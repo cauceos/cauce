@@ -1,11 +1,19 @@
-# Cauce
+<div align="center">
 
-**The open-source Agent OS for European businesses.**
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/cauce-lockup-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/cauce-lockup-light.svg">
+  <img alt="Cauce" src=".github/assets/cauce-lockup-light.svg" width="280">
+</picture>
+
+### The open-source Agent OS for European businesses.
 
 Multi-channel. Multi-tenant. Sovereign by design.
 
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL_1.1-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early%20development-orange.svg)](https://github.com/cauceos/cauce)
+
+</div>
 
 ---
 

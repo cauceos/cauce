@@ -1,0 +1,8 @@
+<svg width="240" height="60" viewBox="0 0 240 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M 4 22 Q 40 72 76 22" stroke="#8C8D82" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M 12 22 Q 40 62 68 22" stroke="#3D6B8A" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M 20 22 Q 40 52 60 22" stroke="#3A6B4A" stroke-width="3.0" stroke-linecap="round"/>
+  <path d="M 28 22 Q 40 42 52 22" stroke="#1BB8A6" stroke-width="4.0" stroke-linecap="round"/>
+  <circle cx="40" cy="40" r="3" fill="#1BB8A6"/>
+  <text x="96" y="44" font-family="Fraunces, Georgia, serif" font-size="38" fill="#0E0F0D" letter-spacing="-1.5">Cauce</text>
+</svg>
