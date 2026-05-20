@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/cauce-lockup-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset=".github/assets/cauce-lockup-light.svg">
-  <img alt="Cauce" src=".github/assets/cauce-lockup-light.svg" width="280">
+  <img alt="Cauce" src=".github/assets/cauce-lockup-light.svg" width="380">
 </picture>
 
 ### The open-source Agent OS for European businesses.
