@@ -258,6 +258,19 @@ Commits are atomic: one logical change per commit. First line ≤72 characters, 
 
 Breaking changes use `!` after the scope and a `BREAKING CHANGE:` footer.
 
+**Attribution**: Commits are attributed exclusively to the human author. Never add `Co-Authored-By` trailers or credit AI tools (Claude Code, IDE assistants, autocomplete) as co-authors, unless the user explicitly requests it for a specific commit.
+
+## Dependencies and updates
+
+Dependency updates are proposed by Dependabot (see `.github/dependabot.yml`): weekly for GitHub Actions, Gradle, and npm.
+
+When Dependabot opens a pull request, evaluate it by version delta:
+
+- **Patch and minor updates**: if CI is green, merge promptly — squash and merge, then delete the branch.
+- **Major updates**: do not merge automatically. Close the PR with a comment explaining why the upgrade is deferred, then comment `@dependabot ignore this major version` so Dependabot stops proposing that specific major.
+
+Major versions often carry breaking changes that need manual migration; they are not suitable for unattended updates.
+
 ## What not to do
 
 - Do not introduce a feature that bypasses multi-tenancy. Every entity is tenant-scoped.
@@ -269,6 +282,7 @@ Breaking changes use `!` after the scope and a `BREAKING CHANGE:` footer.
 - Do not skip writing tests for new public methods.
 - Do not commit code that fails the build or tests.
 - Do not bypass code style or linting.
+- Do not commit Unix shell scripts (e.g. `gradlew`, `bin/*.sh`) without the executable bit set in the Git index. This repo is bootstrapped on Windows, which does not preserve Unix exec bits. Set it with `git update-index --chmod=+x <path>` and confirm `git ls-files --stage <path>` reports mode `100755` (not `100644`). `.gitattributes` does not control exec bits — only the index mode does. A missing bit causes "Permission denied" on Linux CI runners.
 
 ## License notes
 
