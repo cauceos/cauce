@@ -7,6 +7,11 @@
 [versions]
 spring-boot = "3.5.14"
 spring-dependency-management = "1.1.7"
+uuid-creator = "6.1.1"
+
+[libraries]
+# RFC 9562 UUIDv7 (time-ordered) generator. Used by the domain to mint ids.
+uuid-creator = { module = "com.github.f4b6a3:uuid-creator", version.ref = "uuid-creator" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
