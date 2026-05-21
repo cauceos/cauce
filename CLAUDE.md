@@ -156,6 +156,47 @@ Core functionality must never depend on enterprise modules. Core-required featur
 3. Run tests after each step.
 4. Do not mix refactoring with behavior changes in a single commit.
 
+## Communication protocol for strategic chat
+
+This project uses two AI assistants in parallel:
+
+- **Claude Code** (this tool, in terminal) — executes plans, writes code, 
+  runs builds, makes commits within `code/`.
+- **Strategic chat** (claude.ai project) — provides architectural decisions, 
+  reviews, and high-level guidance from outside the codebase.
+
+After completing any non-trivial task (planning, implementation, verification, 
+debugging), append a structured summary block at the end of the response. 
+The user copies only this block to the strategic chat, not the full output.
+
+Format (exact, do not deviate):
+
+​```
+═══════════════════════════════════════
+RESUMEN PARA CHAT ESTRATÉGICO
+═══════════════════════════════════════
+
+ESTADO: [plan-pendiente-aprobación | en-ejecución | completado-pendiente-commit | commiteado | fallo]
+
+DECISIONES TOMADAS:
+- [Brief list of non-trivial decisions]
+
+PUNTOS DE CRITERIO (requieren validación estratégica):
+- [Items that need strategic input, or "ninguno"]
+
+DESVIACIONES DEL PLAN APROBADO:
+- [If any, listed, or "ninguna"]
+
+PRÓXIMO PASO PROPUESTO:
+[One line with the next step]
+
+═══════════════════════════════════════
+​```
+
+Generate this summary block in Spanish. Keep it under 30 lines total. 
+Do not include build logs, file listings, or command outputs in the 
+summary — that information stays in the full response for local review.
+
 ## Build and run
 
 > **Note**: commands below describe the target setup. They will become functional once initial Gradle structure exists.
