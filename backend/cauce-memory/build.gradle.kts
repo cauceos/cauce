@@ -10,6 +10,7 @@ plugins {
 dependencies {
     implementation(project(":cauce-core"))
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
 
     // Flyway 11.x: PostgreSQL support is a separate module since Flyway 10.
     runtimeOnly("org.flywaydb:flyway-core")
