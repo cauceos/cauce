@@ -12,6 +12,7 @@ Multi-channel. Multi-tenant. Sovereign by design.
 
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL_1.1-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early%20development-orange.svg)](https://github.com/cauceos/cauce)
+[![CI](https://github.com/cauceos/cauce/actions/workflows/ci.yml/badge.svg)](https://github.com/cauceos/cauce/actions/workflows/ci.yml)
 
 </div>
 
