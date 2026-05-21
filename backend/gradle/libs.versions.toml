@@ -1,0 +1,13 @@
+# Gradle version catalog — single source of truth for pinned versions.
+#
+# Only versions that we pin ourselves live here. Library versions for the test
+# stack (JUnit, AssertJ, Mockito, Testcontainers, etc.) are intentionally NOT
+# listed: they are governed by the Spring Boot BOM imported in build.gradle.kts.
+
+[versions]
+spring-boot = "3.5.14"
+spring-dependency-management = "1.1.7"
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }

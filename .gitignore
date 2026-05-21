@@ -22,3 +22,14 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+# --- Gradle / build outputs (backend multi-module build) ---
+.gradle/
+build/
+
+# The *.jar rule above would otherwise drop the committed Gradle wrapper jar,
+# which must be checked in for ./gradlew to work on a fresh clone.
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# --- Claude Code local state (not for the public repo) ---
+.claude/
