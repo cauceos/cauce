@@ -35,6 +35,9 @@ subprojects {
 
     dependencies {
         "testImplementation"("org.springframework.boot:spring-boot-starter-test")
+        // Aligns the JUnit Platform launcher with the engine version pinned by the
+        // Spring Boot BOM; without it Gradle injects a mismatched launcher.
+        "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
     }
 
     tasks.withType<JavaCompile>().configureEach {
