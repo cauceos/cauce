@@ -50,7 +50,7 @@ class TenantPersistenceIT {
     @BeforeEach
     void setUp() {
         jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("TRUNCATE TABLE tenants");
+        jdbc.execute("TRUNCATE TABLE agents, tenants CASCADE");
         // Least-privilege role for RLS tests (idempotent across tests).
         jdbc.execute("DO $$ BEGIN "
                 + "IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'cauce_app') "
