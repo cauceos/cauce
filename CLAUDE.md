@@ -36,7 +36,7 @@ See [README.md](README.md) for the user-facing project description.
 
 ## Repository structure
 
-> **Current state**: this repository contains only README, LICENSE, CLAUDE.md, and branding assets. The module structure below will be materialized in the initial Gradle setup. Claude Code is expected to assist in creating this structure when prompted.
+> **Current state**: foundational structure in place. backend/ contains the Gradle multi-module skeleton with 10 subprojects compiling cleanly but without business logic yet. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. Domain code and frontend not yet started.
 
 **Backend modules** (Gradle subprojects under `backend/`):
 
@@ -199,34 +199,42 @@ summary — that information stays in the full response for local review.
 
 ## Build and run
 
-> **Note**: commands below describe the target setup. They will become functional once initial Gradle structure exists.
+> The backend Gradle build lives under `backend/` — run Gradle from there.
+> The Angular frontend under `frontend/` does not exist yet.
+
+### Local development environment
+
+Start the local stack (PostgreSQL + pgvector, Redis, Adminer) from the repo root:
+
+```bash
+docker compose up -d         # start services
+docker compose ps            # check health
+docker compose down          # stop (keeps data)
+docker compose down -v       # stop and wipe volumes
+```
+
+Host ports: PostgreSQL `5433`, Redis `6379`, Adminer `8081`. Adminer is at
+http://localhost:8081 (server `postgres`, database/user/password
+`cauce_dev`/`cauce`/`cauce_dev`). Copy `.env.example` to `.env` to override
+defaults, and `docker-compose.override.yml.example` to
+`docker-compose.override.yml` for local-only tweaks.
 
 ### Backend
 
 ```bash
-./gradlew build              # build all modules
-./gradlew test               # run unit tests
-./gradlew integrationTest    # run integration tests
-./gradlew :cauce-api:bootRun # run the application
+cd backend
+./gradlew build               # build all modules
+./gradlew test                # run unit tests
+./gradlew :cauce-api:bootRun  # run the application (dev profile by default)
 ```
+
+`cauce-api` serves on http://localhost:8080 with the `dev` profile active, which
+connects to the Docker Compose services above. Health:
+http://localhost:8080/actuator/health.
 
 ### Frontend
 
-```bash
-cd frontend/cauce-dashboard
-npm install
-npm start                    # dev server at localhost:4200
-npm run build                # production build
-npm run test                 # unit tests
-npm run e2e                  # e2e tests
-```
-
-### Local development environment
-
-```bash
-docker compose up -d         # PostgreSQL, Redis, observability stack
-./gradlew :cauce-api:bootRun
-```
+> Not present yet. Will be added under `frontend/cauce-dashboard`.
 
 ## Commit conventions
 

@@ -33,3 +33,7 @@ build/
 
 # --- Claude Code local state (not for the public repo) ---
 .claude/
+
+# --- Local environment / Docker overrides (.example templates ARE tracked) ---
+.env
+docker-compose.override.yml

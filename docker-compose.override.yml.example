@@ -1,0 +1,21 @@
+# Copy to docker-compose.override.yml for local-only tweaks.
+# Docker Compose merges it automatically on top of docker-compose.yml.
+# The real override file is gitignored; this template is tracked.
+#
+# Examples below are commented out. Uncomment and edit what you need.
+
+# services:
+#   postgres:
+#     # Pin the image by digest for reproducible builds.
+#     # image: pgvector/pgvector:pg16@sha256:<digest>
+#     ports:
+#       # Use a different host port if 5433 is taken.
+#       - "55432:5432"
+#
+#   redis:
+#     ports:
+#       - "16379:6379"
+#
+#   adminer:
+#     ports:
+#       - "18081:8080"
