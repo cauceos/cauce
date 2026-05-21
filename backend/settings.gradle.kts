@@ -1,7 +1,7 @@
 plugins {
     // Lets Gradle auto-provision the Java 21 toolchain if it is not already
     // installed on the machine. Compatible with the Gradle 8.x line.
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
 rootProject.name = "cauce"
