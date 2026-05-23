@@ -19,6 +19,10 @@ dependencies {
     implementation(project(":cauce-governance"))
     implementation(project(":cauce-tenancy"))
 
+    // LLM provider adapters are discovered at runtime via the cauce-llm SPI; the app does
+    // not compile against any specific provider (only against the SPI in cauce-llm).
+    runtimeOnly(project(":cauce-llm-anthropic"))
+
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")

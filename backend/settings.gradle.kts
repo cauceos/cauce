@@ -20,6 +20,7 @@ include(
     "cauce-memory",
     "cauce-channels",
     "cauce-llm",
+    "cauce-llm-anthropic",
     "cauce-evals",
     "cauce-observability",
     "cauce-governance",
