@@ -45,13 +45,19 @@ public class ConversationEntity {
     @Column(name = "closed_at")
     private Instant closedAt;
 
+    @Column(name = "escalated_at")
+    private Instant escalatedAt;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
     protected ConversationEntity() {
         // for JPA
     }
 
     public ConversationEntity(UUID id, UUID agentId, String channelType, String externalIdentityRef,
                               ConversationStatus status, Instant startedAt, Instant lastMessageAt,
-                              Instant closedAt) {
+                              Instant closedAt, Instant escalatedAt, Instant archivedAt) {
         this.id = id;
         this.agentId = agentId;
         this.channelType = channelType;
@@ -60,6 +66,8 @@ public class ConversationEntity {
         this.startedAt = startedAt;
         this.lastMessageAt = lastMessageAt;
         this.closedAt = closedAt;
+        this.escalatedAt = escalatedAt;
+        this.archivedAt = archivedAt;
     }
 
     public UUID getId() {
@@ -92,5 +100,13 @@ public class ConversationEntity {
 
     public Instant getClosedAt() {
         return closedAt;
+    }
+
+    public Instant getEscalatedAt() {
+        return escalatedAt;
+    }
+
+    public Instant getArchivedAt() {
+        return archivedAt;
     }
 }

@@ -11,7 +11,11 @@ import java.util.UUID;
  *
  * <p>Pure domain type: no persistence or framework dependencies. Immutable; created
  * via {@link #start} with status {@link ConversationStatus#OPEN} and a time-ordered
- * UUIDv7 id. Status transitions (close, escalate, archive) arrive in a later commit.
+ * UUIDv7 id. The lifecycle transitions {@link #close}, {@link #escalate}, and
+ * {@link #archive} do not mutate the instance: each returns a new {@code Conversation}
+ * with the updated status and timestamp, or throws
+ * {@link InvalidConversationTransitionException} if the transition is not allowed from
+ * the current status.
  *
  * <p>{@code channelType} is a free-form String identifier (e.g. {@code "whatsapp"}).
  * The domain deliberately does not enumerate channels: the set of valid channels is
@@ -32,11 +36,13 @@ public final class Conversation {
     private final ConversationStatus status;
     private final Instant startedAt;
     private final Instant lastMessageAt;
-    private final Instant closedAt; // null while not CLOSED
+    private final Instant closedAt;    // null unless CLOSED (or archived after being closed)
+    private final Instant escalatedAt; // null unless it was ever escalated
+    private final Instant archivedAt;  // null unless ARCHIVED
 
     private Conversation(UUID id, UUID agentId, String channelType, String externalIdentityRef,
                          ConversationStatus status, Instant startedAt, Instant lastMessageAt,
-                         Instant closedAt) {
+                         Instant closedAt, Instant escalatedAt, Instant archivedAt) {
         this.id = id;
         this.agentId = agentId;
         this.channelType = channelType;
@@ -45,6 +51,8 @@ public final class Conversation {
         this.startedAt = startedAt;
         this.lastMessageAt = lastMessageAt;
         this.closedAt = closedAt;
+        this.escalatedAt = escalatedAt;
+        this.archivedAt = archivedAt;
     }
 
     /**
@@ -63,13 +71,16 @@ public final class Conversation {
                 ConversationStatus.OPEN,
                 now,
                 now,
+                null,
+                null,
                 null);
     }
 
     /** Rebuilds a conversation from already-persisted state. For the persistence layer only. */
     public static Conversation rehydrate(UUID id, UUID agentId, String channelType,
                                          String externalIdentityRef, ConversationStatus status,
-                                         Instant startedAt, Instant lastMessageAt, Instant closedAt) {
+                                         Instant startedAt, Instant lastMessageAt, Instant closedAt,
+                                         Instant escalatedAt, Instant archivedAt) {
         return new Conversation(
                 Objects.requireNonNull(id, "id"),
                 Objects.requireNonNull(agentId, "agentId"),
@@ -78,7 +89,9 @@ public final class Conversation {
                 Objects.requireNonNull(status, "status"),
                 Objects.requireNonNull(startedAt, "startedAt"),
                 Objects.requireNonNull(lastMessageAt, "lastMessageAt"),
-                closedAt); // nullable: null while OPEN
+                closedAt,    // nullable
+                escalatedAt, // nullable
+                archivedAt); // nullable
     }
 
     private static String requireText(String value, String field) {
@@ -86,6 +99,56 @@ public final class Conversation {
             throw new IllegalArgumentException(field + " must not be blank");
         }
         return value.strip();
+    }
+
+    /**
+     * Closes the conversation. Allowed from {@link ConversationStatus#OPEN} or
+     * {@link ConversationStatus#ESCALATED} (a human resolves an escalation and closes).
+     *
+     * @return a new closed conversation with {@code closedAt} set to now
+     * @throws InvalidConversationTransitionException if not OPEN or ESCALATED
+     */
+    public Conversation close() {
+        if (status != ConversationStatus.OPEN && status != ConversationStatus.ESCALATED) {
+            throw new InvalidConversationTransitionException(transitionError(ConversationStatus.CLOSED));
+        }
+        return new Conversation(id, agentId, channelType, externalIdentityRef,
+                ConversationStatus.CLOSED, startedAt, lastMessageAt, Instant.now(), escalatedAt, archivedAt);
+    }
+
+    /**
+     * Escalates the conversation to a human. Allowed only from
+     * {@link ConversationStatus#OPEN}; there is no de-escalation.
+     *
+     * @return a new escalated conversation with {@code escalatedAt} set to now
+     * @throws InvalidConversationTransitionException if not OPEN
+     */
+    public Conversation escalate() {
+        if (status != ConversationStatus.OPEN) {
+            throw new InvalidConversationTransitionException(transitionError(ConversationStatus.ESCALATED));
+        }
+        return new Conversation(id, agentId, channelType, externalIdentityRef,
+                ConversationStatus.ESCALATED, startedAt, lastMessageAt, closedAt, Instant.now(), archivedAt);
+    }
+
+    /**
+     * Archives the conversation. Allowed from any status except
+     * {@link ConversationStatus#ARCHIVED} (an absorbing state). Preserves any existing
+     * {@code closedAt}/{@code escalatedAt}.
+     *
+     * @return a new archived conversation with {@code archivedAt} set to now
+     * @throws InvalidConversationTransitionException if already ARCHIVED
+     */
+    public Conversation archive() {
+        if (status == ConversationStatus.ARCHIVED) {
+            throw new InvalidConversationTransitionException(transitionError(ConversationStatus.ARCHIVED));
+        }
+        return new Conversation(id, agentId, channelType, externalIdentityRef,
+                ConversationStatus.ARCHIVED, startedAt, lastMessageAt, closedAt, escalatedAt, Instant.now());
+    }
+
+    private String transitionError(ConversationStatus target) {
+        return "Cannot transition Conversation %s from %s to %s".formatted(id, status, target);
     }
 
     public UUID id() {
@@ -118,6 +181,14 @@ public final class Conversation {
 
     public Instant closedAt() {
         return closedAt;
+    }
+
+    public Instant escalatedAt() {
+        return escalatedAt;
+    }
+
+    public Instant archivedAt() {
+        return archivedAt;
     }
 
     @Override

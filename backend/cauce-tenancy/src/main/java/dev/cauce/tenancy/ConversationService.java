@@ -2,16 +2,19 @@ package dev.cauce.tenancy;
 
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.conversation.Conversation;
+import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.conversation.ConversationStatus;
 import dev.cauce.core.conversation.InvalidChannelTypeException;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentRepository;
+import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationMapper;
 import dev.cauce.memory.conversation.ConversationRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -87,5 +90,53 @@ public class ConversationService {
         return conversationRepository.findByAgentId(agentId).stream()
                 .map(conversationMapper::toDomain)
                 .toList();
+    }
+
+    /**
+     * Closes the conversation (OPEN or ESCALATED &rarr; CLOSED).
+     *
+     * @throws ConversationNotFoundException if not visible under the current context
+     * @throws dev.cauce.core.conversation.InvalidConversationTransitionException
+     *         if the conversation cannot be closed from its current status
+     */
+    @Transactional
+    public Conversation closeConversation(UUID conversationId) {
+        return applyTransition(conversationId, Conversation::close);
+    }
+
+    /**
+     * Escalates the conversation to a human (OPEN &rarr; ESCALATED).
+     *
+     * @throws ConversationNotFoundException if not visible under the current context
+     * @throws dev.cauce.core.conversation.InvalidConversationTransitionException
+     *         if the conversation cannot be escalated from its current status
+     */
+    @Transactional
+    public Conversation escalateConversation(UUID conversationId) {
+        return applyTransition(conversationId, Conversation::escalate);
+    }
+
+    /**
+     * Archives the conversation (any status except ARCHIVED &rarr; ARCHIVED).
+     *
+     * @throws ConversationNotFoundException if not visible under the current context
+     * @throws dev.cauce.core.conversation.InvalidConversationTransitionException
+     *         if the conversation is already archived
+     */
+    @Transactional
+    public Conversation archiveConversation(UUID conversationId) {
+        return applyTransition(conversationId, Conversation::archive);
+    }
+
+    /**
+     * Loads a conversation (RLS-filtered), applies a domain transition, and persists the
+     * result, all in the current transaction. An invalid transition throws and rolls the
+     * transaction back, leaving the stored row untouched.
+     */
+    private Conversation applyTransition(UUID conversationId, UnaryOperator<Conversation> transition) {
+        ConversationEntity entity = conversationRepository.findById(conversationId).orElseThrow(() ->
+                new ConversationNotFoundException("No conversation found for id " + conversationId));
+        Conversation updated = transition.apply(conversationMapper.toDomain(entity));
+        return conversationMapper.toDomain(conversationRepository.save(conversationMapper.toEntity(updated)));
     }
 }

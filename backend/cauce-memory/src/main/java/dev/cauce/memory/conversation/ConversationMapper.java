@@ -19,7 +19,9 @@ public final class ConversationMapper {
                 conversation.status(),
                 conversation.startedAt(),
                 conversation.lastMessageAt(),
-                conversation.closedAt());
+                conversation.closedAt(),
+                conversation.escalatedAt(),
+                conversation.archivedAt());
     }
 
     public Conversation toDomain(ConversationEntity entity) {
@@ -31,6 +33,8 @@ public final class ConversationMapper {
                 entity.getStatus(),
                 entity.getStartedAt(),
                 entity.getLastMessageAt(),
-                entity.getClosedAt());
+                entity.getClosedAt(),
+                entity.getEscalatedAt(),
+                entity.getArchivedAt());
     }
 }

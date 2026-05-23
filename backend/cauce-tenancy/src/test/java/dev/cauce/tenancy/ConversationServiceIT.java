@@ -7,6 +7,7 @@ import dev.cauce.core.UuidGenerator;
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationStatus;
+import dev.cauce.core.conversation.InvalidConversationTransitionException;
 import dev.cauce.core.tenant.MissingTenantContextException;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
@@ -203,6 +204,59 @@ class ConversationServiceIT {
         assertThat(byId).containsExactlyElementsOf(creationOrder);
     }
 
+    @Test
+    void lifecycle_startEscalateCloseArchive_persistsEachStateInDb() {
+        Conversation conv = startForClientA("whatsapp", "+34612345678");
+
+        asClientA(() -> conversationService.escalateConversation(conv.id()));
+        assertThat(readStatus(conv.id())).isEqualTo("ESCALATED");
+        assertThat(readTimestamp(conv.id(), "escalated_at")).isNotNull();
+
+        asClientA(() -> conversationService.closeConversation(conv.id()));
+        assertThat(readStatus(conv.id())).isEqualTo("CLOSED");
+        assertThat(readTimestamp(conv.id(), "closed_at")).isNotNull();
+        assertThat(readTimestamp(conv.id(), "escalated_at")).isNotNull(); // preserved
+
+        asClientA(() -> conversationService.archiveConversation(conv.id()));
+        assertThat(readStatus(conv.id())).isEqualTo("ARCHIVED");
+        assertThat(readTimestamp(conv.id(), "archived_at")).isNotNull();
+        assertThat(readTimestamp(conv.id(), "closed_at")).isNotNull();    // preserved
+    }
+
+    @Test
+    void closeConversation_underPartnerContext_succeeds() {
+        // B2B2B: a partner may close a conversation belonging to one of its clients.
+        Conversation conv = startForClientA("whatsapp", "+34612345678");
+
+        TenantContext.setCurrentTenantId(partner.id());
+        try {
+            Conversation closed = conversationService.closeConversation(conv.id());
+            assertThat(closed.status()).isEqualTo(ConversationStatus.CLOSED);
+        } finally {
+            TenantContext.clear();
+        }
+        assertThat(readStatus(conv.id())).isEqualTo("CLOSED");
+    }
+
+    @Test
+    void closeConversation_whenAlreadyClosed_throwsAndLeavesRowUnchanged() {
+        Conversation conv = startForClientA("whatsapp", "+34612345678");
+        asClientA(() -> conversationService.closeConversation(conv.id()));
+        Instant closedAt = readTimestamp(conv.id(), "closed_at");
+
+        // A CLOSED conversation is never reopened or re-closed.
+        TenantContext.setCurrentTenantId(clientA.id());
+        try {
+            assertThatThrownBy(() -> conversationService.closeConversation(conv.id()))
+                    .isInstanceOf(InvalidConversationTransitionException.class);
+        } finally {
+            TenantContext.clear();
+        }
+
+        assertThat(readStatus(conv.id())).isEqualTo("CLOSED");
+        assertThat(readTimestamp(conv.id(), "closed_at")).isEqualTo(closedAt); // unchanged
+    }
+
     private Conversation startForClientA(String channelType, String externalIdentityRef) {
         TenantContext.setCurrentTenantId(clientA.id());
         try {
@@ -220,6 +274,27 @@ class ConversationServiceIT {
                 UuidGenerator.newV7(), agent.id(), channelType, externalIdentityRef,
                 status.name(), Timestamp.from(now), Timestamp.from(now),
                 status == ConversationStatus.CLOSED ? Timestamp.from(now) : null);
+    }
+
+    private void asClientA(Runnable action) {
+        TenantContext.setCurrentTenantId(clientA.id());
+        try {
+            action.run();
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    private String readStatus(UUID conversationId) {
+        return jdbc.queryForObject(
+                "SELECT status FROM conversations WHERE id = ?", String.class, conversationId);
+    }
+
+    /** Reads a nullable timestamp column (column name is a test-controlled literal). */
+    private Instant readTimestamp(UUID conversationId, String column) {
+        Timestamp ts = jdbc.queryForObject(
+                "SELECT " + column + " FROM conversations WHERE id = ?", Timestamp.class, conversationId);
+        return ts == null ? null : ts.toInstant();
     }
 
     private long countConversationsVisibleAs(UUID context) throws SQLException {
