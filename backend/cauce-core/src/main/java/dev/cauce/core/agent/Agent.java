@@ -1,6 +1,6 @@
 package dev.cauce.core.agent;
 
-import com.github.f4b6a3.uuid.UuidCreator;
+import dev.cauce.core.UuidGenerator;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -48,7 +48,7 @@ public final class Agent {
                                String modelProvider, String modelName) {
         Instant now = Instant.now();
         return new Agent(
-                UuidCreator.getTimeOrderedEpoch(),
+                UuidGenerator.newV7(),
                 Objects.requireNonNull(tenantId, "tenantId"),
                 requireText(name, "name"),
                 Objects.requireNonNull(systemPrompt, "systemPrompt"), // may be empty for a draft

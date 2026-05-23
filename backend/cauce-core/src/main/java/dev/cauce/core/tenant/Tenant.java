@@ -1,6 +1,6 @@
 package dev.cauce.core.tenant;
 
-import com.github.f4b6a3.uuid.UuidCreator;
+import dev.cauce.core.UuidGenerator;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -37,21 +37,21 @@ public final class Tenant {
     /** Creates a top-level operator tenant (no parent). */
     public static Tenant operator(String name) {
         Instant now = Instant.now();
-        return new Tenant(newId(), null, Tier.OPERATOR, requireName(name), now, now);
+        return new Tenant(UuidGenerator.newV7(), null, Tier.OPERATOR, requireName(name), now, now);
     }
 
     /** Creates a partner tenant under the given operator. */
     public static Tenant partner(String name, UUID operatorId) {
         Objects.requireNonNull(operatorId, "operatorId must not be null for a PARTNER");
         Instant now = Instant.now();
-        return new Tenant(newId(), operatorId, Tier.PARTNER, requireName(name), now, now);
+        return new Tenant(UuidGenerator.newV7(), operatorId, Tier.PARTNER, requireName(name), now, now);
     }
 
     /** Creates a client tenant under the given partner. */
     public static Tenant client(String name, UUID partnerId) {
         Objects.requireNonNull(partnerId, "partnerId must not be null for a CLIENT");
         Instant now = Instant.now();
-        return new Tenant(newId(), partnerId, Tier.CLIENT, requireName(name), now, now);
+        return new Tenant(UuidGenerator.newV7(), partnerId, Tier.CLIENT, requireName(name), now, now);
     }
 
     /**
@@ -67,10 +67,6 @@ public final class Tenant {
                 Objects.requireNonNull(name, "name"),
                 Objects.requireNonNull(createdAt, "createdAt"),
                 Objects.requireNonNull(updatedAt, "updatedAt"));
-    }
-
-    private static UUID newId() {
-        return UuidCreator.getTimeOrderedEpoch(); // RFC 9562 UUIDv7
     }
 
     private static String requireName(String name) {

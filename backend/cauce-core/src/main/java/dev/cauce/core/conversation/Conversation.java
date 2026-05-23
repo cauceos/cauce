@@ -1,6 +1,6 @@
 package dev.cauce.core.conversation;
 
-import com.github.f4b6a3.uuid.UuidCreator;
+import dev.cauce.core.UuidGenerator;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -56,7 +56,7 @@ public final class Conversation {
     public static Conversation start(UUID agentId, String channelType, String externalIdentityRef) {
         Instant now = Instant.now();
         return new Conversation(
-                UuidCreator.getTimeOrderedEpoch(),
+                UuidGenerator.newV7(),
                 Objects.requireNonNull(agentId, "agentId"),
                 requireText(channelType, "channelType"),
                 requireText(externalIdentityRef, "externalIdentityRef"),

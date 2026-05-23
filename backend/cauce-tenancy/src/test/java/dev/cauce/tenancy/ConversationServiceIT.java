@@ -3,6 +3,7 @@ package dev.cauce.tenancy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.cauce.core.UuidGenerator;
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationStatus;
@@ -216,7 +217,7 @@ class ConversationServiceIT {
         Instant now = Instant.now();
         jdbc.update("INSERT INTO conversations (id, agent_id, channel_type, external_identity_ref, "
                 + "status, started_at, last_message_at, closed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                UUID.randomUUID(), agent.id(), channelType, externalIdentityRef,
+                UuidGenerator.newV7(), agent.id(), channelType, externalIdentityRef,
                 status.name(), Timestamp.from(now), Timestamp.from(now),
                 status == ConversationStatus.CLOSED ? Timestamp.from(now) : null);
     }
