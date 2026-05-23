@@ -74,7 +74,7 @@ class ConversationServiceIT {
     @BeforeEach
     void setUp() {
         jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("TRUNCATE TABLE conversations, agents, tenants CASCADE");
+        jdbc.execute("TRUNCATE TABLE messages, conversations, agents, tenants CASCADE");
         jdbc.execute("DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'cauce_app') "
                 + "THEN CREATE ROLE cauce_app; END IF; END $$");
         jdbc.execute("GRANT USAGE ON SCHEMA public TO cauce_app");
