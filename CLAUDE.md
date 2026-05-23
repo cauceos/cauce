@@ -100,6 +100,50 @@ Modules under BUSL license (everything except `cauce-enterprise`) must be functi
 
 Core functionality must never depend on enterprise modules. Core-required features must never be moved behind the enterprise license.
 
+## Adding a new domain entity with hierarchical RLS
+
+When introducing a new domain entity that participates in the tenant hierarchy, follow this pattern (proven across Tenant, Agent, and Conversation). It keeps the hexagonal boundaries clean and makes tenant isolation enforceable at the database layer.
+
+### 1. Domain layer (`cauce-core/<entity>/`)
+
+- Pure POJO with private final fields and no JPA or framework annotations.
+- Static factory methods that mint a UUIDv7 via `UuidGenerator.newV7()` (never call the UUID library directly).
+- The factory validates only domain invariants: non-null/non-blank for required fields and basic shape. Everything that needs other rows or external config is validated in the service.
+- Configuration-like fields whose valid values will eventually be owned by an SPI (e.g. provider identifiers for `cauce-llm`, channel types for `cauce-channels`) are `String`, not `enum`, so the core stays free of provider-specific knowledge.
+- Status fields are `enum` when they are part of the immutable domain model (lifecycle states).
+- Domain exceptions (extending `RuntimeException`) live in `cauce-core/<entity>/` next to the aggregate.
+
+### 2. Persistence layer (`cauce-memory/<entity>/`)
+
+- A JPA `@Entity` mirroring the domain shape, plus a hand-written `@Component` mapper (no MapStruct yet).
+- A Spring Data `JpaRepository` with derived finders, added only when a query is actually needed.
+- A Flyway migration `V<N>__create_<entity>_table.sql`:
+  - Table with appropriate columns and constraints.
+  - FK to the parent entity with `ON DELETE RESTRICT`.
+  - `CHECK` constraints for enum-mapped columns (e.g. `status`), but not for SPI-bound columns (e.g. `provider`, `channel_type`) — those are validated by the service so the database does not hardcode the list.
+  - Indexes on the parent id (`tenant_id` / `<parent>_id`), on `status`, and on any column used for routing/lookup queries.
+  - RLS enabled with a policy named `hierarchical_visibility`.
+  - A `<entity>_is_visible` function (`SECURITY DEFINER`, `STABLE`) that composes with the parent's visibility function — e.g. `conversation_is_visible` calls `agent_is_visible`, which calls `tenant_is_visible`.
+  - Carry the least-privilege role TODO comment forward until that role is wired up.
+
+### 3. Service layer (`cauce-tenancy/`, or a dedicated module if scope justifies it)
+
+- A `@Service` with `@Transactional` methods; `RlsContextAspect` sets the DB tenant context from `TenantContext` before each one runs.
+- Validate that referenced parent entities exist via `repository.findById`, relying on RLS for visibility. A not-found result for an entity outside the current `TenantContext` is the correct outcome: do not distinguish "does not exist" from "not visible to you" in the public API, to avoid leaking the existence of out-of-scope entities.
+- Validate SPI-bound fields against a temporary hardcoded `Set` with a TODO referencing the future SPI module.
+- Operations that create or read on behalf of subordinate tenants (e.g. a partner acting for its client) rely on hierarchical RLS, not strict-owner checks.
+
+### 4. Test layer (three levels)
+
+- Domain unit test (`cauce-core/<Entity>Test.java`): factory behavior, `equals`/`hashCode`, invariant validation.
+- Mapper unit test (`cauce-memory/<Entity>MapperTest.java`): round-trip preservation, including nullable fields.
+- Service unit test (`cauce-tenancy/<Entity>ServiceTest.java`): validation behavior with mocked repositories.
+- Integration test with Testcontainers (`cauce-tenancy/<Entity>ServiceIT.java`): seed the hierarchy via the existing services, verify hierarchical RLS through a dedicated restricted role, check UUIDv7 ordering, and confirm operations succeed across hierarchy levels (operator, partner, client) where appropriate and fail without a `TenantContext`.
+
+### 5. Update existing integration tests
+
+- Add the new table to the `TRUNCATE` statement in the setup of other ITs, since FK relationships make them interdependent.
+
 ## Code conventions
 
 ### Java
