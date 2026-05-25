@@ -25,6 +25,7 @@ include(
     "cauce-observability",
     "cauce-governance",
     "cauce-tenancy",
+    "cauce-orchestration",
     "cauce-api",
     "cauce-enterprise",
 )

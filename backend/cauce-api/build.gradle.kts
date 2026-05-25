@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":cauce-observability"))
     implementation(project(":cauce-governance"))
     implementation(project(":cauce-tenancy"))
+    implementation(project(":cauce-orchestration"))
 
     // LLM provider adapters are discovered at runtime via the cauce-llm SPI; the app does
     // not compile against any specific provider (only against the SPI in cauce-llm).
