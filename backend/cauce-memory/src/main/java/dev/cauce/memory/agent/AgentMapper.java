@@ -18,6 +18,8 @@ public final class AgentMapper {
                 agent.systemPrompt(),
                 agent.modelProvider(),
                 agent.modelName(),
+                agent.temperature(),
+                agent.maxResponseTokens(),
                 agent.status(),
                 agent.createdAt(),
                 agent.updatedAt());
@@ -31,6 +33,8 @@ public final class AgentMapper {
                 entity.getSystemPrompt(),
                 entity.getModelProvider(),
                 entity.getModelName(),
+                entity.getTemperature(),
+                entity.getMaxResponseTokens(),
                 entity.getStatus(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt());

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -93,6 +94,50 @@ class AgentServiceIT {
         Integer count = jdbc.queryForObject(
                 "SELECT count(*) FROM agents WHERE id = ?", Integer.class, agent.id());
         assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void createAgent_withoutLlmConfig_persistsDefaultsInDatabase() {
+        Agent agent = createAgentForClientA();
+
+        Double temperature = jdbc.queryForObject(
+                "SELECT temperature FROM agents WHERE id = ?", Double.class, agent.id());
+        Integer maxTokens = jdbc.queryForObject(
+                "SELECT max_response_tokens FROM agents WHERE id = ?", Integer.class, agent.id());
+        assertThat(temperature).isEqualTo(0.7);
+        assertThat(maxTokens).isEqualTo(4096);
+    }
+
+    @Test
+    void createAgent_withCustomLlmConfig_persistsThoseValues() {
+        TenantContext.setCurrentTenantId(clientA.id());
+        Agent agent;
+        try {
+            agent = agentService.createAgent(clientA.id(), "DentalBot",
+                    "You are a dentist receptionist.", "anthropic", "claude-sonnet-4-7", 0.25, 16000);
+        } finally {
+            TenantContext.clear();
+        }
+
+        assertThat(agent.temperature()).isEqualTo(0.25);
+        assertThat(agent.maxResponseTokens()).isEqualTo(16000);
+        Double temperature = jdbc.queryForObject(
+                "SELECT temperature FROM agents WHERE id = ?", Double.class, agent.id());
+        Integer maxTokens = jdbc.queryForObject(
+                "SELECT max_response_tokens FROM agents WHERE id = ?", Integer.class, agent.id());
+        assertThat(temperature).isEqualTo(0.25);
+        assertThat(maxTokens).isEqualTo(16000);
+    }
+
+    @Test
+    void temperatureCheckConstraint_rejectsOutOfRangeValueOnDirectInsert() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO agents (id, tenant_id, name, system_prompt, model_provider, model_name, "
+                        + "temperature, status, created_at, updated_at) "
+                        + "VALUES (?, ?, 'Bot', 'p', 'anthropic', 'claude-sonnet-4-7', 2.0, 'DRAFT', "
+                        + "now(), now())",
+                UUID.randomUUID(), clientA.id()))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

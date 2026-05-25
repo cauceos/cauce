@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentStatus;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -41,5 +42,29 @@ class AgentMapperTest {
         assertThat(entity.getName()).isEqualTo("Bot");
         assertThat(entity.getModelProvider()).isEqualTo("openai");
         assertThat(entity.getStatus()).isEqualTo(AgentStatus.DRAFT);
+    }
+
+    @Test
+    void roundTrip_withExplicitLlmConfig_preservesValues() {
+        Agent original = Agent.create(UUID.randomUUID(), "Bot", "prompt", "anthropic",
+                "claude-sonnet-4-7", 0.3, 8000);
+
+        Agent roundTripped = mapper.toDomain(mapper.toEntity(original));
+
+        assertThat(roundTripped.temperature()).isEqualTo(0.3);
+        assertThat(roundTripped.maxResponseTokens()).isEqualTo(8000);
+    }
+
+    @Test
+    void toDomain_whenEntityLlmConfigIsNull_appliesDefaults() {
+        // A pre-V7 row: temperature and max_response_tokens are NULL in the database.
+        Instant now = Instant.now();
+        AgentEntity legacy = new AgentEntity(UUID.randomUUID(), UUID.randomUUID(), "Bot", "prompt",
+                "anthropic", "claude-sonnet-4-7", null, null, AgentStatus.ACTIVE, now, now);
+
+        Agent domain = mapper.toDomain(legacy);
+
+        assertThat(domain.temperature()).isEqualTo(Agent.DEFAULT_TEMPERATURE);
+        assertThat(domain.maxResponseTokens()).isEqualTo(Agent.DEFAULT_MAX_RESPONSE_TOKENS);
     }
 }

@@ -136,6 +136,6 @@ class PendingInvocationServiceTest {
     private AgentEntity agentEntity() {
         Instant now = Instant.now();
         return new AgentEntity(agentId, tenantId, "DentalBot", "prompt", "anthropic",
-                "claude-sonnet-4-7", AgentStatus.ACTIVE, now, now);
+                "claude-sonnet-4-7", 0.7, 4096, AgentStatus.ACTIVE, now, now);
     }
 }

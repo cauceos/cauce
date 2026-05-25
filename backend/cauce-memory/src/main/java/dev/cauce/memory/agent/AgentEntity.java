@@ -37,6 +37,13 @@ public class AgentEntity {
     @Column(name = "model_name", nullable = false, length = 100)
     private String modelName;
 
+    // Nullable in the DB to preserve pre-V7 rows; the domain coalesces null to its default.
+    @Column(name = "temperature")
+    private Double temperature;
+
+    @Column(name = "max_response_tokens")
+    private Integer maxResponseTokens;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private AgentStatus status;
@@ -52,13 +59,16 @@ public class AgentEntity {
     }
 
     public AgentEntity(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
-                       String modelName, AgentStatus status, Instant createdAt, Instant updatedAt) {
+                       String modelName, Double temperature, Integer maxResponseTokens,
+                       AgentStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
         this.systemPrompt = systemPrompt;
         this.modelProvider = modelProvider;
         this.modelName = modelName;
+        this.temperature = temperature;
+        this.maxResponseTokens = maxResponseTokens;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -86,6 +96,14 @@ public class AgentEntity {
 
     public String getModelName() {
         return modelName;
+    }
+
+    public Double getTemperature() {
+        return temperature;
+    }
+
+    public Integer getMaxResponseTokens() {
+        return maxResponseTokens;
     }
 
     public AgentStatus getStatus() {

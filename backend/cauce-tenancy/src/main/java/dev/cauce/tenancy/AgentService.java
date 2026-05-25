@@ -39,9 +39,22 @@ public class AgentService {
         this.agentMapper = agentMapper;
     }
 
+    /** Creates an agent with the default LLM configuration. */
     @Transactional
     public Agent createAgent(UUID tenantId, String name, String systemPrompt,
                              String modelProvider, String modelName) {
+        return createAgent(tenantId, name, systemPrompt, modelProvider, modelName, null, null);
+    }
+
+    /**
+     * Creates an agent, optionally overriding the LLM configuration. A null
+     * {@code temperature} or {@code maxResponseTokens} falls back to the domain default;
+     * non-null values are range-validated by the {@link Agent} factory.
+     */
+    @Transactional
+    public Agent createAgent(UUID tenantId, String name, String systemPrompt,
+                             String modelProvider, String modelName,
+                             Double temperature, Integer maxResponseTokens) {
         TenantEntity tenant = tenantRepository.findById(tenantId).orElseThrow(() ->
                 new TenantNotFoundException("No tenant found for id " + tenantId));
         if (tenant.getTier() != Tier.CLIENT) {
@@ -52,7 +65,8 @@ public class AgentService {
             throw new IllegalArgumentException("Unsupported model provider: " + modelProvider);
         }
 
-        Agent agent = Agent.create(tenantId, name, systemPrompt, modelProvider, modelName);
+        Agent agent = Agent.create(tenantId, name, systemPrompt, modelProvider, modelName,
+                temperature, maxResponseTokens);
         return agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(agent)));
     }
 

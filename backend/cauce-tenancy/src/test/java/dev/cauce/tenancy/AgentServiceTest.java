@@ -86,6 +86,39 @@ class AgentServiceTest {
         assertThat(agent.status()).isEqualTo(AgentStatus.DRAFT);
     }
 
+    @Test
+    void createAgent_withoutLlmConfig_persistsWithDefaults() {
+        UUID tenantId = UUID.randomUUID();
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant(tenantId, Tier.CLIENT)));
+
+        Agent agent = service.createAgent(tenantId, "Bot", "p", "anthropic", "claude-sonnet-4-7");
+
+        assertThat(agent.temperature()).isEqualTo(Agent.DEFAULT_TEMPERATURE);
+        assertThat(agent.maxResponseTokens()).isEqualTo(Agent.DEFAULT_MAX_RESPONSE_TOKENS);
+    }
+
+    @Test
+    void createAgent_withExplicitLlmConfig_persistsThoseValues() {
+        UUID tenantId = UUID.randomUUID();
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant(tenantId, Tier.CLIENT)));
+
+        Agent agent = service.createAgent(tenantId, "Bot", "p", "anthropic", "claude-sonnet-4-7",
+                0.2, 12000);
+
+        assertThat(agent.temperature()).isEqualTo(0.2);
+        assertThat(agent.maxResponseTokens()).isEqualTo(12000);
+    }
+
+    @Test
+    void createAgent_whenTemperatureOutOfRange_throws() {
+        UUID tenantId = UUID.randomUUID();
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant(tenantId, Tier.CLIENT)));
+
+        assertThatThrownBy(() ->
+                service.createAgent(tenantId, "Bot", "p", "anthropic", "claude-sonnet-4-7", 1.5, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private static TenantEntity tenant(UUID id, Tier tier) {
         Instant now = Instant.now();
         return new TenantEntity(id, null, tier, "name", now, now);

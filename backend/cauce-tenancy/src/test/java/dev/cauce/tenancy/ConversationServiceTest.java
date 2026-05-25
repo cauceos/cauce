@@ -195,7 +195,7 @@ class ConversationServiceTest {
     private static AgentEntity agent(UUID id) {
         Instant now = Instant.now();
         return new AgentEntity(id, UUID.randomUUID(), "DentalBot", "prompt",
-                "anthropic", "claude-sonnet-4-7", AgentStatus.ACTIVE, now, now);
+                "anthropic", "claude-sonnet-4-7", 0.7, 4096, AgentStatus.ACTIVE, now, now);
     }
 
     private static ConversationEntity conversationEntity(UUID id, ConversationStatus status) {
