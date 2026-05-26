@@ -127,7 +127,7 @@ class PendingInvocationWorkerIT {
     @BeforeEach
     void setUp() {
         jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("TRUNCATE TABLE pending_invocations, messages, conversations, agents, tenants CASCADE");
+        jdbc.execute("TRUNCATE TABLE api_keys, pending_invocations, messages, conversations, agents, tenants CASCADE");
         mockLlmProvider.respondWith(invocation ->
                 new LlmResponse("default reply", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
         TenantContext.clear();
