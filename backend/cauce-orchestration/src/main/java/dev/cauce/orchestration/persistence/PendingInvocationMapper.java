@@ -24,7 +24,8 @@ public final class PendingInvocationMapper {
                 invocation.createdAt(),
                 invocation.claimedAt(),
                 invocation.claimedBy(),
-                invocation.completedAt());
+                invocation.completedAt(),
+                invocation.nextAttemptAt());
     }
 
     public PendingInvocation toDomain(PendingInvocationEntity entity) {
@@ -41,6 +42,7 @@ public final class PendingInvocationMapper {
                 entity.getCreatedAt(),
                 entity.getClaimedAt(),
                 entity.getClaimedBy(),
-                entity.getCompletedAt());
+                entity.getCompletedAt(),
+                entity.getNextAttemptAt());
     }
 }

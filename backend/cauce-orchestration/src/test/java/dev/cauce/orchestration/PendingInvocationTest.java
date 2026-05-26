@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.cauce.orchestration.exception.InvalidPendingInvocationTransitionException;
 import dev.cauce.orchestration.exception.MaxRetriesExceededException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +15,7 @@ class PendingInvocationTest {
     private static final UUID TENANT = UUID.randomUUID();
     private static final UUID CONVERSATION = UUID.randomUUID();
     private static final UUID TRIGGER = UUID.randomUUID();
+    private static final long BASE_INTERVAL = 30L;
 
     private static PendingInvocation pending() {
         return PendingInvocation.create(TENANT, CONVERSATION, TRIGGER);
@@ -36,6 +39,7 @@ class PendingInvocationTest {
         assertThat(invocation.claimedAt()).isNull();
         assertThat(invocation.claimedBy()).isNull();
         assertThat(invocation.completedAt()).isNull();
+        assertThat(invocation.nextAttemptAt()).isNull();
     }
 
     @Test
@@ -65,6 +69,7 @@ class PendingInvocationTest {
         assertThat(claimed.claimedBy()).isEqualTo("worker-1");
         assertThat(claimed.claimedAt()).isNotNull();
         assertThat(claimed.lastAttemptAt()).isNotNull();
+        assertThat(claimed.nextAttemptAt()).isNull();
     }
 
     @Test
@@ -87,6 +92,7 @@ class PendingInvocationTest {
 
         assertThat(completed.status()).isEqualTo(PendingInvocationStatus.COMPLETED);
         assertThat(completed.completedAt()).isNotNull();
+        assertThat(completed.nextAttemptAt()).isNull();
     }
 
     @Test
@@ -96,21 +102,58 @@ class PendingInvocationTest {
     }
 
     @Test
-    void releaseForRetry_whenProcessing_returnsPendingAndClearsClaim() {
-        PendingInvocation released = pending().claim("worker-1").releaseForRetry("429 rate limited");
+    void releaseForRetry_whenProcessing_returnsPendingClearsClaimAndSchedulesBackoff() {
+        Instant before = Instant.now();
+        PendingInvocation released =
+                pending().claim("worker-1").releaseForRetry("429 rate limited", BASE_INTERVAL);
 
         assertThat(released.status()).isEqualTo(PendingInvocationStatus.PENDING);
         assertThat(released.claimedAt()).isNull();
         assertThat(released.claimedBy()).isNull();
         assertThat(released.lastError()).isEqualTo("429 rate limited");
         assertThat(released.attemptCount()).isEqualTo(1);
+        assertThat(released.nextAttemptAt())
+                .as("attempt 1 -> base * 2^0 = base seconds in the future")
+                .isAfterOrEqualTo(before.plusSeconds(BASE_INTERVAL))
+                .isBeforeOrEqualTo(Instant.now().plusSeconds(BASE_INTERVAL + 5));
+    }
+
+    @Test
+    void releaseForRetry_secondAttempt_schedulesDoubleBackoff() {
+        Instant before = Instant.now();
+        PendingInvocation released = pending()
+                .claim("w1").releaseForRetry("e1", BASE_INTERVAL)
+                .claim("w2").releaseForRetry("e2", BASE_INTERVAL);
+
+        assertThat(released.attemptCount()).isEqualTo(2);
+        assertThat(released.nextAttemptAt())
+                .as("attempt 2 -> base * 2^1 = 2x base seconds")
+                .isAfterOrEqualTo(before.plus(Duration.ofSeconds(BASE_INTERVAL * 2L)))
+                .isBeforeOrEqualTo(Instant.now().plus(Duration.ofSeconds(BASE_INTERVAL * 2L + 5)));
+    }
+
+    @Test
+    void releaseForRetry_thirdAttempt_schedulesQuadrupleBackoff() {
+        // Bump the budget so we can release after attempt 3 instead of hitting the max.
+        PendingInvocation third = PendingInvocation.rehydrate(UUID.randomUUID(), TENANT, CONVERSATION,
+                TRIGGER, PendingInvocationStatus.PROCESSING, 3, 5, Instant.now(), "prev",
+                Instant.now(), Instant.now(), "w3", null, null);
+
+        Instant before = Instant.now();
+        PendingInvocation released = third.releaseForRetry("transient", BASE_INTERVAL);
+
+        assertThat(released.attemptCount()).isEqualTo(3);
+        assertThat(released.nextAttemptAt())
+                .as("attempt 3 -> base * 2^2 = 4x base seconds")
+                .isAfterOrEqualTo(before.plus(Duration.ofSeconds(BASE_INTERVAL * 4L)))
+                .isBeforeOrEqualTo(Instant.now().plus(Duration.ofSeconds(BASE_INTERVAL * 4L + 5)));
     }
 
     @Test
     void releaseForRetry_canBeReclaimedAndCompleted() {
         PendingInvocation completed = pending()
                 .claim("worker-1")
-                .releaseForRetry("transient")
+                .releaseForRetry("transient", BASE_INTERVAL)
                 .claim("worker-2")
                 .complete();
 
@@ -120,7 +163,7 @@ class PendingInvocationTest {
 
     @Test
     void releaseForRetry_whenNotProcessing_throwsInvalidTransition() {
-        assertThatThrownBy(() -> pending().releaseForRetry("x"))
+        assertThatThrownBy(() -> pending().releaseForRetry("x", BASE_INTERVAL))
                 .isInstanceOf(InvalidPendingInvocationTransitionException.class);
     }
 
@@ -128,13 +171,31 @@ class PendingInvocationTest {
     void releaseForRetry_whenAttemptsExhausted_throwsMaxRetriesExceeded() {
         // Three claims consume the default budget of 3; the third release must be rejected.
         PendingInvocation afterThirdClaim = pending()
-                .claim("w1").releaseForRetry("e1")
-                .claim("w2").releaseForRetry("e2")
+                .claim("w1").releaseForRetry("e1", BASE_INTERVAL)
+                .claim("w2").releaseForRetry("e2", BASE_INTERVAL)
                 .claim("w3");
 
         assertThat(afterThirdClaim.attemptCount()).isEqualTo(3);
-        assertThatThrownBy(() -> afterThirdClaim.releaseForRetry("e3"))
+        assertThatThrownBy(() -> afterThirdClaim.releaseForRetry("e3", BASE_INTERVAL))
                 .isInstanceOf(MaxRetriesExceededException.class);
+    }
+
+    @Test
+    void releaseForRetry_whenBaseIntervalZero_throwsIllegalArgument() {
+        PendingInvocation processing = pending().claim("worker-1");
+
+        assertThatThrownBy(() -> processing.releaseForRetry("x", 0L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("baseIntervalSeconds");
+    }
+
+    @Test
+    void releaseForRetry_whenBaseIntervalNegative_throwsIllegalArgument() {
+        PendingInvocation processing = pending().claim("worker-1");
+
+        assertThatThrownBy(() -> processing.releaseForRetry("x", -1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("baseIntervalSeconds");
     }
 
     @Test
@@ -144,6 +205,7 @@ class PendingInvocationTest {
         assertThat(failed.status()).isEqualTo(PendingInvocationStatus.FAILED);
         assertThat(failed.completedAt()).isNotNull();
         assertThat(failed.lastError()).isEqualTo("401 unauthorized");
+        assertThat(failed.nextAttemptAt()).isNull();
     }
 
     @Test
@@ -167,6 +229,7 @@ class PendingInvocationTest {
         assertThat(abandoned.status()).isEqualTo(PendingInvocationStatus.ABANDONED);
         assertThat(abandoned.completedAt()).isNotNull();
         assertThat(abandoned.lastError()).isEqualTo("gave up after retries");
+        assertThat(abandoned.nextAttemptAt()).isNull();
     }
 
     @Test
@@ -206,6 +269,16 @@ class PendingInvocationTest {
         PendingInvocation failed = pending().claim("worker-1").fail(longError);
 
         assertThat(failed.lastError()).hasSize(1000);
+    }
+
+    @Test
+    void claim_afterReleaseForRetry_clearsNextAttemptAt() {
+        PendingInvocation reClaimed = pending()
+                .claim("w1")
+                .releaseForRetry("transient", BASE_INTERVAL)
+                .claim("w2");
+
+        assertThat(reClaimed.nextAttemptAt()).isNull();
     }
 
     @Test

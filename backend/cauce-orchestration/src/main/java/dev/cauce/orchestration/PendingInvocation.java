@@ -9,7 +9,7 @@ import java.util.UUID;
 
 /**
  * A single LLM invocation queued for the asynchronous orchestrator. Each USER message that
- * needs an agent reply enqueues one; a worker (later commit) claims PENDING rows with
+ * needs an agent reply enqueues one; the worker claims PENDING rows with
  * {@code SELECT ... FOR UPDATE SKIP LOCKED} and drives them through the lifecycle.
  *
  * <p>Pure domain type: no persistence or framework dependencies. Immutable; created via
@@ -50,11 +50,13 @@ public final class PendingInvocation {
     private final Instant claimedAt;     // null unless currently PROCESSING
     private final String claimedBy;      // null unless currently PROCESSING
     private final Instant completedAt;   // null unless COMPLETED, FAILED or ABANDONED
+    private final Instant nextAttemptAt; // null unless PENDING after a retry release
 
     private PendingInvocation(UUID id, UUID tenantId, UUID conversationId, UUID triggerMessageId,
                              PendingInvocationStatus status, int attemptCount, int maxAttempts,
                              Instant lastAttemptAt, String lastError, Instant createdAt,
-                             Instant claimedAt, String claimedBy, Instant completedAt) {
+                             Instant claimedAt, String claimedBy, Instant completedAt,
+                             Instant nextAttemptAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.conversationId = conversationId;
@@ -68,6 +70,7 @@ public final class PendingInvocation {
         this.claimedAt = claimedAt;
         this.claimedBy = claimedBy;
         this.completedAt = completedAt;
+        this.nextAttemptAt = nextAttemptAt;
     }
 
     // === FACTORY METHODS ===
@@ -75,8 +78,8 @@ public final class PendingInvocation {
     /**
      * Enqueues a new invocation for {@code conversationId}, triggered by
      * {@code triggerMessageId} and owned by {@code tenantId}. Starts
-     * {@link PendingInvocationStatus#PENDING} with a zero attempt count and the default
-     * attempt budget.
+     * {@link PendingInvocationStatus#PENDING} with a zero attempt count, the default
+     * attempt budget, and {@code nextAttemptAt} unset (immediately eligible).
      */
     public static PendingInvocation create(UUID tenantId, UUID conversationId, UUID triggerMessageId) {
         return new PendingInvocation(
@@ -92,6 +95,7 @@ public final class PendingInvocation {
                 Instant.now(),
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -100,7 +104,8 @@ public final class PendingInvocation {
                                              UUID triggerMessageId, PendingInvocationStatus status,
                                              int attemptCount, int maxAttempts, Instant lastAttemptAt,
                                              String lastError, Instant createdAt, Instant claimedAt,
-                                             String claimedBy, Instant completedAt) {
+                                             String claimedBy, Instant completedAt,
+                                             Instant nextAttemptAt) {
         return new PendingInvocation(
                 Objects.requireNonNull(id, "id"),
                 Objects.requireNonNull(tenantId, "tenantId"),
@@ -114,7 +119,8 @@ public final class PendingInvocation {
                 Objects.requireNonNull(createdAt, "createdAt"),
                 claimedAt,     // nullable
                 claimedBy,     // nullable
-                completedAt);  // nullable
+                completedAt,   // nullable
+                nextAttemptAt); // nullable
     }
 
     // === LIFECYCLE TRANSITIONS (IMMUTABLE - RETURN NEW INSTANCES) ===
@@ -136,7 +142,7 @@ public final class PendingInvocation {
         Instant now = Instant.now();
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.PROCESSING, attemptCount + 1, maxAttempts, now, lastError,
-                createdAt, now, worker, completedAt);
+                createdAt, now, worker, completedAt, null);
     }
 
     /**
@@ -153,21 +159,30 @@ public final class PendingInvocation {
         }
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.COMPLETED, attemptCount, maxAttempts, lastAttemptAt, lastError,
-                createdAt, claimedAt, claimedBy, Instant.now());
+                createdAt, claimedAt, claimedBy, Instant.now(), null);
     }
 
     /**
      * Releases the invocation back to {@link PendingInvocationStatus#PENDING} for another
      * attempt (e.g. a transient provider error). Allowed only from
-     * {@link PendingInvocationStatus#PROCESSING}. Clears the claim and records the error.
+     * {@link PendingInvocationStatus#PROCESSING}. Clears the claim, records the error, and
+     * schedules the next attempt with exponential backoff:
+     * {@code nextAttemptAt = now + baseIntervalSeconds * 2^(attemptCount - 1)}.
+     *
+     * <p>The first retry (after attempt 1) lands {@code baseIntervalSeconds} in the future;
+     * the second {@code 2 * baseIntervalSeconds}; the third {@code 4 * baseIntervalSeconds};
+     * and so on. The caller passes {@code baseIntervalSeconds} from configuration rather
+     * than the domain hardcoding it.
      *
      * @param errorMessage the reason for the retry; may be {@code null}, truncated to 1000 chars
-     * @return a new PENDING invocation with the claim cleared
+     * @param baseIntervalSeconds the seed of the backoff; must be &gt; 0
+     * @return a new PENDING invocation with the claim cleared and {@code nextAttemptAt} set
      * @throws InvalidPendingInvocationTransitionException if not PROCESSING
      * @throws MaxRetriesExceededException if the attempt budget is already exhausted; the
      *     caller must use {@link #fail(String)} or {@link #abandon(String)} instead
+     * @throws IllegalArgumentException if {@code baseIntervalSeconds} is not strictly positive
      */
-    public PendingInvocation releaseForRetry(String errorMessage) {
+    public PendingInvocation releaseForRetry(String errorMessage, long baseIntervalSeconds) {
         if (status != PendingInvocationStatus.PROCESSING) {
             throw new InvalidPendingInvocationTransitionException(
                     transitionError(PendingInvocationStatus.PENDING));
@@ -177,9 +192,15 @@ public final class PendingInvocation {
                     "PendingInvocation %s exhausted its %d attempt(s); use fail() or abandon()"
                             .formatted(id, maxAttempts));
         }
+        if (baseIntervalSeconds <= 0) {
+            throw new IllegalArgumentException(
+                    "baseIntervalSeconds must be > 0 but was " + baseIntervalSeconds);
+        }
+        long delaySeconds = baseIntervalSeconds * (1L << (attemptCount - 1));
+        Instant next = Instant.now().plusSeconds(delaySeconds);
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.PENDING, attemptCount, maxAttempts, lastAttemptAt,
-                truncateError(errorMessage), createdAt, null, null, completedAt);
+                truncateError(errorMessage), createdAt, null, null, completedAt, next);
     }
 
     /**
@@ -198,7 +219,7 @@ public final class PendingInvocation {
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.FAILED, attemptCount, maxAttempts, lastAttemptAt,
                 truncateError(requireText(errorMessage, "errorMessage")), createdAt, claimedAt,
-                claimedBy, Instant.now());
+                claimedBy, Instant.now(), null);
     }
 
     /**
@@ -217,7 +238,7 @@ public final class PendingInvocation {
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.ABANDONED, attemptCount, maxAttempts, lastAttemptAt,
                 truncateError(requireText(errorMessage, "errorMessage")), createdAt, claimedAt,
-                claimedBy, Instant.now());
+                claimedBy, Instant.now(), null);
     }
 
     private String transitionError(PendingInvocationStatus target) {
@@ -290,6 +311,10 @@ public final class PendingInvocation {
 
     public Instant completedAt() {
         return completedAt;
+    }
+
+    public Instant nextAttemptAt() {
+        return nextAttemptAt;
     }
 
     // === EQUALS/HASHCODE (ID-BASED) ===

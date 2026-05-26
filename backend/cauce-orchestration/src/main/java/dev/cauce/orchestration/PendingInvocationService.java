@@ -3,13 +3,17 @@ package dev.cauce.orchestration;
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.MessageNotFoundException;
+import dev.cauce.core.tenant.NoTenantContext;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageRepository;
+import dev.cauce.orchestration.persistence.PendingInvocationEntity;
 import dev.cauce.orchestration.persistence.PendingInvocationMapper;
 import dev.cauce.orchestration.persistence.PendingInvocationRepository;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,13 +21,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Application service that enqueues and reads {@link PendingInvocation}s. Every method is
- * tenant-scoped: {@code RlsContextAspect} establishes the RLS context from
- * {@code TenantContext} before each transactional method runs, and Row-Level Security
- * filters every query by the visibility of the owning tenant.
+ * Application service that enqueues, reads, and transitions {@link PendingInvocation}s.
+ * Tenant-scoped operations (enqueue, read) rely on {@code RlsContextAspect} to set the RLS
+ * context from {@code TenantContext} before each transactional method runs, and on
+ * Row-Level Security to filter every query by the visibility of the owning tenant.
  *
- * <p>The worker that drains the queue (claiming, retrying, processing) lands in a later
- * commit; this service only covers enqueue and read.
+ * <p>Worker-facing operations ({@link #claimNextBatch}, {@link #findOrphanedSince}) drain
+ * the queue across all tenants and are therefore annotated {@link NoTenantContext}: there
+ * is no single owning tenant for the polling itself. Per-row processing must establish
+ * the row's owning tenant context before invoking tenant-scoped services downstream.
+ *
+ * <p>The per-row terminal transitions ({@link #markCompleted}, {@link #markFailed},
+ * {@link #markAbandoned}, {@link #releaseForRetry}) are ordinary tenant-scoped operations:
+ * the caller (the worker) sets {@code TenantContext} to the invocation's owning tenant
+ * before invoking them.
  */
 @Service
 public class PendingInvocationService {
@@ -88,5 +99,97 @@ public class PendingInvocationService {
         return pendingInvocationRepository.findByConversationId(conversationId).stream()
                 .map(pendingInvocationMapper::toDomain)
                 .toList();
+    }
+
+    // === WORKER-FACING OPERATIONS (cross-tenant) ===
+
+    /**
+     * Claims up to {@code batchSize} of the oldest PENDING rows whose backoff has cleared,
+     * marks each PROCESSING under {@code workerId}, and returns the claimed rows.
+     *
+     * <p>{@link NoTenantContext}: the worker has no single owning tenant. The underlying
+     * row lock ({@code FOR UPDATE SKIP LOCKED}) holds for the duration of this transaction
+     * and is released on commit, so the persisted PROCESSING transition is what prevents
+     * a second worker from picking the same row.
+     */
+    @Transactional
+    @NoTenantContext
+    public List<PendingInvocation> claimNextBatch(String workerId, int batchSize) {
+        List<PendingInvocationEntity> claimedRaw = pendingInvocationRepository.claimNextBatch(batchSize);
+        List<PendingInvocation> claimed = new ArrayList<>(claimedRaw.size());
+        for (PendingInvocationEntity entity : claimedRaw) {
+            PendingInvocation domain = pendingInvocationMapper.toDomain(entity).claim(workerId);
+            claimed.add(pendingInvocationMapper.toDomain(
+                    pendingInvocationRepository.save(pendingInvocationMapper.toEntity(domain))));
+        }
+        return claimed;
+    }
+
+    /**
+     * Returns PROCESSING invocations whose claim is older than {@code threshold}. Used by
+     * the reaper to recover work whose worker died (or hung) before transitioning the row.
+     *
+     * <p>{@link NoTenantContext}: same rationale as {@link #claimNextBatch}.
+     */
+    @Transactional(readOnly = true)
+    @NoTenantContext
+    public List<PendingInvocation> findOrphanedSince(Instant threshold) {
+        return pendingInvocationRepository.findOrphanedSince(threshold).stream()
+                .map(pendingInvocationMapper::toDomain)
+                .toList();
+    }
+
+    // === PER-ROW TERMINAL TRANSITIONS (tenant-scoped) ===
+
+    /**
+     * Marks {@code invocationId} COMPLETED. The caller must have set {@code TenantContext}
+     * to the invocation's owning tenant; RLS enforces that the caller may see the row.
+     *
+     * @throws PendingInvocationNotFoundException if the row is not visible under the current
+     *     tenant context
+     */
+    @Transactional
+    public void markCompleted(UUID invocationId) {
+        PendingInvocation completed = loadVisible(invocationId).complete();
+        pendingInvocationRepository.save(pendingInvocationMapper.toEntity(completed));
+    }
+
+    /**
+     * Marks {@code invocationId} FAILED. The caller must have set {@code TenantContext} to
+     * the invocation's owning tenant.
+     */
+    @Transactional
+    public void markFailed(UUID invocationId, String errorMessage) {
+        PendingInvocation failed = loadVisible(invocationId).fail(errorMessage);
+        pendingInvocationRepository.save(pendingInvocationMapper.toEntity(failed));
+    }
+
+    /**
+     * Marks {@code invocationId} ABANDONED. The caller must have set {@code TenantContext}
+     * to the invocation's owning tenant.
+     */
+    @Transactional
+    public void markAbandoned(UUID invocationId, String errorMessage) {
+        PendingInvocation abandoned = loadVisible(invocationId).abandon(errorMessage);
+        pendingInvocationRepository.save(pendingInvocationMapper.toEntity(abandoned));
+    }
+
+    /**
+     * Releases {@code invocationId} back to PENDING with exponential backoff (see
+     * {@link PendingInvocation#releaseForRetry}). The caller must have set
+     * {@code TenantContext} to the invocation's owning tenant.
+     */
+    @Transactional
+    public void releaseForRetry(UUID invocationId, String errorMessage, long baseIntervalSeconds) {
+        PendingInvocation released =
+                loadVisible(invocationId).releaseForRetry(errorMessage, baseIntervalSeconds);
+        pendingInvocationRepository.save(pendingInvocationMapper.toEntity(released));
+    }
+
+    private PendingInvocation loadVisible(UUID invocationId) {
+        return pendingInvocationRepository.findById(invocationId)
+                .map(pendingInvocationMapper::toDomain)
+                .orElseThrow(() -> new PendingInvocationNotFoundException(
+                        "No pending invocation found for id " + invocationId));
     }
 }

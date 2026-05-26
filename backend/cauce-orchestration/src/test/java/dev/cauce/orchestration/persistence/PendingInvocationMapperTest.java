@@ -32,14 +32,17 @@ class PendingInvocationMapperTest {
         assertThat(result.claimedAt()).isNull();
         assertThat(result.claimedBy()).isNull();
         assertThat(result.completedAt()).isNull();
+        assertThat(result.nextAttemptAt()).isNull();
     }
 
     @Test
     void roundTrip_withAllFieldsSet_preservesState() {
         Instant now = Instant.now();
+        Instant nextAttempt = now.plusSeconds(60);
         PendingInvocation original = PendingInvocation.rehydrate(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                PendingInvocationStatus.FAILED, 2, 3, now, "boom", now, now, "worker-9", now);
+                PendingInvocationStatus.FAILED, 2, 3, now, "boom", now, now, "worker-9", now,
+                nextAttempt);
 
         PendingInvocation result = mapper.toDomain(mapper.toEntity(original));
 
@@ -53,5 +56,24 @@ class PendingInvocationMapperTest {
         assertThat(result.claimedAt()).isEqualTo(now);
         assertThat(result.claimedBy()).isEqualTo("worker-9");
         assertThat(result.completedAt()).isEqualTo(now);
+        assertThat(result.nextAttemptAt()).isEqualTo(nextAttempt);
+    }
+
+    @Test
+    void roundTrip_pendingWithBackoff_preservesNextAttemptAt() {
+        Instant now = Instant.now();
+        Instant nextAttempt = now.plusSeconds(120);
+        PendingInvocation original = PendingInvocation.rehydrate(
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                PendingInvocationStatus.PENDING, 2, 3, now, "rate limited", now, null, null, null,
+                nextAttempt);
+
+        PendingInvocation result = mapper.toDomain(mapper.toEntity(original));
+
+        assertThat(result.status()).isEqualTo(PendingInvocationStatus.PENDING);
+        assertThat(result.attemptCount()).isEqualTo(2);
+        assertThat(result.lastError()).isEqualTo("rate limited");
+        assertThat(result.nextAttemptAt()).isEqualTo(nextAttempt);
+        assertThat(result.claimedAt()).isNull();
     }
 }

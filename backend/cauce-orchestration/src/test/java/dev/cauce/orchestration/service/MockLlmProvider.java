@@ -35,11 +35,11 @@ public class MockLlmProvider implements LlmProvider {
         return responder.apply(invocation);
     }
 
-    void respondWith(Function<LlmInvocation, LlmResponse> responder) {
+    public void respondWith(Function<LlmInvocation, LlmResponse> responder) {
         this.responder = responder;
     }
 
-    LlmInvocation lastInvocation() {
+    public LlmInvocation lastInvocation() {
         return lastInvocation;
     }
 }

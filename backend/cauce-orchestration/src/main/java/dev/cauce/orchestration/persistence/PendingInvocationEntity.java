@@ -61,6 +61,9 @@ public class PendingInvocationEntity {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
+
     protected PendingInvocationEntity() {
         // for JPA
     }
@@ -68,7 +71,8 @@ public class PendingInvocationEntity {
     public PendingInvocationEntity(UUID id, UUID tenantId, UUID conversationId, UUID triggerMessageId,
                                    PendingInvocationStatus status, int attemptCount, int maxAttempts,
                                    Instant lastAttemptAt, String lastError, Instant createdAt,
-                                   Instant claimedAt, String claimedBy, Instant completedAt) {
+                                   Instant claimedAt, String claimedBy, Instant completedAt,
+                                   Instant nextAttemptAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.conversationId = conversationId;
@@ -82,6 +86,7 @@ public class PendingInvocationEntity {
         this.claimedAt = claimedAt;
         this.claimedBy = claimedBy;
         this.completedAt = completedAt;
+        this.nextAttemptAt = nextAttemptAt;
     }
 
     public UUID getId() {
@@ -134,5 +139,9 @@ public class PendingInvocationEntity {
 
     public Instant getCompletedAt() {
         return completedAt;
+    }
+
+    public Instant getNextAttemptAt() {
+        return nextAttemptAt;
     }
 }
