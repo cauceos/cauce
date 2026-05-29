@@ -1,5 +1,7 @@
 package dev.cauce.api.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.cauce.api.web.ApiErrorWriter;
 import dev.cauce.core.apikey.ApiKey;
 import dev.cauce.core.apikey.ApiKeyGenerator;
 import dev.cauce.core.apikey.ApiKeyHasher;
@@ -18,7 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -59,18 +60,20 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ApiKeyAuthenticationFilter.class);
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final String UNAUTHORIZED_BODY = "{\"error\":\"unauthorized\"}";
 
     private final ApiKeyService apiKeyService;
     private final ApiKeyHasher apiKeyHasher;
     private final ApiKeyCache apiKeyCache;
+    private final ObjectMapper objectMapper;
 
     public ApiKeyAuthenticationFilter(ApiKeyService apiKeyService,
                                       ApiKeyHasher apiKeyHasher,
-                                      ApiKeyCache apiKeyCache) {
+                                      ApiKeyCache apiKeyCache,
+                                      ObjectMapper objectMapper) {
         this.apiKeyService = apiKeyService;
         this.apiKeyHasher = apiKeyHasher;
         this.apiKeyCache = apiKeyCache;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -142,10 +145,12 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         return null;
     }
 
-    private static void writeUnauthorized(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpStatus.UNAUTHORIZED.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(UNAUTHORIZED_BODY);
+    private void writeUnauthorized(HttpServletResponse response) throws IOException {
+        // Same uniform body as the authentication entry point: a generic, non-revealing
+        // message identical for every failure reason (bad format, unknown / revoked /
+        // expired key), so callers cannot probe which keys exist.
+        ApiErrorWriter.write(response, HttpStatus.UNAUTHORIZED,
+                Http401AuthenticationEntryPoint.ERROR_CODE, Http401AuthenticationEntryPoint.MESSAGE, objectMapper);
     }
 
     private record AuthenticatedKey(UUID apiKeyId, UUID tenantId, boolean cached) {

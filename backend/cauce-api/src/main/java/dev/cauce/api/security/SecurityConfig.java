@@ -1,5 +1,7 @@
 package dev.cauce.api.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.cauce.api.web.RequestIdFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -30,7 +32,9 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   ApiKeyAuthenticationFilter apiKeyAuthenticationFilter)
+                                                   RequestIdFilter requestIdFilter,
+                                                   ApiKeyAuthenticationFilter apiKeyAuthenticationFilter,
+                                                   ObjectMapper objectMapper)
             throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -43,8 +47,11 @@ public class SecurityConfig {
                         .requestMatchers("/v1/api-docs/**", "/swagger-ui/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex ->
-                        ex.authenticationEntryPoint(new Http401AuthenticationEntryPoint()))
+                        ex.authenticationEntryPoint(new Http401AuthenticationEntryPoint(objectMapper)))
                 .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // request_id must be assigned before authentication so even 401 responses
+                // carry it (in the MDC and the X-Request-Id header).
+                .addFilterBefore(requestIdFilter, ApiKeyAuthenticationFilter.class)
                 .build();
     }
 }
