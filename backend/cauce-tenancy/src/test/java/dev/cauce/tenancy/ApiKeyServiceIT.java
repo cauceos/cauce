@@ -3,13 +3,13 @@ package dev.cauce.tenancy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.cauce.core.agent.TenantNotFoundException;
 import dev.cauce.core.apikey.ApiKey;
 import dev.cauce.core.apikey.ApiKeyAlreadyRevokedException;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.tenant.MissingTenantContextException;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.core.tenant.TenantNotFoundException;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;

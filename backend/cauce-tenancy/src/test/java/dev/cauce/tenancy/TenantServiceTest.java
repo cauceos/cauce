@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.Tenant;
+import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.tenant.TenantEntity;
 import dev.cauce.memory.tenant.TenantMapper;
@@ -35,7 +37,7 @@ class TenantServiceTest {
         when(repository.findById(operatorId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createPartner("P", operatorId))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(TenantNotFoundException.class);
     }
 
     @Test
@@ -44,7 +46,7 @@ class TenantServiceTest {
         when(repository.findById(clientId)).thenReturn(Optional.of(entity(clientId, Tier.CLIENT)));
 
         assertThatThrownBy(() -> service.createPartner("P", clientId))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidTenantTierException.class);
     }
 
     @Test
@@ -65,7 +67,7 @@ class TenantServiceTest {
         when(repository.findById(operatorId)).thenReturn(Optional.of(entity(operatorId, Tier.OPERATOR)));
 
         assertThatThrownBy(() -> service.createClient("C", operatorId))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidTenantTierException.class);
     }
 
     @Test

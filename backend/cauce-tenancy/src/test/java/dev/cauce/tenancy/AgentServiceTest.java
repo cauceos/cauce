@@ -7,8 +7,8 @@ import static org.mockito.Mockito.when;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentStatus;
-import dev.cauce.core.agent.InvalidTenantTierException;
-import dev.cauce.core.agent.TenantNotFoundException;
+import dev.cauce.core.tenant.InvalidTenantTierException;
+import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentMapper;

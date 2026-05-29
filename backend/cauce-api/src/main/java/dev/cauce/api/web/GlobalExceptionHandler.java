@@ -1,15 +1,15 @@
 package dev.cauce.api.web;
 
 import dev.cauce.core.agent.AgentNotFoundException;
-import dev.cauce.core.agent.InvalidTenantTierException;
-import dev.cauce.core.agent.TenantNotFoundException;
 import dev.cauce.core.apikey.ApiKeyAlreadyRevokedException;
 import dev.cauce.core.apikey.ApiKeyNotFoundException;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.conversation.InvalidChannelTypeException;
 import dev.cauce.core.conversation.InvalidConversationTransitionException;
 import dev.cauce.core.message.MessageNotFoundException;
+import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.MissingTenantContextException;
+import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.llm.exception.LlmAuthenticationException;
 import dev.cauce.llm.exception.LlmInvalidRequestException;
 import dev.cauce.llm.exception.LlmRateLimitException;

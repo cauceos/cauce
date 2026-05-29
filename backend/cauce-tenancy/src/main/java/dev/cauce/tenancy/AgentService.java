@@ -1,10 +1,10 @@
 package dev.cauce.tenancy;
 
 import dev.cauce.core.agent.Agent;
-import dev.cauce.core.agent.InvalidTenantTierException;
-import dev.cauce.core.agent.TenantNotFoundException;
+import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.MissingTenantContextException;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;

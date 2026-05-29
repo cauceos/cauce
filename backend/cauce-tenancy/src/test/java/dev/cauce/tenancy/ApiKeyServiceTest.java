@@ -6,11 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.cauce.core.agent.TenantNotFoundException;
 import dev.cauce.core.apikey.ApiKey;
 import dev.cauce.core.apikey.ApiKeyGenerator;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.apikey.ApiKeyNotFoundException;
+import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.apikey.ApiKeyEntity;
 import dev.cauce.memory.apikey.ApiKeyMapper;

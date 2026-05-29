@@ -1,7 +1,9 @@
 package dev.cauce.tenancy;
 
+import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.NoTenantContext;
 import dev.cauce.core.tenant.Tenant;
+import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.tenant.TenantEntity;
 import dev.cauce.memory.tenant.TenantMapper;
@@ -53,9 +55,9 @@ public class TenantService {
 
     private void requireTier(UUID parentId, Tier expected, String label) {
         TenantEntity parent = repository.findById(parentId).orElseThrow(() ->
-                new IllegalArgumentException("No tenant found for id " + parentId));
+                new TenantNotFoundException("No tenant found for id " + parentId));
         if (parent.getTier() != expected) {
-            throw new IllegalArgumentException(
+            throw new InvalidTenantTierException(
                     "Parent " + parentId + " must be " + label + " but was " + parent.getTier());
         }
     }
