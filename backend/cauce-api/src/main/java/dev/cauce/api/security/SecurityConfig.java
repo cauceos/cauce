@@ -45,6 +45,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/v1/api-docs/**", "/swagger-ui/**").permitAll()
+                        // DEV-ONLY AUTH HOLE: the /v1 API surface is open and its tenant context
+                        // comes from the X-Tenant-Id header (see TenantContextFilter). This
+                        // permitAll and that filter are a temporary pair — both are removed
+                        // together when real authentication lands and sets the context from a
+                        // validated principal instead of a trusted header.
+                        .requestMatchers("/v1/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex ->
                         ex.authenticationEntryPoint(new Http401AuthenticationEntryPoint(objectMapper)))

@@ -21,14 +21,17 @@ import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxRetriesExceededException;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
 import dev.cauce.orchestration.exception.UnknownModelException;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * Translates exceptions thrown by controllers into the uniform {@link ErrorResponse}
@@ -72,7 +75,6 @@ public class GlobalExceptionHandler {
             Map.entry(ApiKeyNotFoundException.class, "api_key_not_found"),
             Map.entry(PendingInvocationNotFoundException.class, "pending_invocation_not_found"),
             // 400 BAD_REQUEST
-            Map.entry(InvalidTenantTierException.class, "invalid_tenant_tier"),
             Map.entry(InvalidConversationTransitionException.class, "invalid_conversation_transition"),
             Map.entry(InvalidChannelTypeException.class, "invalid_channel_type"),
             Map.entry(InvalidTriggerMessageException.class, "invalid_trigger_message"),
@@ -83,6 +85,7 @@ public class GlobalExceptionHandler {
             Map.entry(MaxRetriesExceededException.class, "max_retries_exceeded"),
             Map.entry(InvalidPendingInvocationTransitionException.class, "invalid_pending_invocation_transition"),
             // 422 UNPROCESSABLE_ENTITY
+            Map.entry(InvalidTenantTierException.class, "invalid_tenant_tier"),
             Map.entry(MessageTooLargeForContextException.class, "message_too_large_for_context"),
             Map.entry(UnknownModelException.class, "unknown_model"),
             // 502 BAD_GATEWAY
@@ -108,12 +111,28 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-            InvalidTenantTierException.class,
             InvalidConversationTransitionException.class,
             InvalidChannelTypeException.class,
             InvalidTriggerMessageException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex) {
         return clientError(HttpStatus.BAD_REQUEST, ex);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+        List<ErrorResponse.FieldError> fields = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> new ErrorResponse.FieldError(fe.getField(), fe.getDefaultMessage()))
+                .toList();
+        log.warn("validation_failed [{}]: {} field error(s)", HttpStatus.BAD_REQUEST.value(), fields.size());
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("validation_failed", "Request validation failed", fields));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        log.warn("invalid_path_parameter [{}]: {}", HttpStatus.BAD_REQUEST.value(), ex.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("invalid_path_parameter", "Invalid value for parameter '" + ex.getName() + "'"));
     }
 
     @ExceptionHandler(MissingTenantContextException.class)
@@ -130,6 +149,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({
+            InvalidTenantTierException.class,
             MessageTooLargeForContextException.class,
             UnknownModelException.class})
     public ResponseEntity<ErrorResponse> handleUnprocessable(RuntimeException ex) {
@@ -157,6 +177,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(LlmTimeoutException.class)
     public ResponseEntity<ErrorResponse> handleGatewayTimeout(LlmTimeoutException ex) {
         return serverError(HttpStatus.GATEWAY_TIMEOUT, ex, GENERIC_504_MESSAGE);
+    }
+
+    // Fallback for argument-shaped errors surfacing from the service layer (e.g. an
+    // unsupported value a DTO does not yet constrain, like an unknown model provider).
+    // Matches only IllegalArgumentException, so it never shadows the specific domain
+    // handlers above; anything else still falls through to the 500 handler.
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("bad_request [{}]: {}", HttpStatus.BAD_REQUEST.value(), ex.getMessage());
+        return ResponseEntity.badRequest().body(ErrorResponse.of("bad_request", ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

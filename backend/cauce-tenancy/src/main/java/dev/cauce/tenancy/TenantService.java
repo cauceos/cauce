@@ -8,6 +8,7 @@ import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.tenant.TenantEntity;
 import dev.cauce.memory.tenant.TenantMapper;
 import dev.cauce.memory.tenant.TenantRepository;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +52,26 @@ public class TenantService {
     public Tenant createClient(String name, UUID partnerId) {
         requireTier(partnerId, Tier.PARTNER, "a PARTNER");
         return persist(Tenant.client(name, partnerId));
+    }
+
+    /**
+     * Returns the tenant by id, or throws {@link TenantNotFoundException} if it does not
+     * exist or is not visible to the current context. RLS does the visibility filtering;
+     * not-found and not-visible are intentionally indistinguishable.
+     */
+    @Transactional
+    public Tenant getTenant(UUID id) {
+        return repository.findById(id).map(mapper::toDomain).orElseThrow(() ->
+                new TenantNotFoundException("No tenant found for id " + id));
+    }
+
+    /**
+     * Lists the direct children of the given tenant. RLS filters out anything the current
+     * context cannot see, so a parent outside the caller's scope yields an empty list.
+     */
+    @Transactional
+    public List<Tenant> listChildren(UUID parentId) {
+        return repository.findByParentTenantId(parentId).stream().map(mapper::toDomain).toList();
     }
 
     private void requireTier(UUID parentId, Tier expected, String label) {
