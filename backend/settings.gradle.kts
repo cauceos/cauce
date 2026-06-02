@@ -21,6 +21,7 @@ include(
     "cauce-channels",
     "cauce-llm",
     "cauce-llm-anthropic",
+    "cauce-llm-openai",
     "cauce-evals",
     "cauce-observability",
     "cauce-governance",
