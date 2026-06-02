@@ -292,6 +292,13 @@ The async worker/reaper run under `cauce_app`: their cross-tenant claim/reap go 
 `V12` SECURITY DEFINER functions, and all processing stays under RLS in the claimed tenant's
 context (see `docs/adr/0001-rls-escape-hatches.md`).
 
+**Authentication.** `/v1/**` requires a valid API key (`Authorization: Bearer <key>`); the tenant
+context is derived from the validated key, never from a client header. There is no key-issuance
+endpoint yet, so on the **first** start against an empty database `OperatorKeyBootstrapRunner`
+creates the root operator and logs its API key **once** (`WARN`) — copy it from the log; it cannot
+be recovered. Subsequent starts are no-ops. In production this is the documented first-run step;
+the runner is disabled under the `test` profile (tests mint their own keys).
+
 ### Frontend
 
 > Not present yet. Will be added under `frontend/cauce-dashboard`.

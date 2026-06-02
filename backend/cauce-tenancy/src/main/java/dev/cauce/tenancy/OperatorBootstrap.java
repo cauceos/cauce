@@ -35,6 +35,17 @@ public class OperatorBootstrap {
     }
 
     /**
+     * Whether any operator already exists. Runs on the same privileged connection (bypassing RLS),
+     * so it can answer without a tenant context — letting the startup bootstrap stay idempotent
+     * across restarts.
+     */
+    public boolean operatorExists() {
+        Integer count = jdbc.queryForObject(
+                "SELECT count(*) FROM tenants WHERE tier = 'OPERATOR'", Integer.class);
+        return count != null && count > 0;
+    }
+
+    /**
      * Persists {@code operator} (an OPERATOR-tier {@link Tenant}) and returns it rehydrated
      * with the database-assigned timestamps.
      */
