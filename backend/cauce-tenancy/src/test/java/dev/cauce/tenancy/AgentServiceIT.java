@@ -147,14 +147,17 @@ class AgentServiceIT {
     }
 
     @Test
-    void getAgent_returnsAgentForOwningClient_emptyForOtherClient() {
+    void getAgent_returnsAgentById_emptyForUnknownId() {
+        // getAgent now relies entirely on RLS for visibility (no app-level owner filter). This IT
+        // connects as the RLS-bypassing superuser, so it can only assert the lookup round-trip;
+        // hierarchical visibility (owner/partner/operator see it, sibling does not) is verified by
+        // agentsCreatedViaService_areFilteredByRlsHierarchy via SET ROLE, and end-to-end under
+        // cauce_app by TenantAndAgentApiIT.
         Agent agent = createAgentForClientA();
-
         TenantContext.setCurrentTenantId(clientA.id());
-        assertThat(agentService.getAgent(agent.id())).isPresent();
 
-        TenantContext.setCurrentTenantId(clientB.id());
-        assertThat(agentService.getAgent(agent.id())).isEmpty();
+        assertThat(agentService.getAgent(agent.id())).isPresent();
+        assertThat(agentService.getAgent(UUID.randomUUID())).isEmpty();
     }
 
     @Test

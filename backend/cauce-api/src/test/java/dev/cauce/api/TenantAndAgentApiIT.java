@@ -133,8 +133,8 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
         String clientAAuth = bearerFor(clientA);
         UUID agentA = createAgent(clientAAuth, clientA);
 
-        // An unrelated tenant's key cannot read agentA: the query is scoped to the AUTHENTICATED
-        // tenant, so the agent is not found -> 404 (not-found and not-visible are indistinguishable).
+        // An unrelated (sibling) partner's key cannot read agentA: it is not in partnerB's subtree,
+        // so RLS hides it -> 404 (not-found and not-visible are indistinguishable).
         mockMvc.perform(getAs(partnerBAuth, "/v1/agents/" + agentA))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("agent_not_found"));
@@ -148,9 +148,12 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("agent_not_found"));
 
-        // The owning tenant's own key reads its agent -> 200 (getAgent is exact-owner; ancestors
-        // see a client's agents via the list endpoint, not GET-by-id).
+        // Hierarchical authority (ADR 0002): the owning client AND its ancestor partner can read
+        // agentA -> 200 (getAgent now follows RLS visibility, not exact-owner).
         mockMvc.perform(getAs(clientAAuth, "/v1/agents/" + agentA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(agentA.toString()));
+        mockMvc.perform(getAs(partnerAAuth, "/v1/agents/" + agentA))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(agentA.toString()));
     }

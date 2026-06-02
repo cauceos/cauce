@@ -2,7 +2,6 @@ package dev.cauce.memory.agent;
 
 import dev.cauce.core.agent.AgentStatus;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -14,6 +13,4 @@ public interface AgentRepository extends JpaRepository<AgentEntity, UUID> {
     List<AgentEntity> findByTenantId(UUID tenantId);
 
     List<AgentEntity> findByStatus(AgentStatus status);
-
-    Optional<AgentEntity> findByIdAndTenantId(UUID id, UUID tenantId);
 }

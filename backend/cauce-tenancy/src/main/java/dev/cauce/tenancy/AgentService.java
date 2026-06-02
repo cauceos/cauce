@@ -2,8 +2,6 @@ package dev.cauce.tenancy;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.tenant.InvalidTenantTierException;
-import dev.cauce.core.tenant.MissingTenantContextException;
-import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.agent.AgentMapper;
@@ -70,12 +68,15 @@ public class AgentService {
         return agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(agent)));
     }
 
-    /** Returns the agent only if it belongs to the current context tenant (and RLS allows it). */
+    /**
+     * Returns the agent if it is visible under the current tenant context. Visibility is
+     * hierarchical: a tenant sees its own agents and those of its descendants. RLS does the
+     * filtering (the aspect sets the context); not-found and not-visible are intentionally
+     * indistinguishable. Aligned with {@code getTenant}/{@code listAgentsForTenant} — see ADR 0002.
+     */
     @Transactional
     public Optional<Agent> getAgent(UUID agentId) {
-        UUID currentTenant = TenantContext.getCurrentTenantId().orElseThrow(() ->
-                new MissingTenantContextException("No tenant context set for getAgent"));
-        return agentRepository.findByIdAndTenantId(agentId, currentTenant).map(agentMapper::toDomain);
+        return agentRepository.findById(agentId).map(agentMapper::toDomain);
     }
 
     /** Lists agents of the given tenant; RLS filters out tenants the context cannot see. */
