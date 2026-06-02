@@ -9,11 +9,9 @@ import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageRepository;
-import dev.cauce.orchestration.persistence.PendingInvocationEntity;
 import dev.cauce.orchestration.persistence.PendingInvocationMapper;
 import dev.cauce.orchestration.persistence.PendingInvocationRepository;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -104,25 +102,22 @@ public class PendingInvocationService {
     // === WORKER-FACING OPERATIONS (cross-tenant) ===
 
     /**
-     * Claims up to {@code batchSize} of the oldest PENDING rows whose backoff has cleared,
-     * marks each PROCESSING under {@code workerId}, and returns the claimed rows.
+     * Claims up to {@code batchSize} of the oldest PENDING rows whose backoff has cleared and
+     * marks each PROCESSING under {@code workerId}, returning the claimed rows.
      *
-     * <p>{@link NoTenantContext}: the worker has no single owning tenant. The underlying
-     * row lock ({@code FOR UPDATE SKIP LOCKED}) holds for the duration of this transaction
-     * and is released on commit, so the persisted PROCESSING transition is what prevents
-     * a second worker from picking the same row.
+     * <p>{@link NoTenantContext}: the worker has no single owning tenant. The claim — the
+     * PENDING -> PROCESSING transition under {@code FOR UPDATE SKIP LOCKED} — is performed
+     * atomically by the {@code claim_pending_invocations} SECURITY DEFINER function (V12),
+     * which is the narrow cross-tenant escape hatch (see ADR 0001). The rows returned are
+     * already PROCESSING; this method only maps them to the domain. The aspect is exempted
+     * so it does not fail-close on the missing context.
      */
     @Transactional
     @NoTenantContext
     public List<PendingInvocation> claimNextBatch(String workerId, int batchSize) {
-        List<PendingInvocationEntity> claimedRaw = pendingInvocationRepository.claimNextBatch(batchSize);
-        List<PendingInvocation> claimed = new ArrayList<>(claimedRaw.size());
-        for (PendingInvocationEntity entity : claimedRaw) {
-            PendingInvocation domain = pendingInvocationMapper.toDomain(entity).claim(workerId);
-            claimed.add(pendingInvocationMapper.toDomain(
-                    pendingInvocationRepository.save(pendingInvocationMapper.toEntity(domain))));
-        }
-        return claimed;
+        return pendingInvocationRepository.claimNextBatch(workerId, batchSize).stream()
+                .map(pendingInvocationMapper::toDomain)
+                .toList();
     }
 
     /**

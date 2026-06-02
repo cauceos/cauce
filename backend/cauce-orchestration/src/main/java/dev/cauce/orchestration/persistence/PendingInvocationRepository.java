@@ -14,11 +14,11 @@ import org.springframework.data.repository.query.Param;
  *
  * <p>The worker-facing operations ({@link #claimNextBatch}, {@link #findOrphanedSince})
  * cross all tenants and must run without an established {@code TenantContext}; the calling
- * service annotates them {@code @NoTenantContext}. Today the application connects as a
- * superuser and RLS is bypassed there. When the application is later wired to the
- * least-privilege {@code cauce_app} role, these queries will need a different mechanism
- * (a worker-only role with {@code BYPASSRLS}, or {@code SECURITY DEFINER} functions) —
- * the {@code @NoTenantContext} marker stays; the DB-level path changes.
+ * service annotates them {@code @NoTenantContext}. Under the least-privilege {@code cauce_app}
+ * role they would otherwise be fail-closed by RLS, so they go through the owner-owned
+ * {@code SECURITY DEFINER} functions {@code claim_pending_invocations} and
+ * {@code orphaned_invocations} (migration V12), the narrow cross-tenant escape hatch (see
+ * ADR 0001). The caller then sets the tenant context and does all further work under RLS.
  */
 public interface PendingInvocationRepository extends JpaRepository<PendingInvocationEntity, UUID> {
 
@@ -30,29 +30,25 @@ public interface PendingInvocationRepository extends JpaRepository<PendingInvoca
 
     /**
      * Atomically claims up to {@code batchSize} of the oldest PENDING invocations whose
-     * backoff has cleared ({@code next_attempt_at IS NULL} or {@code <= NOW()}), skipping
-     * rows already locked by a concurrent worker ({@code FOR UPDATE SKIP LOCKED}).
-     *
-     * <p>Backed by the partial index {@code idx_pending_invocations_pending_ready}. The
-     * returned rows are row-locked for the remainder of the transaction, so this
-     * <strong>must</strong> run inside an open transaction and the caller is expected to
-     * transition and persist each claimed row before commit.
+     * backoff has cleared, marks them PROCESSING under {@code workerId}, and returns the
+     * claimed rows — all in one statement via the {@code claim_pending_invocations}
+     * SECURITY DEFINER function (V12). The function uses {@code FOR UPDATE SKIP LOCKED} so
+     * concurrent workers claim disjoint sets, and runs as the owner so the cross-tenant
+     * claim is not fail-closed under {@code cauce_app}. The returned rows are already
+     * PROCESSING; the caller only maps them.
      */
-    @Query(value = "SELECT * FROM pending_invocations "
-            + "WHERE status = 'PENDING' "
-            + "  AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()) "
-            + "ORDER BY created_at ASC "
-            + "LIMIT :batchSize FOR UPDATE SKIP LOCKED",
+    @Query(value = "SELECT * FROM claim_pending_invocations(:workerId, :batchSize)",
             nativeQuery = true)
-    List<PendingInvocationEntity> claimNextBatch(@Param("batchSize") int batchSize);
+    List<PendingInvocationEntity> claimNextBatch(@Param("workerId") String workerId,
+                                                 @Param("batchSize") int batchSize);
 
     /**
-     * Returns invocations in {@link PendingInvocationStatus#PROCESSING} whose claim is
-     * older than {@code threshold}. Used by the reaper to recover work whose worker died
-     * (or hung) before transitioning the row to a terminal or PENDING state.
+     * Returns invocations in {@link PendingInvocationStatus#PROCESSING} whose claim is older
+     * than {@code threshold}, via the {@code orphaned_invocations} SECURITY DEFINER function
+     * (V12) — the cross-tenant discovery the reaper needs without being fail-closed under
+     * {@code cauce_app}. Discovery only: the recovery transition stays in the domain under
+     * RLS in each row's tenant context.
      */
-    @Query("SELECT p FROM PendingInvocationEntity p "
-            + "WHERE p.status = dev.cauce.orchestration.PendingInvocationStatus.PROCESSING "
-            + "  AND p.claimedAt < :threshold")
+    @Query(value = "SELECT * FROM orphaned_invocations(:threshold)", nativeQuery = true)
     List<PendingInvocationEntity> findOrphanedSince(@Param("threshold") Instant threshold);
 }

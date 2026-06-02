@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -128,10 +127,15 @@ class PendingInvocationServiceTest {
     }
 
     @Test
-    void claimNextBatch_marksEachRowProcessingUnderWorkerId() {
-        PendingInvocation a = PendingInvocation.create(tenantId, conversationId, UUID.randomUUID());
-        PendingInvocation b = PendingInvocation.create(tenantId, conversationId, UUID.randomUUID());
-        when(pendingInvocationRepository.claimNextBatch(5))
+    void claimNextBatch_returnsClaimedRows_mappedFromTheClaimFunction() {
+        // The claim_pending_invocations SECURITY DEFINER function (V12) performs the
+        // PENDING -> PROCESSING transition and returns the already-claimed rows; the service
+        // only maps them. It no longer transitions or persists rows itself.
+        PendingInvocation a =
+                PendingInvocation.create(tenantId, conversationId, UUID.randomUUID()).claim("worker-x");
+        PendingInvocation b =
+                PendingInvocation.create(tenantId, conversationId, UUID.randomUUID()).claim("worker-x");
+        when(pendingInvocationRepository.claimNextBatch("worker-x", 5))
                 .thenReturn(List.of(mapper.toEntity(a), mapper.toEntity(b)));
 
         List<PendingInvocation> claimed = service.claimNextBatch("worker-x", 5);
@@ -142,12 +146,12 @@ class PendingInvocationServiceTest {
             assertThat(i.claimedBy()).isEqualTo("worker-x");
             assertThat(i.attemptCount()).isEqualTo(1);
         });
-        verify(pendingInvocationRepository, times(2)).save(any(PendingInvocationEntity.class));
+        verify(pendingInvocationRepository, Mockito.never()).save(any(PendingInvocationEntity.class));
     }
 
     @Test
     void claimNextBatch_whenNoneAvailable_returnsEmpty() {
-        when(pendingInvocationRepository.claimNextBatch(5)).thenReturn(List.of());
+        when(pendingInvocationRepository.claimNextBatch("worker-x", 5)).thenReturn(List.of());
 
         List<PendingInvocation> claimed = service.claimNextBatch("worker-x", 5);
 
