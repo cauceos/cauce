@@ -19,11 +19,10 @@ import org.springframework.stereotype.Component;
  * In-process cache of successfully-verified API keys, indexed by a one-way digest of
  * the plaintext.
  *
- * <p>Bcrypt verification is intentionally expensive (~100ms at the default cost on a
- * modern CPU). A 5-minute TTL cache amortises that cost across requests from the same
- * caller: a cache hit avoids both the database lookup and the bcrypt comparison, so a
- * typical hot key adds microseconds to the request path instead of ~100ms plus a DB
- * round-trip.
+ * <p>A cache hit avoids the database lookup (the prefix query via the SECURITY DEFINER function)
+ * and the HMAC verification, so a hot key resolves from memory in microseconds instead of a DB
+ * round-trip. The default 5-minute TTL bounds staleness; revocations invalidate eagerly via
+ * {@link #invalidateById(UUID)}.
  *
  * <p>Storage model:
  * <ul>

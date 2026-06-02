@@ -13,10 +13,6 @@ dependencies {
     implementation(project(":cauce-core"))
     implementation(project(":cauce-memory"))
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    // BCryptPasswordEncoder for the BcryptApiKeyHasher adapter. The minimal
-    // spring-security-crypto subset (no servlet/web filter chain) keeps cauce-tenancy
-    // framework-light; the full spring-boot-starter-security lives in cauce-api.
-    implementation("org.springframework.security:spring-security-crypto")
     // In-process cache for successful ApiKey verifications. Bcrypt is intentionally
     // slow (~100ms at cost 10); a 5-minute TTL cache amortises that across requests.
     implementation("com.github.ben-manes.caffeine:caffeine")

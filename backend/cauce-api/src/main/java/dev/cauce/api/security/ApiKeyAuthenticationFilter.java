@@ -37,14 +37,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * <p>Cold path (cache miss):
  * <pre>
  *   header -> validate format -> repository.findByKeyPrefixAndRevokedAtIsNull
- *          -> for each candidate: hasher.matches (bcrypt) -> validate isActive
+ *          -> for each candidate: hasher.matches (HMAC) -> validate isActive
  *          -> cache.put -> set TenantContext + Authentication -> markAsUsed -> chain
  * </pre>
  *
- * <p>The cache exists because bcrypt is intentionally ~100ms at the default cost; the
- * default 5-minute TTL amortises that across requests. Revocations call
- * {@link ApiKeyCache#invalidateById} on the same instance so they take effect at
- * once.
+ * <p>The cache avoids the per-request DB lookup and HMAC verification; the default 5-minute TTL
+ * bounds staleness. Revocations call {@link ApiKeyCache#invalidateById} on the same instance so
+ * they take effect at once.
  *
  * <p>Requests without an {@code Authorization} header (or with a non-{@code Bearer}
  * one) pass through unauthenticated; Spring Security then decides what to do based on
@@ -65,7 +64,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private final ApiKeyHasher apiKeyHasher;
     private final ApiKeyCache apiKeyCache;
     private final ObjectMapper objectMapper;
-    /** A real bcrypt hash, computed once, used only to spend comparable time on a prefix miss. */
+    /** A precomputed HMAC, used only to spend comparable time on a prefix miss. */
     private final String dummyHash;
 
     public ApiKeyAuthenticationFilter(ApiKeyService apiKeyService,
@@ -136,7 +135,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         String prefix = plaintext.substring(0, 8);
         List<ApiKey> candidates = apiKeyService.findActiveByKeyPrefix(prefix);
         if (candidates.isEmpty()) {
-            // No key shares this prefix. Spend comparable time on a dummy bcrypt so the response
+            // No key shares this prefix. Spend comparable time on a dummy HMAC so the response
             // time cannot reveal whether a prefix exists (timing-oracle defence).
             apiKeyHasher.matches(plaintext, dummyHash);
             return null;
