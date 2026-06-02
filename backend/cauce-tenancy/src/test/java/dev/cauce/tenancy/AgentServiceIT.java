@@ -65,10 +65,7 @@ class AgentServiceIT {
     void setUp() {
         jdbc = new JdbcTemplate(dataSource);
         jdbc.execute("TRUNCATE TABLE api_keys, pending_invocations, messages, conversations, agents, tenants CASCADE");
-        jdbc.execute("DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'cauce_app') "
-                + "THEN CREATE ROLE cauce_app; END IF; END $$");
-        jdbc.execute("GRANT USAGE ON SCHEMA public TO cauce_app");
-        jdbc.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON tenants, agents TO cauce_app");
+        // cauce_app and its grants come from Flyway migration V10; tests SET ROLE to it.
         TenantContext.clear();
 
         operator = tenantService.bootstrapOperator("Operator");

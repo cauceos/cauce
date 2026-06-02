@@ -124,7 +124,7 @@ When introducing a new domain entity that participates in the tenant hierarchy, 
   - Indexes on the parent id (`tenant_id` / `<parent>_id`), on `status`, and on any column used for routing/lookup queries.
   - RLS enabled with a policy named `hierarchical_visibility`.
   - A `<entity>_is_visible` function (`SECURITY DEFINER`, `STABLE`) that composes with the parent's visibility function — e.g. `conversation_is_visible` calls `agent_is_visible`, which calls `tenant_is_visible`.
-  - Carry the least-privilege role TODO comment forward until that role is wired up.
+  - No explicit grant to the runtime role: the `cauce_app` least-privilege role (wired in `V10`) inherits `SELECT, INSERT, UPDATE, DELETE` on new tables automatically via `ALTER DEFAULT PRIVILEGES`. The role is provisioned outside migrations (docker init locally, Testcontainers `withInitScript` for cauce-api tests).
 
 ### 3. Service layer (`cauce-tenancy/`, or a dedicated module if scope justifies it)
 
