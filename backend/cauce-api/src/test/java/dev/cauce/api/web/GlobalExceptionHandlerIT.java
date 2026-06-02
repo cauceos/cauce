@@ -11,13 +11,11 @@ import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
@@ -40,15 +38,11 @@ class GlobalExceptionHandlerIT extends AbstractApiIntegrationTest {
     @Autowired
     private ApiKeyService apiKeyService;
 
-    @Autowired
-    private DataSource dataSource;
-
     private String bearer;
 
     @BeforeEach
     void setUp() {
-        new JdbcTemplate(dataSource).execute("TRUNCATE TABLE api_keys, pending_invocations, messages, "
-                + "conversations, agents, tenants CASCADE");
+        truncateAll();
         TenantContext.clear();
 
         Tenant operator = tenantService.bootstrapOperator("Operator");

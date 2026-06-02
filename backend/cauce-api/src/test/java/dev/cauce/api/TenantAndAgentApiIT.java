@@ -14,12 +14,10 @@ import dev.cauce.api.web.TenantContextFilter;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.tenancy.TenantService;
 import java.util.UUID;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
@@ -38,15 +36,11 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @Autowired
-    private DataSource dataSource;
-
     private UUID operatorId;
 
     @BeforeEach
     void setUp() {
-        new JdbcTemplate(dataSource).execute("TRUNCATE TABLE api_keys, pending_invocations, messages, "
-                + "conversations, agents, tenants CASCADE");
+        truncateAll();
         TenantContext.clear();
         operatorId = tenantService.bootstrapOperator("Operator").id();
     }
@@ -112,11 +106,26 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.error").value("invalid_tenant_tier"));
     }
 
-    // NOTE on RLS: cross-tenant *read* isolation (one partner reading another partner's client)
-    // is intentionally not asserted at this (API) layer. In dev/test the app connects with an
-    // RLS-bypassing superuser role, so RLS does not filter here yet; it is enforced and verified
-    // at the persistence layer via a dedicated restricted role (see cauce-tenancy ITs) and will
-    // apply end-to-end once the cauce_app least-privilege role is wired (V1__create_tenants_table.sql).
+    // RLS is enforced end-to-end here: the app-under-test connects as the least-privilege
+    // cauce_app role (see AbstractApiIntegrationTest), so cross-tenant reads are filtered by the
+    // database, not just at the persistence layer.
+    @Test
+    void getAgent_fromUnrelatedTenant_returns404() throws Exception {
+        // partnerA -> clientA -> agentA; partnerB is a sibling partner with no path to agentA.
+        UUID partnerA = createPartner();
+        UUID partnerB = createPartner();
+        UUID clientA = createClient(partnerA);
+        UUID agentA = createAgent(clientA);
+
+        // partnerB asserts its own context and asks for agentA. RLS scopes the query to partnerB,
+        // which cannot see agentA, so the row is invisible and the API returns 404 — not-found and
+        // not-visible are deliberately indistinguishable. This verifies RLS scopes to the asserted
+        // tenant, not that the assertion itself cannot be spoofed.
+        mockMvc.perform(get("/v1/agents/" + agentA)
+                        .header(TenantContextFilter.TENANT_ID_HEADER, partnerB.toString()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("agent_not_found"));
+    }
 
     @Test
     void validationError_messageIsEnglish_regardlessOfServerLocale() throws Exception {
@@ -131,6 +140,8 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
 
     @Test
     void missingTenantHeader_returns401() throws Exception {
+        // Fail-closed: the aspect throws MissingTenantContextException before any SQL runs. RLS
+        // is the second layer — under cauce_app a contextless query would also return nothing.
         mockMvc.perform(post("/v1/tenants/partner").contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new CreatePartnerRequest("Partner", operatorId))))
                 .andExpect(status().isUnauthorized())

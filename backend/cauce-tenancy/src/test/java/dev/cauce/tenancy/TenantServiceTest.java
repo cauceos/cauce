@@ -27,7 +27,9 @@ class TenantServiceTest {
     @BeforeEach
     void setUp() {
         repository = Mockito.mock(TenantRepository.class);
-        service = new TenantService(repository, new TenantMapper());
+        // bootstrapOperator is not exercised by these unit tests; a bare mock suffices.
+        service = new TenantService(repository, new TenantMapper(),
+                Mockito.mock(OperatorBootstrap.class));
         when(repository.save(any(TenantEntity.class))).thenAnswer(call -> call.getArgument(0));
     }
 

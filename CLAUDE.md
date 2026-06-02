@@ -263,6 +263,11 @@ http://localhost:8081 (server `postgres`, database/user/password
 defaults, and `docker-compose.override.yml.example` to
 `docker-compose.override.yml` for local-only tweaks.
 
+The Postgres init scripts under `docker/postgres/init/` (pgvector extension and the
+least-privilege `cauce_app` login role) run **only on a fresh volume**. After pulling a
+change that adds or edits one, recreate the volume to pick it up:
+`docker compose down -v && docker compose up -d`.
+
 ### Backend
 
 ```bash
@@ -275,6 +280,16 @@ cd backend
 `cauce-api` serves on http://localhost:8080 with the `dev` profile active, which
 connects to the Docker Compose services above. Health:
 http://localhost:8080/actuator/health.
+
+**Two database roles.** The application runs as the least-privilege `cauce_app` role
+(`spring.datasource.*`) so Row-Level Security is enforced at runtime; a privileged owner
+role (`cauce.admin.datasource.*`) runs Flyway migrations and the operator bootstrap, which
+must bypass RLS. Locally both point at the same database, with `cauce_app` created by the
+init script above and granted by migration `V10`. In production, set `DATABASE_*` to the
+`cauce_app` credentials and `ADMIN_DATABASE_*` to the owner; the `cauce_app` role must be
+provisioned out of band before first start (ops runbook), after which `V10` grants it.
+The async worker/reaper are disabled under `cauce_app` (their cross-tenant queue scans need
+a privileged path that lands in a later change).
 
 ### Frontend
 

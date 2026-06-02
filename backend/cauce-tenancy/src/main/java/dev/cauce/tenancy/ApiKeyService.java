@@ -110,14 +110,14 @@ public class ApiKeyService {
     /**
      * Repository-level lookup used by the authentication filter. Returns the active
      * (not-revoked) keys sharing {@code keyPrefix}; the filter verifies bcrypt only
-     * against this small candidate set. {@link dev.cauce.core.tenant.NoTenantContext}
-     * is intentionally NOT applied: the filter calls this BEFORE setting
-     * {@code TenantContext}, so the call runs in a no-context transaction and relies
-     * on the (today-superuser) connection bypassing RLS.
+     * against this small candidate set.
      *
-     * <p>TODO: when the application is wired to a least-privilege role, this lookup
-     * needs a worker-style bypass mechanism (SECURITY DEFINER function or a dedicated
-     * role with BYPASSRLS).
+     * <p>The filter calls this BEFORE setting {@code TenantContext} — the lookup is what
+     * discovers the owning tenant — so {@link dev.cauce.core.tenant.NoTenantContext} keeps
+     * {@code RlsContextAspect} from demanding a context. Under the least-privilege
+     * {@code cauce_app} role the query itself bypasses RLS via the
+     * {@code api_keys_active_by_prefix} SECURITY DEFINER function (migration V11);
+     * returning prefix matches is safe because the bcrypt check above still gates trust.
      */
     @Transactional(readOnly = true)
     @dev.cauce.core.tenant.NoTenantContext

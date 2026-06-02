@@ -1,7 +1,6 @@
 package dev.cauce.tenancy;
 
 import dev.cauce.core.tenant.InvalidTenantTierException;
-import dev.cauce.core.tenant.NoTenantContext;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
@@ -14,32 +13,37 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Application service for creating tenants. Each public method runs in its own
- * transaction; {@code RlsContextAspect} establishes the RLS context for all but
- * the {@link NoTenantContext} bootstrap method.
+ * Application service for creating tenants. Each tenant-scoped method runs in its own
+ * transaction; {@code RlsContextAspect} establishes the RLS context from
+ * {@code TenantContext} before it runs. Bootstrap is the exception: it has no tenant
+ * context and is delegated to {@link OperatorBootstrap}, which writes through the
+ * privileged owner connection that bypasses RLS.
  */
 @Service
 public class TenantService {
 
     private final TenantRepository repository;
     private final TenantMapper mapper;
+    private final OperatorBootstrap operatorBootstrap;
 
-    public TenantService(TenantRepository repository, TenantMapper mapper) {
+    public TenantService(TenantRepository repository, TenantMapper mapper,
+                         OperatorBootstrap operatorBootstrap) {
         this.repository = repository;
         this.mapper = mapper;
+        this.operatorBootstrap = operatorBootstrap;
     }
 
     /**
-     * Creates the first operator. Bootstrap-only: runs without a tenant context and
-     * therefore relies on a connection that bypasses RLS.
+     * Creates the first operator. Bootstrap-only: it runs without a tenant context, so it
+     * is written via {@link OperatorBootstrap} on the owner connection (which bypasses RLS)
+     * rather than the RLS-scoped {@code cauce_app} path. Not {@code @Transactional}: it does
+     * not go through {@code RlsContextAspect}, and a single INSERT is atomic on its own.
      *
      * <p>TODO: enforce single-bootstrap (or authorize operator creation) once an
      * authentication layer exists; today this simply creates an operator.
      */
-    @NoTenantContext
-    @Transactional
     public Tenant bootstrapOperator(String name) {
-        return persist(Tenant.operator(name));
+        return operatorBootstrap.insertOperator(Tenant.operator(name));
     }
 
     @Transactional

@@ -15,7 +15,6 @@ import dev.cauce.tenancy.apikey.ApiKeyCache;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,15 +42,14 @@ class ApiKeyAuthenticationFilterIT extends AbstractApiIntegrationTest {
     @Autowired
     private ApiKeyCache apiKeyCache;
 
-    @Autowired
-    private DataSource dataSource;
-
     private JdbcTemplate jdbc;
     private Tenant clientA;
 
     @BeforeEach
     void setUp() {
-        jdbc = new JdbcTemplate(dataSource);
+        // Raw DB pokes (truncate, backdating expiry, reading last_used_at) go through the owner
+        // connection: cauce_app is subject to RLS and cannot TRUNCATE or read rows out of context.
+        jdbc = new JdbcTemplate(adminDataSource);
         jdbc.execute("TRUNCATE TABLE api_keys, pending_invocations, messages, "
                 + "conversations, agents, tenants CASCADE");
         TenantContext.clear();
