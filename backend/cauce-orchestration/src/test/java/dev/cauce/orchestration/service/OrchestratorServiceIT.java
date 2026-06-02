@@ -13,6 +13,7 @@ import dev.cauce.llm.exception.LlmRateLimitException;
 import dev.cauce.llm.model.FinishReason;
 import dev.cauce.llm.model.LlmResponse;
 import dev.cauce.llm.model.LlmUsage;
+import dev.cauce.orchestration.support.AbstractOrchestrationIntegrationTest;
 import dev.cauce.tenancy.AgentService;
 import dev.cauce.tenancy.ConversationService;
 import dev.cauce.tenancy.MessageService;
@@ -31,17 +32,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * End-to-end tests for OrchestratorService using a {@link MockLlmProvider} (no real network
@@ -49,11 +43,8 @@ import org.testcontainers.utility.DockerImageName;
  * RLS filtering of persisted data is verified through a dedicated restricted role, while the
  * service-level path is exercised across hierarchy levels.
  */
-@SpringBootTest
-@ActiveProfiles("test")
-@Testcontainers
 @Import(OrchestratorServiceIT.MockProviderConfig.class)
-class OrchestratorServiceIT {
+class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
 
     @TestConfiguration
     static class MockProviderConfig {
@@ -62,11 +53,6 @@ class OrchestratorServiceIT {
             return new MockLlmProvider();
         }
     }
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
-            DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 
     @Autowired
     private TenantService tenantService;
@@ -101,9 +87,10 @@ class OrchestratorServiceIT {
 
     @BeforeEach
     void setUp() {
-        jdbc = new JdbcTemplate(dataSource);
+        // Raw setup/introspection runs as the owner; the service runs as cauce_app, and
+        // countConversationsVisibleAs uses the cauce_app datasource to exercise RLS for real.
+        jdbc = new JdbcTemplate(adminDataSource);
         jdbc.execute("TRUNCATE TABLE api_keys, pending_invocations, messages, conversations, agents, tenants CASCADE");
-        // cauce_app and its grants come from Flyway migration V10; tests SET ROLE to it.
         mockLlmProvider.respondWith(invocation ->
                 new LlmResponse("default reply", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
         TenantContext.clear();

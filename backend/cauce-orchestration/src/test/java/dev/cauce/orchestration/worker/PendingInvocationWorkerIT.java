@@ -18,6 +18,7 @@ import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.PendingInvocationStatus;
 import dev.cauce.orchestration.service.MockLlmProvider;
+import dev.cauce.orchestration.support.AbstractOrchestrationIntegrationTest;
 import dev.cauce.tenancy.AgentService;
 import dev.cauce.tenancy.ConversationService;
 import dev.cauce.tenancy.MessageService;
@@ -26,28 +27,28 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * End-to-end tests for {@link PendingInvocationWorker} and {@link PendingInvocationReaper}
@@ -59,9 +60,6 @@ import org.testcontainers.utility.DockerImageName;
  * deterministic, manual ones from each test. The reaper timeout is set to 1 second so a
  * single hand-inserted PROCESSING row is immediately reapable.
  */
-@SpringBootTest
-@ActiveProfiles("test")
-@Testcontainers
 @TestPropertySource(properties = {
         "cauce.orchestration.worker.enabled=true",
         "cauce.orchestration.worker.poll-interval-ms=3600000",
@@ -73,7 +71,7 @@ import org.testcontainers.utility.DockerImageName;
         "cauce.orchestration.worker.reaper.timeout-ms=1000"
 })
 @Import(PendingInvocationWorkerIT.MockProviderConfig.class)
-class PendingInvocationWorkerIT {
+class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
 
     @TestConfiguration
     static class MockProviderConfig {
@@ -82,11 +80,6 @@ class PendingInvocationWorkerIT {
             return new MockLlmProvider();
         }
     }
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
-            DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 
     @Autowired
     private TenantService tenantService;
@@ -112,21 +105,22 @@ class PendingInvocationWorkerIT {
     @Autowired
     private MockLlmProvider mockLlmProvider;
 
-    @Autowired
-    private DataSource dataSource;
-
     private JdbcTemplate jdbc;
 
     private Tenant operator;
     private Tenant partner;
     private Tenant clientA;
+    private Tenant clientB;
     private Agent agent;
     private Conversation conversation;
     private Message triggerMessage;
+    private Conversation conversationB;
+    private Message triggerMessageB;
 
     @BeforeEach
     void setUp() {
-        jdbc = new JdbcTemplate(dataSource);
+        // Raw setup/introspection runs as the owner; the app (worker) connects as cauce_app.
+        jdbc = new JdbcTemplate(adminDataSource);
         jdbc.execute("TRUNCATE TABLE api_keys, pending_invocations, messages, conversations, agents, tenants CASCADE");
         mockLlmProvider.respondWith(invocation ->
                 new LlmResponse("default reply", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
@@ -137,11 +131,20 @@ class PendingInvocationWorkerIT {
         partner = tenantService.createPartner("Partner", operator.id());
         TenantContext.setCurrentTenantId(partner.id());
         clientA = tenantService.createClient("Client A", partner.id());
+        clientB = tenantService.createClient("Client B", partner.id());
+
         TenantContext.setCurrentTenantId(clientA.id());
         agent = agentService.createAgent(clientA.id(), "DentalBot",
                 "You are a dentist receptionist.", "anthropic", "claude-sonnet-4-7");
         conversation = conversationService.startConversation(agent.id(), "whatsapp", "+34612345678");
         triggerMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola");
+
+        // A second client under the same partner, for cross-tenant claim/RLS assertions.
+        TenantContext.setCurrentTenantId(clientB.id());
+        Agent agentB = agentService.createAgent(clientB.id(), "ClinicBot",
+                "You are a clinic receptionist.", "anthropic", "claude-sonnet-4-7");
+        conversationB = conversationService.startConversation(agentB.id(), "whatsapp", "+34655555555");
+        triggerMessageB = messageService.appendMessage(conversationB.id(), MessageRole.USER, "Hi");
         TenantContext.clear();
     }
 
@@ -342,6 +345,101 @@ class PendingInvocationWorkerIT {
         }
     }
 
+    // === Strategy C: cross-tenant claim/reap under cauce_app, processing under RLS ===
+
+    @Test
+    void pollAndProcess_claimsAcrossTenants_processesEachInItsOwnTenant() {
+        mockLlmProvider.respondWith(invocation ->
+                new LlmResponse("reply", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
+        PendingInvocation invA = enqueueAs(clientA.id());
+        PendingInvocation invB = enqueueForClientB();
+
+        // One claim batch crosses tenants (via the SECURITY DEFINER function); each claimed row
+        // is then processed under its own tenant context.
+        worker.pollAndProcess();
+
+        awaitInvocationStatus(invA.id(), PendingInvocationStatus.COMPLETED);
+        awaitInvocationStatus(invB.id(), PendingInvocationStatus.COMPLETED);
+        // Each reply landed in the right conversation, i.e. the right tenant.
+        assertThat(agentMessageCount(conversation.id())).isEqualTo(1);
+        assertThat(agentMessageCount(conversationB.id())).isEqualTo(1);
+        // RLS scopes each invocation to its owning tenant; neither client sees the other's.
+        assertThat(countAs("pending_invocations", clientA.id())).isEqualTo(1);
+        assertThat(countAs("pending_invocations", clientB.id())).isEqualTo(1);
+        assertThat(countAs("pending_invocations", null)).isZero();
+    }
+
+    @Test
+    void pendingInvocations_areInvisibleToCauceAppWithoutContext() {
+        enqueueAs(clientA.id());
+
+        // The SECURITY DEFINER claim function is the ONLY cross-tenant path: a plain query as
+        // the runtime cauce_app role with no tenant context is fail-closed by RLS.
+        assertThat(countAs("pending_invocations", null)).isZero();
+        // Sanity: the row exists (the owner, which bypasses RLS, sees it).
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pending_invocations", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void underTenantAContext_cannotTouchTenantBRow() {
+        PendingInvocation invB = enqueueForClientB();
+
+        // Containment: claiming bypasses RLS, but everything else does not. As cauce_app with
+        // clientA's context, an attempt to modify clientB's row affects zero rows — RLS hides it.
+        int updated = updateAs(clientA.id(),
+                "UPDATE pending_invocations SET last_error = 'intrusion' WHERE id = '" + invB.id() + "'");
+
+        assertThat(updated).isZero();
+        String lastError = jdbc.queryForObject(
+                "SELECT last_error FROM pending_invocations WHERE id = ?", String.class, invB.id());
+        assertThat(lastError).isNull();
+    }
+
+    @Test
+    void concurrentClaims_doNotDoubleClaimUnderSkipLocked() throws Exception {
+        int total = 6;
+        for (int i = 0; i < total; i++) {
+            enqueueAs(clientA.id());
+        }
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CyclicBarrier barrier = new CyclicBarrier(2);
+        Callable<List<UUID>> claim = () -> {
+            barrier.await(5, TimeUnit.SECONDS);
+            return pendingInvocationService.claimNextBatch("w-" + UUID.randomUUID(), total)
+                    .stream().map(PendingInvocation::id).toList();
+        };
+        Future<List<UUID>> first = pool.submit(claim);
+        Future<List<UUID>> second = pool.submit(claim);
+        List<UUID> claimedByFirst = first.get(10, TimeUnit.SECONDS);
+        List<UUID> claimedBySecond = second.get(10, TimeUnit.SECONDS);
+        pool.shutdown();
+
+        // FOR UPDATE SKIP LOCKED inside the claim function => the two claims are disjoint and
+        // together claim each row exactly once.
+        assertThat(Collections.disjoint(claimedByFirst, claimedBySecond)).isTrue();
+        Set<UUID> all = new HashSet<>(claimedByFirst);
+        all.addAll(claimedBySecond);
+        assertThat(all).hasSize(total);
+    }
+
+    @Test
+    void reaper_recoversOrphansAcrossTenants() {
+        PendingInvocation invA = enqueueAs(clientA.id());
+        PendingInvocation invB = enqueueForClientB();
+        Instant staleClaim = Instant.now().minusSeconds(60);
+        markProcessingStale(invA.id(), staleClaim);
+        markProcessingStale(invB.id(), staleClaim);
+
+        // The reaper discovers orphans across tenants (via the SECURITY DEFINER function) and
+        // resets each under its own tenant context.
+        reaper.reapOrphanedInvocations();
+
+        awaitInvocationStatus(invA.id(), PendingInvocationStatus.PENDING);
+        awaitInvocationStatus(invB.id(), PendingInvocationStatus.PENDING);
+    }
+
     private PendingInvocation enqueueAs(UUID context) {
         TenantContext.setCurrentTenantId(context);
         try {
@@ -349,6 +447,27 @@ class PendingInvocationWorkerIT {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    private PendingInvocation enqueueForClientB() {
+        TenantContext.setCurrentTenantId(clientB.id());
+        try {
+            return pendingInvocationService.enqueueInvocation(conversationB.id(), triggerMessageB.id());
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    private Integer agentMessageCount(UUID conversationId) {
+        return jdbc.queryForObject(
+                "SELECT count(*) FROM messages WHERE conversation_id = ? AND role = 'AGENT'",
+                Integer.class, conversationId);
+    }
+
+    private void markProcessingStale(UUID invocationId, Instant claimedAt) {
+        jdbc.update("UPDATE pending_invocations SET status = 'PROCESSING', attempt_count = 1, "
+                        + "claimed_at = ?, claimed_by = ? WHERE id = ?",
+                Timestamp.from(claimedAt), "dead-worker:1:deadbeef", invocationId);
     }
 
     private void awaitInvocationStatus(UUID invocationId, PendingInvocationStatus expected) {

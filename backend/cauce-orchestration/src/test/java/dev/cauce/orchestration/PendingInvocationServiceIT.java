@@ -11,6 +11,7 @@ import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.MissingTenantContextException;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.orchestration.support.AbstractOrchestrationIntegrationTest;
 import dev.cauce.tenancy.AgentService;
 import dev.cauce.tenancy.ConversationService;
 import dev.cauce.tenancy.MessageService;
@@ -27,15 +28,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * End-to-end tests for PendingInvocationService and the pending_invocations RLS policy. The
@@ -43,15 +37,7 @@ import org.testcontainers.utility.DockerImageName;
  * filtering is verified through a dedicated restricted role on data created by the service.
  * A pending invocation is visible exactly when its owning tenant is visible.
  */
-@SpringBootTest
-@ActiveProfiles("test")
-@Testcontainers
-class PendingInvocationServiceIT {
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
-            DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
+class PendingInvocationServiceIT extends AbstractOrchestrationIntegrationTest {
 
     @Autowired
     private TenantService tenantService;
@@ -83,9 +69,11 @@ class PendingInvocationServiceIT {
 
     @BeforeEach
     void setUp() {
-        jdbc = new JdbcTemplate(dataSource);
+        // Raw setup/introspection runs as the owner (cauce_app is RLS-scoped and cannot
+        // TRUNCATE or read rows out of context). countVisibleAs uses the cauce_app datasource
+        // so it exercises RLS for real.
+        jdbc = new JdbcTemplate(adminDataSource);
         jdbc.execute("TRUNCATE TABLE api_keys, pending_invocations, messages, conversations, agents, tenants CASCADE");
-        // cauce_app and its grants come from Flyway migration V10; tests SET ROLE to it.
         TenantContext.clear();
 
         operator = tenantService.bootstrapOperator("Operator");

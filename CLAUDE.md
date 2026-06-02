@@ -288,8 +288,9 @@ must bypass RLS. Locally both point at the same database, with `cauce_app` creat
 init script above and granted by migration `V10`. In production, set `DATABASE_*` to the
 `cauce_app` credentials and `ADMIN_DATABASE_*` to the owner; the `cauce_app` role must be
 provisioned out of band before first start (ops runbook), after which `V10` grants it.
-The async worker/reaper are disabled under `cauce_app` (their cross-tenant queue scans need
-a privileged path that lands in a later change).
+The async worker/reaper run under `cauce_app`: their cross-tenant claim/reap go through the
+`V12` SECURITY DEFINER functions, and all processing stays under RLS in the claimed tenant's
+context (see `docs/adr/0001-rls-escape-hatches.md`).
 
 ### Frontend
 
