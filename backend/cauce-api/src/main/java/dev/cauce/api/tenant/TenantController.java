@@ -17,8 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * REST surface for tenants. Thin: validates and deserialises the request, delegates to
  * {@link TenantService} (which enforces tier rules and RLS), and maps the domain result to a
- * {@link TenantResponse}. The tenant context for these calls comes from the {@code X-Tenant-Id}
- * header via {@code TenantContextFilter} (a development stopgap).
+ * {@link TenantResponse}. The tenant context for these calls is derived from the validated API
+ * key by {@code ApiKeyAuthenticationFilter} (the {@code Authorization: Bearer} principal).
  *
  * <p>Operator bootstrap is deliberately NOT exposed here.
  */

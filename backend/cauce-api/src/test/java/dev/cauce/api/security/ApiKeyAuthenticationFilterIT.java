@@ -2,6 +2,7 @@ package dev.cauce.api.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -80,9 +81,11 @@ class ApiKeyAuthenticationFilterIT extends AbstractApiIntegrationTest {
     // === 401 on bad credentials ===
 
     @Test
-    void protectedEndpoint_withoutAuthorization_returns401() throws Exception {
+    void protectedEndpoint_withoutAuthorization_returns401WithBearerChallenge() throws Exception {
+        // The AuthenticationEntryPoint path (no credential at all) carries the Bearer challenge.
         mockMvc.perform(get("/test/protected-resource"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate", "Bearer"));
     }
 
     @Test
@@ -92,9 +95,11 @@ class ApiKeyAuthenticationFilterIT extends AbstractApiIntegrationTest {
     }
 
     @Test
-    void protectedEndpoint_withMalformedBearerKey_returns401() throws Exception {
+    void protectedEndpoint_withMalformedBearerKey_returns401WithBearerChallenge() throws Exception {
+        // The filter's own writeUnauthorized path (bad credential) also carries the challenge.
         mockMvc.perform(get("/test/protected-resource").header("Authorization", "Bearer not-a-real-key"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate", "Bearer"));
     }
 
     @Test

@@ -77,12 +77,14 @@ class GlobalExceptionHandlerIT extends AbstractApiIntegrationTest {
     }
 
     @Test
-    void missingTenantContextException_maps401WithDomainCode() throws Exception {
-        // Distinct from an authentication failure: this is an authenticated request whose
-        // handler found no tenant context, so the code is the domain one, not "unauthorized".
+    void missingTenantContextException_maps500AsInvariantViolation() throws Exception {
+        // An authenticated request always carries a tenant context (set by the auth filter from
+        // the validated key). Hitting MissingTenantContextException is now a server-side invariant
+        // violation -> 500 with the generic body, never leaking the method name.
         mockMvc.perform(get("/test/throw/missing-context").header(HttpHeaders.AUTHORIZATION, bearer))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("missing_tenant_context"));
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("internal_error"))
+                .andExpect(jsonPath("$.message").value("An unexpected error occurred"));
     }
 
     @Test

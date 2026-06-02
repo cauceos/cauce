@@ -2,6 +2,7 @@ package dev.cauce.api;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -10,20 +11,25 @@ import dev.cauce.api.agent.CreateAgentRequest;
 import dev.cauce.api.support.AbstractApiIntegrationTest;
 import dev.cauce.api.tenant.CreateClientRequest;
 import dev.cauce.api.tenant.CreatePartnerRequest;
-import dev.cauce.api.web.TenantContextFilter;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
  * End-to-end test of the tenant and agent REST surface against a real datasource, exercising
- * the {@code X-Tenant-Id} stopgap, hierarchical RLS over HTTP, and the operator→partner→
- * client→agent chain. Operator bootstrap is done via the service (never exposed over REST).
+ * API-key authentication ({@code Authorization: Bearer}), hierarchical RLS over HTTP, and the
+ * operator→partner→client→agent chain. The tenant context is derived from the validated key,
+ * never from a client header. The operator tenant is created via the bootstrap service; each
+ * actor's key is minted via the admin path ({@link ApiKeyService}) in setup, since key issuance
+ * is not exposed over REST.
  */
 class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
 
@@ -34,20 +40,25 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
     private TenantService tenantService;
 
     @Autowired
+    private ApiKeyService apiKeyService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private UUID operatorId;
+    private String operatorAuth;
 
     @BeforeEach
     void setUp() {
         truncateAll();
         TenantContext.clear();
         operatorId = tenantService.bootstrapOperator("Operator").id();
+        operatorAuth = bearerFor(operatorId);
     }
 
     @Test
     void createPartner_asOperator_returns201() throws Exception {
-        mockMvc.perform(postAs(operatorId, "/v1/tenants/partner", new CreatePartnerRequest("Partner", operatorId)))
+        mockMvc.perform(postAs(operatorAuth, "/v1/tenants/partner", new CreatePartnerRequest("Partner", operatorId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tier").value("PARTNER"))
                 .andExpect(jsonPath("$.parent_tenant_id").value(operatorId.toString()));
@@ -56,8 +67,9 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
     @Test
     void createClient_asPartner_returns201() throws Exception {
         UUID partnerId = createPartner();
+        String partnerAuth = bearerFor(partnerId);
 
-        mockMvc.perform(postAs(partnerId, "/v1/tenants/client", new CreateClientRequest("Client", partnerId)))
+        mockMvc.perform(postAs(partnerAuth, "/v1/tenants/client", new CreateClientRequest("Client", partnerId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tier").value("CLIENT"))
                 .andExpect(jsonPath("$.parent_tenant_id").value(partnerId.toString()));
@@ -65,9 +77,11 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
 
     @Test
     void createAgent_asClient_returns201() throws Exception {
-        UUID clientId = createClient(createPartner());
+        UUID partnerId = createPartner();
+        UUID clientId = createClient(bearerFor(partnerId), partnerId);
+        String clientAuth = bearerFor(clientId);
 
-        mockMvc.perform(postAs(clientId, "/v1/tenants/" + clientId + "/agents",
+        mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
                         new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
@@ -77,23 +91,25 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
     @Test
     void getAndList_reflectTheCreatedHierarchy() throws Exception {
         UUID partnerId = createPartner();
-        UUID clientId = createClient(partnerId);
-        UUID agentId = createAgent(clientId);
+        String partnerAuth = bearerFor(partnerId);
+        UUID clientId = createClient(partnerAuth, partnerId);
+        String clientAuth = bearerFor(clientId);
+        UUID agentId = createAgent(clientAuth, clientId);
 
         // Operator can read its partner and list its children.
-        mockMvc.perform(get("/v1/tenants/" + partnerId).header(TenantContextFilter.TENANT_ID_HEADER, operatorId.toString()))
+        mockMvc.perform(getAs(operatorAuth, "/v1/tenants/" + partnerId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tier").value("PARTNER"));
-        mockMvc.perform(get("/v1/tenants/" + operatorId + "/children").header(TenantContextFilter.TENANT_ID_HEADER, operatorId.toString()))
+        mockMvc.perform(getAs(operatorAuth, "/v1/tenants/" + operatorId + "/children"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].id").value(partnerId.toString()));
 
         // Client can read its agent and list its agents.
-        mockMvc.perform(get("/v1/agents/" + agentId).header(TenantContextFilter.TENANT_ID_HEADER, clientId.toString()))
+        mockMvc.perform(getAs(clientAuth, "/v1/agents/" + agentId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(agentId.toString()));
-        mockMvc.perform(get("/v1/tenants/" + clientId + "/agents").header(TenantContextFilter.TENANT_ID_HEADER, clientId.toString()))
+        mockMvc.perform(getAs(clientAuth, "/v1/tenants/" + clientId + "/agents"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
     }
@@ -101,37 +117,49 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
     @Test
     void createClient_underOperatorParent_returns422() throws Exception {
         // Domain tier validation over HTTP: a CLIENT's parent must be a PARTNER, not an OPERATOR.
-        mockMvc.perform(postAs(operatorId, "/v1/tenants/client", new CreateClientRequest("Client", operatorId)))
+        mockMvc.perform(postAs(operatorAuth, "/v1/tenants/client", new CreateClientRequest("Client", operatorId)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error").value("invalid_tenant_tier"));
     }
 
-    // RLS is enforced end-to-end here: the app-under-test connects as the least-privilege
-    // cauce_app role (see AbstractApiIntegrationTest), so cross-tenant reads are filtered by the
-    // database, not just at the persistence layer.
     @Test
-    void getAgent_fromUnrelatedTenant_returns404() throws Exception {
+    void getAgent_fromUnrelatedTenant_returns404_andHeaderCannotImpersonate() throws Exception {
         // partnerA -> clientA -> agentA; partnerB is a sibling partner with no path to agentA.
         UUID partnerA = createPartner();
+        String partnerAAuth = bearerFor(partnerA);
         UUID partnerB = createPartner();
-        UUID clientA = createClient(partnerA);
-        UUID agentA = createAgent(clientA);
+        String partnerBAuth = bearerFor(partnerB);
+        UUID clientA = createClient(partnerAAuth, partnerA);
+        String clientAAuth = bearerFor(clientA);
+        UUID agentA = createAgent(clientAAuth, clientA);
 
-        // partnerB asserts its own context and asks for agentA. RLS scopes the query to partnerB,
-        // which cannot see agentA, so the row is invisible and the API returns 404 — not-found and
-        // not-visible are deliberately indistinguishable. This verifies RLS scopes to the asserted
-        // tenant, not that the assertion itself cannot be spoofed.
-        mockMvc.perform(get("/v1/agents/" + agentA)
-                        .header(TenantContextFilter.TENANT_ID_HEADER, partnerB.toString()))
+        // An unrelated tenant's key cannot read agentA: the query is scoped to the AUTHENTICATED
+        // tenant, so the agent is not found -> 404 (not-found and not-visible are indistinguishable).
+        mockMvc.perform(getAs(partnerBAuth, "/v1/agents/" + agentA))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("agent_not_found"));
+
+        // Impersonation is closed: spoofing the old X-Tenant-Id header with the OWNING tenant
+        // (clientA) — which would have granted access under the stopgap — still yields 404, because
+        // the validated key (partnerB) decides the tenant and the header is ignored.
+        mockMvc.perform(get("/v1/agents/" + agentA)
+                        .header(HttpHeaders.AUTHORIZATION, partnerBAuth)
+                        .header("X-Tenant-Id", clientA.toString()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("agent_not_found"));
+
+        // The owning tenant's own key reads its agent -> 200 (getAgent is exact-owner; ancestors
+        // see a client's agents via the list endpoint, not GET-by-id).
+        mockMvc.perform(getAs(clientAAuth, "/v1/agents/" + agentA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(agentA.toString()));
     }
 
     @Test
     void validationError_messageIsEnglish_regardlessOfServerLocale() throws Exception {
         // The validation message language is pinned to English (see ValidationConfig), so the
         // contract does not float with the host JVM/OS locale.
-        mockMvc.perform(postAs(operatorId, "/v1/tenants/partner", new CreatePartnerRequest("  ", operatorId)))
+        mockMvc.perform(postAs(operatorAuth, "/v1/tenants/partner", new CreatePartnerRequest("  ", operatorId)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("validation_failed"))
                 .andExpect(jsonPath("$.errors[0].field").value("name"))
@@ -139,51 +167,61 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
     }
 
     @Test
-    void missingTenantHeader_returns401() throws Exception {
-        // Fail-closed: the aspect throws MissingTenantContextException before any SQL runs. RLS
-        // is the second layer — under cauce_app a contextless query would also return nothing.
+    void noAuthorization_returns401WithBearerChallenge() throws Exception {
         mockMvc.perform(post("/v1/tenants/partner").contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new CreatePartnerRequest("Partner", operatorId))))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("missing_tenant_context"));
+                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, "Bearer"))
+                .andExpect(jsonPath("$.error").value("unauthorized"));
     }
 
     @Test
-    void malformedTenantHeader_returns400() throws Exception {
-        mockMvc.perform(post("/v1/tenants/partner")
-                        .header(TenantContextFilter.TENANT_ID_HEADER, "not-a-uuid")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new CreatePartnerRequest("Partner", operatorId))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("invalid_tenant_id"));
+    void garbageBearerKey_returns401() throws Exception {
+        mockMvc.perform(getAs("Bearer ck_" + "z".repeat(32), "/v1/tenants/" + operatorId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, "Bearer"))
+                .andExpect(jsonPath("$.error").value("unauthorized"));
     }
 
     // --- helpers ---
 
-    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder postAs(
-            UUID tenantId, String path, Object body) throws Exception {
+    /** Mints a fresh API key for {@code tenantId} via the admin path and returns the Bearer value. */
+    private String bearerFor(UUID tenantId) {
+        TenantContext.setCurrentTenantId(tenantId);
+        try {
+            return "Bearer " + apiKeyService.createApiKey(tenantId, "it-key").plaintextKey();
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    private MockHttpServletRequestBuilder postAs(String auth, String path, Object body) throws Exception {
         return post(path)
-                .header(TenantContextFilter.TENANT_ID_HEADER, tenantId.toString())
+                .header(HttpHeaders.AUTHORIZATION, auth)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(body));
     }
 
+    private MockHttpServletRequestBuilder getAs(String auth, String path) {
+        return get(path).header(HttpHeaders.AUTHORIZATION, auth);
+    }
+
     private UUID createPartner() throws Exception {
-        String body = mockMvc.perform(postAs(operatorId, "/v1/tenants/partner", new CreatePartnerRequest("Partner", operatorId)))
+        String body = mockMvc.perform(postAs(operatorAuth, "/v1/tenants/partner", new CreatePartnerRequest("Partner", operatorId)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return UUID.fromString(objectMapper.readTree(body).get("id").asText());
     }
 
-    private UUID createClient(UUID partnerId) throws Exception {
-        String body = mockMvc.perform(postAs(partnerId, "/v1/tenants/client", new CreateClientRequest("Client", partnerId)))
+    private UUID createClient(String partnerAuth, UUID partnerId) throws Exception {
+        String body = mockMvc.perform(postAs(partnerAuth, "/v1/tenants/client", new CreateClientRequest("Client", partnerId)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return UUID.fromString(objectMapper.readTree(body).get("id").asText());
     }
 
-    private UUID createAgent(UUID clientId) throws Exception {
-        String body = mockMvc.perform(postAs(clientId, "/v1/tenants/" + clientId + "/agents",
+    private UUID createAgent(String clientAuth, UUID clientId) throws Exception {
+        String body = mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
                         new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();

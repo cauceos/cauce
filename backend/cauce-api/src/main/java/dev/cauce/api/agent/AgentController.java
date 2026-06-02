@@ -16,8 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * REST surface for agents. Thin: validates and deserialises the request, delegates to
  * {@link AgentService} (which enforces the CLIENT-tier rule, provider support, and RLS), and
- * maps the domain result to an {@link AgentResponse}. Tenant context comes from the
- * {@code X-Tenant-Id} header via {@code TenantContextFilter} (a development stopgap).
+ * maps the domain result to an {@link AgentResponse}. Tenant context is derived from the
+ * validated API key by {@code ApiKeyAuthenticationFilter} (the {@code Authorization: Bearer}
+ * principal).
  */
 @RestController
 public class AgentController {

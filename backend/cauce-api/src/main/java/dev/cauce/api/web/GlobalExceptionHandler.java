@@ -78,8 +78,6 @@ public class GlobalExceptionHandler {
             Map.entry(InvalidConversationTransitionException.class, "invalid_conversation_transition"),
             Map.entry(InvalidChannelTypeException.class, "invalid_channel_type"),
             Map.entry(InvalidTriggerMessageException.class, "invalid_trigger_message"),
-            // 401 UNAUTHORIZED
-            Map.entry(MissingTenantContextException.class, "missing_tenant_context"),
             // 409 CONFLICT
             Map.entry(ApiKeyAlreadyRevokedException.class, "api_key_already_revoked"),
             Map.entry(MaxRetriesExceededException.class, "max_retries_exceeded"),
@@ -136,8 +134,11 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MissingTenantContextException.class)
-    public ResponseEntity<ErrorResponse> handleUnauthorized(RuntimeException ex) {
-        return clientError(HttpStatus.UNAUTHORIZED, ex);
+    public ResponseEntity<ErrorResponse> handleMissingTenantContext(MissingTenantContextException ex) {
+        // Now an invariant violation: an authenticated request always carries a tenant context
+        // (set by ApiKeyAuthenticationFilter from the validated key). Reaching here is a server
+        // bug — return a generic 500 with no internals, and log the full detail server-side.
+        return serverError(HttpStatus.INTERNAL_SERVER_ERROR, ex, GENERIC_500_MESSAGE);
     }
 
     @ExceptionHandler({

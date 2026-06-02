@@ -65,6 +65,8 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private final ApiKeyHasher apiKeyHasher;
     private final ApiKeyCache apiKeyCache;
     private final ObjectMapper objectMapper;
+    /** A real bcrypt hash, computed once, used only to spend comparable time on a prefix miss. */
+    private final String dummyHash;
 
     public ApiKeyAuthenticationFilter(ApiKeyService apiKeyService,
                                       ApiKeyHasher apiKeyHasher,
@@ -74,6 +76,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         this.apiKeyHasher = apiKeyHasher;
         this.apiKeyCache = apiKeyCache;
         this.objectMapper = objectMapper;
+        this.dummyHash = apiKeyHasher.hash("timing-equalizer-not-a-real-key");
     }
 
     @Override
@@ -132,16 +135,20 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
         String prefix = plaintext.substring(0, 8);
         List<ApiKey> candidates = apiKeyService.findActiveByKeyPrefix(prefix);
+        if (candidates.isEmpty()) {
+            // No key shares this prefix. Spend comparable time on a dummy bcrypt so the response
+            // time cannot reveal whether a prefix exists (timing-oracle defence).
+            apiKeyHasher.matches(plaintext, dummyHash);
+            return null;
+        }
         for (ApiKey candidate : candidates) {
             if (candidate.matches(plaintext, apiKeyHasher) && candidate.isActive()) {
                 apiKeyCache.put(plaintext, candidate);
                 return new AuthenticatedKey(candidate.id(), candidate.tenantId(), false);
             }
         }
-        if (!candidates.isEmpty()) {
-            log.debug("API key with prefix {} did not match any of {} candidate(s)",
-                    prefix, candidates.size());
-        }
+        log.debug("API key with prefix {} did not match any of {} candidate(s)",
+                prefix, candidates.size());
         return null;
     }
 
@@ -149,6 +156,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         // Same uniform body as the authentication entry point: a generic, non-revealing
         // message identical for every failure reason (bad format, unknown / revoked /
         // expired key), so callers cannot probe which keys exist.
+        response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
         ApiErrorWriter.write(response, HttpStatus.UNAUTHORIZED,
                 Http401AuthenticationEntryPoint.ERROR_CODE, Http401AuthenticationEntryPoint.MESSAGE, objectMapper);
     }

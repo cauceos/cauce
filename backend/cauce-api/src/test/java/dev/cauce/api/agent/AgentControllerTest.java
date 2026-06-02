@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cauce.api.security.ApiKeyAuthenticationFilter;
 import dev.cauce.api.web.RequestIdFilter;
-import dev.cauce.api.web.TenantContextFilter;
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.TenantNotFoundException;
@@ -36,7 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @WebMvcTest(controllers = AgentController.class,
         excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
-                classes = {RequestIdFilter.class, TenantContextFilter.class, ApiKeyAuthenticationFilter.class}))
+                classes = {RequestIdFilter.class, ApiKeyAuthenticationFilter.class}))
 @AutoConfigureMockMvc(addFilters = false)
 class AgentControllerTest {
 
