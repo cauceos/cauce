@@ -15,6 +15,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,8 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ConversationService {
 
+    private static final Logger log = LoggerFactory.getLogger(ConversationService.class);
+
+    // "api" is the reserved built-in channel for the REST messaging endpoint: a first-class
+    // origin handled in-process, not a pluggable adapter. The rest are placeholders.
     // TODO: replace hardcoded validation with the cauce-channels channel registry when the SPI is implemented.
-    private static final Set<String> SUPPORTED_CHANNELS = Set.of("whatsapp", "voice", "email", "web_chat");
+    private static final Set<String> SUPPORTED_CHANNELS = Set.of("api", "whatsapp", "voice", "email", "web_chat");
 
     private final ConversationRepository conversationRepository;
     private final AgentRepository agentRepository;
@@ -54,12 +60,7 @@ public class ConversationService {
      */
     @Transactional
     public Conversation startConversation(UUID agentId, String channelType, String externalIdentityRef) {
-        AgentEntity agent = agentRepository.findById(agentId).orElseThrow(() ->
-                new AgentNotFoundException("No agent found for id " + agentId));
-        if (!SUPPORTED_CHANNELS.contains(channelType)) {
-            throw new InvalidChannelTypeException("Unsupported channel type: " + channelType);
-        }
-
+        AgentEntity agent = requireVisibleAgentForSupportedChannel(agentId, channelType);
         Conversation conversation = Conversation.start(agent.getId(), channelType, externalIdentityRef);
         return conversationMapper.toDomain(conversationRepository.save(conversationMapper.toEntity(conversation)));
     }
@@ -82,6 +83,48 @@ public class ConversationService {
                 .findByAgentIdAndChannelTypeAndExternalIdentityRefAndStatus(
                         agentId, channelType, externalIdentityRef, ConversationStatus.OPEN)
                 .map(conversationMapper::toDomain);
+    }
+
+    /**
+     * Resolves the active conversation for the {@code (agent, channel, external identity)} tuple,
+     * starting a new one when none is open. This is the channel-agnostic entry point an inbound
+     * message uses to continue an existing thread or begin a new one; the REST messaging endpoint
+     * and future cauce-channels adapters share it. The find and the conditional create run in one
+     * transaction under the same tenant RLS context; a non-visible agent surfaces as not-found via
+     * {@link #startConversation}.
+     *
+     * <p>There is no database uniqueness on an open thread, so two concurrent first messages for
+     * the same tuple could each open a conversation. Accepted for now (no schema change).
+     *
+     * @throws dev.cauce.core.agent.AgentNotFoundException if the agent is not visible
+     * @throws InvalidChannelTypeException if the channel type is not supported
+     */
+    @Transactional
+    public Conversation resolveOrStartConversation(UUID agentId, String channelType,
+                                                   String externalIdentityRef) {
+        Optional<Conversation> active = findActiveConversation(agentId, channelType, externalIdentityRef);
+        if (active.isPresent()) {
+            return active.get();
+        }
+        AgentEntity agent = requireVisibleAgentForSupportedChannel(agentId, channelType);
+        Conversation candidate = Conversation.start(agent.getId(), channelType, externalIdentityRef);
+        // Race-free create: at most one OPEN row per tuple is guaranteed by the V13 partial
+        // unique index; ON CONFLICT DO NOTHING means a concurrent first message does not throw
+        // (which would poison this transaction) — it simply skips, and we re-read the winner.
+        int inserted = conversationRepository.insertOpenConversationIfAbsent(
+                candidate.id(), candidate.agentId(), candidate.channelType(),
+                candidate.externalIdentityRef());
+        if (inserted == 0) {
+            log.debug("Concurrent OPEN conversation for agent {} on channel {}; reusing the existing thread",
+                    candidate.agentId(), candidate.channelType());
+        }
+        return conversationRepository
+                .findByAgentIdAndChannelTypeAndExternalIdentityRefAndStatus(
+                        candidate.agentId(), candidate.channelType(),
+                        candidate.externalIdentityRef(), ConversationStatus.OPEN)
+                .map(conversationMapper::toDomain)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Expected an OPEN conversation after insert-or-skip for agent " + candidate.agentId()));
     }
 
     /** Lists the conversations of an agent; RLS filters out agents the context cannot see. */
@@ -126,6 +169,20 @@ public class ConversationService {
     @Transactional
     public Conversation archiveConversation(UUID conversationId) {
         return applyTransition(conversationId, Conversation::archive);
+    }
+
+    /**
+     * Loads the agent for a new conversation, enforcing that it is visible under the current
+     * tenant context (RLS) and that the channel type is supported. Shared by
+     * {@link #startConversation} and {@link #resolveOrStartConversation}.
+     */
+    private AgentEntity requireVisibleAgentForSupportedChannel(UUID agentId, String channelType) {
+        AgentEntity agent = agentRepository.findById(agentId).orElseThrow(() ->
+                new AgentNotFoundException("No agent found for id " + agentId));
+        if (!SUPPORTED_CHANNELS.contains(channelType)) {
+            throw new InvalidChannelTypeException("Unsupported channel type: " + channelType);
+        }
+        return agent;
     }
 
     /**

@@ -11,6 +11,7 @@ import dev.cauce.core.conversation.InvalidConversationTransitionException;
 import dev.cauce.core.tenant.MissingTenantContextException;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.memory.conversation.ConversationRepository;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,9 +19,17 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +39,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -60,6 +71,12 @@ class ConversationServiceIT {
 
     @Autowired
     private ConversationService conversationService;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private DataSource dataSource;
@@ -182,6 +199,87 @@ class ConversationServiceIT {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    @Test
+    void resolveOrStartConversation_reusesOpenThreadAndCreatesOnePerIdentity() {
+        TenantContext.setCurrentTenantId(clientA.id());
+        try {
+            Conversation first = conversationService
+                    .resolveOrStartConversation(agent.id(), "api", "user-1");
+            // Same (agent, channel, identity) => the same open conversation is reused.
+            Conversation again = conversationService
+                    .resolveOrStartConversation(agent.id(), "api", "user-1");
+            assertThat(again.id()).isEqualTo(first.id());
+            // A different external identity => a distinct conversation.
+            Conversation other = conversationService
+                    .resolveOrStartConversation(agent.id(), "api", "user-2");
+            assertThat(other.id()).isNotEqualTo(first.id());
+        } finally {
+            TenantContext.clear();
+        }
+
+        Integer apiConversations = jdbc.queryForObject(
+                "SELECT count(*) FROM conversations WHERE channel_type = 'api'", Integer.class);
+        assertThat(apiConversations).isEqualTo(2);
+    }
+
+    @Test
+    void insertOpenConversationIfAbsent_secondInsertForSameOpenTupleIsSkipped() {
+        // Two sequential committed transactions: the first creates the OPEN thread; the second
+        // attempt for the same (agent, channel, identity) is refused by the V13 partial unique
+        // index and returns 0 (ON CONFLICT DO NOTHING) rather than duplicating the thread.
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        Integer first = tx.execute(status -> conversationRepository.insertOpenConversationIfAbsent(
+                UuidGenerator.newV7(), agent.id(), "api", "user-1"));
+        Integer second = tx.execute(status -> conversationRepository.insertOpenConversationIfAbsent(
+                UuidGenerator.newV7(), agent.id(), "api", "user-1"));
+
+        assertThat(first).isEqualTo(1);
+        assertThat(second).isZero();
+        Integer openRows = jdbc.queryForObject(
+                "SELECT count(*) FROM conversations WHERE agent_id = ? AND channel_type = 'api' "
+                        + "AND external_identity_ref = 'user-1' AND status = 'OPEN'",
+                Integer.class, agent.id());
+        assertThat(openRows).isEqualTo(1);
+    }
+
+    @Test
+    void resolveOrStartConversation_underConcurrency_yieldsExactlyOneOpenThread() throws Exception {
+        int parallel = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(parallel);
+        CyclicBarrier barrier = new CyclicBarrier(parallel);
+        List<Callable<UUID>> tasks = new ArrayList<>();
+        for (int i = 0; i < parallel; i++) {
+            tasks.add(() -> {
+                TenantContext.setCurrentTenantId(clientA.id());
+                try {
+                    barrier.await(5, TimeUnit.SECONDS); // release all callers together to force the race
+                    return conversationService
+                            .resolveOrStartConversation(agent.id(), "api", "user-shared").id();
+                } finally {
+                    TenantContext.clear();
+                }
+            });
+        }
+
+        Set<UUID> returnedIds = new HashSet<>();
+        try {
+            for (Future<UUID> future : pool.invokeAll(tasks)) {
+                returnedIds.add(future.get(10, TimeUnit.SECONDS));
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // All concurrent callers converge on a single conversation, and the DB holds exactly one
+        // OPEN row for the tuple — the partial unique index prevents the split.
+        assertThat(returnedIds).as("concurrent callers converge on one conversation").hasSize(1);
+        Integer openRows = jdbc.queryForObject(
+                "SELECT count(*) FROM conversations WHERE agent_id = ? AND channel_type = 'api' "
+                        + "AND external_identity_ref = 'user-shared' AND status = 'OPEN'",
+                Integer.class, agent.id());
+        assertThat(openRows).isEqualTo(1);
     }
 
     @Test

@@ -97,6 +97,82 @@ class ConversationServiceTest {
         assertThat(found.get().status()).isEqualTo(ConversationStatus.OPEN);
     }
 
+    // --- resolve-or-create ---
+
+    @Test
+    void resolveOrStartConversation_whenActiveExists_returnsItWithoutCreating() {
+        UUID agentId = UUID.randomUUID();
+        Conversation open = Conversation.start(agentId, "api", "user-1");
+        when(conversationRepository.findByAgentIdAndChannelTypeAndExternalIdentityRefAndStatus(
+                agentId, "api", "user-1", ConversationStatus.OPEN))
+                .thenReturn(Optional.of(new ConversationMapper().toEntity(open)));
+
+        Conversation resolved = service.resolveOrStartConversation(agentId, "api", "user-1");
+
+        assertThat(resolved.id()).isEqualTo(open.id());
+        Mockito.verify(agentRepository, Mockito.never()).findById(any());
+    }
+
+    @Test
+    void resolveOrStartConversation_whenNoActive_insertsAndReturnsTheOpenConversation() {
+        UUID agentId = UUID.randomUUID();
+        ConversationEntity persisted = new ConversationMapper()
+                .toEntity(Conversation.start(agentId, "api", "user-1"));
+        when(conversationRepository.findByAgentIdAndChannelTypeAndExternalIdentityRefAndStatus(
+                agentId, "api", "user-1", ConversationStatus.OPEN))
+                .thenReturn(Optional.empty())          // fast path: no open thread
+                .thenReturn(Optional.of(persisted));   // re-read after the insert
+        when(agentRepository.findById(agentId)).thenReturn(Optional.of(agent(agentId)));
+        when(conversationRepository.insertOpenConversationIfAbsent(
+                any(UUID.class), eq(agentId), eq("api"), eq("user-1"))).thenReturn(1);
+
+        Conversation resolved = service.resolveOrStartConversation(agentId, "api", "user-1");
+
+        assertThat(resolved.channelType()).isEqualTo("api");
+        assertThat(resolved.status()).isEqualTo(ConversationStatus.OPEN);
+    }
+
+    @Test
+    void resolveOrStartConversation_whenConcurrentInsertWonTheRace_returnsTheWinner() {
+        UUID agentId = UUID.randomUUID();
+        ConversationEntity winner = new ConversationMapper()
+                .toEntity(Conversation.start(agentId, "api", "user-1"));
+        when(conversationRepository.findByAgentIdAndChannelTypeAndExternalIdentityRefAndStatus(
+                agentId, "api", "user-1", ConversationStatus.OPEN))
+                .thenReturn(Optional.empty())        // fast path: none yet
+                .thenReturn(Optional.of(winner));    // re-read finds the concurrent winner
+        when(agentRepository.findById(agentId)).thenReturn(Optional.of(agent(agentId)));
+        when(conversationRepository.insertOpenConversationIfAbsent(
+                any(UUID.class), eq(agentId), eq("api"), eq("user-1"))).thenReturn(0);  // lost the race
+
+        Conversation resolved = service.resolveOrStartConversation(agentId, "api", "user-1");
+
+        assertThat(resolved.id()).isEqualTo(winner.getId());
+    }
+
+    @Test
+    void resolveOrStartConversation_whenAgentNotVisible_throwsAgentNotFound() {
+        UUID agentId = UUID.randomUUID();
+        when(conversationRepository.findByAgentIdAndChannelTypeAndExternalIdentityRefAndStatus(
+                agentId, "api", "user-1", ConversationStatus.OPEN))
+                .thenReturn(Optional.empty());
+        when(agentRepository.findById(agentId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.resolveOrStartConversation(agentId, "api", "user-1"))
+                .isInstanceOf(AgentNotFoundException.class);
+    }
+
+    @Test
+    void startConversation_whenApiChannel_persistsOpenConversation() {
+        UUID agentId = UUID.randomUUID();
+        when(agentRepository.findById(agentId)).thenReturn(Optional.of(agent(agentId)));
+
+        Conversation conversation = service.startConversation(agentId, "api", "user-1");
+
+        assertThat(conversation.channelType()).isEqualTo("api");
+        assertThat(conversation.status()).isEqualTo(ConversationStatus.OPEN);
+    }
+
     // --- lifecycle transitions ---
 
     @Test
