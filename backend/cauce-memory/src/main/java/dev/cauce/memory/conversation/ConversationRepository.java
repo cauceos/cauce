@@ -30,6 +30,28 @@ public interface ConversationRepository extends JpaRepository<ConversationEntity
             UUID agentId, String channelType, String externalIdentityRef, ConversationStatus status);
 
     /**
+     * Inserts a new OPEN conversation for the {@code (agent, channel, external user)} tuple
+     * unless one already exists, in a single race-free statement. Returns {@code 1} when this
+     * call created the row, {@code 0} when a concurrent caller already had — the
+     * {@code idx_conversations_one_open_per_identity} partial unique index (V13) is the conflict
+     * arbiter. The caller then re-reads the OPEN row to obtain the winner. {@code started_at}
+     * and {@code last_message_at} default to {@code now()}; the conversation starts OPEN with no
+     * lifecycle timestamps. Runs in the caller's transaction with the tenant RLS context applied,
+     * so the insert is subject to the conversations {@code WITH CHECK} visibility policy.
+     */
+    @Modifying
+    @Query(value = """
+            INSERT INTO conversations (id, agent_id, channel_type, external_identity_ref, status)
+            VALUES (:id, :agentId, :channelType, :externalIdentityRef, 'OPEN')
+            ON CONFLICT (agent_id, channel_type, external_identity_ref) WHERE status = 'OPEN'
+            DO NOTHING
+            """, nativeQuery = true)
+    int insertOpenConversationIfAbsent(@Param("id") UUID id,
+                                       @Param("agentId") UUID agentId,
+                                       @Param("channelType") String channelType,
+                                       @Param("externalIdentityRef") String externalIdentityRef);
+
+    /**
      * Advances {@code lastMessageAt} of a conversation, called when a message is appended.
      * A single bulk UPDATE, so the conversation does not need to be loaded or mutated via
      * a setter; the caller passes the new message's timestamp for conversational
