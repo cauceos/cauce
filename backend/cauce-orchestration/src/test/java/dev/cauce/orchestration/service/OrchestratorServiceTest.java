@@ -38,7 +38,6 @@ import dev.cauce.memory.message.MessageRepository;
 import dev.cauce.orchestration.context.ContextBuilder;
 import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
-import dev.cauce.orchestration.exception.UnknownModelException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -163,13 +162,18 @@ class OrchestratorServiceTest {
     }
 
     @Test
-    void respondToMessage_whenModelUnknown_propagatesUnknownModelAndDoesNotRecordError() {
+    void respondToMessage_whenModelUnknown_usesFallbackWindowAndStillResponds() {
         stubConversation();
         stubHistory(triggerEntity(MessageRole.USER, "Hola"));
-        stubAgent("gpt-4"); // not in ModelContextWindow table
+        stubAgent("claude-opus-4-99"); // not in ModelContextWindow table -> conservative fallback
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any(LlmInvocation.class))).thenReturn(
+                new LlmResponse("Hola", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
 
-        assertThatThrownBy(() -> service.respondToMessage(conversationId, triggerId))
-                .isInstanceOf(UnknownModelException.class);
+        Message result = service.respondToMessage(conversationId, triggerId);
+
+        assertThat(result.role()).isEqualTo(MessageRole.AGENT);
+        verify(messageRepository).save(any(MessageEntity.class));
         verifyNoInteractions(errorRecorder);
     }
 

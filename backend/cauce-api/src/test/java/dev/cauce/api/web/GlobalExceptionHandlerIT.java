@@ -95,10 +95,10 @@ class GlobalExceptionHandlerIT extends AbstractApiIntegrationTest {
     }
 
     @Test
-    void unknownModelException_maps422() throws Exception {
+    void unprocessableEntityException_maps422() throws Exception {
         mockMvc.perform(get("/test/throw/unprocessable").header(HttpHeaders.AUTHORIZATION, bearer))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.error").value("unknown_model"));
+                .andExpect(jsonPath("$.error").value("message_too_large_for_context"));
     }
 
     @Test

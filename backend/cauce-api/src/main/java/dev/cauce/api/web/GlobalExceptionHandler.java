@@ -20,7 +20,6 @@ import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxRetriesExceededException;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
-import dev.cauce.orchestration.exception.UnknownModelException;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -85,7 +84,6 @@ public class GlobalExceptionHandler {
             // 422 UNPROCESSABLE_ENTITY
             Map.entry(InvalidTenantTierException.class, "invalid_tenant_tier"),
             Map.entry(MessageTooLargeForContextException.class, "message_too_large_for_context"),
-            Map.entry(UnknownModelException.class, "unknown_model"),
             // 502 BAD_GATEWAY
             Map.entry(LlmAuthenticationException.class, "llm_authentication_error"),
             Map.entry(LlmProviderNotAvailableException.class, "llm_provider_not_available"),
@@ -151,8 +149,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             InvalidTenantTierException.class,
-            MessageTooLargeForContextException.class,
-            UnknownModelException.class})
+            MessageTooLargeForContextException.class})
     public ResponseEntity<ErrorResponse> handleUnprocessable(RuntimeException ex) {
         return clientError(HttpStatus.UNPROCESSABLE_ENTITY, ex);
     }

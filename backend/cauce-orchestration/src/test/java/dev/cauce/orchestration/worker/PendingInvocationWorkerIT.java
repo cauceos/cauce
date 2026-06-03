@@ -176,6 +176,30 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
     }
 
     @Test
+    void pollAndProcess_whenModelNotRegistered_usesFallbackWindowAndCompletes() {
+        mockLlmProvider.respondWith(invocation ->
+                new LlmResponse("reply", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
+        PendingInvocation enqueued;
+        TenantContext.setCurrentTenantId(clientA.id());
+        try {
+            // A model absent from ModelContextWindow (still claude-* so the mock supports it).
+            Agent unregistered = agentService.createAgent(clientA.id(), "FutureBot",
+                    "You are helpful.", "anthropic", "claude-opus-4-99");
+            Conversation conv = conversationService.startConversation(
+                    unregistered.id(), "whatsapp", "+34611112222");
+            Message trigger = messageService.appendMessage(conv.id(), MessageRole.USER, "Hola");
+            enqueued = pendingInvocationService.enqueueInvocation(conv.id(), trigger.id());
+        } finally {
+            TenantContext.clear();
+        }
+
+        worker.pollAndProcess();
+
+        // The conservative fallback window lets the invocation COMPLETE rather than FAIL.
+        awaitInvocationStatus(enqueued.id(), PendingInvocationStatus.COMPLETED);
+    }
+
+    @Test
     void pollAndProcess_whenRetryableLlmError_releasesForRetryWithFutureNextAttempt() {
         mockLlmProvider.respondWith(invocation -> {
             throw new LlmRateLimitException("anthropic", "claude-sonnet-4-7", "429 throttled");

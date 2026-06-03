@@ -5,7 +5,6 @@ import dev.cauce.core.message.MessageRole;
 import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmRole;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
-import dev.cauce.orchestration.exception.UnknownModelException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -30,7 +29,6 @@ public final class ContextBuilder {
      * Builds the invocation context for {@code modelName} from {@code conversationMessages}
      * (assumed chronological, oldest first).
      *
-     * @throws UnknownModelException if the model has no registered context window
      * @throws MessageTooLargeForContextException if the most recent message alone exceeds the
      *     effective context window
      */

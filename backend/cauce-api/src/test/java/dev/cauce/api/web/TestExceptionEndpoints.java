@@ -7,7 +7,7 @@ import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.llm.exception.LlmAuthenticationException;
 import dev.cauce.llm.exception.LlmRateLimitException;
 import dev.cauce.llm.exception.LlmTimeoutException;
-import dev.cauce.orchestration.exception.UnknownModelException;
+import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,7 +50,7 @@ public class TestExceptionEndpoints {
 
     @GetMapping("/test/throw/unprocessable")
     public void unprocessable() {
-        throw new UnknownModelException("unknown model: gpt-9");
+        throw new MessageTooLargeForContextException("message exceeds the context window");
     }
 
     @GetMapping("/test/throw/bad-gateway")

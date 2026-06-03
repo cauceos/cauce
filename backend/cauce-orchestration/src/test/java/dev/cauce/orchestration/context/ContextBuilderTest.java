@@ -8,7 +8,6 @@ import dev.cauce.core.message.MessageRole;
 import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmRole;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
-import dev.cauce.orchestration.exception.UnknownModelException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -112,12 +111,16 @@ class ContextBuilderTest {
     }
 
     @Test
-    void build_whenUnknownModel_throwsUnknownModel() {
+    void build_whenUnknownModel_usesConservativeFallbackWindow() {
+        // An unregistered model no longer fails: ModelContextWindow returns a conservative
+        // fallback window so the invocation degrades (history trimmed) rather than breaking.
         List<Message> messages = List.of(Message.from(CONVERSATION, MessageRole.USER, "hi"));
 
-        assertThatThrownBy(() -> builder.build(messages, "gpt-4", SYSTEM_PROMPT))
-                .isInstanceOf(UnknownModelException.class)
-                .hasMessageContaining("gpt-4");
+        LlmInvocationContext context = builder.build(messages, "gpt-4", SYSTEM_PROMPT);
+
+        assertThat(context.messages()).hasSize(1);
+        assertThat(context.contextWindowLimit()).isEqualTo(16_384);
+        assertThat(context.reservedForResponse()).isEqualTo(10_000);
     }
 
     @Test
