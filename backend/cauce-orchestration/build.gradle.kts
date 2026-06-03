@@ -11,8 +11,9 @@
 // The cauce-llm dependency is the SPI's neutral model only (LlmMessage/LlmRole); no
 // provider is invoked here — that lands with the synchronous orchestrator.
 //
-// cauce-tenancy is test-only: the integration test seeds the tenant->agent->conversation
-// ->message graph through the existing services.
+// cauce-tenancy is a main dependency: InboundMessageService (the inbound ingest unit) composes
+// the tenancy application services (Conversation/Message) with the orchestration queue in one
+// transaction. Tests also seed the tenant->agent->conversation->message graph through them.
 // Build config inherited from the root project (see ../build.gradle.kts).
 plugins {
     java
@@ -22,9 +23,9 @@ dependencies {
     implementation(project(":cauce-core"))
     implementation(project(":cauce-memory"))
     implementation(project(":cauce-llm"))
+    implementation(project(":cauce-tenancy"))
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
-    testImplementation(project(":cauce-tenancy"))
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:junit-jupiter")
