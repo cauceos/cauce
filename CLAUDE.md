@@ -17,12 +17,12 @@ See [README.md](README.md) for the user-facing project description.
 - Spring Boot 3.x
 - Gradle with Kotlin DSL (multi-module project)
 - PostgreSQL 16+ with pgvector extension
-- Redis for cache and ephemeral state
-- Spring Application Events for internal eventing
-- OpenTelemetry for observability
+- Redis for cache and ephemeral state (provisioned in dev; no production code uses it yet — the only cache today is the in-process Caffeine API-key cache)
+- Spring Application Events for internal eventing (planned, not yet used)
+- OpenTelemetry for observability (planned; no OTel dependency yet)
 - JUnit 5, Mockito, AssertJ, Testcontainers for testing
 
-**Frontend**
+**Frontend** (planned — `frontend/` does not exist yet)
 - Angular 17+ with standalone components and Signals
 - TypeScript 5+ (strict mode)
 - Tailwind CSS
@@ -31,34 +31,37 @@ See [README.md](README.md) for the user-facing project description.
 
 **Infrastructure**
 - Docker + Docker Compose for development
-- Helm chart for Kubernetes production deployments
+- Helm chart for Kubernetes production deployments (planned, not in the repo yet)
 - GitHub Actions for CI/CD
 
 ## Repository structure
 
-> **Current state**: foundational structure in place. backend/ contains the Gradle multi-module skeleton with 10 subprojects compiling cleanly but without business logic yet. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. Domain code and frontend not yet started.
+> **Current state**: backend/ contains 13 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V13), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), and an authenticated REST API including a public messaging endpoint. `cauce-channels`, `cauce-evals`, `cauce-observability`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-06-10): 480 tests, 0 failures.
 
-**Backend modules** (Gradle subprojects under `backend/`):
+**Backend modules** (Gradle subprojects under `backend/`; the Gradle build — `settings.gradle.kts`, wrapper, `gradle/` — lives under `backend/`, not the repo root):
 
-- `cauce-core` — domain model, agent runtime, conversation state, plugin SPI
-- `cauce-memory` — persistent state, cross-channel identity, vector retrieval
-- `cauce-channels` — channel adapter SPI and reference adapters (WhatsApp, voice, email, web chat)
-- `cauce-llm` — LLM provider SPI and reference adapters (OpenAI, Anthropic, Mistral, Ollama)
-- `cauce-evals` — evaluation framework, conversation testing, regression detection
-- `cauce-observability` — OpenTelemetry integration, traces, metrics, replay
-- `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance
-- `cauce-tenancy` — multi-tenant isolation, hierarchical visibility, quotas, usage tracking
-- `cauce-api` — REST API surface; the application module that runs Spring Boot
-- `cauce-enterprise` — commercial modules under separate license
+- `cauce-core` — domain model: `Tenant`, `Agent`, `Conversation`, `Message`, `ApiKey` aggregates, `TenantContext`, UUIDv7 generation, API-key hashing ports; no framework dependencies (its only third-party library is uuid-creator)
+- `cauce-memory` — persistence: JPA entities, hand-written mappers, Spring Data repositories, `RlsContextAspect`, Flyway migrations (V1–V13). Vector retrieval is planned (pgvector enabled, no code yet)
+- `cauce-channels` — channel adapter SPI and reference adapters (WhatsApp, voice, email, web chat) — empty skeleton, not started
+- `cauce-llm` — provider-neutral LLM SPI: `LlmProvider`, `LlmProviderRegistry`, credentials, and the neutral invocation model (tool types exist but are not exercised yet). Adapters live in separate modules
+- `cauce-llm-anthropic` — native Anthropic adapter (`POST /v1/messages`); its bean is registered only when an Anthropic API key is configured
+- `cauce-llm-openai` — single OpenAI-compatible adapter (`POST /chat/completions`) registered as three conditional providers: `ollama` (keyless, dev default), `openai`, `mistral`
+- `cauce-evals` — evaluation framework, conversation testing, regression detection — empty skeleton, not started
+- `cauce-observability` — OpenTelemetry integration, traces, metrics, replay — empty skeleton, not started
+- `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance — empty skeleton, not started
+- `cauce-tenancy` — application services for tenants, agents, conversations, messages, and API keys; operator bootstrap; HMAC-SHA256 API-key hashing with a Caffeine cache
+- `cauce-orchestration` — async LLM invocation engine: pending-invocation queue, context assembly with a per-model context-window registry (`ModelContextWindow`; conservative 16,384-token fallback with a `WARN` for unknown models), orchestrator, background worker/reaper, and `InboundMessageService` (the inbound message ingest unit; depends on `cauce-tenancy`)
+- `cauce-api` — REST API surface; the Spring Boot application module. Compiles against the `cauce-llm` SPI only and wires both LLM adapters as `runtimeOnly`
+- `cauce-enterprise` — commercial modules under separate license — empty skeleton
 
-**Frontend** (Angular project under `frontend/`):
+**Frontend** (planned — `frontend/` does not exist yet):
 
 - `cauce-dashboard` — operator interface for managing workspaces, agents, conversations, costs
 
 **Other top-level directories**:
 
-- `.github/` — GitHub workflows, assets, issue templates
-- `docs/` — public documentation (populated as project matures)
+- `.github/` — GitHub workflows (CI), Dependabot config, repo assets (no issue templates yet)
+- `docs/` — public documentation; currently the ADRs under `docs/adr/`
 
 ## Architectural invariants
 
@@ -102,7 +105,7 @@ Core functionality must never depend on enterprise modules. Core-required featur
 
 ## Adding a new domain entity with hierarchical RLS
 
-When introducing a new domain entity that participates in the tenant hierarchy, follow this pattern (proven across Tenant, Agent, and Conversation). It keeps the hexagonal boundaries clean and makes tenant isolation enforceable at the database layer.
+When introducing a new domain entity that participates in the tenant hierarchy, follow this pattern (proven across Tenant, Agent, Conversation, Message, and ApiKey; PendingInvocation applies the same RLS approach but keeps its domain and persistence inside `cauce-orchestration`). It keeps the hexagonal boundaries clean and makes tenant isolation enforceable at the database layer.
 
 ### 1. Domain layer (`cauce-core/<entity>/`)
 
@@ -293,15 +296,92 @@ The async worker/reaper run under `cauce_app`: their cross-tenant claim/reap go 
 context (see `docs/adr/0001-rls-escape-hatches.md`).
 
 **Authentication.** `/v1/**` requires a valid API key (`Authorization: Bearer <key>`); the tenant
-context is derived from the validated key, never from a client header. There is no key-issuance
-endpoint yet, so on the **first** start against an empty database `OperatorKeyBootstrapRunner`
-creates the root operator and logs its API key **once** (`WARN`) — copy it from the log; it cannot
-be recovered. Subsequent starts are no-ops. In production this is the documented first-run step;
-the runner is disabled under the `test` profile (tests mint their own keys).
+context is derived from the validated key, never from a client header. API keys are issued, listed,
+and revoked over REST under hierarchical authority (see the inventory below and
+`docs/adr/0002-authority-model.md`) — but issuing a key requires authenticating with one, so on the
+**first** start against an empty database `OperatorKeyBootstrapRunner` creates the root operator and
+logs its API key **once** (`WARN`) — copy it from the log; it cannot be recovered. Subsequent starts
+are no-ops. In production this is the documented first-run step; the runner is disabled under the
+`test` profile (tests mint their own keys).
+
+### REST surface (v1)
+
+All `/v1/**` endpoints require Bearer API-key auth; JSON is globally snake_case. Out-of-scope
+entities surface as 404: "does not exist" and "not visible to you" are deliberately
+indistinguishable.
+
+- **Tenants**: `POST /v1/tenants/partner`, `POST /v1/tenants/client`, `GET /v1/tenants/{id}`,
+  `GET /v1/tenants/{id}/children`
+- **Agents**: `POST /v1/tenants/{tenantId}/agents`, `GET /v1/agents/{id}`,
+  `GET /v1/tenants/{tenantId}/agents`
+- **API keys** (hierarchical authority, ADR 0002): `POST /v1/tenants/{tenantId}/api-keys` (201;
+  plaintext key returned exactly once), `GET /v1/tenants/{tenantId}/api-keys` (metadata only),
+  `DELETE /v1/api-keys/{keyId}` (204, soft revoke)
+- **Messaging**: `POST /v1/agents/{agentId}/messages` (202 Accepted with
+  `{conversation_id, message_id}`), `GET /v1/conversations/{id}`,
+  `GET /v1/conversations/{id}/messages`
+
+The messaging endpoint stamps the reserved channel type `api` server-side — the request body
+carries only `external_identity_ref` and `content`, so the client cannot choose the channel.
+Ingest is atomic (`InboundMessageService`, one transaction): resolve-or-start the OPEN
+conversation — race-safe via `INSERT ... ON CONFLICT DO NOTHING` + re-`SELECT`, backed by the V13
+partial unique index on `conversations (agent_id, channel_type, external_identity_ref) WHERE
+status = 'OPEN'` — then append the USER message and enqueue the async invocation. The agent reply
+arrives asynchronously; clients poll the conversation messages.
 
 ### Frontend
 
 > Not present yet. Will be added under `frontend/cauce-dashboard`.
+
+## Deferred / Known gaps
+
+A durable register of work that is consciously deferred. Each item is verified against the code as
+of the reconciliation date; this is a backlog record, not a commitment to build these next.
+(Last reconciled: 2026-06-10.)
+
+### Large / strategic deferrals
+
+- **Tool-calling / agentic loop.** The LLM SPI already carries `ToolDefinition`, `ToolCall`, and
+  `FinishReason.TOOL_USE`, but the orchestrator performs single-step invocation: tools are always
+  sent empty and `toolCalls` is never read. This is the "agent vs chatbot" trait and the next major
+  planned unit.
+- **Idempotency of message ingestion.** `POST /v1/agents/{agentId}/messages` has no idempotency
+  key: a client retry or webhook redelivery after a committed ingest duplicates the USER message
+  and its invocation. Prerequisite for real channels (at-least-once webhook delivery); pair with
+  `cauce-channels`.
+- **Per-tenant LLM credentials and usage accounting.** Only the system-default credential exists
+  (`SystemDefaultLlmCredential`, env-var based); there is no per-tenant/BYO-key path. Token usage
+  (`LlmUsage`) is logged but never persisted or attributed per tenant. Both gate the commercial
+  model and billing.
+- **OSS quickstart.** docker-compose runs only PostgreSQL, Redis, and Adminer; there is no
+  clone → compose up → agent-responding path (app + Ollama in compose). Adoption surface.
+- **Real channels and dashboard.** `cauce-channels` is an empty skeleton (not even the SPI exists
+  yet) and the frontend does not exist.
+- **Observability instrumentation.** Invariant 4 ("observable by default") is not implemented yet:
+  no structured events, traces, or metrics are emitted anywhere; there is no OpenTelemetry or
+  Micrometer dependency, and `cauce-observability` is an empty skeleton.
+
+### Minor technical follow-ups
+
+- **No failure signal for permanently failed invocations.** LLM provider failures do surface as
+  SYSTEM `[orchestration_error]` messages in the conversation, but reaper-abandoned invocations and
+  non-LLM setup failures leave no conversation-visible trace, and there is no invocation-status
+  endpoint (the public 202 response drops the invocation id).
+- **Per-model limits beyond the context window.** Only the context window has a registry plus
+  conservative fallback (`ModelContextWindow`); max response tokens is a flat 4096 default, never
+  per-model.
+- **`RESERVED_FOR_RESPONSE`** is a hardcoded 10,000-token constant in `ContextBuilder`; revisit
+  when tuning context assembly.
+- **Pagination** is deferred on all list endpoints (`GET /v1/tenants/{id}/agents`,
+  `GET /v1/tenants/{id}/children`, `GET /v1/conversations/{id}/messages`) — explicit TODOs in the
+  controllers.
+- **`api_keys.last_used_at`** is updated synchronously, but only on the auth cold path (cache hits
+  skip the UPDATE; staleness is bounded by the cache TTL). Moving to an async batched update is
+  deferred (TODO in `ApiKeyAuthenticationFilter`).
+- **Streaming** is not part of the LLM SPI yet — explicitly deferred past v1.0, to be added as a
+  separate method. The orchestrator does one blocking `invoke`.
+- **Fine-grained authorization.** API keys carry no scopes or roles (empty authorities); deferred
+  until a concrete need exists. Authorization today is tenant scoping via RLS only.
 
 ## Commit conventions
 
