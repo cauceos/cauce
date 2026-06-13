@@ -76,6 +76,11 @@ public final class ContextBuilder {
             case USER -> LlmRole.USER;
             case AGENT -> LlmRole.ASSISTANT;
             case SYSTEM -> LlmRole.SYSTEM;
+            // Tool messages are mapped into each provider's tool format by the LLM adapters
+            // (sub-unit B) and driven by the orchestrator loop (sub-unit C); they do not flow
+            // through single-step context assembly yet. Fail fast rather than guess a role.
+            case TOOL_CALL, TOOL_RESULT -> throw new IllegalStateException(
+                    "Tool message role " + role + " is not yet supported in context assembly");
         };
     }
 }
