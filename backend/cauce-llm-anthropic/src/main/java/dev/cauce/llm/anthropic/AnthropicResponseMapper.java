@@ -4,17 +4,19 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.cauce.core.tool.ToolCall;
 import dev.cauce.llm.model.FinishReason;
 import dev.cauce.llm.model.LlmResponse;
 import dev.cauce.llm.model.LlmUsage;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * Parses an Anthropic Messages API success response into a neutral {@link LlmResponse}:
- * concatenates the {@code text} content blocks, normalises {@code stop_reason} to a
- * {@link FinishReason}, and copies token usage. Tool-call blocks are not yet handled, so
- * the response carries an empty tool-call list.
+ * concatenates the {@code text} content blocks, collects {@code tool_use} blocks into neutral
+ * {@link ToolCall}s (carrying the {@code id} as the correlation id and the {@code input}
+ * verbatim), normalises {@code stop_reason} to a {@link FinishReason}, and copies token usage.
  */
 final class AnthropicResponseMapper {
 
@@ -27,17 +29,24 @@ final class AnthropicResponseMapper {
     LlmResponse toDomain(String responseBody) throws JsonProcessingException {
         AnthropicMessagesResponse response =
                 objectMapper.readValue(responseBody, AnthropicMessagesResponse.class);
+        List<ContentBlock> blocks = response.content() == null ? List.of() : response.content();
 
-        String text = response.content() == null ? "" : response.content().stream()
+        String text = blocks.stream()
                 .filter(block -> "text".equals(block.type()) && block.text() != null)
                 .map(ContentBlock::text)
                 .collect(Collectors.joining());
+
+        List<ToolCall> toolCalls = blocks.stream()
+                .filter(block -> "tool_use".equals(block.type()))
+                .map(block -> new ToolCall(block.id(), block.name(),
+                        block.input() == null ? Map.of() : block.input()))
+                .toList();
 
         LlmUsage usage = response.usage() == null
                 ? LlmUsage.of(0, 0)
                 : LlmUsage.of(response.usage().inputTokens(), response.usage().outputTokens());
 
-        return new LlmResponse(text, List.of(), mapStopReason(response.stopReason()), usage);
+        return new LlmResponse(text, toolCalls, mapStopReason(response.stopReason()), usage);
     }
 
     private static FinishReason mapStopReason(String stopReason) {
@@ -61,7 +70,10 @@ final class AnthropicResponseMapper {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record ContentBlock(
             @JsonProperty("type") String type,
-            @JsonProperty("text") String text) {
+            @JsonProperty("text") String text,
+            @JsonProperty("id") String id,
+            @JsonProperty("name") String name,
+            @JsonProperty("input") Map<String, Object> input) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
