@@ -25,6 +25,10 @@ dependencies {
     runtimeOnly(project(":cauce-llm-anthropic"))
     runtimeOnly(project(":cauce-llm-openai"))
 
+    // Tools (executable tool SPI + built-in tools) are discovered at runtime via the
+    // component scan; the app does not yet compile against the tool SPI.
+    runtimeOnly(project(":cauce-tools"))
+
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")

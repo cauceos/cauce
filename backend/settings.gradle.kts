@@ -22,6 +22,7 @@ include(
     "cauce-llm",
     "cauce-llm-anthropic",
     "cauce-llm-openai",
+    "cauce-tools",
     "cauce-evals",
     "cauce-observability",
     "cauce-governance",
