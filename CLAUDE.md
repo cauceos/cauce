@@ -36,22 +36,23 @@ See [README.md](README.md) for the user-facing project description.
 
 ## Repository structure
 
-> **Current state**: backend/ contains 13 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V13), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), and an authenticated REST API including a public messaging endpoint. `cauce-channels`, `cauce-evals`, `cauce-observability`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-06-10): 480 tests, 0 failures.
+> **Current state**: backend/ contains 14 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V14), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, and the foundation of the tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, and tool-message persistence in `cauce-memory`). `cauce-channels`, `cauce-evals`, `cauce-observability`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-06-10): 480 tests, 0 failures.
 
 **Backend modules** (Gradle subprojects under `backend/`; the Gradle build — `settings.gradle.kts`, wrapper, `gradle/` — lives under `backend/`, not the repo root):
 
-- `cauce-core` — domain model: `Tenant`, `Agent`, `Conversation`, `Message`, `ApiKey` aggregates, `TenantContext`, UUIDv7 generation, API-key hashing ports; no framework dependencies (its only third-party library is uuid-creator)
-- `cauce-memory` — persistence: JPA entities, hand-written mappers, Spring Data repositories, `RlsContextAspect`, Flyway migrations (V1–V13). Vector retrieval is planned (pgvector enabled, no code yet)
+- `cauce-core` — domain model: `Tenant`, `Agent`, `Conversation`, `Message`, `ApiKey` aggregates, the neutral tool model (`ToolDefinition`, and the sealed `ToolContent` = `ToolCall` | `ToolResult`), `MessageRole` (incl. `TOOL_CALL`/`TOOL_RESULT`), `TenantContext`, UUIDv7 generation, API-key hashing ports; no framework dependencies (its only third-party library is uuid-creator)
+- `cauce-memory` — persistence: JPA entities, hand-written mappers, Spring Data repositories, `RlsContextAspect`, Flyway migrations (V1–V14, incl. the messages `tool_content` jsonb column). Vector retrieval is planned (pgvector enabled, no code yet)
 - `cauce-channels` — channel adapter SPI and reference adapters (WhatsApp, voice, email, web chat) — empty skeleton, not started
 - `cauce-llm` — provider-neutral LLM SPI: `LlmProvider`, `LlmProviderRegistry`, credentials, and the neutral invocation model (tool types exist but are not exercised yet). Adapters live in separate modules
 - `cauce-llm-anthropic` — native Anthropic adapter (`POST /v1/messages`); its bean is registered only when an Anthropic API key is configured
 - `cauce-llm-openai` — single OpenAI-compatible adapter (`POST /chat/completions`) registered as three conditional providers: `ollama` (keyless, dev default), `openai`, `mistral`
+- `cauce-tools` — executable tool SPI: the `Tool` contract (`definition()` + `execute(ToolCall)`), a Spring-managed `ToolRegistry` mirroring `LlmProviderRegistry`, and the built-in `get_current_time` clock tool (injectable `java.time.Clock`). Depends only on `cauce-core` (plus spring-context); the neutral tool model lives in core. Global registry; per-agent tool scoping is deferred. Format mapping in the adapters (B) and the orchestrator loop (C) are not built yet
 - `cauce-evals` — evaluation framework, conversation testing, regression detection — empty skeleton, not started
 - `cauce-observability` — OpenTelemetry integration, traces, metrics, replay — empty skeleton, not started
 - `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance — empty skeleton, not started
 - `cauce-tenancy` — application services for tenants, agents, conversations, messages, and API keys; operator bootstrap; HMAC-SHA256 API-key hashing with a Caffeine cache
 - `cauce-orchestration` — async LLM invocation engine: pending-invocation queue, context assembly with a per-model context-window registry (`ModelContextWindow`; conservative 16,384-token fallback with a `WARN` for unknown models), orchestrator, background worker/reaper, and `InboundMessageService` (the inbound message ingest unit; depends on `cauce-tenancy`)
-- `cauce-api` — REST API surface; the Spring Boot application module. Compiles against the `cauce-llm` SPI only and wires both LLM adapters as `runtimeOnly`
+- `cauce-api` — REST API surface; the Spring Boot application module. Compiles against the `cauce-llm` SPI only and wires both LLM adapters plus `cauce-tools` as `runtimeOnly` (the built-in tools register via the `dev.cauce` component scan)
 - `cauce-enterprise` — commercial modules under separate license — empty skeleton
 
 **Frontend** (planned — `frontend/` does not exist yet):
@@ -341,10 +342,15 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
 
 ### Large / strategic deferrals
 
-- **Tool-calling / agentic loop.** The LLM SPI already carries `ToolDefinition`, `ToolCall`, and
-  `FinishReason.TOOL_USE`, but the orchestrator performs single-step invocation: tools are always
-  sent empty and `toolCalls` is never read. This is the "agent vs chatbot" trait and the next major
-  planned unit.
+- **Tool-calling / agentic loop.** The foundation (sub-unit A) has landed: the neutral tool model
+  lives in `cauce-core`, the executable tool SPI + registry + built-in clock in `cauce-tools`, and
+  tool messages (`TOOL_CALL`/`TOOL_RESULT`) persist with their structured payload in the messages
+  `tool_content` jsonb column. Still missing: the LLM adapters do not yet map tools to/from each
+  provider's wire format (sub-unit B — `LlmInvocation.tools` is still sent empty and
+  `LlmResponse.toolCalls` is never read; `cauce-llm` keeps its own skeletal `ToolDefinition`/
+  `ToolCall` pending migration to the core model), and the orchestrator still performs single-step
+  invocation rather than the dispatch-and-feed-back loop (sub-unit C; `ContextBuilder` deliberately
+  rejects tool roles until then). This is the "agent vs chatbot" trait.
 - **Idempotency of message ingestion.** `POST /v1/agents/{agentId}/messages` has no idempotency
   key: a client retry or webhook redelivery after a committed ingest duplicates the USER message
   and its invocation. Prerequisite for real channels (at-least-once webhook delivery); pair with

@@ -8,7 +8,10 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * JPA persistence mapping for a message row. Infrastructure detail of cauce-memory;
@@ -33,6 +36,15 @@ public class MessageEntity {
     @Column(name = "content", nullable = false)
     private String content;
 
+    /**
+     * Structured tool payload for TOOL_CALL / TOOL_RESULT messages, stored as jsonb; null for
+     * text messages. Shape: {tool_call_id, tool_name, input} for a call,
+     * {tool_call_id, tool_name, output, is_error} for a result (built by {@link MessageMapper}).
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "tool_content")
+    private Map<String, Object> toolContent;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -40,12 +52,19 @@ public class MessageEntity {
         // for JPA
     }
 
+    /** Convenience constructor for a text message (USER / AGENT / SYSTEM): no tool content. */
     public MessageEntity(UUID id, UUID conversationId, MessageRole role, String content,
                          Instant createdAt) {
+        this(id, conversationId, role, content, null, createdAt);
+    }
+
+    public MessageEntity(UUID id, UUID conversationId, MessageRole role, String content,
+                         Map<String, Object> toolContent, Instant createdAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.role = role;
         this.content = content;
+        this.toolContent = toolContent;
         this.createdAt = createdAt;
     }
 
@@ -63,6 +82,10 @@ public class MessageEntity {
 
     public String getContent() {
         return content;
+    }
+
+    public Map<String, Object> getToolContent() {
+        return toolContent;
     }
 
     public Instant getCreatedAt() {

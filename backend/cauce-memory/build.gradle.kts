@@ -12,6 +12,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-aop")
 
+    // Jackson backs Hibernate's JSON format mapper used to (de)serialize the messages
+    // tool_content jsonb column to/from a Map (see MessageEntity).
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+
     // Flyway 11.x: PostgreSQL support is a separate module since Flyway 10.
     runtimeOnly("org.flywaydb:flyway-core")
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
