@@ -5,7 +5,7 @@
 # listed: they are governed by the Spring Boot BOM imported in build.gradle.kts.
 
 [versions]
-spring-boot = "3.5.14"
+spring-boot = "3.5.15"
 spring-dependency-management = "1.1.7"
 uuid-creator = "6.1.1"
 wiremock = "3.9.2"
