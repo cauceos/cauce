@@ -1,13 +1,16 @@
 package dev.cauce.llm.model;
 
+import dev.cauce.core.tool.ToolCall;
 import java.util.List;
 import java.util.Objects;
 
 /**
  * A provider-independent completion result. Immutable.
  *
- * <p>{@code toolCalls} is part of the contract from v1.0 but is always empty until the
- * Tool entity exists.
+ * <p>{@code content} (text) and {@code toolCalls} can coexist: a model may emit text and
+ * request one or more tool calls in the same turn. {@code toolCalls} defaults to empty for a
+ * plain text completion; {@code finishReason} is {@link FinishReason#TOOL_USE} when the model
+ * asked to call a tool.
  */
 public record LlmResponse(
         String content,

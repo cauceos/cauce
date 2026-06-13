@@ -13,5 +13,8 @@ plugins {
 }
 
 dependencies {
+    // The neutral tool model (ToolDefinition, ToolCall, ToolResult) lives in cauce-core and
+    // appears in this module's request/response contract (LlmInvocation, LlmResponse, LlmMessage).
+    implementation(project(":cauce-core"))
     implementation("org.springframework:spring-context")
 }

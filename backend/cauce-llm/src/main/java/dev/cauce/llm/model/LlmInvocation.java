@@ -1,5 +1,6 @@
 package dev.cauce.llm.model;
 
+import dev.cauce.core.tool.ToolDefinition;
 import dev.cauce.llm.spi.LlmCredential;
 import java.util.List;
 import java.util.Objects;
@@ -9,8 +10,9 @@ import java.util.Objects;
  * {@link #builder()}.
  *
  * <p>{@code systemPrompt}, {@code maxTokens}, and {@code temperature} are optional and may
- * be null (adapters apply provider defaults). {@code tools} is part of the contract from
- * v1.0 but is always empty until the Tool entity exists.
+ * be null (adapters apply provider defaults). {@code tools} declares the neutral
+ * {@link ToolDefinition tool definitions} the model may call; each adapter translates them to
+ * its provider's wire format. It defaults to empty (a plain completion request).
  */
 public record LlmInvocation(
         String modelName,

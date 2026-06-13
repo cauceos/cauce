@@ -3,8 +3,10 @@ package dev.cauce.llm.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.cauce.core.tool.ToolDefinition;
 import dev.cauce.llm.spi.LlmCredential;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -46,6 +48,16 @@ class LlmInvocationTest {
         LlmInvocation invocation = baseBuilder().build();
 
         assertThat(invocation.tools()).isEmpty();
+    }
+
+    @Test
+    void builder_carriesToolDefinitions() {
+        ToolDefinition clock = new ToolDefinition("get_current_time", "Returns the time",
+                Map.of("type", "object"));
+
+        LlmInvocation invocation = baseBuilder().tools(List.of(clock)).build();
+
+        assertThat(invocation.tools()).containsExactly(clock);
     }
 
     @Test

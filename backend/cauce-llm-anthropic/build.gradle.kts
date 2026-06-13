@@ -10,6 +10,9 @@ plugins {
 
 dependencies {
     implementation(project(":cauce-llm"))
+    // The neutral tool model (ToolDefinition/ToolCall/ToolResult) this adapter maps to/from the
+    // Anthropic tool wire format lives in cauce-core; it appears in the cauce-llm contract.
+    implementation(project(":cauce-core"))
     implementation("com.fasterxml.jackson.core:jackson-databind")
     // @Configuration, @Bean, @ConfigurationProperties, @ConditionalOnProperty.
     implementation("org.springframework.boot:spring-boot-autoconfigure")
