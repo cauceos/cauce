@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolDefinition;
+import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.model.LlmInvocation;
 import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.spi.LlmCredential;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -62,6 +66,61 @@ class OpenAiMessageMapperTest {
         assertThat(json.get("messages").get(0).get("role").asText()).isEqualTo("user");
         assertThat(json.get("max_tokens").asInt()).isEqualTo(4096);
         assertThat(json.has("temperature")).isFalse(); // null temperature is omitted
+    }
+
+    @Test
+    void toRequest_serializesToolsArray_withFunctionWrapperAndParameters() throws Exception {
+        ToolDefinition clock = new ToolDefinition("get_current_time", "Returns the current time",
+                Map.of("type", "object", "properties", Map.of()));
+        LlmInvocation invocation = LlmInvocation.builder()
+                .modelName("gpt-4o")
+                .messages(List.of(LlmMessage.user("Hi")))
+                .tools(List.of(clock))
+                .credential(cred())
+                .build();
+
+        JsonNode tool = objectMapper.readTree(mapper.toRequestJson(invocation, 4096))
+                .get("tools").get(0);
+
+        assertThat(tool.get("type").asText()).isEqualTo("function");
+        assertThat(tool.get("function").get("name").asText()).isEqualTo("get_current_time");
+        assertThat(tool.get("function").get("parameters").get("type").asText()).isEqualTo("object");
+    }
+
+    @Test
+    void toRequest_collapsesAssistantToolCalls_andEmitsSeparateToolMessages() throws Exception {
+        LlmInvocation invocation = LlmInvocation.builder()
+                .modelName("gpt-4o")
+                .messages(List.of(
+                        LlmMessage.user("What time is it?"),
+                        LlmMessage.assistant("Let me check."),
+                        LlmMessage.toolCall(
+                                new ToolCall("call-1", "get_current_time", Map.of("tz", "UTC"))),
+                        LlmMessage.toolResult(
+                                ToolResult.success("call-1", "get_current_time", "2026-06-13T10:15:30Z"))))
+                .credential(cred())
+                .build();
+
+        JsonNode messages = objectMapper.readTree(mapper.toRequestJson(invocation, 4096))
+                .get("messages");
+
+        assertThat(messages).hasSize(3);
+        assertThat(messages.get(0).get("role").asText()).isEqualTo("user");
+
+        JsonNode assistant = messages.get(1);
+        assertThat(assistant.get("role").asText()).isEqualTo("assistant");
+        assertThat(assistant.get("content").asText()).isEqualTo("Let me check.");
+        JsonNode toolCall = assistant.get("tool_calls").get(0);
+        assertThat(toolCall.get("id").asText()).isEqualTo("call-1");
+        assertThat(toolCall.get("type").asText()).isEqualTo("function");
+        assertThat(toolCall.get("function").get("name").asText()).isEqualTo("get_current_time");
+        // arguments is a JSON-encoded STRING, not an object
+        assertThat(toolCall.get("function").get("arguments").asText()).isEqualTo("{\"tz\":\"UTC\"}");
+
+        JsonNode tool = messages.get(2);
+        assertThat(tool.get("role").asText()).isEqualTo("tool");
+        assertThat(tool.get("tool_call_id").asText()).isEqualTo("call-1");
+        assertThat(tool.get("content").asText()).isEqualTo("2026-06-13T10:15:30Z");
     }
 
     private static LlmCredential cred() {

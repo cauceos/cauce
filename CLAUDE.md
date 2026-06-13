@@ -43,9 +43,9 @@ See [README.md](README.md) for the user-facing project description.
 - `cauce-core` — domain model: `Tenant`, `Agent`, `Conversation`, `Message`, `ApiKey` aggregates, the neutral tool model (`ToolDefinition`, and the sealed `ToolContent` = `ToolCall` | `ToolResult`), `MessageRole` (incl. `TOOL_CALL`/`TOOL_RESULT`), `TenantContext`, UUIDv7 generation, API-key hashing ports; no framework dependencies (its only third-party library is uuid-creator)
 - `cauce-memory` — persistence: JPA entities, hand-written mappers, Spring Data repositories, `RlsContextAspect`, Flyway migrations (V1–V14, incl. the messages `tool_content` jsonb column). Vector retrieval is planned (pgvector enabled, no code yet)
 - `cauce-channels` — channel adapter SPI and reference adapters (WhatsApp, voice, email, web chat) — empty skeleton, not started
-- `cauce-llm` — provider-neutral LLM SPI: `LlmProvider`, `LlmProviderRegistry`, credentials, and the neutral invocation model (tool types exist but are not exercised yet). Adapters live in separate modules
-- `cauce-llm-anthropic` — native Anthropic adapter (`POST /v1/messages`); its bean is registered only when an Anthropic API key is configured
-- `cauce-llm-openai` — single OpenAI-compatible adapter (`POST /chat/completions`) registered as three conditional providers: `ollama` (keyless, dev default), `openai`, `mistral`
+- `cauce-llm` — provider-neutral LLM SPI: `LlmProvider`, `LlmProviderRegistry`, credentials, and the neutral invocation/response model, which carries the `cauce-core` tool model (`LlmInvocation.tools`, `LlmMessage` tool content, `LlmResponse.toolCalls`, `FinishReason.TOOL_USE`). Depends on `cauce-core`. Adapters live in separate modules
+- `cauce-llm-anthropic` — native Anthropic adapter (`POST /v1/messages`); maps the neutral tool model to/from Anthropic's `tool_use`/`tool_result` content blocks. Its bean is registered only when an Anthropic API key is configured
+- `cauce-llm-openai` — single OpenAI-compatible adapter (`POST /chat/completions`) mapping tools to/from the `tools`/`tool_calls`/`role:"tool"` format (`arguments` as a JSON string), registered as three conditional providers: `ollama` (keyless, dev default), `openai`, `mistral`
 - `cauce-tools` — executable tool SPI: the `Tool` contract (`definition()` + `execute(ToolCall)`), a Spring-managed `ToolRegistry` mirroring `LlmProviderRegistry`, and the built-in `get_current_time` clock tool (injectable `java.time.Clock`). Depends only on `cauce-core` (plus spring-context); the neutral tool model lives in core. Global registry; per-agent tool scoping is deferred. Format mapping in the adapters (B) and the orchestrator loop (C) are not built yet
 - `cauce-evals` — evaluation framework, conversation testing, regression detection — empty skeleton, not started
 - `cauce-observability` — OpenTelemetry integration, traces, metrics, replay — empty skeleton, not started
@@ -342,15 +342,16 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
 
 ### Large / strategic deferrals
 
-- **Tool-calling / agentic loop.** The foundation (sub-unit A) has landed: the neutral tool model
-  lives in `cauce-core`, the executable tool SPI + registry + built-in clock in `cauce-tools`, and
-  tool messages (`TOOL_CALL`/`TOOL_RESULT`) persist with their structured payload in the messages
-  `tool_content` jsonb column. Still missing: the LLM adapters do not yet map tools to/from each
-  provider's wire format (sub-unit B — `LlmInvocation.tools` is still sent empty and
-  `LlmResponse.toolCalls` is never read; `cauce-llm` keeps its own skeletal `ToolDefinition`/
-  `ToolCall` pending migration to the core model), and the orchestrator still performs single-step
-  invocation rather than the dispatch-and-feed-back loop (sub-unit C; `ContextBuilder` deliberately
-  rejects tool roles until then). This is the "agent vs chatbot" trait.
+- **Tool-calling / agentic loop.** The foundation (sub-unit A) and provider wiring (sub-unit B)
+  have landed: the neutral tool model lives in `cauce-core`, the executable tool SPI + registry +
+  built-in clock in `cauce-tools`, tool messages (`TOOL_CALL`/`TOOL_RESULT`) persist with their
+  structured payload in the messages `tool_content` jsonb column, the `cauce-llm` contract carries
+  the core tool model, and both adapters map tools to/from their provider's wire format (Anthropic
+  `tool_use`/`tool_result` blocks; OpenAI `tools`/`tool_calls`/`role:"tool"` messages, `arguments`
+  as a JSON string). Still missing (sub-unit C): the orchestrator performs single-step invocation
+  rather than the dispatch-and-feed-back loop, so the engine still sends `LlmInvocation.tools`
+  empty and never consumes `LlmResponse.toolCalls`, and `ContextBuilder` deliberately rejects tool
+  roles until the loop lands. This is the "agent vs chatbot" trait.
 - **Idempotency of message ingestion.** `POST /v1/agents/{agentId}/messages` has no idempotency
   key: a client retry or webhook redelivery after a committed ingest duplicates the USER message
   and its invocation. Prerequisite for real channels (at-least-once webhook delivery); pair with
