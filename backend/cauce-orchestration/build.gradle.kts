@@ -23,6 +23,9 @@ dependencies {
     implementation(project(":cauce-core"))
     implementation(project(":cauce-memory"))
     implementation(project(":cauce-llm"))
+    // The agentic loop injects the ToolRegistry (all registered tools are offered to every
+    // agent) and dispatches tool calls through it.
+    implementation(project(":cauce-tools"))
     implementation(project(":cauce-tenancy"))
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 

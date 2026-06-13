@@ -3,43 +3,40 @@ package dev.cauce.orchestration.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import dev.cauce.core.agent.AgentNotFoundException;
-import dev.cauce.core.agent.AgentStatus;
+import dev.cauce.core.agent.Agent;
 import dev.cauce.core.conversation.ConversationNotFoundException;
-import dev.cauce.core.conversation.ConversationStatus;
-import dev.cauce.core.message.MessageNotFoundException;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
-import dev.cauce.llm.exception.LlmAuthenticationException;
-import dev.cauce.llm.exception.LlmProviderException;
+import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolDefinition;
+import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.exception.LlmRateLimitException;
-import dev.cauce.llm.exception.LlmTimeoutException;
 import dev.cauce.llm.model.FinishReason;
 import dev.cauce.llm.model.LlmInvocation;
+import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmResponse;
 import dev.cauce.llm.model.LlmUsage;
 import dev.cauce.llm.spi.LlmProvider;
 import dev.cauce.llm.spi.LlmProviderRegistry;
-import dev.cauce.memory.agent.AgentEntity;
-import dev.cauce.memory.agent.AgentMapper;
-import dev.cauce.memory.agent.AgentRepository;
-import dev.cauce.memory.conversation.ConversationEntity;
-import dev.cauce.memory.conversation.ConversationRepository;
-import dev.cauce.memory.message.MessageEntity;
-import dev.cauce.memory.message.MessageMapper;
-import dev.cauce.memory.message.MessageRepository;
 import dev.cauce.orchestration.context.ContextBuilder;
-import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
+import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
+import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
+import dev.cauce.tools.clock.ClockTool;
+import dev.cauce.tools.spi.Tool;
+import dev.cauce.tools.spi.ToolRegistry;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -53,65 +50,50 @@ class OrchestratorServiceTest {
 
     private static final String MODEL = "claude-sonnet-4-7";
     private static final String PROVIDER = "anthropic";
+    private static final Instant FIXED = Instant.parse("2026-06-13T10:15:30Z");
 
     private final UUID conversationId = UUID.randomUUID();
-    private final UUID agentId = UUID.randomUUID();
     private final UUID tenantId = UUID.randomUUID();
     private final UUID triggerId = UUID.randomUUID();
-    private final Instant now = Instant.now();
 
-    private ConversationRepository conversationRepository;
-    private MessageRepository messageRepository;
-    private AgentRepository agentRepository;
+    private ConversationGateway gateway;
     private LlmProviderRegistry registry;
     private OrchestrationErrorRecorder errorRecorder;
     private LlmProvider provider;
-    private OrchestratorService service;
 
     @BeforeEach
     void setUp() {
-        conversationRepository = Mockito.mock(ConversationRepository.class);
-        messageRepository = Mockito.mock(MessageRepository.class);
-        agentRepository = Mockito.mock(AgentRepository.class);
+        gateway = Mockito.mock(ConversationGateway.class);
         registry = Mockito.mock(LlmProviderRegistry.class);
         errorRecorder = Mockito.mock(OrchestrationErrorRecorder.class);
         provider = Mockito.mock(LlmProvider.class);
-        service = new OrchestratorService(conversationRepository, messageRepository, new MessageMapper(),
-                agentRepository, new AgentMapper(), registry, new ContextBuilder(), new MockEnvironment(),
-                errorRecorder);
-        when(messageRepository.save(any(MessageEntity.class))).thenAnswer(call -> call.getArgument(0));
     }
 
     @Test
-    void respondToMessage_happyPath_invokesLlmPersistsAgentMessageAndReturnsIt() {
-        stubConversation();
-        stubHistory(triggerEntity(MessageRole.USER, "Hola"));
-        stubAgent(MODEL);
+    void respondToMessage_noToolsAvailable_persistsAgentReplyAndOffersNoTools() {
+        stubLoadAndEchoAppend();
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
-        when(provider.invoke(any(LlmInvocation.class))).thenReturn(
-                new LlmResponse("Hola, soy un agente", List.of(), FinishReason.STOP, LlmUsage.of(10, 5)));
+        when(provider.invoke(any())).thenReturn(reply("Hola, soy un agente"));
 
-        Message result = service.respondToMessage(conversationId, triggerId);
+        Message result = serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId);
 
         assertThat(result.role()).isEqualTo(MessageRole.AGENT);
         assertThat(result.content()).isEqualTo("Hola, soy un agente");
-        verify(messageRepository).save(argThat(entity ->
-                entity.getRole() == MessageRole.AGENT
-                        && entity.getContent().equals("Hola, soy un agente")));
-        verify(conversationRepository).touchLastMessageAt(eq(conversationId), any());
+        ArgumentCaptor<LlmInvocation> captor = ArgumentCaptor.forClass(LlmInvocation.class);
+        verify(provider).invoke(captor.capture());
+        // Empty registry => no tools offered: the request is byte-identical to the single-shot path.
+        assertThat(captor.getValue().tools()).isEmpty();
+        assertThat(captor.getValue().messages()).extracting(LlmMessage::content).containsExactly("Hola");
         verifyNoInteractions(errorRecorder);
     }
 
     @Test
     void respondToMessage_buildsInvocationFromAgentConfigAndContext() {
-        stubConversation();
-        stubHistory(triggerEntity(MessageRole.USER, "Hola"));
-        stubAgent(MODEL);
+        stubLoadAndEchoAppend();
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
-        when(provider.invoke(any(LlmInvocation.class))).thenReturn(
-                new LlmResponse("ok", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
+        when(provider.invoke(any())).thenReturn(reply("ok"));
 
-        service.respondToMessage(conversationId, triggerId);
+        serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId);
 
         ArgumentCaptor<LlmInvocation> captor = ArgumentCaptor.forClass(LlmInvocation.class);
         verify(provider).invoke(captor.capture());
@@ -120,133 +102,170 @@ class OrchestratorServiceTest {
         assertThat(invocation.systemPrompt()).isEqualTo("You are helpful.");
         assertThat(invocation.temperature()).isEqualTo(0.7);
         assertThat(invocation.maxTokens()).isEqualTo(4096);
-        assertThat(invocation.messages()).extracting(m -> m.content()).containsExactly("Hola");
     }
 
     @Test
-    void respondToMessage_whenConversationNotFound_throwsConversationNotFound() {
-        when(conversationRepository.findById(conversationId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.respondToMessage(conversationId, triggerId))
-                .isInstanceOf(ConversationNotFoundException.class);
-        verifyNoInteractions(errorRecorder);
-    }
-
-    @Test
-    void respondToMessage_whenTriggerMessageNotInConversation_throwsMessageNotFound() {
-        stubConversation();
-        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId))
-                .thenReturn(List.of()); // trigger absent
-
-        assertThatThrownBy(() -> service.respondToMessage(conversationId, triggerId))
-                .isInstanceOf(MessageNotFoundException.class);
-    }
-
-    @Test
-    void respondToMessage_whenTriggerIsNotUserRole_throwsInvalidTriggerMessage() {
-        stubConversation();
-        stubHistory(triggerEntity(MessageRole.AGENT, "previous agent reply"));
-
-        assertThatThrownBy(() -> service.respondToMessage(conversationId, triggerId))
-                .isInstanceOf(InvalidTriggerMessageException.class);
-    }
-
-    @Test
-    void respondToMessage_whenAgentNotFound_throwsAgentNotFound() {
-        stubConversation();
-        stubHistory(triggerEntity(MessageRole.USER, "Hola"));
-        when(agentRepository.findById(agentId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.respondToMessage(conversationId, triggerId))
-                .isInstanceOf(AgentNotFoundException.class);
-    }
-
-    @Test
-    void respondToMessage_whenModelUnknown_usesFallbackWindowAndStillResponds() {
-        stubConversation();
-        stubHistory(triggerEntity(MessageRole.USER, "Hola"));
-        stubAgent("claude-opus-4-99"); // not in ModelContextWindow table -> conservative fallback
+    void respondToMessage_whenModelRequestsTool_executesItFeedsResultBackAndReplies() {
+        stubLoadAndEchoAppend();
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
-        when(provider.invoke(any(LlmInvocation.class))).thenReturn(
-                new LlmResponse("Hola", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
+        when(provider.invoke(any())).thenReturn(
+                toolRequest("get_current_time"),
+                reply("It is 2026-06-13T10:15:30Z."));
 
-        Message result = service.respondToMessage(conversationId, triggerId);
+        Message result = serviceWith(clockRegistry()).respondToMessage(conversationId, triggerId);
 
         assertThat(result.role()).isEqualTo(MessageRole.AGENT);
-        verify(messageRepository).save(any(MessageEntity.class));
+        assertThat(result.content()).isEqualTo("It is 2026-06-13T10:15:30Z.");
+
+        // Persisted in order: TOOL_CALL, TOOL_RESULT (the clock output), then the final AGENT reply.
+        List<Message> persisted = capturedAppends(3);
+        assertThat(persisted.get(0).role()).isEqualTo(MessageRole.TOOL_CALL);
+        assertThat(persisted.get(1).role()).isEqualTo(MessageRole.TOOL_RESULT);
+        ToolResult result1 = (ToolResult) persisted.get(1).toolContent().orElseThrow();
+        assertThat(result1.output()).isEqualTo("2026-06-13T10:15:30Z");
+        assertThat(result1.isError()).isFalse();
+        assertThat(persisted.get(2).role()).isEqualTo(MessageRole.AGENT);
+        verify(provider, times(2)).invoke(any());
         verifyNoInteractions(errorRecorder);
+    }
+
+    @Test
+    void respondToMessage_whenToolThrows_feedsErrorBackAndCompletes() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("boom_tool"), reply("Recovered."));
+
+        Message result = serviceWith(new ToolRegistry(List.of(throwingTool("boom_tool"))))
+                .respondToMessage(conversationId, triggerId);
+
+        assertThat(result.content()).isEqualTo("Recovered."); // invocation completes, not failed
+        ToolResult toolResult = (ToolResult) capturedAppends(3).get(1).toolContent().orElseThrow();
+        assertThat(toolResult.isError()).isTrue();
+        assertThat(toolResult.output()).contains("Tool execution failed");
+        verifyNoInteractions(errorRecorder);
+    }
+
+    @Test
+    void respondToMessage_whenToolUnknown_feedsErrorBackAndCompletes() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("does_not_exist"), reply("Done."));
+
+        Message result = serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId);
+
+        assertThat(result.content()).isEqualTo("Done.");
+        ToolResult toolResult = (ToolResult) capturedAppends(3).get(1).toolContent().orElseThrow();
+        assertThat(toolResult.isError()).isTrue();
+        assertThat(toolResult.output()).contains("Unknown tool");
+        verifyNoInteractions(errorRecorder);
+    }
+
+    @Test
+    void respondToMessage_whenModelNeverStopsCallingTools_failsAtTheCap() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("get_current_time"));
+
+        assertThatThrownBy(() ->
+                serviceWith(clockRegistry()).respondToMessage(conversationId, triggerId))
+                .isInstanceOf(MaxToolIterationsExceededException.class);
+
+        verify(provider, times(OrchestratorService.MAX_TOOL_ITERATIONS)).invoke(any());
+        ArgumentCaptor<String> error = ArgumentCaptor.forClass(String.class);
+        verify(errorRecorder).recordError(eq(conversationId), error.capture());
+        assertThat(error.getValue()).startsWith("[orchestration_error] ").contains("maximum");
+    }
+
+    @Test
+    void respondToMessage_whenProviderFails_recordsErrorAndRethrows() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        LlmRateLimitException failure = new LlmRateLimitException(PROVIDER, MODEL, "429 throttled");
+        when(provider.invoke(any())).thenThrow(failure);
+
+        assertThatThrownBy(() ->
+                serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId))
+                .isSameAs(failure);
+
+        ArgumentCaptor<String> content = ArgumentCaptor.forClass(String.class);
+        verify(errorRecorder).recordError(eq(conversationId), content.capture());
+        assertThat(content.getValue()).startsWith("[orchestration_error] LlmRateLimitException: ");
+        verify(gateway, never()).append(any()); // no message persisted on failure
     }
 
     @Test
     void respondToMessage_whenProviderNotAvailable_throwsLlmProviderNotAvailable() {
-        stubConversation();
-        stubHistory(triggerEntity(MessageRole.USER, "Hola"));
-        stubAgent(MODEL);
+        stubLoadAndEchoAppend();
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.empty());
         when(registry.availableProviders()).thenReturn(Set.of());
 
-        assertThatThrownBy(() -> service.respondToMessage(conversationId, triggerId))
+        assertThatThrownBy(() ->
+                serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId))
                 .isInstanceOf(LlmProviderNotAvailableException.class);
         verifyNoInteractions(errorRecorder);
     }
 
     @Test
-    void respondToMessage_whenRateLimited_recordsErrorAndRethrows() {
-        assertLlmFailureRecordedAndRethrown(
-                new LlmRateLimitException(PROVIDER, MODEL, "429 throttled"), "LlmRateLimitException");
+    void respondToMessage_whenLoadThrows_propagatesWithoutRecording() {
+        when(gateway.load(conversationId, triggerId))
+                .thenThrow(new ConversationNotFoundException("not visible"));
+
+        assertThatThrownBy(() ->
+                serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId))
+                .isInstanceOf(ConversationNotFoundException.class);
+        verifyNoInteractions(errorRecorder);
+        verify(provider, never()).invoke(any());
     }
 
-    @Test
-    void respondToMessage_whenTimeout_recordsErrorAndRethrows() {
-        assertLlmFailureRecordedAndRethrown(
-                new LlmTimeoutException(PROVIDER, MODEL, "timed out"), "LlmTimeoutException");
+    // === helpers ===
+
+    private OrchestratorService serviceWith(ToolRegistry toolRegistry) {
+        return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
+                new MockEnvironment(), errorRecorder);
     }
 
-    @Test
-    void respondToMessage_whenAuthFails_recordsErrorAndRethrows() {
-        assertLlmFailureRecordedAndRethrown(
-                new LlmAuthenticationException(PROVIDER, MODEL, "401 unauthorized"),
-                "LlmAuthenticationException");
+    private void stubLoadAndEchoAppend() {
+        Agent agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL);
+        Message user = Message.from(conversationId, MessageRole.USER, "Hola");
+        when(gateway.load(conversationId, triggerId))
+                .thenReturn(new LoadedConversation(agent, List.of(user)));
+        when(gateway.append(any())).thenAnswer(call -> call.getArgument(0));
     }
 
-    private void assertLlmFailureRecordedAndRethrown(LlmProviderException failure,
-                                                     String expectedClassInContent) {
-        stubConversation();
-        stubHistory(triggerEntity(MessageRole.USER, "Hola"));
-        stubAgent(MODEL);
-        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
-        when(provider.invoke(any(LlmInvocation.class))).thenThrow(failure);
-
-        assertThatThrownBy(() -> service.respondToMessage(conversationId, triggerId))
-                .isSameAs(failure);
-
-        ArgumentCaptor<String> content = ArgumentCaptor.forClass(String.class);
-        verify(errorRecorder).recordError(eq(conversationId), content.capture());
-        assertThat(content.getValue())
-                .startsWith("[orchestration_error] " + expectedClassInContent + ": ");
-        verify(messageRepository, never()).save(any()); // no AGENT message on failure
+    private List<Message> capturedAppends(int times) {
+        ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
+        verify(gateway, times(times)).append(captor.capture());
+        return captor.getAllValues();
     }
 
-    // === fixtures ===
-
-    private void stubConversation() {
-        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(
-                new ConversationEntity(conversationId, agentId, "whatsapp", "+34600000000",
-                        ConversationStatus.OPEN, now, now, null, null, null)));
+    private static ToolRegistry emptyRegistry() {
+        return new ToolRegistry(List.of());
     }
 
-    private void stubHistory(MessageEntity... history) {
-        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId))
-                .thenReturn(List.of(history));
+    private static ToolRegistry clockRegistry() {
+        return new ToolRegistry(List.of(new ClockTool(Clock.fixed(FIXED, ZoneOffset.UTC))));
     }
 
-    private void stubAgent(String modelName) {
-        when(agentRepository.findById(agentId)).thenReturn(Optional.of(
-                new AgentEntity(agentId, tenantId, "DentalBot", "You are helpful.", PROVIDER, modelName,
-                        0.7, 4096, AgentStatus.ACTIVE, now, now)));
+    private static LlmResponse reply(String text) {
+        return new LlmResponse(text, List.of(), FinishReason.STOP, LlmUsage.of(5, 5));
     }
 
-    private MessageEntity triggerEntity(MessageRole role, String content) {
-        return new MessageEntity(triggerId, conversationId, role, content, now);
+    private static LlmResponse toolRequest(String toolName) {
+        return new LlmResponse("", List.of(new ToolCall("call-1", toolName, Map.of())),
+                FinishReason.TOOL_USE, LlmUsage.of(3, 4));
+    }
+
+    private static Tool throwingTool(String name) {
+        return new Tool() {
+            @Override
+            public ToolDefinition definition() {
+                return new ToolDefinition(name, "always throws", Map.of("type", "object"));
+            }
+
+            @Override
+            public ToolResult execute(ToolCall call) {
+                throw new IllegalStateException("boom");
+            }
+        };
     }
 }

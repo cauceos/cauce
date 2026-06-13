@@ -36,7 +36,7 @@ See [README.md](README.md) for the user-facing project description.
 
 ## Repository structure
 
-> **Current state**: backend/ contains 14 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V14), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, and the foundation of the tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, and tool-message persistence in `cauce-memory`). `cauce-channels`, `cauce-evals`, `cauce-observability`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-06-10): 480 tests, 0 failures.
+> **Current state**: backend/ contains 14 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V14), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, and the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop). `cauce-channels`, `cauce-evals`, `cauce-observability`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-06-10): 480 tests, 0 failures.
 
 **Backend modules** (Gradle subprojects under `backend/`; the Gradle build — `settings.gradle.kts`, wrapper, `gradle/` — lives under `backend/`, not the repo root):
 
@@ -51,7 +51,7 @@ See [README.md](README.md) for the user-facing project description.
 - `cauce-observability` — OpenTelemetry integration, traces, metrics, replay — empty skeleton, not started
 - `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance — empty skeleton, not started
 - `cauce-tenancy` — application services for tenants, agents, conversations, messages, and API keys; operator bootstrap; HMAC-SHA256 API-key hashing with a Caffeine cache
-- `cauce-orchestration` — async LLM invocation engine: pending-invocation queue, context assembly with a per-model context-window registry (`ModelContextWindow`; conservative 16,384-token fallback with a `WARN` for unknown models), orchestrator, background worker/reaper, and `InboundMessageService` (the inbound message ingest unit; depends on `cauce-tenancy`)
+- `cauce-orchestration` — async invocation engine and the bounded agentic tool loop: pending-invocation queue, context assembly with a per-model context-window registry (`ModelContextWindow`; conservative 16,384-token fallback with a `WARN` for unknown models) that renders tool messages, the orchestrator loop (offers all registered tools, dispatches tool calls via the `cauce-tools` `ToolRegistry`, feeds results back, capped at 10 iterations — tool failures feed back as errored results, the cap fails the invocation), background worker/reaper (12-minute orphan timeout sized for the multi-step loop), and `InboundMessageService` (the inbound message ingest unit). Depends on `cauce-tenancy` and `cauce-tools`
 - `cauce-api` — REST API surface; the Spring Boot application module. Compiles against the `cauce-llm` SPI only and wires both LLM adapters plus `cauce-tools` as `runtimeOnly` (the built-in tools register via the `dev.cauce` component scan)
 - `cauce-enterprise` — commercial modules under separate license — empty skeleton
 
@@ -342,16 +342,15 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
 
 ### Large / strategic deferrals
 
-- **Tool-calling / agentic loop.** The foundation (sub-unit A) and provider wiring (sub-unit B)
-  have landed: the neutral tool model lives in `cauce-core`, the executable tool SPI + registry +
-  built-in clock in `cauce-tools`, tool messages (`TOOL_CALL`/`TOOL_RESULT`) persist with their
-  structured payload in the messages `tool_content` jsonb column, the `cauce-llm` contract carries
-  the core tool model, and both adapters map tools to/from their provider's wire format (Anthropic
-  `tool_use`/`tool_result` blocks; OpenAI `tools`/`tool_calls`/`role:"tool"` messages, `arguments`
-  as a JSON string). Still missing (sub-unit C): the orchestrator performs single-step invocation
-  rather than the dispatch-and-feed-back loop, so the engine still sends `LlmInvocation.tools`
-  empty and never consumes `LlmResponse.toolCalls`, and `ContextBuilder` deliberately rejects tool
-  roles until the loop lands. This is the "agent vs chatbot" trait.
+- **Tool-calling / agentic loop — landed.** The "agent vs chatbot" trait is complete across
+  sub-units A (neutral tool model in `cauce-core`, executable tool SPI + built-in clock in
+  `cauce-tools`, tool-message persistence), B (the `cauce-llm` contract carries the tool model and
+  both adapters map it to each provider's wire format), and C (the orchestrator runs the bounded
+  dispatch-and-feed-back loop: offer tools → invoke → execute requested tools → feed results back →
+  re-invoke, capped at 10 iterations). Remaining deferrals: **per-agent tool scoping** (today all
+  registered tools are offered to every agent); a heartbeat to replace the flat 12-minute reaper
+  timeout if the loop grows; and counting the tool-definition schema (not just tool-message
+  content) against the context window. The only built-in tool today is the `get_current_time` clock.
 - **Idempotency of message ingestion.** `POST /v1/agents/{agentId}/messages` has no idempotency
   key: a client retry or webhook redelivery after a committed ingest duplicates the USER message
   and its invocation. Prerequisite for real channels (at-least-once webhook delivery); pair with

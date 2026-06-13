@@ -9,6 +9,8 @@ import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.exception.LlmRateLimitException;
 import dev.cauce.llm.model.FinishReason;
 import dev.cauce.llm.model.LlmResponse;
@@ -26,6 +28,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
@@ -167,6 +170,38 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
         assertThat(countConversationsVisibleAs(partner.id())).isEqualTo(1);
         assertThat(countConversationsVisibleAs(operator.id())).isEqualTo(1);
         assertThat(countConversationsVisibleAs(partner2.id())).isZero();
+    }
+
+    @Test
+    void respondToMessage_whenModelCallsTool_runsLoopAndPersistsToolMessagesVisibleViaApi() {
+        // First invocation asks for the clock; once the tool result is in context, reply with text.
+        mockLlmProvider.respondWith(invocation -> {
+            boolean afterTool = invocation.messages().stream()
+                    .anyMatch(message -> message.toolContent() instanceof ToolResult);
+            if (afterTool) {
+                return new LlmResponse("The current time has been retrieved.", List.of(),
+                        FinishReason.STOP, LlmUsage.of(5, 5));
+            }
+            return new LlmResponse("", List.of(new ToolCall("call-1", "get_current_time", Map.of())),
+                    FinishReason.TOOL_USE, LlmUsage.of(3, 3));
+        });
+
+        Message reply = respondAs(clientA.id());
+
+        assertThat(reply.role()).isEqualTo(MessageRole.AGENT);
+        assertThat(reply.content()).isEqualTo("The current time has been retrieved.");
+
+        List<String> roles = jdbc.queryForList(
+                "SELECT role FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, id ASC",
+                String.class, conversation.id());
+        assertThat(roles).containsExactly("USER", "TOOL_CALL", "TOOL_RESULT", "AGENT");
+
+        // The tool messages carry their structured payload (jsonb), persisted and API-visible.
+        Integer toolMessagesWithContent = jdbc.queryForObject(
+                "SELECT count(*) FROM messages WHERE conversation_id = ? "
+                        + "AND role IN ('TOOL_CALL', 'TOOL_RESULT') AND tool_content IS NOT NULL",
+                Integer.class, conversation.id());
+        assertThat(toolMessagesWithContent).isEqualTo(2);
     }
 
     @Test

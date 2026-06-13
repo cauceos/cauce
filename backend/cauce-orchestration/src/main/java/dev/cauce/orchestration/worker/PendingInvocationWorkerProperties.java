@@ -19,8 +19,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * cauce.orchestration.worker.retry-base-interval-seconds = 30    # backoff seed
  * cauce.orchestration.worker.reaper.enabled           = true     # reaper bean is created
  * cauce.orchestration.worker.reaper.interval-ms       = 300000   # @Scheduled fixedDelay (5min)
- * cauce.orchestration.worker.reaper.timeout-ms        = 600000   # claim age before reaping (10min)
+ * cauce.orchestration.worker.reaper.timeout-ms        = 720000   # claim age before reaping (12min)
  * </pre>
+ *
+ * <p>The reaper timeout accommodates the agentic loop: one invocation may make up to
+ * {@code MAX_TOOL_ITERATIONS} (10) provider calls, each bounded by the provider HTTP timeout
+ * (60s default), so 12 minutes leaves a margin over the 10-minute worst case before a still-
+ * running claim is treated as orphaned.
  */
 @ConfigurationProperties(prefix = "cauce.orchestration.worker")
 public class PendingInvocationWorkerProperties {
@@ -85,7 +90,9 @@ public class PendingInvocationWorkerProperties {
 
         private boolean enabled = true;
         private long intervalMs = 300_000L;
-        private long timeoutMs = 600_000L;
+        // 12 minutes: covers an agentic loop of up to MAX_TOOL_ITERATIONS (10) provider calls at
+        // the 60s HTTP timeout (10 min worst case) plus margin, so a running loop is not reaped.
+        private long timeoutMs = 720_000L;
 
         public boolean isEnabled() {
             return enabled;
