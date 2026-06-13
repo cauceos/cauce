@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
+import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmRole;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -108,6 +111,37 @@ class ContextBuilderTest {
                 new LlmMessage(LlmRole.USER, "user text"),
                 new LlmMessage(LlmRole.ASSISTANT, "agent text"),
                 new LlmMessage(LlmRole.SYSTEM, "system text"));
+    }
+
+    @Test
+    void build_translatesToolCallAndToolResultMessages() {
+        ToolCall call = new ToolCall("call-1", "get_current_time", Map.of("tz", "UTC"));
+        ToolResult result = ToolResult.success("call-1", "get_current_time", "2026-06-13T10:15:30Z");
+        List<Message> messages = List.of(
+                Message.from(CONVERSATION, MessageRole.USER, "What time is it?"),
+                Message.toolCall(CONVERSATION, call),
+                Message.toolResult(CONVERSATION, result),
+                Message.from(CONVERSATION, MessageRole.AGENT, "It's 10:15 UTC."));
+
+        LlmInvocationContext context = builder.build(messages, MODEL, SYSTEM_PROMPT);
+
+        assertThat(context.messages()).containsExactly(
+                new LlmMessage(LlmRole.USER, "What time is it?"),
+                LlmMessage.toolCall(call),
+                LlmMessage.toolResult(result),
+                new LlmMessage(LlmRole.ASSISTANT, "It's 10:15 UTC."));
+    }
+
+    @Test
+    void build_toolCallMessage_countsInputArgumentTokens() {
+        ToolCall call = new ToolCall("call-1", "search", Map.of("query", "x".repeat(70)));
+        Message toolCallMessage = Message.toolCall(CONVERSATION, call);
+
+        LlmInvocationContext context = builder.build(List.of(toolCallMessage), MODEL, SYSTEM_PROMPT);
+
+        int expected = TokenEstimator.estimate(toolCallMessage.content())
+                + TokenEstimator.estimate(String.valueOf(call.input()));
+        assertThat(context.estimatedTokens()).isEqualTo(expected);
     }
 
     @Test

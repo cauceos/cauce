@@ -1,7 +1,8 @@
 package dev.cauce.orchestration.context;
 
 import dev.cauce.core.message.Message;
-import dev.cauce.core.message.MessageRole;
+import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmRole;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
@@ -47,7 +48,7 @@ public final class ContextBuilder {
 
         for (int i = lastIndex; i >= 0; i--) {
             Message message = conversationMessages.get(i);
-            int messageTokens = TokenEstimator.estimate(message.content());
+            int messageTokens = estimateTokens(message);
 
             if (i == lastIndex && messageTokens > effectiveWindow) {
                 throw new MessageTooLargeForContextException(
@@ -67,20 +68,32 @@ public final class ContextBuilder {
                 selected, systemPrompt, runningTokens, contextWindow, RESERVED_FOR_RESPONSE);
     }
 
-    private static LlmMessage toLlmMessage(Message message) {
-        return new LlmMessage(toLlmRole(message.role()), message.content());
+    /**
+     * Estimates the wire-token cost of a message. Text content is measured directly; a
+     * TOOL_CALL additionally carries its input arguments on the wire (the rendered
+     * {@code content()} is only the tool name), so they are added. A TOOL_RESULT's output is
+     * already the message content, so no extra is added.
+     */
+    private static int estimateTokens(Message message) {
+        int tokens = TokenEstimator.estimate(message.content());
+        if (message.toolContent().orElse(null) instanceof ToolCall call) {
+            tokens += TokenEstimator.estimate(String.valueOf(call.input()));
+        }
+        return tokens;
     }
 
-    private static LlmRole toLlmRole(MessageRole role) {
-        return switch (role) {
-            case USER -> LlmRole.USER;
-            case AGENT -> LlmRole.ASSISTANT;
-            case SYSTEM -> LlmRole.SYSTEM;
-            // Tool messages are mapped into each provider's tool format by the LLM adapters
-            // (sub-unit B) and driven by the orchestrator loop (sub-unit C); they do not flow
-            // through single-step context assembly yet. Fail fast rather than guess a role.
-            case TOOL_CALL, TOOL_RESULT -> throw new IllegalStateException(
-                    "Tool message role " + role + " is not yet supported in context assembly");
+    /**
+     * Translates a domain {@link Message} to a neutral {@link LlmMessage}. Text roles map to
+     * their {@link LlmRole}; tool roles use the neutral tool factories, carrying the structured
+     * {@code toolContent} so the adapters can assemble each provider's tool wire format.
+     */
+    private static LlmMessage toLlmMessage(Message message) {
+        return switch (message.role()) {
+            case USER -> new LlmMessage(LlmRole.USER, message.content());
+            case AGENT -> new LlmMessage(LlmRole.ASSISTANT, message.content());
+            case SYSTEM -> new LlmMessage(LlmRole.SYSTEM, message.content());
+            case TOOL_CALL -> LlmMessage.toolCall((ToolCall) message.toolContent().orElseThrow());
+            case TOOL_RESULT -> LlmMessage.toolResult((ToolResult) message.toolContent().orElseThrow());
         };
     }
 }
