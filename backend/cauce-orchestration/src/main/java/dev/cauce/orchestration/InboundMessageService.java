@@ -3,9 +3,12 @@ package dev.cauce.orchestration;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
+import dev.cauce.orchestration.events.InvocationRequested;
 import dev.cauce.tenancy.ConversationService;
 import dev.cauce.tenancy.MessageService;
+import java.time.Instant;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,13 +33,16 @@ public class InboundMessageService {
     private final ConversationService conversationService;
     private final MessageService messageService;
     private final PendingInvocationService pendingInvocationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public InboundMessageService(ConversationService conversationService,
                                  MessageService messageService,
-                                 PendingInvocationService pendingInvocationService) {
+                                 PendingInvocationService pendingInvocationService,
+                                 ApplicationEventPublisher eventPublisher) {
         this.conversationService = conversationService;
         this.messageService = messageService;
         this.pendingInvocationService = pendingInvocationService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -57,6 +63,12 @@ public class InboundMessageService {
         Message userMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, content);
         PendingInvocation invocation =
                 pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id());
+        // Published synchronously INSIDE the ingest transaction: if it rolls back, the event
+        // will have fired for work that never existed. Harmless with no consumers; TODO when a
+        // persisting consumer lands, it must listen with
+        // @TransactionalEventListener(phase = AFTER_COMMIT) (or move this behind an outbox).
+        eventPublisher.publishEvent(new InvocationRequested(invocation.id(), invocation.tenantId(),
+                agentId, conversation.id(), userMessage.id(), Instant.now()));
         return new InboundMessageResult(conversation.id(), userMessage.id(), invocation.id());
     }
 }

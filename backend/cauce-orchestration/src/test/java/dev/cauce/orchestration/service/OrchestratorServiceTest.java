@@ -26,6 +26,13 @@ import dev.cauce.llm.model.LlmUsage;
 import dev.cauce.llm.spi.LlmProvider;
 import dev.cauce.llm.spi.LlmProviderRegistry;
 import dev.cauce.orchestration.context.ContextBuilder;
+import dev.cauce.orchestration.events.ContextAssembled;
+import dev.cauce.orchestration.events.InvocationCompleted;
+import dev.cauce.orchestration.events.LlmInvoked;
+import dev.cauce.orchestration.events.LlmResponded;
+import dev.cauce.orchestration.events.OrchestrationEvent;
+import dev.cauce.orchestration.events.ToolCallRequested;
+import dev.cauce.orchestration.events.ToolExecuted;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
@@ -44,6 +51,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mock.env.MockEnvironment;
 
 class OrchestratorServiceTest {
@@ -52,6 +60,7 @@ class OrchestratorServiceTest {
     private static final String PROVIDER = "anthropic";
     private static final Instant FIXED = Instant.parse("2026-06-13T10:15:30Z");
 
+    private final UUID invocationId = UUID.randomUUID();
     private final UUID conversationId = UUID.randomUUID();
     private final UUID tenantId = UUID.randomUUID();
     private final UUID triggerId = UUID.randomUUID();
@@ -60,6 +69,7 @@ class OrchestratorServiceTest {
     private LlmProviderRegistry registry;
     private OrchestrationErrorRecorder errorRecorder;
     private LlmProvider provider;
+    private ApplicationEventPublisher eventPublisher;
 
     @BeforeEach
     void setUp() {
@@ -67,6 +77,8 @@ class OrchestratorServiceTest {
         registry = Mockito.mock(LlmProviderRegistry.class);
         errorRecorder = Mockito.mock(OrchestrationErrorRecorder.class);
         provider = Mockito.mock(LlmProvider.class);
+        when(provider.id()).thenReturn(PROVIDER);
+        eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
     }
 
     @Test
@@ -75,7 +87,7 @@ class OrchestratorServiceTest {
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
         when(provider.invoke(any())).thenReturn(reply("Hola, soy un agente"));
 
-        Message result = serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId);
+        Message result = serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId);
 
         assertThat(result.role()).isEqualTo(MessageRole.AGENT);
         assertThat(result.content()).isEqualTo("Hola, soy un agente");
@@ -93,7 +105,7 @@ class OrchestratorServiceTest {
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
         when(provider.invoke(any())).thenReturn(reply("ok"));
 
-        serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId);
+        serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId);
 
         ArgumentCaptor<LlmInvocation> captor = ArgumentCaptor.forClass(LlmInvocation.class);
         verify(provider).invoke(captor.capture());
@@ -112,7 +124,7 @@ class OrchestratorServiceTest {
                 toolRequest("get_current_time"),
                 reply("It is 2026-06-13T10:15:30Z."));
 
-        Message result = serviceWith(clockRegistry()).respondToMessage(conversationId, triggerId);
+        Message result = serviceWith(clockRegistry()).respondToMessage(invocationId, conversationId, triggerId);
 
         assertThat(result.role()).isEqualTo(MessageRole.AGENT);
         assertThat(result.content()).isEqualTo("It is 2026-06-13T10:15:30Z.");
@@ -136,7 +148,7 @@ class OrchestratorServiceTest {
         when(provider.invoke(any())).thenReturn(toolRequest("boom_tool"), reply("Recovered."));
 
         Message result = serviceWith(new ToolRegistry(List.of(throwingTool("boom_tool"))))
-                .respondToMessage(conversationId, triggerId);
+                .respondToMessage(invocationId, conversationId, triggerId);
 
         assertThat(result.content()).isEqualTo("Recovered."); // invocation completes, not failed
         ToolResult toolResult = (ToolResult) capturedAppends(3).get(1).toolContent().orElseThrow();
@@ -151,7 +163,7 @@ class OrchestratorServiceTest {
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
         when(provider.invoke(any())).thenReturn(toolRequest("does_not_exist"), reply("Done."));
 
-        Message result = serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId);
+        Message result = serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId);
 
         assertThat(result.content()).isEqualTo("Done.");
         ToolResult toolResult = (ToolResult) capturedAppends(3).get(1).toolContent().orElseThrow();
@@ -167,7 +179,7 @@ class OrchestratorServiceTest {
         when(provider.invoke(any())).thenReturn(toolRequest("get_current_time"));
 
         assertThatThrownBy(() ->
-                serviceWith(clockRegistry()).respondToMessage(conversationId, triggerId))
+                serviceWith(clockRegistry()).respondToMessage(invocationId, conversationId, triggerId))
                 .isInstanceOf(MaxToolIterationsExceededException.class);
 
         verify(provider, times(OrchestratorService.MAX_TOOL_ITERATIONS)).invoke(any());
@@ -184,7 +196,7 @@ class OrchestratorServiceTest {
         when(provider.invoke(any())).thenThrow(failure);
 
         assertThatThrownBy(() ->
-                serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId))
+                serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId))
                 .isSameAs(failure);
 
         ArgumentCaptor<String> content = ArgumentCaptor.forClass(String.class);
@@ -200,7 +212,7 @@ class OrchestratorServiceTest {
         when(registry.availableProviders()).thenReturn(Set.of());
 
         assertThatThrownBy(() ->
-                serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId))
+                serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId))
                 .isInstanceOf(LlmProviderNotAvailableException.class);
         verifyNoInteractions(errorRecorder);
     }
@@ -211,17 +223,125 @@ class OrchestratorServiceTest {
                 .thenThrow(new ConversationNotFoundException("not visible"));
 
         assertThatThrownBy(() ->
-                serviceWith(emptyRegistry()).respondToMessage(conversationId, triggerId))
+                serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId))
                 .isInstanceOf(ConversationNotFoundException.class);
         verifyNoInteractions(errorRecorder);
         verify(provider, never()).invoke(any());
+    }
+
+    @Test
+    void respondToMessage_simpleReply_publishesLifecycleEventsInOrder() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(reply("Hola, soy un agente"));
+
+        Message result = serviceWith(emptyRegistry())
+                .respondToMessage(invocationId, conversationId, triggerId);
+
+        List<OrchestrationEvent> events = publishedEvents();
+        assertThat(events).hasExactlyElementsOfTypes(ContextAssembled.class, LlmInvoked.class,
+                LlmResponded.class, InvocationCompleted.class);
+        assertThat(events).allSatisfy(event ->
+                assertThat(event.invocationId()).isEqualTo(invocationId));
+
+        ContextAssembled assembled = (ContextAssembled) events.get(0);
+        assertThat(assembled.roundIndex()).isZero();
+        assertThat(assembled.modelName()).isEqualTo(MODEL);
+        assertThat(assembled.messageCount()).isEqualTo(1);
+
+        LlmInvoked invoked = (LlmInvoked) events.get(1);
+        assertThat(invoked.provider()).isEqualTo(PROVIDER);
+        assertThat(invoked.roundIndex()).isZero();
+
+        LlmResponded responded = (LlmResponded) events.get(2);
+        assertThat(responded.finishReason()).isEqualTo("STOP");
+        assertThat(responded.inputTokens()).isEqualTo(5);
+        assertThat(responded.outputTokens()).isEqualTo(5);
+        assertThat(responded.totalTokens()).isEqualTo(10);
+
+        InvocationCompleted completed = (InvocationCompleted) events.get(3);
+        assertThat(completed.roundCount()).isEqualTo(1);
+        assertThat(completed.finalMessageId()).isEqualTo(result.id());
+    }
+
+    @Test
+    void respondToMessage_toolRound_publishesToolEventsWithRoundIndices() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(
+                toolRequest("get_current_time"),
+                reply("It is 2026-06-13T10:15:30Z."));
+
+        serviceWith(clockRegistry()).respondToMessage(invocationId, conversationId, triggerId);
+
+        List<OrchestrationEvent> events = publishedEvents();
+        assertThat(events).hasExactlyElementsOfTypes(
+                ContextAssembled.class, LlmInvoked.class, LlmResponded.class,   // round 0
+                ToolCallRequested.class, ToolExecuted.class,
+                ContextAssembled.class, LlmInvoked.class, LlmResponded.class,   // round 1
+                InvocationCompleted.class);
+
+        assertThat(((LlmResponded) events.get(2)).finishReason()).isEqualTo("TOOL_USE");
+
+        ToolCallRequested requested = (ToolCallRequested) events.get(3);
+        assertThat(requested.toolName()).isEqualTo("get_current_time");
+        assertThat(requested.toolCallId()).isEqualTo("call-1");
+        assertThat(requested.roundIndex()).isZero();
+
+        ToolExecuted executed = (ToolExecuted) events.get(4);
+        assertThat(executed.toolName()).isEqualTo("get_current_time");
+        assertThat(executed.isError()).isFalse();
+        assertThat(executed.durationMs()).isNotNegative();
+
+        assertThat(((ContextAssembled) events.get(5)).roundIndex()).isEqualTo(1);
+        assertThat(((InvocationCompleted) events.get(8)).roundCount()).isEqualTo(2);
+    }
+
+    @Test
+    void respondToMessage_whenToolFails_publishesToolExecutedWithErrorFlag() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("boom_tool"), reply("Recovered."));
+
+        serviceWith(new ToolRegistry(List.of(throwingTool("boom_tool"))))
+                .respondToMessage(invocationId, conversationId, triggerId);
+
+        ToolExecuted executed = publishedEvents().stream()
+                .filter(ToolExecuted.class::isInstance).map(ToolExecuted.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(executed.isError()).isTrue();
+    }
+
+    @Test
+    void respondToMessage_whenProviderFails_publishesNoRespondedOrCompletedEvent() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any()))
+                .thenThrow(new LlmRateLimitException(PROVIDER, MODEL, "429 throttled"));
+
+        assertThatThrownBy(() -> serviceWith(emptyRegistry())
+                .respondToMessage(invocationId, conversationId, triggerId))
+                .isInstanceOf(LlmRateLimitException.class);
+
+        // The call was announced but produced nothing: LlmInvoked yes, the rest is the
+        // worker's InvocationFailed (not emitted from here).
+        assertThat(publishedEvents())
+                .hasExactlyElementsOfTypes(ContextAssembled.class, LlmInvoked.class);
     }
 
     // === helpers ===
 
     private OrchestratorService serviceWith(ToolRegistry toolRegistry) {
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
-                new MockEnvironment(), errorRecorder);
+                new MockEnvironment(), errorRecorder, eventPublisher);
+    }
+
+    /** All lifecycle events published so far, in publication order. */
+    private List<OrchestrationEvent> publishedEvents() {
+        ArgumentCaptor<OrchestrationEvent> captor =
+                ArgumentCaptor.forClass(OrchestrationEvent.class);
+        verify(eventPublisher, Mockito.atLeast(0)).publishEvent(captor.capture());
+        return captor.getAllValues();
     }
 
     private void stubLoadAndEchoAppend() {

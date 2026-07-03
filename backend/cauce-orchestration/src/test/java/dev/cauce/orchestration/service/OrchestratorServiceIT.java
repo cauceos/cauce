@@ -214,7 +214,7 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
                 new LlmResponse("reply", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
         TenantContext.setCurrentTenantId(clientA.id());
         try {
-            orchestratorService.respondToMessage(conversation.id(), trigger);
+            orchestratorService.respondToMessage(UUID.randomUUID(), conversation.id(), trigger);
         } finally {
             TenantContext.clear();
         }
@@ -228,7 +228,8 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
     private Message respondAs(UUID context) {
         TenantContext.setCurrentTenantId(context);
         try {
-            return orchestratorService.respondToMessage(conversation.id(), triggerMessage.id());
+            return orchestratorService.respondToMessage(
+                    UUID.randomUUID(), conversation.id(), triggerMessage.id());
         } finally {
             TenantContext.clear();
         }

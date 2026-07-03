@@ -5,12 +5,17 @@ import dev.cauce.llm.exception.LlmProviderException;
 import dev.cauce.orchestration.OrchestrationConfig;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
+import dev.cauce.orchestration.events.InvocationFailed;
+import dev.cauce.orchestration.events.InvocationFailureType;
+import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.OrchestratorService;
+import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -51,18 +56,21 @@ public class PendingInvocationWorker {
     private final WorkerIdentity workerIdentity;
     private final TaskExecutor executor;
     private final PendingInvocationWorkerProperties properties;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PendingInvocationWorker(PendingInvocationService pendingInvocationService,
                                    OrchestratorService orchestratorService,
                                    WorkerIdentity workerIdentity,
                                    @Qualifier(OrchestrationConfig.WORKER_EXECUTOR_BEAN)
                                            TaskExecutor executor,
-                                   PendingInvocationWorkerProperties properties) {
+                                   PendingInvocationWorkerProperties properties,
+                                   ApplicationEventPublisher eventPublisher) {
         this.pendingInvocationService = pendingInvocationService;
         this.orchestratorService = orchestratorService;
         this.workerIdentity = workerIdentity;
         this.executor = executor;
         this.properties = properties;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -101,7 +109,7 @@ public class PendingInvocationWorker {
         TenantContext.setCurrentTenantId(invocation.tenantId());
         try {
             try {
-                orchestratorService.respondToMessage(
+                orchestratorService.respondToMessage(invocation.id(),
                         invocation.conversationId(), invocation.triggerMessageId());
                 pendingInvocationService.markCompleted(invocation.id());
                 log.debug("Worker {} completed invocation {}",
@@ -114,8 +122,13 @@ public class PendingInvocationWorker {
                 // not transient — failing the row is the correct action.
                 log.warn("Worker {} failing invocation {} due to non-LLM error: {}",
                         workerIdentity.getId(), invocation.id(), e.toString(), e);
-                safeMark(() -> pendingInvocationService.markFailed(invocation.id(), e.toString()),
-                        invocation, "FAILED");
+                InvocationFailureType failureType = e instanceof MaxToolIterationsExceededException
+                        ? InvocationFailureType.MAX_TOOL_ITERATIONS
+                        : InvocationFailureType.SETUP_ERROR;
+                safeMark(() -> {
+                    pendingInvocationService.markFailed(invocation.id(), e.toString());
+                    publishFailed(invocation, failureType, e.toString());
+                }, invocation, "FAILED");
             }
         } finally {
             TenantContext.clear();
@@ -127,8 +140,10 @@ public class PendingInvocationWorker {
         if (!LlmErrorClassifier.isRetryable(error)) {
             log.warn("Worker {} failing invocation {} due to non-retryable LLM error: {}",
                     workerIdentity.getId(), invocation.id(), errorSummary);
-            safeMark(() -> pendingInvocationService.markFailed(invocation.id(), errorSummary),
-                    invocation, "FAILED");
+            safeMark(() -> {
+                pendingInvocationService.markFailed(invocation.id(), errorSummary);
+                publishFailed(invocation, InvocationFailureType.LLM_ERROR, errorSummary);
+            }, invocation, "FAILED");
             return;
         }
         // Retryable. The claim() already incremented attemptCount, so attemptCount ==
@@ -137,8 +152,10 @@ public class PendingInvocationWorker {
         if (invocation.attemptCount() >= invocation.maxAttempts()) {
             log.warn("Worker {} abandoning invocation {} after exhausting {} attempt(s): {}",
                     workerIdentity.getId(), invocation.id(), invocation.maxAttempts(), errorSummary);
-            safeMark(() -> pendingInvocationService.markAbandoned(invocation.id(), errorSummary),
-                    invocation, "ABANDONED");
+            safeMark(() -> {
+                pendingInvocationService.markAbandoned(invocation.id(), errorSummary);
+                publishFailed(invocation, InvocationFailureType.LLM_RETRIES_EXHAUSTED, errorSummary);
+            }, invocation, "ABANDONED");
             return;
         }
         log.info("Worker {} releasing invocation {} for retry (attempt {}/{}): {}",
@@ -147,6 +164,18 @@ public class PendingInvocationWorker {
         safeMark(() -> pendingInvocationService.releaseForRetry(
                         invocation.id(), errorSummary, properties.getRetryBaseIntervalSeconds()),
                 invocation, "RELEASED");
+    }
+
+    /**
+     * Publishes the permanent-failure event. Called inside the {@link #safeMark} action, right
+     * after the terminal transition returns (its short transaction committed), so no event
+     * fires for a mark that failed — the reaper will recover the row and the event comes from
+     * the real retry.
+     */
+    private void publishFailed(PendingInvocation invocation, InvocationFailureType failureType,
+                               String detail) {
+        eventPublisher.publishEvent(
+                new InvocationFailed(invocation.id(), failureType, detail, Instant.now()));
     }
 
     private void safeMark(Runnable action, PendingInvocation invocation, String label) {

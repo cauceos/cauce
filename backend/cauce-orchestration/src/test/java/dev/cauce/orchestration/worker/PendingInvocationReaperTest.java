@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
+import dev.cauce.orchestration.events.InvocationFailed;
+import dev.cauce.orchestration.events.InvocationFailureType;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -19,12 +21,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.context.ApplicationEventPublisher;
 
 class PendingInvocationReaperTest {
 
     private PendingInvocationService pendingInvocationService;
     private PendingInvocationWorkerProperties properties;
+    private ApplicationEventPublisher eventPublisher;
     private PendingInvocationReaper reaper;
 
     private final UUID tenantId = UUID.randomUUID();
@@ -37,7 +42,8 @@ class PendingInvocationReaperTest {
         properties = new PendingInvocationWorkerProperties();
         properties.setRetryBaseIntervalSeconds(30L);
         properties.getReaper().setTimeoutMs(60_000L);
-        reaper = new PendingInvocationReaper(pendingInvocationService, properties);
+        eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
+        reaper = new PendingInvocationReaper(pendingInvocationService, properties, eventPublisher);
         TenantContext.clear();
     }
 
@@ -67,6 +73,8 @@ class PendingInvocationReaperTest {
         verify(pendingInvocationService)
                 .releaseForRetry(eq(orphan.id()), anyString(), eq(30L));
         verify(pendingInvocationService, never()).markAbandoned(any(), anyString());
+        // A retry release is not permanent: no failure event.
+        verify(eventPublisher, never()).publishEvent(any(InvocationFailed.class));
     }
 
     @Test
@@ -79,6 +87,23 @@ class PendingInvocationReaperTest {
         verify(pendingInvocationService).markAbandoned(eq(orphan.id()), anyString());
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
+        ArgumentCaptor<InvocationFailed> captor = ArgumentCaptor.forClass(InvocationFailed.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().invocationId()).isEqualTo(orphan.id());
+        assertThat(captor.getValue().failureType())
+                .isEqualTo(InvocationFailureType.REAPER_ABANDONED);
+    }
+
+    @Test
+    void reapOrphanedInvocations_whenMarkAbandonedFails_publishesNoFailureEvent() {
+        PendingInvocation orphan = claimedAtAttempt(3);
+        when(pendingInvocationService.findOrphanedSince(any())).thenReturn(List.of(orphan));
+        Mockito.doThrow(new RuntimeException("locked"))
+                .when(pendingInvocationService).markAbandoned(any(), anyString());
+
+        reaper.reapOrphanedInvocations();
+
+        verify(eventPublisher, never()).publishEvent(any(InvocationFailed.class));
     }
 
     @Test

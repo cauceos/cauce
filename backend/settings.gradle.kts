@@ -28,6 +28,7 @@ include(
     "cauce-governance",
     "cauce-tenancy",
     "cauce-orchestration",
+    "cauce-orchestration-events",
     "cauce-api",
     "cauce-enterprise",
 )

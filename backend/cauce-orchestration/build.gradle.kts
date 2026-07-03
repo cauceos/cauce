@@ -21,6 +21,9 @@ plugins {
 
 dependencies {
     implementation(project(":cauce-core"))
+    // Invocation lifecycle event contract (leaf module, zero deps): the loop, worker,
+    // reaper, and ingest publish these records via ApplicationEventPublisher.
+    implementation(project(":cauce-orchestration-events"))
     implementation(project(":cauce-memory"))
     implementation(project(":cauce-llm"))
     // The agentic loop injects the ToolRegistry (all registered tools are offered to every

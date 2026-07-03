@@ -3,12 +3,15 @@ package dev.cauce.orchestration.worker;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
+import dev.cauce.orchestration.events.InvocationFailed;
+import dev.cauce.orchestration.events.InvocationFailureType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -35,11 +38,14 @@ public class PendingInvocationReaper {
 
     private final PendingInvocationService pendingInvocationService;
     private final PendingInvocationWorkerProperties properties;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PendingInvocationReaper(PendingInvocationService pendingInvocationService,
-                                   PendingInvocationWorkerProperties properties) {
+                                   PendingInvocationWorkerProperties properties,
+                                   ApplicationEventPublisher eventPublisher) {
         this.pendingInvocationService = pendingInvocationService;
         this.properties = properties;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -65,6 +71,10 @@ public class PendingInvocationReaper {
             try {
                 if (invocation.attemptCount() >= invocation.maxAttempts()) {
                     pendingInvocationService.markAbandoned(invocation.id(), REAP_ERROR);
+                    // Emitted only after the terminal transition committed (a retry release
+                    // below is not permanent and emits nothing).
+                    eventPublisher.publishEvent(new InvocationFailed(invocation.id(),
+                            InvocationFailureType.REAPER_ABANDONED, REAP_ERROR, Instant.now()));
                     log.warn("Reaper abandoned invocation {} after exhausting {} attempt(s)",
                             invocation.id(), invocation.maxAttempts());
                 } else {

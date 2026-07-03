@@ -16,6 +16,9 @@ import dev.cauce.llm.exception.LlmAuthenticationException;
 import dev.cauce.llm.exception.LlmRateLimitException;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
+import dev.cauce.orchestration.events.InvocationFailed;
+import dev.cauce.orchestration.events.InvocationFailureType;
+import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.OrchestratorService;
 import java.util.List;
 import java.util.UUID;
@@ -23,7 +26,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 
@@ -36,6 +41,7 @@ class PendingInvocationWorkerTest {
     private WorkerIdentity workerIdentity;
     private TaskExecutor executor;
     private PendingInvocationWorkerProperties properties;
+    private ApplicationEventPublisher eventPublisher;
     private PendingInvocationWorker worker;
 
     private final UUID tenantId = UUID.randomUUID();
@@ -52,8 +58,9 @@ class PendingInvocationWorkerTest {
         properties = new PendingInvocationWorkerProperties();
         properties.setBatchSize(3);
         properties.setRetryBaseIntervalSeconds(30L);
+        eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
         worker = new PendingInvocationWorker(pendingInvocationService, orchestratorService,
-                workerIdentity, executor, properties);
+                workerIdentity, executor, properties, eventPublisher);
         TenantContext.clear();
     }
 
@@ -68,7 +75,7 @@ class PendingInvocationWorkerTest {
 
         worker.pollAndProcess();
 
-        verify(orchestratorService, never()).respondToMessage(any(), any());
+        verify(orchestratorService, never()).respondToMessage(any(), any(), any());
     }
 
     @Test
@@ -83,8 +90,8 @@ class PendingInvocationWorkerTest {
 
         worker.pollAndProcess();
 
-        verify(orchestratorService).respondToMessage(convA, triggerA);
-        verify(orchestratorService).respondToMessage(convB, triggerB);
+        verify(orchestratorService).respondToMessage(a.id(), convA, triggerA);
+        verify(orchestratorService).respondToMessage(b.id(), convB, triggerB);
         verify(pendingInvocationService).markCompleted(a.id());
         verify(pendingInvocationService).markCompleted(b.id());
     }
@@ -97,7 +104,7 @@ class PendingInvocationWorkerTest {
         // Must not throw — the scheduler thread keeps running.
         worker.pollAndProcess();
 
-        verify(orchestratorService, never()).respondToMessage(any(), any());
+        verify(orchestratorService, never()).respondToMessage(any(), any(), any());
     }
 
     @Test
@@ -106,7 +113,7 @@ class PendingInvocationWorkerTest {
 
         worker.processInvocation(claimed);
 
-        verify(orchestratorService).respondToMessage(conversationId, triggerMessageId);
+        verify(orchestratorService).respondToMessage(claimed.id(), conversationId, triggerMessageId);
         verify(pendingInvocationService).markCompleted(claimed.id());
         verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
         verify(pendingInvocationService, never()).markFailed(any(), anyString());
@@ -120,7 +127,7 @@ class PendingInvocationWorkerTest {
         Mockito.doAnswer(invocation -> {
             captured.set(TenantContext.getCurrentTenantId().orElse(null));
             return null;
-        }).when(orchestratorService).respondToMessage(any(), any());
+        }).when(orchestratorService).respondToMessage(any(), any(), any());
 
         worker.processInvocation(claimed);
 
@@ -132,7 +139,7 @@ class PendingInvocationWorkerTest {
     void processInvocation_whenRetryableLlmErrorAndBudgetRemains_releasesForRetry() {
         PendingInvocation claimed = claimedFirstAttempt();
         Mockito.doThrow(new LlmRateLimitException("anthropic", "claude-sonnet-4-7", "429"))
-                .when(orchestratorService).respondToMessage(any(), any());
+                .when(orchestratorService).respondToMessage(any(), any(), any());
 
         worker.processInvocation(claimed);
 
@@ -147,20 +154,21 @@ class PendingInvocationWorkerTest {
     void processInvocation_whenNonRetryableLlmError_marksFailed() {
         PendingInvocation claimed = claimedFirstAttempt();
         Mockito.doThrow(new LlmAuthenticationException("anthropic", "claude-sonnet-4-7", "401"))
-                .when(orchestratorService).respondToMessage(any(), any());
+                .when(orchestratorService).respondToMessage(any(), any(), any());
 
         worker.processInvocation(claimed);
 
         verify(pendingInvocationService).markFailed(eq(claimed.id()), anyString());
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
+        assertThat(publishedFailure().failureType()).isEqualTo(InvocationFailureType.LLM_ERROR);
     }
 
     @Test
     void processInvocation_whenRetryableLlmErrorAtLastAttempt_abandons() {
         PendingInvocation claimed = claimedAtAttempt(3);
         Mockito.doThrow(new LlmRateLimitException("anthropic", "claude-sonnet-4-7", "429"))
-                .when(orchestratorService).respondToMessage(any(), any());
+                .when(orchestratorService).respondToMessage(any(), any(), any());
 
         worker.processInvocation(claimed);
 
@@ -168,19 +176,64 @@ class PendingInvocationWorkerTest {
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
         verify(pendingInvocationService, never()).markFailed(any(), anyString());
+        assertThat(publishedFailure().failureType())
+                .isEqualTo(InvocationFailureType.LLM_RETRIES_EXHAUSTED);
     }
 
     @Test
     void processInvocation_whenSetupError_marksFailed() {
         PendingInvocation claimed = claimedFirstAttempt();
         Mockito.doThrow(new AgentNotFoundException("missing"))
-                .when(orchestratorService).respondToMessage(any(), any());
+                .when(orchestratorService).respondToMessage(any(), any(), any());
 
         worker.processInvocation(claimed);
 
         verify(pendingInvocationService).markFailed(eq(claimed.id()), anyString());
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
+        InvocationFailed failed = publishedFailure();
+        assertThat(failed.failureType()).isEqualTo(InvocationFailureType.SETUP_ERROR);
+        assertThat(failed.invocationId()).isEqualTo(claimed.id());
+        assertThat(failed.detail()).contains("missing");
+    }
+
+    @Test
+    void processInvocation_whenIterationCapExceeded_marksFailedAsMaxToolIterations() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new MaxToolIterationsExceededException("cap"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markFailed(eq(claimed.id()), anyString());
+        assertThat(publishedFailure().failureType())
+                .isEqualTo(InvocationFailureType.MAX_TOOL_ITERATIONS);
+    }
+
+    @Test
+    void processInvocation_happyPathOrRetryRelease_publishesNoFailureEvent() {
+        worker.processInvocation(claimedFirstAttempt());
+        Mockito.doThrow(new LlmRateLimitException("anthropic", "claude-sonnet-4-7", "429"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+        worker.processInvocation(claimedFirstAttempt());
+
+        // Completion is not a failure and a retry release is not permanent: nothing published.
+        verify(eventPublisher, never()).publishEvent(any(InvocationFailed.class));
+    }
+
+    @Test
+    void processInvocation_whenMarkFailedItselfFails_publishesNoFailureEvent() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new LlmAuthenticationException("anthropic", "claude-sonnet-4-7", "401"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+        Mockito.doThrow(new RuntimeException("DB outage"))
+                .when(pendingInvocationService).markFailed(any(), anyString());
+
+        worker.processInvocation(claimed);
+
+        // The terminal transition did not commit; the reaper will recover the row, so no
+        // event may claim the invocation permanently failed.
+        verify(eventPublisher, never()).publishEvent(any(InvocationFailed.class));
     }
 
     @Test
@@ -200,11 +253,17 @@ class PendingInvocationWorkerTest {
     void processInvocation_clearsTenantContextEvenAfterLlmError() {
         PendingInvocation claimed = claimedFirstAttempt();
         Mockito.doThrow(new LlmRateLimitException("anthropic", "claude-sonnet-4-7", "429"))
-                .when(orchestratorService).respondToMessage(any(), any());
+                .when(orchestratorService).respondToMessage(any(), any(), any());
 
         worker.processInvocation(claimed);
 
         assertThat(TenantContext.getCurrentTenantId()).isEmpty();
+    }
+
+    private InvocationFailed publishedFailure() {
+        ArgumentCaptor<InvocationFailed> captor = ArgumentCaptor.forClass(InvocationFailed.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        return captor.getValue();
     }
 
     private PendingInvocation claimedFirstAttempt() {
