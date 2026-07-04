@@ -1,5 +1,8 @@
 package dev.cauce.api.web;
 
+import dev.cauce.channels.WebhookAuthenticationException;
+import dev.cauce.channels.config.ChannelConfigNotFoundException;
+import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.apikey.ApiKeyAlreadyRevokedException;
 import dev.cauce.core.apikey.ApiKeyNotFoundException;
@@ -74,11 +77,15 @@ public class GlobalExceptionHandler {
             Map.entry(MessageNotFoundException.class, "message_not_found"),
             Map.entry(ApiKeyNotFoundException.class, "api_key_not_found"),
             Map.entry(PendingInvocationNotFoundException.class, "pending_invocation_not_found"),
+            Map.entry(ChannelConfigNotFoundException.class, "channel_config_not_found"),
             // 400 BAD_REQUEST
             Map.entry(InvalidConversationTransitionException.class, "invalid_conversation_transition"),
             Map.entry(InvalidChannelTypeException.class, "invalid_channel_type"),
             Map.entry(InvalidTriggerMessageException.class, "invalid_trigger_message"),
             Map.entry(InvalidIdempotencyKeyException.class, "invalid_idempotency_key"),
+            Map.entry(ChannelPayloadException.class, "channel_payload_invalid"),
+            // 401 UNAUTHORIZED
+            Map.entry(WebhookAuthenticationException.class, "webhook_authentication_failed"),
             // 409 CONFLICT
             Map.entry(ApiKeyAlreadyRevokedException.class, "api_key_already_revoked"),
             Map.entry(MaxRetriesExceededException.class, "max_retries_exceeded"),
@@ -103,7 +110,8 @@ public class GlobalExceptionHandler {
             ConversationNotFoundException.class,
             MessageNotFoundException.class,
             ApiKeyNotFoundException.class,
-            PendingInvocationNotFoundException.class})
+            PendingInvocationNotFoundException.class,
+            ChannelConfigNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex) {
         return clientError(HttpStatus.NOT_FOUND, ex);
     }
@@ -112,9 +120,16 @@ public class GlobalExceptionHandler {
             InvalidConversationTransitionException.class,
             InvalidChannelTypeException.class,
             InvalidTriggerMessageException.class,
-            InvalidIdempotencyKeyException.class})
+            InvalidIdempotencyKeyException.class,
+            ChannelPayloadException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex) {
         return clientError(HttpStatus.BAD_REQUEST, ex);
+    }
+
+    @ExceptionHandler(WebhookAuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleWebhookAuthentication(WebhookAuthenticationException ex) {
+        // The message names only the config id; the presented secret is never echoed or logged.
+        return clientError(HttpStatus.UNAUTHORIZED, ex);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

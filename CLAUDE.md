@@ -36,13 +36,13 @@ See [README.md](README.md) for the user-facing project description.
 
 ## Repository structure
 
-> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V15), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop), and its first consumer: Micrometer metrics in `cauce-observability` (exposed via the authenticated `/actuator/metrics`; no exporter yet). `cauce-channels`, `cauce-evals`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-07-04): 597 tests, 0 failures.
+> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V15), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop) with its first consumer (Micrometer metrics in `cauce-observability`, exposed via the authenticated `/actuator/metrics`; no exporter yet), and the channel layer in `cauce-channels`: the complete channel SPI (inbound + outbound halves), the `ChannelConfig` agent/tenant binding (V16, RLS + SECURITY DEFINER webhook resolution), and the inbound Telegram adapter (webhook → normalization → idempotent ingest; outbound delivery is the next commit). `cauce-evals`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-07-04): 634 tests, 0 failures.
 
 **Backend modules** (Gradle subprojects under `backend/`; the Gradle build — `settings.gradle.kts`, wrapper, `gradle/` — lives under `backend/`, not the repo root):
 
 - `cauce-core` — domain model: `Tenant`, `Agent`, `Conversation`, `Message`, `ApiKey` aggregates, the neutral tool model (`ToolDefinition`, and the sealed `ToolContent` = `ToolCall` | `ToolResult`), `MessageRole` (incl. `TOOL_CALL`/`TOOL_RESULT`), `TenantContext`, UUIDv7 generation, API-key hashing ports; no framework dependencies (its only third-party library is uuid-creator)
 - `cauce-memory` — persistence: JPA entities, hand-written mappers, Spring Data repositories, `RlsContextAspect`, Flyway migrations (V1–V15, incl. the messages `tool_content` jsonb column and the `ingest_idempotency_records` table). Vector retrieval is planned (pgvector enabled, no code yet)
-- `cauce-channels` — channel adapter SPI and reference adapters (WhatsApp, voice, email, web chat) — empty skeleton, not started
+- `cauce-channels` — channel adapter SPI (invariant 3) and reference adapters. The SPI is complete: `InboundChannelAdapter` (`verify` webhook authenticity against the config — header token or body HMAC — then `parse` the provider payload into the neutral `ChannelInboundMessage`) and `OutboundChannelAdapter` (`deliver(ChannelOutboundMessage, config)` — **contract only, no implementation or caller yet**), with `ChannelAdapterRegistry` mirroring the LLM/tool registries. `ChannelConfig` binds a channel instance (e.g. one Telegram bot) to an agent: vertical slice (domain + JPA persistence + services) mirroring `PendingInvocation`; rows carry the agent's owning `tenant_id` for RLS, the provider `credential` (plaintext at rest, encryption TODO) and the hash of the server-generated webhook secret (plaintext returned once, mirroring API keys). The unauthenticated webhook path resolves a config — and discovers the tenant — via the V16 `SECURITY DEFINER` function (ADR 0001), then ingests under RLS through `InboundMessageService`. First adapter: **Telegram, inbound only** (`update.message.text`; idempotency key `configId + ":" + update_id`, so provider redelivery replays instead of duplicating). Depends on core, memory, orchestration; only cauce-api depends on it
 - `cauce-llm` — provider-neutral LLM SPI: `LlmProvider`, `LlmProviderRegistry`, credentials, and the neutral invocation/response model, which carries the `cauce-core` tool model (`LlmInvocation.tools`, `LlmMessage` tool content, `LlmResponse.toolCalls`, `FinishReason.TOOL_USE`). Depends on `cauce-core`. Adapters live in separate modules
 - `cauce-llm-anthropic` — native Anthropic adapter (`POST /v1/messages`); maps the neutral tool model to/from Anthropic's `tool_use`/`tool_result` content blocks. Its bean is registered only when an Anthropic API key is configured
 - `cauce-llm-openai` — single OpenAI-compatible adapter (`POST /chat/completions`) mapping tools to/from the `tools`/`tool_calls`/`role:"tool"` format (`arguments` as a JSON string), registered as three conditional providers: `ollama` (keyless, dev default), `openai`, `mistral`
@@ -322,6 +322,9 @@ indistinguishable.
 - **Messaging**: `POST /v1/agents/{agentId}/messages` (202 Accepted with
   `{conversation_id, message_id}`), `GET /v1/conversations/{id}`,
   `GET /v1/conversations/{id}/messages`
+- **Channels**: `POST /v1/agents/{agentId}/channels` (201; binds a channel instance to the agent,
+  `{channel_type, credential}` in, `webhook_secret` returned exactly once — pass it to the
+  provider, e.g. Telegram `setWebhook(url, secret_token)`). List/disable deferred.
 
 The messaging endpoint stamps the reserved channel type `api` server-side — the request body
 carries only `external_identity_ref` and `content`, so the client cannot choose the channel.
@@ -337,7 +340,18 @@ second USER message, invocation, or `InvocationRequested` event. Deduplication i
 inside the same ingest transaction, on the V15 `ingest_idempotency_records`
 `(agent_id, idempotency_key)` unique constraint (RLS-scoped via the agent); matching is by key
 only, the body is not fingerprinted. Future `cauce-channels` adapters populate the key with the
-provider's message id.
+provider's message id (the Telegram adapter uses `configId + ":" + update_id`).
+
+**Provider webhooks** live outside `/v1` and outside API-key auth:
+`POST /webhooks/channels/{configId}` (SecurityConfig permits `/webhooks/**`). Authentication is
+the per-config channel secret verified by the adapter before anything is processed (Telegram:
+`X-Telegram-Bot-Api-Secret-Token` vs the stored hash). The endpoint dispatches through the
+channel SPI: resolve the ACTIVE config via the V16 SECURITY DEFINER function (the webhook has no
+tenant context; the config row carries the owning tenant — ADR 0001), verify, normalize, ingest.
+Responses: 200 empty on ingest or on an authentic-but-unsupported update (Telegram redelivers
+non-2xx), 401 on a bad secret, 404 on an unknown/disabled config, 400 on a malformed payload.
+Local development against real Telegram needs a public URL (tunnel, e.g. cloudflared/ngrok) +
+`setWebhook`; the ITs drive the endpoint directly.
 
 ### Frontend
 
@@ -371,8 +385,19 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
   model and billing.
 - **OSS quickstart.** docker-compose runs only PostgreSQL, Redis, and Adminer; there is no
   clone → compose up → agent-responding path (app + Ollama in compose). Adoption surface.
-- **Real channels and dashboard.** `cauce-channels` is an empty skeleton (not even the SPI exists
-  yet) and the frontend does not exist.
+- **Channel outbound delivery (the next commit).** The inbound half is live (Telegram webhook →
+  ingest) and `OutboundChannelAdapter` is defined, but nothing implements or calls it: agent
+  replies on channel conversations are only readable by polling `GET messages`. The delivery
+  trigger is an open decision — an `InvocationCompleted` consumer or an explicit port. WARNING
+  (flagged at SPI design time): if delivery rides on the event stream, the stream stops being
+  observational and becomes a business path, which reopens the parked transactional guarantee
+  (at-least-once ⇒ duplicate deliveries without outbound dedup; `InvocationRequested` is in-tx ⇒
+  AFTER_COMMIT/outbox).
+- **Channel follow-ups.** Credential (bot token) encryption-at-rest (TODO, consistent with the
+  deferred per-tenant LLM credentials); channel-config list/disable endpoints; replacing the
+  hardcoded `SUPPORTED_CHANNELS` set in `ConversationService` with SPI-driven validation (needs a
+  port — direct dependency is a cycle); WhatsApp adapter (the SPI was designed against it).
+- **Dashboard.** The frontend does not exist.
 - **Observability instrumentation.** Invariant 4 ("observable by default") is partially
   covered: the orchestrator emits invocation lifecycle events (`cauce-orchestration-events`,
   incl. per-call token usage on `LlmResponded`) and `cauce-observability` now consumes them

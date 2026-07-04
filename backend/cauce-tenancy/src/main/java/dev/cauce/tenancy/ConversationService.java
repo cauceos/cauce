@@ -38,9 +38,13 @@ public class ConversationService {
     private static final Logger log = LoggerFactory.getLogger(ConversationService.class);
 
     // "api" is the reserved built-in channel for the REST messaging endpoint: a first-class
-    // origin handled in-process, not a pluggable adapter. The rest are placeholders.
-    // TODO: replace hardcoded validation with the cauce-channels channel registry when the SPI is implemented.
-    private static final Set<String> SUPPORTED_CHANNELS = Set.of("api", "whatsapp", "voice", "email", "web_chat");
+    // origin handled in-process, not a pluggable adapter. "telegram" has a real adapter in
+    // cauce-channels; the rest are placeholders.
+    // TODO: replace hardcoded validation with the cauce-channels ChannelAdapterRegistry.
+    // Not doable by direct dependency (cycle: tenancy <- orchestration <- channels); needs
+    // a port in core or an app-level validation seam.
+    private static final Set<String> SUPPORTED_CHANNELS =
+            Set.of("api", "telegram", "whatsapp", "voice", "email", "web_chat");
 
     private final ConversationRepository conversationRepository;
     private final AgentRepository agentRepository;

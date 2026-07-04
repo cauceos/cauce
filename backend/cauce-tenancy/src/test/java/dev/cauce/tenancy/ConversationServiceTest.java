@@ -54,7 +54,9 @@ class ConversationServiceTest {
         UUID agentId = UUID.randomUUID();
         when(agentRepository.findById(agentId)).thenReturn(Optional.of(agent(agentId)));
 
-        assertThatThrownBy(() -> service.startConversation(agentId, "telegram", "+34612345678"))
+        // "discord" has no adapter and is not in the supported set ("telegram" is, since the
+        // cauce-channels inbound adapter landed).
+        assertThatThrownBy(() -> service.startConversation(agentId, "discord", "+34612345678"))
                 .isInstanceOf(InvalidChannelTypeException.class);
     }
 

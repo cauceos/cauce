@@ -46,7 +46,7 @@ class InboundMessageServiceIT extends AbstractOrchestrationIntegrationTest {
     @BeforeEach
     void setUp() {
         jdbc = new JdbcTemplate(adminDataSource);
-        jdbc.execute("TRUNCATE TABLE api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, agents, tenants CASCADE");
+        jdbc.execute("TRUNCATE TABLE channel_configs, api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, agents, tenants CASCADE");
         TenantContext.clear();
 
         operator = tenantService.bootstrapOperator("Operator");

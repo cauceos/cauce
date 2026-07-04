@@ -121,7 +121,7 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
     void setUp() {
         // Raw setup/introspection runs as the owner; the app (worker) connects as cauce_app.
         jdbc = new JdbcTemplate(adminDataSource);
-        jdbc.execute("TRUNCATE TABLE api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, agents, tenants CASCADE");
+        jdbc.execute("TRUNCATE TABLE channel_configs, api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, agents, tenants CASCADE");
         mockLlmProvider.respondWith(invocation ->
                 new LlmResponse("default reply", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
         TenantContext.clear();

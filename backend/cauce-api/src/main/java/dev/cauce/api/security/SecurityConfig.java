@@ -23,6 +23,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   <li>{@code /actuator/health} and {@code /actuator/info} — operational health.</li>
  *   <li>{@code /v1/api-docs/**} and {@code /swagger-ui/**} — placeholder for the
  *       OpenAPI surface that lands in a later commit.</li>
+ *   <li>{@code /webhooks/**} — provider webhooks, authenticated by the per-config
+ *       channel secret instead of an API key.</li>
  * </ul>
  * Everything else requires a valid API key.
  */
@@ -45,6 +47,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/v1/api-docs/**", "/swagger-ui/**").permitAll()
+                        // Provider webhooks carry no API key: the caller is the channel
+                        // provider, and authentication is the per-config channel secret
+                        // verified by the adapter (ChannelWebhookService) before anything
+                        // is processed.
+                        .requestMatchers("/webhooks/**").permitAll()
                         // Everything else — the /v1 API surface and non-health actuator endpoints —
                         // requires a valid API key. ApiKeyAuthenticationFilter authenticates the
                         // Bearer key and derives the tenant context from the validated principal.

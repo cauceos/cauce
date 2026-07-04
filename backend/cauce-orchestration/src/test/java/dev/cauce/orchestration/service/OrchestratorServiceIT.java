@@ -93,7 +93,7 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
         // Raw setup/introspection runs as the owner; the service runs as cauce_app, and
         // countConversationsVisibleAs uses the cauce_app datasource to exercise RLS for real.
         jdbc = new JdbcTemplate(adminDataSource);
-        jdbc.execute("TRUNCATE TABLE api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, agents, tenants CASCADE");
+        jdbc.execute("TRUNCATE TABLE channel_configs, api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, agents, tenants CASCADE");
         mockLlmProvider.respondWith(invocation ->
                 new LlmResponse("default reply", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
         TenantContext.clear();
