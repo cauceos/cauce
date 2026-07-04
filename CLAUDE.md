@@ -36,7 +36,7 @@ See [README.md](README.md) for the user-facing project description.
 
 ## Repository structure
 
-> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V15), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), and the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop; no consumers yet). `cauce-channels`, `cauce-evals`, `cauce-observability`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-07-04): 585 tests, 0 failures.
+> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V15), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop), and its first consumer: Micrometer metrics in `cauce-observability` (exposed via the authenticated `/actuator/metrics`; no exporter yet). `cauce-channels`, `cauce-evals`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-07-04): 597 tests, 0 failures.
 
 **Backend modules** (Gradle subprojects under `backend/`; the Gradle build — `settings.gradle.kts`, wrapper, `gradle/` — lives under `backend/`, not the repo root):
 
@@ -48,7 +48,7 @@ See [README.md](README.md) for the user-facing project description.
 - `cauce-llm-openai` — single OpenAI-compatible adapter (`POST /chat/completions`) mapping tools to/from the `tools`/`tool_calls`/`role:"tool"` format (`arguments` as a JSON string), registered as three conditional providers: `ollama` (keyless, dev default), `openai`, `mistral`
 - `cauce-tools` — executable tool SPI: the `Tool` contract (`definition()` + `execute(ToolCall)`), a Spring-managed `ToolRegistry` mirroring `LlmProviderRegistry`, and the built-in `get_current_time` clock tool (injectable `java.time.Clock`). Depends only on `cauce-core` (plus spring-context); the neutral tool model lives in core. Global registry; per-agent tool scoping is deferred. Format mapping in the adapters (B) and the orchestrator loop (C) are not built yet
 - `cauce-evals` — evaluation framework, conversation testing, regression detection — empty skeleton, not started
-- `cauce-observability` — OpenTelemetry integration, traces, metrics, replay — empty skeleton, not started
+- `cauce-observability` — observability layer; first content: `OrchestrationMetrics`, the first consumer of the orchestration event stream — a guarded `@EventListener` translating the 8 `OrchestrationEvent`s into Micrometer meters (`cauce.orchestration.*`: invocation counters incl. `failure_type`, LLM calls/responses and token usage by `provider`/`model`, tool-call counters and an execution timer; low-cardinality tags only, ids never become tags). Pure consumer: the whole dispatch is try/caught so a metrics failure can never break the synchronous publication path. Depends only on `cauce-orchestration-events`, spring-context, and micrometer-core; the `MeterRegistry` is wired by cauce-api's Actuator. Traces (OTel) and exporters (OTLP/Prometheus) are planned, separate units
 - `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance — empty skeleton, not started
 - `cauce-tenancy` — application services for tenants, agents, conversations, messages, and API keys; operator bootstrap; HMAC-SHA256 API-key hashing with a Caffeine cache
 - `cauce-orchestration` — async invocation engine and the bounded agentic tool loop: pending-invocation queue, context assembly with a per-model context-window registry (`ModelContextWindow`; conservative 16,384-token fallback with a `WARN` for unknown models) that renders tool messages, the orchestrator loop (offers all registered tools, dispatches tool calls via the `cauce-tools` `ToolRegistry`, feeds results back, capped at 10 iterations — tool failures feed back as errored results, the cap fails the invocation), background worker/reaper (12-minute orphan timeout sized for the multi-step loop), and `InboundMessageService` (the inbound message ingest unit, with optional idempotency-key deduplication: an insert-first lock on the V15 `(agent_id, idempotency_key)` unique constraint inside the single ingest transaction; a replay returns the stored result with no second message, invocation, or `InvocationRequested` event). Depends on `cauce-tenancy`, `cauce-tools`, and `cauce-orchestration-events`. Publishes the invocation lifecycle events synchronously via `ApplicationEventPublisher` at each step of the loop (ingest, context assembly, each LLM call/response with token usage, each tool dispatch, completion, permanent failure)
@@ -373,13 +373,15 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
   clone → compose up → agent-responding path (app + Ollama in compose). Adoption surface.
 - **Real channels and dashboard.** `cauce-channels` is an empty skeleton (not even the SPI exists
   yet) and the frontend does not exist.
-- **Observability instrumentation.** Invariant 4 ("observable by default") is only partially
-  covered: the orchestrator now emits invocation lifecycle events (`cauce-orchestration-events`,
-  incl. per-call token usage on `LlmResponded`), but there are no consumers yet, no events
-  outside the invocation path (tenancy/API operations emit nothing), and no traces or metrics —
-  there is no OpenTelemetry or Micrometer dependency, and `cauce-observability` is an empty
-  skeleton. When a persisting consumer lands, revisit the `AFTER_COMMIT`/outbox TODO in
-  `InboundMessageService`.
+- **Observability instrumentation.** Invariant 4 ("observable by default") is partially
+  covered: the orchestrator emits invocation lifecycle events (`cauce-orchestration-events`,
+  incl. per-call token usage on `LlmResponded`) and `cauce-observability` now consumes them
+  into Micrometer metrics (`OrchestrationMetrics`, exposed via the authenticated
+  `/actuator/metrics`). Still missing: events outside the invocation path (tenancy/API
+  operations emit nothing), distributed traces (no OpenTelemetry dependency), and any metric
+  exporter (OTLP/Prometheus) — Micrometer-now/OTLP-later is a bridge, not a migration. When a
+  persisting consumer lands, revisit the `AFTER_COMMIT`/outbox TODO in
+  `InboundMessageService` (the metrics listener is in-memory only, so it is exempt).
 
 ### Minor technical follow-ups
 
