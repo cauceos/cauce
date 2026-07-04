@@ -56,7 +56,7 @@ class TenantServiceIT {
     @BeforeEach
     void setUp() {
         jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("TRUNCATE TABLE api_keys, pending_invocations, messages, conversations, agents, tenants CASCADE");
+        jdbc.execute("TRUNCATE TABLE api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, agents, tenants CASCADE");
         // cauce_app and its grants come from Flyway migration V10; tests SET ROLE to it.
         TenantContext.clear();
     }

@@ -73,7 +73,7 @@ public abstract class AbstractOrchestrationIntegrationTest {
      */
     protected void truncateAll() {
         new JdbcTemplate(adminDataSource).execute(
-                "TRUNCATE TABLE api_keys, pending_invocations, messages, conversations, agents, tenants CASCADE");
+                "TRUNCATE TABLE api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, agents, tenants CASCADE");
     }
 
     /**

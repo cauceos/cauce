@@ -36,12 +36,12 @@ See [README.md](README.md) for the user-facing project description.
 
 ## Repository structure
 
-> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V14), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), and the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop; no consumers yet). `cauce-channels`, `cauce-evals`, `cauce-observability`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-07-03): 566 tests, 0 failures.
+> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V15), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), and the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop; no consumers yet). `cauce-channels`, `cauce-evals`, `cauce-observability`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-07-04): 585 tests, 0 failures.
 
 **Backend modules** (Gradle subprojects under `backend/`; the Gradle build — `settings.gradle.kts`, wrapper, `gradle/` — lives under `backend/`, not the repo root):
 
 - `cauce-core` — domain model: `Tenant`, `Agent`, `Conversation`, `Message`, `ApiKey` aggregates, the neutral tool model (`ToolDefinition`, and the sealed `ToolContent` = `ToolCall` | `ToolResult`), `MessageRole` (incl. `TOOL_CALL`/`TOOL_RESULT`), `TenantContext`, UUIDv7 generation, API-key hashing ports; no framework dependencies (its only third-party library is uuid-creator)
-- `cauce-memory` — persistence: JPA entities, hand-written mappers, Spring Data repositories, `RlsContextAspect`, Flyway migrations (V1–V14, incl. the messages `tool_content` jsonb column). Vector retrieval is planned (pgvector enabled, no code yet)
+- `cauce-memory` — persistence: JPA entities, hand-written mappers, Spring Data repositories, `RlsContextAspect`, Flyway migrations (V1–V15, incl. the messages `tool_content` jsonb column and the `ingest_idempotency_records` table). Vector retrieval is planned (pgvector enabled, no code yet)
 - `cauce-channels` — channel adapter SPI and reference adapters (WhatsApp, voice, email, web chat) — empty skeleton, not started
 - `cauce-llm` — provider-neutral LLM SPI: `LlmProvider`, `LlmProviderRegistry`, credentials, and the neutral invocation/response model, which carries the `cauce-core` tool model (`LlmInvocation.tools`, `LlmMessage` tool content, `LlmResponse.toolCalls`, `FinishReason.TOOL_USE`). Depends on `cauce-core`. Adapters live in separate modules
 - `cauce-llm-anthropic` — native Anthropic adapter (`POST /v1/messages`); maps the neutral tool model to/from Anthropic's `tool_use`/`tool_result` content blocks. Its bean is registered only when an Anthropic API key is configured
@@ -51,7 +51,7 @@ See [README.md](README.md) for the user-facing project description.
 - `cauce-observability` — OpenTelemetry integration, traces, metrics, replay — empty skeleton, not started
 - `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance — empty skeleton, not started
 - `cauce-tenancy` — application services for tenants, agents, conversations, messages, and API keys; operator bootstrap; HMAC-SHA256 API-key hashing with a Caffeine cache
-- `cauce-orchestration` — async invocation engine and the bounded agentic tool loop: pending-invocation queue, context assembly with a per-model context-window registry (`ModelContextWindow`; conservative 16,384-token fallback with a `WARN` for unknown models) that renders tool messages, the orchestrator loop (offers all registered tools, dispatches tool calls via the `cauce-tools` `ToolRegistry`, feeds results back, capped at 10 iterations — tool failures feed back as errored results, the cap fails the invocation), background worker/reaper (12-minute orphan timeout sized for the multi-step loop), and `InboundMessageService` (the inbound message ingest unit). Depends on `cauce-tenancy`, `cauce-tools`, and `cauce-orchestration-events`. Publishes the invocation lifecycle events synchronously via `ApplicationEventPublisher` at each step of the loop (ingest, context assembly, each LLM call/response with token usage, each tool dispatch, completion, permanent failure)
+- `cauce-orchestration` — async invocation engine and the bounded agentic tool loop: pending-invocation queue, context assembly with a per-model context-window registry (`ModelContextWindow`; conservative 16,384-token fallback with a `WARN` for unknown models) that renders tool messages, the orchestrator loop (offers all registered tools, dispatches tool calls via the `cauce-tools` `ToolRegistry`, feeds results back, capped at 10 iterations — tool failures feed back as errored results, the cap fails the invocation), background worker/reaper (12-minute orphan timeout sized for the multi-step loop), and `InboundMessageService` (the inbound message ingest unit, with optional idempotency-key deduplication: an insert-first lock on the V15 `(agent_id, idempotency_key)` unique constraint inside the single ingest transaction; a replay returns the stored result with no second message, invocation, or `InvocationRequested` event). Depends on `cauce-tenancy`, `cauce-tools`, and `cauce-orchestration-events`. Publishes the invocation lifecycle events synchronously via `ApplicationEventPublisher` at each step of the loop (ingest, context assembly, each LLM call/response with token usage, each tool dispatch, completion, permanent failure)
 - `cauce-orchestration-events` — the invocation lifecycle event contract: sealed `OrchestrationEvent` with 8 immutable records (`InvocationRequested`, `ContextAssembled`, `LlmInvoked`, `LlmResponded`, `ToolCallRequested`, `ToolExecuted`, `InvocationCompleted`, `InvocationFailed` + `InvocationFailureType`). Leaf module with zero dependencies (plain JDK payloads; no Spring) so future consumers (observability, governance, usage accounting) can listen without depending on orchestration internals. No consumers exist yet; the stream is at-least-once, and `InvocationRequested` is published inside the ingest transaction (persisting consumers must use `AFTER_COMMIT` or an outbox — TODO in `InboundMessageService`)
 - `cauce-api` — REST API surface; the Spring Boot application module. Compiles against the `cauce-llm` SPI only and wires both LLM adapters plus `cauce-tools` as `runtimeOnly` (the built-in tools register via the `dev.cauce` component scan)
 - `cauce-enterprise` — commercial modules under separate license — empty skeleton
@@ -331,6 +331,14 @@ partial unique index on `conversations (agent_id, channel_type, external_identit
 status = 'OPEN'` — then append the USER message and enqueue the async invocation. The agent reply
 arrives asynchronously; clients poll the conversation messages.
 
+The endpoint accepts an optional `Idempotency-Key` header (opaque, ≤255 chars): a repeated POST
+with the same key for the same agent replays the original 202 ids and ingests nothing new — no
+second USER message, invocation, or `InvocationRequested` event. Deduplication is insert-first
+inside the same ingest transaction, on the V15 `ingest_idempotency_records`
+`(agent_id, idempotency_key)` unique constraint (RLS-scoped via the agent); matching is by key
+only, the body is not fingerprinted. Future `cauce-channels` adapters populate the key with the
+provider's message id.
+
 ### Frontend
 
 > Not present yet. Will be added under `frontend/cauce-dashboard`.
@@ -352,10 +360,11 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
   registered tools are offered to every agent); a heartbeat to replace the flat 12-minute reaper
   timeout if the loop grows; and counting the tool-definition schema (not just tool-message
   content) against the context window. The only built-in tool today is the `get_current_time` clock.
-- **Idempotency of message ingestion.** `POST /v1/agents/{agentId}/messages` has no idempotency
-  key: a client retry or webhook redelivery after a committed ingest duplicates the USER message
-  and its invocation. Prerequisite for real channels (at-least-once webhook delivery); pair with
-  `cauce-channels`.
+- **Idempotency of message ingestion — landed** (`Idempotency-Key` header, V15 table, insert-first
+  lock in `InboundMessageService`). Remaining deferrals: **no body fingerprint** (replay matches
+  by key only; the threat model is byte-identical webhook redelivery, not a client reusing a key
+  with a different body) and **no retention purge** for `ingest_idempotency_records` (the table
+  has `created_at` + an index so a scheduled `DELETE WHERE created_at < …` is a pure add).
 - **Per-tenant LLM credentials and usage accounting.** Only the system-default credential exists
   (`SystemDefaultLlmCredential`, env-var based); there is no per-tenant/BYO-key path. Token usage
   (`LlmUsage`) is logged but never persisted or attributed per tenant. Both gate the commercial

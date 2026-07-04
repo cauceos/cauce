@@ -15,6 +15,7 @@ import dev.cauce.llm.exception.LlmInvalidRequestException;
 import dev.cauce.llm.exception.LlmRateLimitException;
 import dev.cauce.llm.exception.LlmTimeoutException;
 import dev.cauce.orchestration.PendingInvocationNotFoundException;
+import dev.cauce.orchestration.exception.InvalidIdempotencyKeyException;
 import dev.cauce.orchestration.exception.InvalidPendingInvocationTransitionException;
 import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
@@ -77,6 +78,7 @@ public class GlobalExceptionHandler {
             Map.entry(InvalidConversationTransitionException.class, "invalid_conversation_transition"),
             Map.entry(InvalidChannelTypeException.class, "invalid_channel_type"),
             Map.entry(InvalidTriggerMessageException.class, "invalid_trigger_message"),
+            Map.entry(InvalidIdempotencyKeyException.class, "invalid_idempotency_key"),
             // 409 CONFLICT
             Map.entry(ApiKeyAlreadyRevokedException.class, "api_key_already_revoked"),
             Map.entry(MaxRetriesExceededException.class, "max_retries_exceeded"),
@@ -109,7 +111,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             InvalidConversationTransitionException.class,
             InvalidChannelTypeException.class,
-            InvalidTriggerMessageException.class})
+            InvalidTriggerMessageException.class,
+            InvalidIdempotencyKeyException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex) {
         return clientError(HttpStatus.BAD_REQUEST, ex);
     }

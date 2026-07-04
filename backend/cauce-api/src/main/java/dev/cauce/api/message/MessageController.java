@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -45,11 +46,18 @@ public class MessageController {
         this.messageService = messageService;
     }
 
+    /**
+     * The optional {@code Idempotency-Key} header deduplicates retries: a repeated POST with
+     * the same key for the same agent returns the original {@code 202} ids and ingests
+     * nothing new. Matching is by key only — the body is not fingerprinted.
+     */
     @PostMapping("/v1/agents/{agentId}/messages")
     public ResponseEntity<PostMessageResponse> post(@PathVariable UUID agentId,
-                                                    @Valid @RequestBody PostMessageRequest request) {
+                                                    @Valid @RequestBody PostMessageRequest request,
+                                                    @RequestHeader(value = "Idempotency-Key", required = false)
+                                                    String idempotencyKey) {
         InboundMessageResult result = inboundMessageService.ingest(
-                agentId, API_CHANNEL, request.externalIdentityRef(), request.content());
+                agentId, API_CHANNEL, request.externalIdentityRef(), request.content(), idempotencyKey);
         return ResponseEntity.accepted().body(PostMessageResponse.from(result));
     }
 

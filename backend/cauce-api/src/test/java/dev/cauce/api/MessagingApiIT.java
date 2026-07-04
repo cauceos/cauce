@@ -184,6 +184,36 @@ class MessagingApiIT extends AbstractApiIntegrationTest {
     }
 
     @Test
+    void postMessage_withSameIdempotencyKey_replaysTheOriginal202() throws Exception {
+        PostMessageRequest request = new PostMessageRequest("user-1", "Hola");
+        String first = mockMvc.perform(postAs(clientAuth, "/v1/agents/" + agentId + "/messages",
+                        request).header("Idempotency-Key", "retry-1"))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
+        String replay = mockMvc.perform(postAs(clientAuth, "/v1/agents/" + agentId + "/messages",
+                        request).header("Idempotency-Key", "retry-1"))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
+
+        // Same wire body (conversation_id and message_id), and only one USER message ingested.
+        assertThat(objectMapper.readTree(replay)).isEqualTo(objectMapper.readTree(first));
+        UUID conversationId = UUID.fromString(
+                objectMapper.readTree(first).get("conversation_id").asText());
+        Integer userMessages = jdbc.queryForObject(
+                "SELECT count(*) FROM messages WHERE conversation_id = ? AND role = 'USER'",
+                Integer.class, conversationId);
+        assertThat(userMessages).isEqualTo(1);
+    }
+
+    @Test
+    void postMessage_withBlankIdempotencyKey_returns400() throws Exception {
+        mockMvc.perform(postAs(clientAuth, "/v1/agents/" + agentId + "/messages",
+                        new PostMessageRequest("user-1", "Hola")).header("Idempotency-Key", "  "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_idempotency_key"));
+    }
+
+    @Test
     void postMessage_withBlankContent_returns400() throws Exception {
         mockMvc.perform(postAs(clientAuth, "/v1/agents/" + agentId + "/messages",
                         new PostMessageRequest("user-1", "  ")))
