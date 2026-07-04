@@ -2,6 +2,8 @@ package dev.cauce.orchestration.service;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentNotFoundException;
+import dev.cauce.core.conversation.AgentReplyDispatcher;
+import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageNotFoundException;
@@ -37,6 +39,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
@@ -66,7 +69,13 @@ import org.springframework.stereotype.Service;
  * <p><b>Events:</b> each step publishes its lifecycle event (see
  * {@code dev.cauce.orchestration.events}) synchronously, always outside any transaction and
  * after the step's messages have committed. Purely observational: emission changes no
- * behaviour and there are no consumers yet.
+ * behaviour.
+ *
+ * <p><b>Outbound delivery:</b> after the final AGENT message commits, the loop hands it to the
+ * {@link AgentReplyDispatcher} port (if an implementation is on the classpath) so the channel
+ * layer can deliver it back through the conversation's channel of origin. Deliberately an
+ * explicit port, NOT an event consumer — the event stream stays observational. Best-effort and
+ * guarded: dispatch failures are logged and never fail the invocation.
  */
 @Service
 public class OrchestratorService {
@@ -91,6 +100,7 @@ public class OrchestratorService {
     private final Environment environment;
     private final OrchestrationErrorRecorder errorRecorder;
     private final ApplicationEventPublisher eventPublisher;
+    private final ObjectProvider<AgentReplyDispatcher> replyDispatcher;
 
     public OrchestratorService(ConversationGateway conversationGateway,
                                LlmProviderRegistry llmProviderRegistry,
@@ -98,7 +108,8 @@ public class OrchestratorService {
                                ToolRegistry toolRegistry,
                                Environment environment,
                                OrchestrationErrorRecorder errorRecorder,
-                               ApplicationEventPublisher eventPublisher) {
+                               ApplicationEventPublisher eventPublisher,
+                               ObjectProvider<AgentReplyDispatcher> replyDispatcher) {
         this.conversationGateway = conversationGateway;
         this.llmProviderRegistry = llmProviderRegistry;
         this.contextBuilder = contextBuilder;
@@ -106,6 +117,7 @@ public class OrchestratorService {
         this.environment = environment;
         this.errorRecorder = errorRecorder;
         this.eventPublisher = eventPublisher;
+        this.replyDispatcher = replyDispatcher;
     }
 
     /**
@@ -164,6 +176,7 @@ public class OrchestratorService {
                         Message.from(conversationId, MessageRole.AGENT, response.content()));
                 eventPublisher.publishEvent(new InvocationCompleted(invocationId, iteration + 1,
                         finalMessage.id(), Instant.now()));
+                dispatchReply(loaded.conversation(), finalMessage);
                 return finalMessage;
             }
 
@@ -194,6 +207,27 @@ public class OrchestratorService {
         log.warn("Conversation {} hit the tool-iteration cap ({})", conversationId, MAX_TOOL_ITERATIONS);
         errorRecorder.recordError(conversationId, error);
         throw new MaxToolIterationsExceededException(error);
+    }
+
+    /**
+     * Hands the committed final reply to the outbound dispatch port (channel delivery), if an
+     * implementation is present. Explicit-port trigger by design: the event stream stays
+     * observational. Guarded so a dispatcher bug can never fail an invocation whose reply is
+     * already persisted — the port contract is best-effort and non-blocking (the channel layer
+     * runs the actual delivery on its own executor).
+     */
+    private void dispatchReply(Conversation conversation, Message finalMessage) {
+        AgentReplyDispatcher dispatcher = replyDispatcher.getIfAvailable();
+        if (dispatcher == null) {
+            return;
+        }
+        try {
+            dispatcher.dispatchAgentReply(conversation, finalMessage);
+        } catch (RuntimeException e) {
+            log.warn("Outbound dispatch failed for conversation {} (reply {} stays readable "
+                    + "via the messages API): {}", conversation.id(), finalMessage.id(),
+                    e.toString(), e);
+        }
     }
 
     private LlmResponse invoke(LlmProvider provider, LlmInvocation invocation,

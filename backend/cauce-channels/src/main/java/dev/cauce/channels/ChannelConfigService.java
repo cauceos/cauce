@@ -1,6 +1,7 @@
 package dev.cauce.channels;
 
 import dev.cauce.channels.config.ChannelConfig;
+import dev.cauce.channels.config.ChannelConfigStatus;
 import dev.cauce.channels.persistence.ChannelConfigMapper;
 import dev.cauce.channels.persistence.ChannelConfigRepository;
 import dev.cauce.channels.spi.ChannelAdapterRegistry;
@@ -11,6 +12,7 @@ import dev.cauce.core.conversation.InvalidChannelTypeException;
 import dev.cauce.core.tenant.NoTenantContext;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentRepository;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -86,5 +88,21 @@ public class ChannelConfigService {
     public Optional<ChannelConfig> resolveActiveChannelConfig(UUID configId) {
         return channelConfigRepository.resolveActiveChannelConfig(configId)
                 .map(channelConfigMapper::toDomain);
+    }
+
+    /**
+     * The ACTIVE configs binding {@code channelType} to {@code agentId}, RLS-filtered under
+     * the current tenant context. Used by outbound delivery to resolve the channel instance
+     * a conversation's reply must go back through; more than one result means the origin is
+     * ambiguous (conversations do not record their originating config yet) and the caller
+     * must not guess.
+     */
+    @Transactional(readOnly = true)
+    public List<ChannelConfig> findActiveConfigs(UUID agentId, String channelType) {
+        return channelConfigRepository
+                .findByAgentIdAndChannelTypeAndStatus(agentId, channelType, ChannelConfigStatus.ACTIVE)
+                .stream()
+                .map(channelConfigMapper::toDomain)
+                .toList();
     }
 }

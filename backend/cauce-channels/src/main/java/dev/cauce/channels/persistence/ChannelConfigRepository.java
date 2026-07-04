@@ -1,5 +1,6 @@
 package dev.cauce.channels.persistence;
 
+import dev.cauce.channels.config.ChannelConfigStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +23,9 @@ import org.springframework.data.repository.query.Param;
 public interface ChannelConfigRepository extends JpaRepository<ChannelConfigEntity, UUID> {
 
     List<ChannelConfigEntity> findByAgentId(UUID agentId);
+
+    List<ChannelConfigEntity> findByAgentIdAndChannelTypeAndStatus(
+            UUID agentId, String channelType, ChannelConfigStatus status);
 
     /**
      * Resolves the ACTIVE config {@code configId} regardless of tenant context, via the

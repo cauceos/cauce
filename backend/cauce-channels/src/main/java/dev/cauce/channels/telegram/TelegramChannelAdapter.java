@@ -3,14 +3,23 @@ package dev.cauce.channels.telegram;
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.cauce.channels.config.ChannelConfig;
+import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelInboundMessage;
+import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.spi.InboundChannelAdapter;
+import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
-import org.springframework.stereotype.Component;
 
 /**
  * Inbound half of the Telegram channel: authenticates the webhook by the
@@ -29,10 +38,14 @@ import org.springframework.stereotype.Component;
  * per-chat and would collide across chats; the config prefix keeps two bots bound to the
  * same agent from colliding in the per-agent dedup table).
  *
- * <p>The outbound half ({@code sendMessage}) lands in the outbound commit.
+ * <p>The outbound half delivers via {@code sendMessage}: {@code POST
+ * {base-url}/bot{token}/sendMessage} with the conversation's {@code external_identity_ref}
+ * as {@code chat_id}. The bot token is the config's credential; failures surface as
+ * {@link dev.cauce.channels.spi.ChannelDeliveryException} for the (best-effort) caller.
+ * Registered as a bean by {@code ChannelsConfig} (it carries the HTTP client and
+ * properties, mirroring the LLM adapter configurations).
  */
-@Component
-public class TelegramChannelAdapter implements InboundChannelAdapter {
+public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundChannelAdapter {
 
     /** Header Telegram sends on every webhook request when a secret_token is set. */
     static final String SECRET_TOKEN_HEADER = "X-Telegram-Bot-Api-Secret-Token";
@@ -43,9 +56,14 @@ public class TelegramChannelAdapter implements InboundChannelAdapter {
     // inherit the application's Jackson configuration (e.g. the global snake_case strategy).
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ApiKeyHasher hasher;
+    private final HttpClient httpClient;
+    private final TelegramProperties properties;
 
-    public TelegramChannelAdapter(ApiKeyHasher hasher) {
+    public TelegramChannelAdapter(ApiKeyHasher hasher, HttpClient httpClient,
+                                  TelegramProperties properties) {
         this.hasher = hasher;
+        this.httpClient = httpClient;
+        this.properties = properties;
     }
 
     @Override
@@ -84,5 +102,44 @@ public class TelegramChannelAdapter implements InboundChannelAdapter {
                 String.valueOf(chatId.asLong()),
                 text.asText(),
                 config.id() + ":" + updateId.asLong()));
+    }
+
+    @Override
+    public void deliver(ChannelOutboundMessage message, ChannelConfig config) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("chat_id", message.externalIdentityRef());
+        payload.put("text", message.content());
+
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create(properties.getBaseUrl() + "/bot" + config.credential() + "/sendMessage"))
+                .timeout(properties.getTimeout())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> response;
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new ChannelDeliveryException("HTTP call to Telegram failed", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ChannelDeliveryException("Interrupted during Telegram delivery", e);
+        }
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            // The response body carries Telegram's error description, never our token.
+            throw new ChannelDeliveryException("Telegram sendMessage returned HTTP "
+                    + response.statusCode() + ": " + response.body());
+        }
+        JsonNode body;
+        try {
+            body = objectMapper.readTree(response.body());
+        } catch (JacksonException e) {
+            throw new ChannelDeliveryException("Malformed Telegram sendMessage response", e);
+        }
+        if (!body.path("ok").asBoolean(false)) {
+            throw new ChannelDeliveryException("Telegram sendMessage rejected: "
+                    + body.path("description").asText("(no description)"));
+        }
     }
 }

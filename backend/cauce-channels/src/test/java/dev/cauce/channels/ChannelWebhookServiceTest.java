@@ -47,7 +47,7 @@ class ChannelWebhookServiceTest {
         inboundMessageService = mock(InboundMessageService.class);
         when(adapter.channelType()).thenReturn("telegram");
         service = new ChannelWebhookService(channelConfigService,
-                new ChannelAdapterRegistry(List.of(adapter)), inboundMessageService);
+                new ChannelAdapterRegistry(List.of(adapter), List.of()), inboundMessageService);
         config = ChannelConfig.create(UUID.randomUUID(), UUID.randomUUID(), "telegram",
                 "token", "hash");
         TenantContext.clear();

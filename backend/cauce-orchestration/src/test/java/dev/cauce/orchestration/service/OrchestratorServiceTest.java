@@ -11,6 +11,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.core.agent.Agent;
+import dev.cauce.core.conversation.AgentReplyDispatcher;
+import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
@@ -51,6 +53,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mock.env.MockEnvironment;
 
@@ -70,8 +73,12 @@ class OrchestratorServiceTest {
     private OrchestrationErrorRecorder errorRecorder;
     private LlmProvider provider;
     private ApplicationEventPublisher eventPublisher;
+    private AgentReplyDispatcher replyDispatcher;
+    private ObjectProvider<AgentReplyDispatcher> replyDispatcherProvider;
+    private Conversation conversation;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         gateway = Mockito.mock(ConversationGateway.class);
         registry = Mockito.mock(LlmProviderRegistry.class);
@@ -79,6 +86,9 @@ class OrchestratorServiceTest {
         provider = Mockito.mock(LlmProvider.class);
         when(provider.id()).thenReturn(PROVIDER);
         eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
+        replyDispatcher = Mockito.mock(AgentReplyDispatcher.class);
+        replyDispatcherProvider = Mockito.mock(ObjectProvider.class);
+        when(replyDispatcherProvider.getIfAvailable()).thenReturn(replyDispatcher);
     }
 
     @Test
@@ -329,11 +339,68 @@ class OrchestratorServiceTest {
                 .hasExactlyElementsOfTypes(ContextAssembled.class, LlmInvoked.class);
     }
 
+    // === OUTBOUND DISPATCH (explicit port) ===
+
+    @Test
+    void respondToMessage_finalReply_dispatchesItThroughTheReplyPort() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(reply("Hola, soy un agente"));
+
+        Message result = serviceWith(emptyRegistry())
+                .respondToMessage(invocationId, conversationId, triggerId);
+
+        verify(replyDispatcher).dispatchAgentReply(conversation, result);
+    }
+
+    @Test
+    void respondToMessage_whenDispatcherThrows_stillReturnsThePersistedReply() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(reply("Hola"));
+        Mockito.doThrow(new IllegalStateException("dispatcher bug"))
+                .when(replyDispatcher).dispatchAgentReply(any(), any());
+
+        Message result = serviceWith(emptyRegistry())
+                .respondToMessage(invocationId, conversationId, triggerId);
+
+        // The reply is already committed; a dispatcher bug must never fail the invocation.
+        assertThat(result.content()).isEqualTo("Hola");
+        verifyNoInteractions(errorRecorder);
+    }
+
+    @Test
+    void respondToMessage_withoutADispatcherOnTheClasspath_completesNormally() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(reply("Hola"));
+        when(replyDispatcherProvider.getIfAvailable()).thenReturn(null);
+
+        Message result = serviceWith(emptyRegistry())
+                .respondToMessage(invocationId, conversationId, triggerId);
+
+        assertThat(result.content()).isEqualTo("Hola");
+    }
+
+    @Test
+    void respondToMessage_whenProviderFails_neverDispatches() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any()))
+                .thenThrow(new LlmRateLimitException(PROVIDER, MODEL, "429 throttled"));
+
+        assertThatThrownBy(() -> serviceWith(emptyRegistry())
+                .respondToMessage(invocationId, conversationId, triggerId))
+                .isInstanceOf(LlmRateLimitException.class);
+
+        verifyNoInteractions(replyDispatcher);
+    }
+
     // === helpers ===
 
     private OrchestratorService serviceWith(ToolRegistry toolRegistry) {
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
-                new MockEnvironment(), errorRecorder, eventPublisher);
+                new MockEnvironment(), errorRecorder, eventPublisher, replyDispatcherProvider);
     }
 
     /** All lifecycle events published so far, in publication order. */
@@ -346,9 +413,10 @@ class OrchestratorServiceTest {
 
     private void stubLoadAndEchoAppend() {
         Agent agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL);
+        conversation = Conversation.start(agent.id(), "telegram", "987654321");
         Message user = Message.from(conversationId, MessageRole.USER, "Hola");
         when(gateway.load(conversationId, triggerId))
-                .thenReturn(new LoadedConversation(agent, List.of(user)));
+                .thenReturn(new LoadedConversation(conversation, agent, List.of(user)));
         when(gateway.append(any())).thenAnswer(call -> call.getArgument(0));
     }
 

@@ -51,7 +51,7 @@ class ChannelConfigServiceTest {
         InboundChannelAdapter telegram = mock(InboundChannelAdapter.class);
         when(telegram.channelType()).thenReturn("telegram");
         service = new ChannelConfigService(repository, new ChannelConfigMapper(),
-                agentRepository, new ChannelAdapterRegistry(List.of(telegram)), FAKE_HASHER);
+                agentRepository, new ChannelAdapterRegistry(List.of(telegram), List.of()), FAKE_HASHER);
         agentId = UUID.randomUUID();
         tenantId = UUID.randomUUID();
         when(repository.save(any(ChannelConfigEntity.class)))

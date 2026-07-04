@@ -2,6 +2,7 @@ package dev.cauce.orchestration.service;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentNotFoundException;
+import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageNotFoundException;
@@ -9,6 +10,7 @@ import dev.cauce.core.message.MessageRole;
 import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
+import dev.cauce.memory.conversation.ConversationMapper;
 import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageMapper;
 import dev.cauce.memory.message.MessageRepository;
@@ -36,25 +38,32 @@ public class ConversationGateway {
     private static final Logger log = LoggerFactory.getLogger(ConversationGateway.class);
 
     private final ConversationRepository conversationRepository;
+    private final ConversationMapper conversationMapper;
     private final MessageRepository messageRepository;
     private final MessageMapper messageMapper;
     private final AgentRepository agentRepository;
     private final AgentMapper agentMapper;
 
     public ConversationGateway(ConversationRepository conversationRepository,
+                               ConversationMapper conversationMapper,
                                MessageRepository messageRepository,
                                MessageMapper messageMapper,
                                AgentRepository agentRepository,
                                AgentMapper agentMapper) {
         this.conversationRepository = conversationRepository;
+        this.conversationMapper = conversationMapper;
         this.messageRepository = messageRepository;
         this.messageMapper = messageMapper;
         this.agentRepository = agentRepository;
         this.agentMapper = agentMapper;
     }
 
-    /** A conversation loaded for orchestration: its agent and its chronological message history. */
-    public record LoadedConversation(Agent agent, List<Message> messages) {
+    /**
+     * A conversation loaded for orchestration: the conversation itself (its channel and
+     * external identity feed the outbound dispatch), its agent, and its chronological
+     * message history.
+     */
+    public record LoadedConversation(Conversation conversation, Agent agent, List<Message> messages) {
     }
 
     /**
@@ -94,7 +103,7 @@ public class ConversationGateway {
                             "No agent found for id " + conversation.getAgentId());
                 });
 
-        return new LoadedConversation(agent, messages);
+        return new LoadedConversation(conversationMapper.toDomain(conversation), agent, messages);
     }
 
     /**

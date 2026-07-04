@@ -26,6 +26,7 @@ dependencies {
     // ITs seed the tenant->agent hierarchy through the tenancy services (implementation
     // deps are not transitive at compile time, so orchestration's tenancy does not leak here).
     testImplementation(project(":cauce-tenancy"))
+    testImplementation(libs.wiremock)
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:junit-jupiter")

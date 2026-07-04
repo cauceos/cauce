@@ -44,6 +44,8 @@ dependencies {
     // ITs assert on the invocation lifecycle event stream (implementation deps are not
     // transitive at compile time, so orchestration's events module does not leak here).
     testImplementation(project(":cauce-orchestration-events"))
+    // The Telegram round-trip IT stubs the Bot API with WireMock.
+    testImplementation(libs.wiremock)
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:junit-jupiter")

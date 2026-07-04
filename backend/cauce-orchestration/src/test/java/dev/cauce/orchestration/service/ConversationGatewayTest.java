@@ -19,6 +19,7 @@ import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
+import dev.cauce.memory.conversation.ConversationMapper;
 import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageEntity;
 import dev.cauce.memory.message.MessageMapper;
@@ -54,8 +55,8 @@ class ConversationGatewayTest {
         conversationRepository = Mockito.mock(ConversationRepository.class);
         messageRepository = Mockito.mock(MessageRepository.class);
         agentRepository = Mockito.mock(AgentRepository.class);
-        gateway = new ConversationGateway(conversationRepository, messageRepository,
-                new MessageMapper(), agentRepository, new AgentMapper());
+        gateway = new ConversationGateway(conversationRepository, new ConversationMapper(),
+                messageRepository, new MessageMapper(), agentRepository, new AgentMapper());
     }
 
     @Test
@@ -69,6 +70,10 @@ class ConversationGatewayTest {
         assertThat(loaded.agent().id()).isEqualTo(agentId);
         assertThat(loaded.agent().modelName()).isEqualTo(MODEL);
         assertThat(loaded.messages()).extracting(Message::content).containsExactly("Hola");
+        // The conversation itself travels too: outbound dispatch needs its channel identity.
+        assertThat(loaded.conversation().id()).isEqualTo(conversationId);
+        assertThat(loaded.conversation().channelType()).isEqualTo("whatsapp");
+        assertThat(loaded.conversation().externalIdentityRef()).isEqualTo("+34600000000");
     }
 
     @Test

@@ -3,15 +3,30 @@ package dev.cauce.channels.telegram;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.serverError;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
+
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import dev.cauce.channels.config.ChannelConfig;
+import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelInboundMessage;
+import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
+import java.net.http.HttpClient;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
+@WireMockTest
 class TelegramChannelAdapterTest {
 
     /** Deterministic stand-in for the HMAC hasher: hash(x) = "hash:" + x. */
@@ -27,11 +42,18 @@ class TelegramChannelAdapterTest {
         }
     };
 
-    private final TelegramChannelAdapter adapter = new TelegramChannelAdapter(FAKE_HASHER);
+    private final TelegramChannelAdapter adapter =
+            new TelegramChannelAdapter(FAKE_HASHER, HttpClient.newHttpClient(), new TelegramProperties());
 
     private final ChannelConfig config = ChannelConfig.create(
             java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), "telegram",
             "12345:bot-token", FAKE_HASHER.hash("s3cret"));
+
+    private TelegramChannelAdapter adapterAgainst(WireMockRuntimeInfo wm) {
+        TelegramProperties properties = new TelegramProperties();
+        properties.setBaseUrl(wm.getHttpBaseUrl());
+        return new TelegramChannelAdapter(FAKE_HASHER, HttpClient.newHttpClient(), properties);
+    }
 
     @Test
     void channelType_always_isTelegram() {
@@ -129,5 +151,40 @@ class TelegramChannelAdapterTest {
                 "{\"message\": {\"chat\": {\"id\": 1}, \"text\": \"hi\"}}", config))
                 .isInstanceOf(ChannelPayloadException.class)
                 .hasMessageContaining("update_id");
+    }
+
+    // === OUTBOUND (deliver) ===
+
+    @Test
+    void deliver_textReply_postsSendMessageWithChatIdAndToken(WireMockRuntimeInfo wm) {
+        stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson("{\"ok\": true}")));
+
+        adapterAgainst(wm).deliver(
+                new ChannelOutboundMessage("987654321", "Hola, soy un agente"), config);
+
+        verify(postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage"))
+                .withRequestBody(equalToJson(
+                        "{\"chat_id\": \"987654321\", \"text\": \"Hola, soy un agente\"}")));
+    }
+
+    @Test
+    void deliver_non2xx_throwsChannelDeliveryException(WireMockRuntimeInfo wm) {
+        stubFor(post("/bot12345:bot-token/sendMessage").willReturn(serverError()));
+
+        assertThatThrownBy(() -> adapterAgainst(wm).deliver(
+                new ChannelOutboundMessage("987654321", "Hola"), config))
+                .isInstanceOf(ChannelDeliveryException.class)
+                .hasMessageContaining("500");
+    }
+
+    @Test
+    void deliver_okFalse_throwsChannelDeliveryException(WireMockRuntimeInfo wm) {
+        stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson(
+                "{\"ok\": false, \"description\": \"Bad Request: chat not found\"}")));
+
+        assertThatThrownBy(() -> adapterAgainst(wm).deliver(
+                new ChannelOutboundMessage("987654321", "Hola"), config))
+                .isInstanceOf(ChannelDeliveryException.class)
+                .hasMessageContaining("chat not found");
     }
 }

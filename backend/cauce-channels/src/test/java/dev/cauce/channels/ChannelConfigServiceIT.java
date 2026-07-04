@@ -126,6 +126,22 @@ class ChannelConfigServiceIT extends AbstractChannelsIntegrationTest {
         assertThat(channelConfigService.resolveActiveChannelConfig(UUID.randomUUID())).isEmpty();
     }
 
+    @Test
+    void findActiveConfigs_underTenantContext_returnsOnlyActiveBindings() {
+        ChannelConfig created = createAsClientA().config();
+        ChannelConfig disabled = createAsClientA().config();
+        jdbc.update("UPDATE channel_configs SET status = 'DISABLED' WHERE id = ?", disabled.id());
+
+        TenantContext.setCurrentTenantId(clientA.id());
+        try {
+            assertThat(channelConfigService.findActiveConfigs(agent.id(), "telegram"))
+                    .extracting(ChannelConfig::id)
+                    .containsExactly(created.id());
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
     private ChannelConfigCreationResult createAsClientA() {
         TenantContext.setCurrentTenantId(clientA.id());
         try {

@@ -13,7 +13,7 @@ class ChannelAdapterRegistryTest {
     @Test
     void inboundAdapter_registeredType_isFoundByChannelType() {
         InboundChannelAdapter telegram = adapterFor("telegram");
-        ChannelAdapterRegistry registry = new ChannelAdapterRegistry(List.of(telegram));
+        ChannelAdapterRegistry registry = new ChannelAdapterRegistry(List.of(telegram), List.of());
 
         assertThat(registry.inboundAdapter("telegram")).contains(telegram);
         assertThat(registry.supportedChannelTypes()).containsExactly("telegram");
@@ -21,14 +21,14 @@ class ChannelAdapterRegistryTest {
 
     @Test
     void inboundAdapter_unknownType_isEmpty() {
-        ChannelAdapterRegistry registry = new ChannelAdapterRegistry(List.of(adapterFor("telegram")));
+        ChannelAdapterRegistry registry = new ChannelAdapterRegistry(List.of(adapterFor("telegram")), List.of());
 
         assertThat(registry.inboundAdapter("whatsapp")).isEmpty();
     }
 
     @Test
     void requireInboundAdapter_unknownType_throwsWithAvailableTypes() {
-        ChannelAdapterRegistry registry = new ChannelAdapterRegistry(List.of(adapterFor("telegram")));
+        ChannelAdapterRegistry registry = new ChannelAdapterRegistry(List.of(adapterFor("telegram")), List.of());
 
         assertThatThrownBy(() -> registry.requireInboundAdapter("whatsapp"))
                 .isInstanceOf(IllegalStateException.class)
@@ -41,8 +41,27 @@ class ChannelAdapterRegistryTest {
         List<InboundChannelAdapter> duplicates =
                 List.of(adapterFor("telegram"), adapterFor("telegram"));
 
-        assertThatThrownBy(() -> new ChannelAdapterRegistry(duplicates))
+        assertThatThrownBy(() -> new ChannelAdapterRegistry(duplicates, List.of()))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void outboundAdapter_registeredType_isFoundByChannelType() {
+        OutboundChannelAdapter telegramOutbound = mock(OutboundChannelAdapter.class);
+        when(telegramOutbound.channelType()).thenReturn("telegram");
+        ChannelAdapterRegistry registry =
+                new ChannelAdapterRegistry(List.of(), List.of(telegramOutbound));
+
+        assertThat(registry.outboundAdapter("telegram")).contains(telegramOutbound);
+    }
+
+    @Test
+    void outboundAdapter_inboundOnlyChannel_isEmpty() {
+        ChannelAdapterRegistry registry =
+                new ChannelAdapterRegistry(List.of(adapterFor("telegram")), List.of());
+
+        assertThat(registry.outboundAdapter("telegram")).isEmpty();
+        assertThat(registry.inboundAdapter("telegram")).isPresent();
     }
 
     private static InboundChannelAdapter adapterFor(String channelType) {

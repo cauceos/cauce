@@ -10,23 +10,27 @@ import org.springframework.stereotype.Component;
 
 /**
  * Registry of the channel adapters available at runtime. Spring injects every
- * {@link InboundChannelAdapter} bean, keyed by {@link InboundChannelAdapter#channelType()}
- * — the exact mirror of {@code LlmProviderRegistry}/{@code ToolRegistry}. Two adapters
- * claiming the same channel type fail startup (duplicate key). If no adapter is active the
- * registry is simply empty.
- *
- * <p>Outbound adapters get their own lookup when the outbound commit lands; a channel may
- * legitimately implement only one half.
+ * {@link InboundChannelAdapter} and {@link OutboundChannelAdapter} bean, each keyed by its
+ * channel type — the exact mirror of {@code LlmProviderRegistry}/{@code ToolRegistry}. Two
+ * adapters claiming the same channel type on the same half fail startup (duplicate key). A
+ * channel may legitimately implement only one half: the built-in {@code "api"} channel has
+ * neither, and an inbound-only channel simply has no outbound entry (delivery is a clean
+ * no-op).
  */
 @Component
 public class ChannelAdapterRegistry {
 
     private final Map<String, InboundChannelAdapter> inboundByType;
+    private final Map<String, OutboundChannelAdapter> outboundByType;
 
-    public ChannelAdapterRegistry(List<InboundChannelAdapter> inboundAdapters) {
+    public ChannelAdapterRegistry(List<InboundChannelAdapter> inboundAdapters,
+                                  List<OutboundChannelAdapter> outboundAdapters) {
         this.inboundByType = inboundAdapters.stream()
                 .collect(Collectors.toUnmodifiableMap(
                         InboundChannelAdapter::channelType, Function.identity()));
+        this.outboundByType = outboundAdapters.stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        OutboundChannelAdapter::channelType, Function.identity()));
     }
 
     /** The inbound adapter for {@code channelType}, if registered. */
@@ -52,5 +56,13 @@ public class ChannelAdapterRegistry {
     /** The channel types with a registered inbound adapter. */
     public Set<String> supportedChannelTypes() {
         return inboundByType.keySet();
+    }
+
+    /**
+     * The outbound adapter for {@code channelType}, if registered. Empty for channels
+     * without a delivery half (the caller treats that as a no-op, not an error).
+     */
+    public Optional<OutboundChannelAdapter> outboundAdapter(String channelType) {
+        return Optional.ofNullable(outboundByType.get(channelType));
     }
 }
