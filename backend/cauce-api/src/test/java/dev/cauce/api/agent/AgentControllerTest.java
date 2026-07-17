@@ -1,5 +1,6 @@
 package dev.cauce.api.agent;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -129,14 +130,58 @@ class AgentControllerTest {
     }
 
     @Test
-    void listAgents_returns200List() throws Exception {
+    void listAgents_returns200Page() throws Exception {
         UUID tenantId = UUID.randomUUID();
         Agent agent = Agent.create(tenantId, "Bot", "You are helpful", "anthropic", "claude-opus-4-8");
-        given(agentService.listAgentsForTenant(tenantId)).willReturn(List.of(agent));
+        given(agentService.listAgentsForTenant(tenantId, null, 51)).willReturn(List.of(agent));
 
         mockMvc.perform(get("/v1/tenants/" + tenantId + "/agents"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].status").value("DRAFT"));
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].status").value("DRAFT"))
+                .andExpect(jsonPath("$.next_cursor").value(nullValue()));
+    }
+
+    @Test
+    void listAgents_withCursor_passesParsedCursorAndLimitPlusOneToService() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID cursor = UUID.randomUUID();
+        given(agentService.listAgentsForTenant(tenantId, cursor, 3)).willReturn(List.of());
+
+        mockMvc.perform(get("/v1/tenants/" + tenantId + "/agents")
+                        .param("limit", "2").param("cursor", cursor.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0))
+                .andExpect(jsonPath("$.next_cursor").value(nullValue()));
+    }
+
+    @Test
+    void listAgents_moreRowsThanLimit_returnsNextCursor() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        Agent a = Agent.create(tenantId, "A", "p", "anthropic", "claude-opus-4-8");
+        Agent b = Agent.create(tenantId, "B", "p", "anthropic", "claude-opus-4-8");
+        Agent c = Agent.create(tenantId, "C", "p", "anthropic", "claude-opus-4-8");
+        given(agentService.listAgentsForTenant(tenantId, null, 3)).willReturn(List.of(a, b, c));
+
+        mockMvc.perform(get("/v1/tenants/" + tenantId + "/agents").param("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[1].id").value(b.id().toString()))
+                .andExpect(jsonPath("$.next_cursor").value(b.id().toString()));
+    }
+
+    @Test
+    void listAgents_invalidCursor_returns400InvalidCursor() throws Exception {
+        mockMvc.perform(get("/v1/tenants/" + UUID.randomUUID() + "/agents")
+                        .param("cursor", "not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_cursor"));
+    }
+
+    @Test
+    void listAgents_limitZero_returns400() throws Exception {
+        mockMvc.perform(get("/v1/tenants/" + UUID.randomUUID() + "/agents").param("limit", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("bad_request"));
     }
 }

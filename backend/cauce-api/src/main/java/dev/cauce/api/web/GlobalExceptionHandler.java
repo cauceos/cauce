@@ -84,6 +84,7 @@ public class GlobalExceptionHandler {
             Map.entry(InvalidTriggerMessageException.class, "invalid_trigger_message"),
             Map.entry(InvalidIdempotencyKeyException.class, "invalid_idempotency_key"),
             Map.entry(ChannelPayloadException.class, "channel_payload_invalid"),
+            Map.entry(InvalidCursorException.class, "invalid_cursor"),
             // 401 UNAUTHORIZED
             Map.entry(WebhookAuthenticationException.class, "webhook_authentication_failed"),
             // 409 CONFLICT
@@ -121,7 +122,8 @@ public class GlobalExceptionHandler {
             InvalidChannelTypeException.class,
             InvalidTriggerMessageException.class,
             InvalidIdempotencyKeyException.class,
-            ChannelPayloadException.class})
+            ChannelPayloadException.class,
+            InvalidCursorException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex) {
         return clientError(HttpStatus.BAD_REQUEST, ex);
     }

@@ -193,8 +193,8 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
         mockMvc.perform(get("/v1/conversations/" + conversationId + "/messages")
                         .header(HttpHeaders.AUTHORIZATION, clientAuth))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[1].role").value("AGENT"))
-                .andExpect(jsonPath("$[1].content").value(FakeLlmProvider.REPLY));
+                .andExpect(jsonPath("$.data[1].role").value("AGENT"))
+                .andExpect(jsonPath("$.data[1].content").value(FakeLlmProvider.REPLY));
     }
 
     // --- helpers ---

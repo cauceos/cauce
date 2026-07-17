@@ -1,5 +1,7 @@
 package dev.cauce.api.agent;
 
+import dev.cauce.api.web.PageParams;
+import dev.cauce.api.web.PageResponse;
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.tenancy.AgentService;
 import jakarta.validation.Valid;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -43,9 +46,14 @@ public class AgentController {
                 new AgentNotFoundException("No agent found for id " + id)));
     }
 
-    // TODO: paginate once agent sets can grow large; returns all agents of the tenant for now.
     @GetMapping("/v1/tenants/{tenantId}/agents")
-    public List<AgentResponse> list(@PathVariable UUID tenantId) {
-        return agentService.listAgentsForTenant(tenantId).stream().map(AgentResponse::from).toList();
+    public PageResponse<AgentResponse> list(@PathVariable UUID tenantId,
+                                            @RequestParam(defaultValue = "50") int limit,
+                                            @RequestParam(required = false) String cursor) {
+        PageParams page = PageParams.parse(limit, cursor);
+        List<AgentResponse> fetched = agentService
+                .listAgentsForTenant(tenantId, page.afterId(), page.fetchSize())
+                .stream().map(AgentResponse::from).toList();
+        return PageResponse.of(fetched, page.limit(), AgentResponse::id);
     }
 }

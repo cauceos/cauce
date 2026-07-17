@@ -36,7 +36,7 @@ See [README.md](README.md) for the user-facing project description.
 
 ## Repository structure
 
-> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V15), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint, the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop) with its first consumer (Micrometer metrics in `cauce-observability`, exposed via the authenticated `/actuator/metrics`; no exporter yet), and the channel layer in `cauce-channels`: the complete channel SPI (inbound + outbound halves), the `ChannelConfig` agent/tenant binding (V16, RLS + SECURITY DEFINER webhook resolution), and the full Telegram round-trip (webhook → normalization → idempotent ingest, and best-effort outbound delivery of the agent reply via the `AgentReplyDispatcher` port in cauce-core — explicit port, not an event consumer). `cauce-evals`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-07-04): 653 tests, 0 failures.
+> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V18), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint (202 with `invocation_id`, an invocation-status endpoint with a public failure vocabulary backed by the V17 persisted failure taxonomy, and uniform keyset pagination on the three list endpoints), the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop) with its first consumer (Micrometer metrics in `cauce-observability`, exposed via the authenticated `/actuator/metrics`; no exporter yet), and the channel layer in `cauce-channels`: the complete channel SPI (inbound + outbound halves), the `ChannelConfig` agent/tenant binding (V16, RLS + SECURITY DEFINER webhook resolution), and the full Telegram round-trip (webhook → normalization → idempotent ingest, and best-effort outbound delivery of the agent reply via the `AgentReplyDispatcher` port in cauce-core — explicit port, not an event consumer). `cauce-evals`, `cauce-governance`, and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-07-17): 693 tests, 0 failures.
 
 **Backend modules** (Gradle subprojects under `backend/`; the Gradle build — `settings.gradle.kts`, wrapper, `gradle/` — lives under `backend/`, not the repo root):
 
@@ -312,16 +312,30 @@ All `/v1/**` endpoints require Bearer API-key auth; JSON is globally snake_case.
 entities surface as 404: "does not exist" and "not visible to you" are deliberately
 indistinguishable.
 
+**Pagination (uniform keyset contract).** The three list endpoints below (tenant children,
+tenant agents, conversation messages) return the envelope `{"data": [...], "next_cursor":
+"<opaque>"|null}` — a **breaking change** from the pre-pagination bare arrays, made while there
+are no external consumers. Query params: `limit` (default 50, max 200 — larger values are
+clamped, `limit < 1` is a 400 `bad_request`) and `cursor` (opaque, from the previous page's
+`next_cursor`; malformed → 400 `invalid_cursor`; `next_cursor: null` is the explicit
+last-page terminator). Ordering is keyset on the UUIDv7 `id` (strict total order — uuid-creator's
+default factory is monotonic within the same millisecond per JVM, and Postgres compares `uuid`
+bytewise), so a full walk never skips or duplicates rows and messages appended mid-walk (a live
+conversation) show up at the end. The `id > cursor` comparison always runs in Postgres (Java's
+`UUID.compareTo` is signed and disagrees). `GET /v1/tenants/{id}/api-keys` remains an
+unpaginated bare array (deferred). The message-list ordering changed from `created_at` to `id`
+(equivalent in practice; context assembly still reads `created_at` via `ConversationGateway`).
+
 - **Tenants**: `POST /v1/tenants/partner`, `POST /v1/tenants/client`, `GET /v1/tenants/{id}`,
-  `GET /v1/tenants/{id}/children`
+  `GET /v1/tenants/{id}/children` (paginated)
 - **Agents**: `POST /v1/tenants/{tenantId}/agents`, `GET /v1/agents/{id}`,
-  `GET /v1/tenants/{tenantId}/agents`
+  `GET /v1/tenants/{tenantId}/agents` (paginated)
 - **API keys** (hierarchical authority, ADR 0002): `POST /v1/tenants/{tenantId}/api-keys` (201;
   plaintext key returned exactly once), `GET /v1/tenants/{tenantId}/api-keys` (metadata only),
   `DELETE /v1/api-keys/{keyId}` (204, soft revoke)
 - **Messaging**: `POST /v1/agents/{agentId}/messages` (202 Accepted with
   `{conversation_id, message_id, invocation_id}`), `GET /v1/conversations/{id}`,
-  `GET /v1/conversations/{id}/messages`
+  `GET /v1/conversations/{id}/messages` (paginated; the visibility probe 404s on every page)
 - **Invocations**: `GET /v1/invocations/{id}` — processing status of a queued invocation, for
   polling after the 202. Public vocabulary decoupled from the internal lifecycle: `status` is
   `PENDING | PROCESSING | COMPLETED | FAILED` (internal ABANDONED collapses into FAILED) and
@@ -434,9 +448,9 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
   per-model.
 - **`RESERVED_FOR_RESPONSE`** is a hardcoded 10,000-token constant in `ContextBuilder`; revisit
   when tuning context assembly.
-- **Pagination** is deferred on all list endpoints (`GET /v1/tenants/{id}/agents`,
-  `GET /v1/tenants/{id}/children`, `GET /v1/conversations/{id}/messages`) — explicit TODOs in the
-  controllers.
+- **`GET /v1/tenants/{id}/api-keys` is still an unpaginated bare array** — the only list
+  endpoint outside the uniform keyset contract (key sets per tenant stay tiny; align it when it
+  is next touched).
 - **`api_keys.last_used_at`** is updated synchronously, but only on the auth cold path (cache hits
   skip the UPDATE; staleness is bounded by the cache TTL). Moving to an async batched update is
   deferred (TODO in `ApiKeyAuthenticationFilter`).

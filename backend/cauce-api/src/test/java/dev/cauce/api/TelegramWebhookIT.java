@@ -186,8 +186,8 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
         mockMvc.perform(get("/v1/conversations/" + conversationId + "/messages")
                         .header(HttpHeaders.AUTHORIZATION, clientAuth))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].role").value("USER"))
-                .andExpect(jsonPath("$[0].content").value("Hola por API"));
+                .andExpect(jsonPath("$.data[0].role").value("USER"))
+                .andExpect(jsonPath("$.data[0].content").value("Hola por API"));
     }
 
     // --- helpers ---

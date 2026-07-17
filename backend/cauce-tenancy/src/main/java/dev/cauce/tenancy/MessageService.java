@@ -4,10 +4,12 @@ import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.memory.conversation.ConversationRepository;
+import dev.cauce.memory.message.MessageEntity;
 import dev.cauce.memory.message.MessageMapper;
 import dev.cauce.memory.message.MessageRepository;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,11 +51,18 @@ public class MessageService {
         return saved;
     }
 
-    /** Lists a conversation's messages in chronological order; RLS filters by visibility. */
+    /**
+     * Lists up to {@code maxRows} of a conversation's messages ordered by id — for UUIDv7 ids
+     * that is insertion order — starting after {@code afterId} when non-null (keyset
+     * pagination). RLS filters by visibility. Context assembly does not use this: it reads
+     * the full thread via {@code ConversationGateway} (ordered by {@code created_at}).
+     */
     @Transactional
-    public List<Message> listMessages(UUID conversationId) {
-        return messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId).stream()
-                .map(messageMapper::toDomain)
-                .toList();
+    public List<Message> listMessages(UUID conversationId, UUID afterId, int maxRows) {
+        List<MessageEntity> page = afterId == null
+                ? messageRepository.findByConversationIdOrderByIdAsc(conversationId, Limit.of(maxRows))
+                : messageRepository.findByConversationIdAndIdGreaterThanOrderByIdAsc(
+                        conversationId, afterId, Limit.of(maxRows));
+        return page.stream().map(messageMapper::toDomain).toList();
     }
 }

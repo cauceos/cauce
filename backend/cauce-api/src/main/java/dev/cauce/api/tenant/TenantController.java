@@ -1,5 +1,7 @@
 package dev.cauce.api.tenant;
 
+import dev.cauce.api.web.PageParams;
+import dev.cauce.api.web.PageResponse;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.tenancy.TenantService;
 import jakarta.validation.Valid;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -47,10 +50,15 @@ public class TenantController {
         return TenantResponse.from(tenantService.getTenant(id));
     }
 
-    // TODO: paginate once child sets can grow large; returns all direct children for now.
     @GetMapping("/{id}/children")
-    public List<TenantResponse> children(@PathVariable UUID id) {
-        return tenantService.listChildren(id).stream().map(TenantResponse::from).toList();
+    public PageResponse<TenantResponse> children(@PathVariable UUID id,
+                                                 @RequestParam(defaultValue = "50") int limit,
+                                                 @RequestParam(required = false) String cursor) {
+        PageParams page = PageParams.parse(limit, cursor);
+        List<TenantResponse> fetched = tenantService
+                .listChildren(id, page.afterId(), page.fetchSize())
+                .stream().map(TenantResponse::from).toList();
+        return PageResponse.of(fetched, page.limit(), TenantResponse::id);
     }
 
     private static ResponseEntity<TenantResponse> created(Tenant tenant) {

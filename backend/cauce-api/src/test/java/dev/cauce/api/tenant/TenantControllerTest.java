@@ -116,15 +116,24 @@ class TenantControllerTest {
     }
 
     @Test
-    void listChildren_returns200List() throws Exception {
+    void listChildren_returns200Page() throws Exception {
         UUID parent = UUID.randomUUID();
-        given(tenantService.listChildren(parent)).willReturn(List.of(
+        given(tenantService.listChildren(parent, null, 51)).willReturn(List.of(
                 tenant(UUID.randomUUID(), parent, Tier.CLIENT, "C1"),
                 tenant(UUID.randomUUID(), parent, Tier.CLIENT, "C2")));
 
         mockMvc.perform(get("/v1/tenants/" + parent + "/children"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].tier").value("CLIENT"));
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].tier").value("CLIENT"))
+                .andExpect(jsonPath("$.next_cursor").value(nullValue()));
+    }
+
+    @Test
+    void listChildren_invalidCursor_returns400InvalidCursor() throws Exception {
+        mockMvc.perform(get("/v1/tenants/" + UUID.randomUUID() + "/children")
+                        .param("cursor", "not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_cursor"));
     }
 }

@@ -102,8 +102,8 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.tier").value("PARTNER"));
         mockMvc.perform(getAs(operatorAuth, "/v1/tenants/" + operatorId + "/children"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value(partnerId.toString()));
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(partnerId.toString()));
 
         // Client can read its agent and list its agents.
         mockMvc.perform(getAs(clientAuth, "/v1/agents/" + agentId))
@@ -111,7 +111,7 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.id").value(agentId.toString()));
         mockMvc.perform(getAs(clientAuth, "/v1/tenants/" + clientId + "/agents"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.data.length()").value(1));
     }
 
     @Test

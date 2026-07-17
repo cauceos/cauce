@@ -111,11 +111,11 @@ class MessagingApiIT extends AbstractApiIntegrationTest {
         // The poller reads the full thread: USER first, then the AGENT reply, in chronological order.
         mockMvc.perform(getAs(clientAuth, "/v1/conversations/" + conversationId + "/messages"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].role").value("USER"))
-                .andExpect(jsonPath("$[0].content").value("Hola"))
-                .andExpect(jsonPath("$[1].role").value("AGENT"))
-                .andExpect(jsonPath("$[1].content").value(FakeLlmProvider.REPLY));
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].role").value("USER"))
+                .andExpect(jsonPath("$.data[0].content").value("Hola"))
+                .andExpect(jsonPath("$.data[1].role").value("AGENT"))
+                .andExpect(jsonPath("$.data[1].content").value(FakeLlmProvider.REPLY));
     }
 
     @Test

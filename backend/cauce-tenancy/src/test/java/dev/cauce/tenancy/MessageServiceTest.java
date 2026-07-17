@@ -22,6 +22,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.data.domain.Limit;
 
 class MessageServiceTest {
 
@@ -71,17 +72,32 @@ class MessageServiceTest {
     }
 
     @Test
-    void listMessages_mapsRepositoryResultsToDomain() {
+    void listMessages_firstPage_mapsRepositoryResultsToDomain() {
         UUID conversationId = UUID.randomUUID();
         Message m1 = Message.from(conversationId, MessageRole.USER, "first");
         Message m2 = Message.from(conversationId, MessageRole.AGENT, "second");
         MessageMapper mapper = new MessageMapper();
-        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId))
+        when(messageRepository.findByConversationIdOrderByIdAsc(conversationId, Limit.of(10)))
                 .thenReturn(List.of(mapper.toEntity(m1), mapper.toEntity(m2)));
 
-        List<Message> messages = service.listMessages(conversationId);
+        List<Message> messages = service.listMessages(conversationId, null, 10);
 
         assertThat(messages).extracting(Message::id).containsExactly(m1.id(), m2.id());
+    }
+
+    @Test
+    void listMessages_withCursor_usesTheKeysetQuery() {
+        UUID conversationId = UUID.randomUUID();
+        Message m2 = Message.from(conversationId, MessageRole.AGENT, "second");
+        MessageMapper mapper = new MessageMapper();
+        UUID afterId = UUID.randomUUID();
+        when(messageRepository.findByConversationIdAndIdGreaterThanOrderByIdAsc(
+                conversationId, afterId, Limit.of(10)))
+                .thenReturn(List.of(mapper.toEntity(m2)));
+
+        List<Message> messages = service.listMessages(conversationId, afterId, 10);
+
+        assertThat(messages).extracting(Message::id).containsExactly(m2.id());
     }
 
     private static ConversationEntity conversation(UUID id) {

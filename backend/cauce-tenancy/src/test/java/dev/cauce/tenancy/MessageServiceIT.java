@@ -136,7 +136,7 @@ class MessageServiceIT {
 
         TenantContext.setCurrentTenantId(clientA.id());
         try {
-            List<Message> messages = messageService.listMessages(conversation.id());
+            List<Message> messages = messageService.listMessages(conversation.id(), null, 100);
             assertThat(messages).extracting(Message::id).containsExactlyElementsOf(appended);
             assertThat(messages).extracting(Message::createdAt).isSorted();
         } finally {

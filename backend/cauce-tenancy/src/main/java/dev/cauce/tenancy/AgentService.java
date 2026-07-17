@@ -4,6 +4,7 @@ import dev.cauce.core.agent.Agent;
 import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
+import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.tenant.TenantEntity;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -79,9 +81,17 @@ public class AgentService {
         return agentRepository.findById(agentId).map(agentMapper::toDomain);
     }
 
-    /** Lists agents of the given tenant; RLS filters out tenants the context cannot see. */
+    /**
+     * Lists up to {@code maxRows} agents of the given tenant, ordered by id (UUIDv7, i.e.
+     * creation order), starting after {@code afterId} when non-null (keyset pagination).
+     * RLS filters out tenants the context cannot see.
+     */
     @Transactional
-    public List<Agent> listAgentsForTenant(UUID tenantId) {
-        return agentRepository.findByTenantId(tenantId).stream().map(agentMapper::toDomain).toList();
+    public List<Agent> listAgentsForTenant(UUID tenantId, UUID afterId, int maxRows) {
+        List<AgentEntity> page = afterId == null
+                ? agentRepository.findByTenantIdOrderByIdAsc(tenantId, Limit.of(maxRows))
+                : agentRepository.findByTenantIdAndIdGreaterThanOrderByIdAsc(
+                        tenantId, afterId, Limit.of(maxRows));
+        return page.stream().map(agentMapper::toDomain).toList();
     }
 }

@@ -1,5 +1,7 @@
 package dev.cauce.api.message;
 
+import dev.cauce.api.web.PageParams;
+import dev.cauce.api.web.PageResponse;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.orchestration.InboundMessageResult;
 import dev.cauce.orchestration.InboundMessageService;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -61,13 +64,19 @@ public class MessageController {
         return ResponseEntity.accepted().body(PostMessageResponse.from(result));
     }
 
-    // TODO: paginate once conversations can grow long; returns the full thread for now.
     @GetMapping("/v1/conversations/{conversationId}/messages")
-    public List<MessageResponse> list(@PathVariable UUID conversationId) {
+    public PageResponse<MessageResponse> list(@PathVariable UUID conversationId,
+                                              @RequestParam(defaultValue = "50") int limit,
+                                              @RequestParam(required = false) String cursor) {
         // listMessages does not itself distinguish an empty thread from an invisible one, so
-        // probe visibility first to return 404 for a conversation outside the caller's scope.
+        // probe visibility first (on every page) to return 404 for a conversation outside
+        // the caller's scope.
         conversationService.getConversation(conversationId).orElseThrow(() ->
                 new ConversationNotFoundException("No conversation found for id " + conversationId));
-        return messageService.listMessages(conversationId).stream().map(MessageResponse::from).toList();
+        PageParams page = PageParams.parse(limit, cursor);
+        List<MessageResponse> fetched = messageService
+                .listMessages(conversationId, page.afterId(), page.fetchSize())
+                .stream().map(MessageResponse::from).toList();
+        return PageResponse.of(fetched, page.limit(), MessageResponse::id);
     }
 }

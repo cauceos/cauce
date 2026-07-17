@@ -9,6 +9,7 @@ import dev.cauce.memory.tenant.TenantMapper;
 import dev.cauce.memory.tenant.TenantRepository;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,12 +71,18 @@ public class TenantService {
     }
 
     /**
-     * Lists the direct children of the given tenant. RLS filters out anything the current
-     * context cannot see, so a parent outside the caller's scope yields an empty list.
+     * Lists up to {@code maxRows} direct children of the given tenant, ordered by id (UUIDv7,
+     * i.e. creation order), starting after {@code afterId} when non-null (keyset pagination).
+     * RLS filters out anything the current context cannot see, so a parent outside the
+     * caller's scope yields an empty list.
      */
     @Transactional
-    public List<Tenant> listChildren(UUID parentId) {
-        return repository.findByParentTenantId(parentId).stream().map(mapper::toDomain).toList();
+    public List<Tenant> listChildren(UUID parentId, UUID afterId, int maxRows) {
+        List<TenantEntity> page = afterId == null
+                ? repository.findByParentTenantIdOrderByIdAsc(parentId, Limit.of(maxRows))
+                : repository.findByParentTenantIdAndIdGreaterThanOrderByIdAsc(
+                        parentId, afterId, Limit.of(maxRows));
+        return page.stream().map(mapper::toDomain).toList();
     }
 
     private void requireTier(UUID parentId, Tier expected, String label) {
