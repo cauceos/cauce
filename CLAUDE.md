@@ -320,8 +320,16 @@ indistinguishable.
   plaintext key returned exactly once), `GET /v1/tenants/{tenantId}/api-keys` (metadata only),
   `DELETE /v1/api-keys/{keyId}` (204, soft revoke)
 - **Messaging**: `POST /v1/agents/{agentId}/messages` (202 Accepted with
-  `{conversation_id, message_id}`), `GET /v1/conversations/{id}`,
+  `{conversation_id, message_id, invocation_id}`), `GET /v1/conversations/{id}`,
   `GET /v1/conversations/{id}/messages`
+- **Invocations**: `GET /v1/invocations/{id}` — processing status of a queued invocation, for
+  polling after the 202. Public vocabulary decoupled from the internal lifecycle: `status` is
+  `PENDING | PROCESSING | COMPLETED | FAILED` (internal ABANDONED collapses into FAILED) and
+  `failure_reason` (only on permanent failure; null for pre-V17 rows) maps the internal
+  `InvocationFailureType` to `PROVIDER_ERROR | PROVIDER_UNAVAILABLE | AGENT_LOOP_LIMIT |
+  INTERNAL_ERROR | TIMEOUT`. The row's `last_error` (raw provider detail) is never exposed.
+  Rows survive terminal states, so the status stays readable after completion. 404 code:
+  `invocation_not_found`.
 - **Channels**: `POST /v1/agents/{agentId}/channels` (201; binds a channel instance to the agent,
   `{channel_type, credential}` in, `webhook_secret` returned exactly once — pass it to the
   provider, e.g. Telegram `setWebhook(url, secret_token)`). List/disable deferred.
@@ -332,7 +340,8 @@ Ingest is atomic (`InboundMessageService`, one transaction): resolve-or-start th
 conversation — race-safe via `INSERT ... ON CONFLICT DO NOTHING` + re-`SELECT`, backed by the V13
 partial unique index on `conversations (agent_id, channel_type, external_identity_ref) WHERE
 status = 'OPEN'` — then append the USER message and enqueue the async invocation. The agent reply
-arrives asynchronously; clients poll the conversation messages.
+arrives asynchronously; clients poll the conversation messages, and can poll the invocation
+status via `GET /v1/invocations/{invocation_id}`.
 
 The endpoint accepts an optional `Idempotency-Key` header (opaque, ≤255 chars): a repeated POST
 with the same key for the same agent replays the original 202 ids and ingests nothing new — no
@@ -414,10 +423,12 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
 
 ### Minor technical follow-ups
 
-- **No failure signal for permanently failed invocations.** LLM provider failures do surface as
-  SYSTEM `[orchestration_error]` messages in the conversation, but reaper-abandoned invocations and
-  non-LLM setup failures leave no conversation-visible trace, and there is no invocation-status
-  endpoint (the public 202 response drops the invocation id).
+- **No conversation-visible trace for some failures.** The invocation-status gap is closed: the
+  202 carries `invocation_id`, `GET /v1/invocations/{id}` reports every terminal state, and the
+  V17 `failure_type` column persists the taxonomy (mapped to the public `failure_reason`). What
+  remains deferred: reaper-abandoned invocations and non-LLM setup failures still append no
+  SYSTEM `[orchestration_error]` message to the conversation (only LLM provider failures and the
+  tool-iteration cap do), so their only client-visible signal is the invocation status.
 - **Per-model limits beyond the context window.** Only the context window has a registry plus
   conservative fallback (`ModelContextWindow`); max response tokens is a flat 4096 default, never
   per-model.

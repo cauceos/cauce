@@ -232,6 +232,7 @@ class MessagingApiIT extends AbstractApiIntegrationTest {
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.conversation_id").exists())
                 .andExpect(jsonPath("$.message_id").exists())
+                .andExpect(jsonPath("$.invocation_id").exists())
                 .andReturn().getResponse().getContentAsString();
         return UUID.fromString(objectMapper.readTree(body).get("conversation_id").asText());
     }

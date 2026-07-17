@@ -19,6 +19,10 @@ dependencies {
     implementation(project(":cauce-governance"))
     implementation(project(":cauce-tenancy"))
     implementation(project(":cauce-orchestration"))
+    // The invocation-status DTO maps InvocationFailureType to the public failure vocabulary
+    // (implementation deps are not transitive at compile time, so the events module must be
+    // declared here explicitly). ITs also assert on the invocation lifecycle event stream.
+    implementation(project(":cauce-orchestration-events"))
 
     // LLM provider adapters are discovered at runtime via the cauce-llm SPI; the app does
     // not compile against any specific provider (only against the SPI in cauce-llm).
@@ -41,9 +45,6 @@ dependencies {
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
     testImplementation("org.springframework.security:spring-security-test")
-    // ITs assert on the invocation lifecycle event stream (implementation deps are not
-    // transitive at compile time, so orchestration's events module does not leak here).
-    testImplementation(project(":cauce-orchestration-events"))
     // The Telegram round-trip IT stubs the Bot API with WireMock.
     testImplementation(libs.wiremock)
     testImplementation("org.springframework.boot:spring-boot-testcontainers")

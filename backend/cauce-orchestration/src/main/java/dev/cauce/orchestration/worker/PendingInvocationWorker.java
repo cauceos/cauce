@@ -126,7 +126,7 @@ public class PendingInvocationWorker {
                         ? InvocationFailureType.MAX_TOOL_ITERATIONS
                         : InvocationFailureType.SETUP_ERROR;
                 safeMark(() -> {
-                    pendingInvocationService.markFailed(invocation.id(), e.toString());
+                    pendingInvocationService.markFailed(invocation.id(), e.toString(), failureType);
                     publishFailed(invocation, failureType, e.toString());
                 }, invocation, "FAILED");
             }
@@ -141,7 +141,8 @@ public class PendingInvocationWorker {
             log.warn("Worker {} failing invocation {} due to non-retryable LLM error: {}",
                     workerIdentity.getId(), invocation.id(), errorSummary);
             safeMark(() -> {
-                pendingInvocationService.markFailed(invocation.id(), errorSummary);
+                pendingInvocationService.markFailed(invocation.id(), errorSummary,
+                        InvocationFailureType.LLM_ERROR);
                 publishFailed(invocation, InvocationFailureType.LLM_ERROR, errorSummary);
             }, invocation, "FAILED");
             return;
@@ -153,7 +154,8 @@ public class PendingInvocationWorker {
             log.warn("Worker {} abandoning invocation {} after exhausting {} attempt(s): {}",
                     workerIdentity.getId(), invocation.id(), invocation.maxAttempts(), errorSummary);
             safeMark(() -> {
-                pendingInvocationService.markAbandoned(invocation.id(), errorSummary);
+                pendingInvocationService.markAbandoned(invocation.id(), errorSummary,
+                        InvocationFailureType.LLM_RETRIES_EXHAUSTED);
                 publishFailed(invocation, InvocationFailureType.LLM_RETRIES_EXHAUSTED, errorSummary);
             }, invocation, "ABANDONED");
             return;

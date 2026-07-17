@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationStatus;
+import dev.cauce.orchestration.events.InvocationFailureType;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ class PendingInvocationMapperTest {
         assertThat(result.maxAttempts()).isEqualTo(original.maxAttempts());
         assertThat(result.lastAttemptAt()).isNull();
         assertThat(result.lastError()).isNull();
+        assertThat(result.failureType()).isNull();
         assertThat(result.createdAt()).isEqualTo(original.createdAt());
         assertThat(result.claimedAt()).isNull();
         assertThat(result.claimedBy()).isNull();
@@ -41,7 +43,8 @@ class PendingInvocationMapperTest {
         Instant nextAttempt = now.plusSeconds(60);
         PendingInvocation original = PendingInvocation.rehydrate(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                PendingInvocationStatus.FAILED, 2, 3, now, "boom", now, now, "worker-9", now,
+                PendingInvocationStatus.FAILED, 2, 3, now, "boom",
+                InvocationFailureType.LLM_ERROR, now, now, "worker-9", now,
                 nextAttempt);
 
         PendingInvocation result = mapper.toDomain(mapper.toEntity(original));
@@ -52,6 +55,7 @@ class PendingInvocationMapperTest {
         assertThat(result.maxAttempts()).isEqualTo(3);
         assertThat(result.lastAttemptAt()).isEqualTo(now);
         assertThat(result.lastError()).isEqualTo("boom");
+        assertThat(result.failureType()).isEqualTo(InvocationFailureType.LLM_ERROR);
         assertThat(result.createdAt()).isEqualTo(now);
         assertThat(result.claimedAt()).isEqualTo(now);
         assertThat(result.claimedBy()).isEqualTo("worker-9");
@@ -65,8 +69,8 @@ class PendingInvocationMapperTest {
         Instant nextAttempt = now.plusSeconds(120);
         PendingInvocation original = PendingInvocation.rehydrate(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                PendingInvocationStatus.PENDING, 2, 3, now, "rate limited", now, null, null, null,
-                nextAttempt);
+                PendingInvocationStatus.PENDING, 2, 3, now, "rate limited", null, now, null, null,
+                null, nextAttempt);
 
         PendingInvocation result = mapper.toDomain(mapper.toEntity(original));
 

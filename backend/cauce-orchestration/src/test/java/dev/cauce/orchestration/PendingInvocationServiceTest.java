@@ -18,6 +18,7 @@ import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageEntity;
 import dev.cauce.memory.message.MessageRepository;
+import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.persistence.PendingInvocationEntity;
 import dev.cauce.orchestration.persistence.PendingInvocationMapper;
 import dev.cauce.orchestration.persistence.PendingInvocationRepository;
@@ -180,13 +181,14 @@ class PendingInvocationServiceTest {
         when(pendingInvocationRepository.findById(processing.id()))
                 .thenReturn(Optional.of(mapper.toEntity(processing)));
 
-        service.markFailed(processing.id(), "401 unauthorized");
+        service.markFailed(processing.id(), "401 unauthorized", InvocationFailureType.LLM_ERROR);
 
         ArgumentCaptor<PendingInvocationEntity> captor =
                 ArgumentCaptor.forClass(PendingInvocationEntity.class);
         verify(pendingInvocationRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PendingInvocationStatus.FAILED);
         assertThat(captor.getValue().getLastError()).isEqualTo("401 unauthorized");
+        assertThat(captor.getValue().getFailureType()).isEqualTo(InvocationFailureType.LLM_ERROR);
     }
 
     @Test
@@ -195,13 +197,16 @@ class PendingInvocationServiceTest {
         when(pendingInvocationRepository.findById(processing.id()))
                 .thenReturn(Optional.of(mapper.toEntity(processing)));
 
-        service.markAbandoned(processing.id(), "exhausted retries");
+        service.markAbandoned(processing.id(), "exhausted retries",
+                InvocationFailureType.LLM_RETRIES_EXHAUSTED);
 
         ArgumentCaptor<PendingInvocationEntity> captor =
                 ArgumentCaptor.forClass(PendingInvocationEntity.class);
         verify(pendingInvocationRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PendingInvocationStatus.ABANDONED);
         assertThat(captor.getValue().getLastError()).isEqualTo("exhausted retries");
+        assertThat(captor.getValue().getFailureType())
+                .isEqualTo(InvocationFailureType.LLM_RETRIES_EXHAUSTED);
     }
 
     @Test

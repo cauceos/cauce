@@ -60,7 +60,7 @@ class PendingInvocationReaperTest {
 
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
-        verify(pendingInvocationService, never()).markAbandoned(any(), anyString());
+        verify(pendingInvocationService, never()).markAbandoned(any(), anyString(), any());
     }
 
     @Test
@@ -72,7 +72,7 @@ class PendingInvocationReaperTest {
 
         verify(pendingInvocationService)
                 .releaseForRetry(eq(orphan.id()), anyString(), eq(30L));
-        verify(pendingInvocationService, never()).markAbandoned(any(), anyString());
+        verify(pendingInvocationService, never()).markAbandoned(any(), anyString(), any());
         // A retry release is not permanent: no failure event.
         verify(eventPublisher, never()).publishEvent(any(InvocationFailed.class));
     }
@@ -84,7 +84,8 @@ class PendingInvocationReaperTest {
 
         reaper.reapOrphanedInvocations();
 
-        verify(pendingInvocationService).markAbandoned(eq(orphan.id()), anyString());
+        verify(pendingInvocationService).markAbandoned(
+                eq(orphan.id()), anyString(), eq(InvocationFailureType.REAPER_ABANDONED));
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
         ArgumentCaptor<InvocationFailed> captor = ArgumentCaptor.forClass(InvocationFailed.class);
@@ -99,7 +100,7 @@ class PendingInvocationReaperTest {
         PendingInvocation orphan = claimedAtAttempt(3);
         when(pendingInvocationService.findOrphanedSince(any())).thenReturn(List.of(orphan));
         Mockito.doThrow(new RuntimeException("locked"))
-                .when(pendingInvocationService).markAbandoned(any(), anyString());
+                .when(pendingInvocationService).markAbandoned(any(), anyString(), any());
 
         reaper.reapOrphanedInvocations();
 

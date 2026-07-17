@@ -9,6 +9,7 @@ import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageRepository;
+import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.persistence.PendingInvocationMapper;
 import dev.cauce.orchestration.persistence.PendingInvocationRepository;
 import java.time.Instant;
@@ -150,22 +151,26 @@ public class PendingInvocationService {
     }
 
     /**
-     * Marks {@code invocationId} FAILED. The caller must have set {@code TenantContext} to
-     * the invocation's owning tenant.
+     * Marks {@code invocationId} FAILED, recording {@code failureType} so the failure cause
+     * survives on the row (the event stream is not queryable). The caller must have set
+     * {@code TenantContext} to the invocation's owning tenant.
      */
     @Transactional
-    public void markFailed(UUID invocationId, String errorMessage) {
-        PendingInvocation failed = loadVisible(invocationId).fail(errorMessage);
+    public void markFailed(UUID invocationId, String errorMessage,
+                           InvocationFailureType failureType) {
+        PendingInvocation failed = loadVisible(invocationId).fail(errorMessage, failureType);
         pendingInvocationRepository.save(pendingInvocationMapper.toEntity(failed));
     }
 
     /**
-     * Marks {@code invocationId} ABANDONED. The caller must have set {@code TenantContext}
-     * to the invocation's owning tenant.
+     * Marks {@code invocationId} ABANDONED, recording {@code failureType} so the failure
+     * cause survives on the row. The caller must have set {@code TenantContext} to the
+     * invocation's owning tenant.
      */
     @Transactional
-    public void markAbandoned(UUID invocationId, String errorMessage) {
-        PendingInvocation abandoned = loadVisible(invocationId).abandon(errorMessage);
+    public void markAbandoned(UUID invocationId, String errorMessage,
+                              InvocationFailureType failureType) {
+        PendingInvocation abandoned = loadVisible(invocationId).abandon(errorMessage, failureType);
         pendingInvocationRepository.save(pendingInvocationMapper.toEntity(abandoned));
     }
 

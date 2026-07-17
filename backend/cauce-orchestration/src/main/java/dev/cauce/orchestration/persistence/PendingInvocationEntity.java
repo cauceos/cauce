@@ -1,6 +1,7 @@
 package dev.cauce.orchestration.persistence;
 
 import dev.cauce.orchestration.PendingInvocationStatus;
+import dev.cauce.orchestration.events.InvocationFailureType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -49,6 +50,10 @@ public class PendingInvocationEntity {
     @Column(name = "last_error", length = 1000)
     private String lastError;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "failure_type", length = 50)
+    private InvocationFailureType failureType;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -70,7 +75,8 @@ public class PendingInvocationEntity {
 
     public PendingInvocationEntity(UUID id, UUID tenantId, UUID conversationId, UUID triggerMessageId,
                                    PendingInvocationStatus status, int attemptCount, int maxAttempts,
-                                   Instant lastAttemptAt, String lastError, Instant createdAt,
+                                   Instant lastAttemptAt, String lastError,
+                                   InvocationFailureType failureType, Instant createdAt,
                                    Instant claimedAt, String claimedBy, Instant completedAt,
                                    Instant nextAttemptAt) {
         this.id = id;
@@ -82,6 +88,7 @@ public class PendingInvocationEntity {
         this.maxAttempts = maxAttempts;
         this.lastAttemptAt = lastAttemptAt;
         this.lastError = lastError;
+        this.failureType = failureType;
         this.createdAt = createdAt;
         this.claimedAt = claimedAt;
         this.claimedBy = claimedBy;
@@ -123,6 +130,10 @@ public class PendingInvocationEntity {
 
     public String getLastError() {
         return lastError;
+    }
+
+    public InvocationFailureType getFailureType() {
+        return failureType;
     }
 
     public Instant getCreatedAt() {

@@ -70,7 +70,8 @@ public class PendingInvocationReaper {
             TenantContext.setCurrentTenantId(invocation.tenantId());
             try {
                 if (invocation.attemptCount() >= invocation.maxAttempts()) {
-                    pendingInvocationService.markAbandoned(invocation.id(), REAP_ERROR);
+                    pendingInvocationService.markAbandoned(invocation.id(), REAP_ERROR,
+                            InvocationFailureType.REAPER_ABANDONED);
                     // Emitted only after the terminal transition committed (a retry release
                     // below is not permanent and emits nothing).
                     eventPublisher.publishEvent(new InvocationFailed(invocation.id(),

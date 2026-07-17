@@ -1,6 +1,7 @@
 package dev.cauce.orchestration;
 
 import dev.cauce.core.UuidGenerator;
+import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.InvalidPendingInvocationTransitionException;
 import dev.cauce.orchestration.exception.MaxRetriesExceededException;
 import java.time.Instant;
@@ -46,6 +47,7 @@ public final class PendingInvocation {
     private final int maxAttempts;
     private final Instant lastAttemptAt; // null until first claimed
     private final String lastError;      // null until a failure/retry records one
+    private final InvocationFailureType failureType; // null unless FAILED or ABANDONED
     private final Instant createdAt;
     private final Instant claimedAt;     // null unless currently PROCESSING
     private final String claimedBy;      // null unless currently PROCESSING
@@ -54,7 +56,8 @@ public final class PendingInvocation {
 
     private PendingInvocation(UUID id, UUID tenantId, UUID conversationId, UUID triggerMessageId,
                              PendingInvocationStatus status, int attemptCount, int maxAttempts,
-                             Instant lastAttemptAt, String lastError, Instant createdAt,
+                             Instant lastAttemptAt, String lastError,
+                             InvocationFailureType failureType, Instant createdAt,
                              Instant claimedAt, String claimedBy, Instant completedAt,
                              Instant nextAttemptAt) {
         this.id = id;
@@ -66,6 +69,7 @@ public final class PendingInvocation {
         this.maxAttempts = maxAttempts;
         this.lastAttemptAt = lastAttemptAt;
         this.lastError = lastError;
+        this.failureType = failureType;
         this.createdAt = createdAt;
         this.claimedAt = claimedAt;
         this.claimedBy = claimedBy;
@@ -92,6 +96,7 @@ public final class PendingInvocation {
                 DEFAULT_MAX_ATTEMPTS,
                 null,
                 null,
+                null,
                 Instant.now(),
                 null,
                 null,
@@ -103,7 +108,8 @@ public final class PendingInvocation {
     public static PendingInvocation rehydrate(UUID id, UUID tenantId, UUID conversationId,
                                              UUID triggerMessageId, PendingInvocationStatus status,
                                              int attemptCount, int maxAttempts, Instant lastAttemptAt,
-                                             String lastError, Instant createdAt, Instant claimedAt,
+                                             String lastError, InvocationFailureType failureType,
+                                             Instant createdAt, Instant claimedAt,
                                              String claimedBy, Instant completedAt,
                                              Instant nextAttemptAt) {
         return new PendingInvocation(
@@ -116,6 +122,7 @@ public final class PendingInvocation {
                 maxAttempts,
                 lastAttemptAt, // nullable
                 lastError,     // nullable
+                failureType,   // nullable; only FAILED/ABANDONED rows carry one
                 Objects.requireNonNull(createdAt, "createdAt"),
                 claimedAt,     // nullable
                 claimedBy,     // nullable
@@ -142,7 +149,7 @@ public final class PendingInvocation {
         Instant now = Instant.now();
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.PROCESSING, attemptCount + 1, maxAttempts, now, lastError,
-                createdAt, now, worker, completedAt, null);
+                failureType, createdAt, now, worker, completedAt, null);
     }
 
     /**
@@ -159,7 +166,7 @@ public final class PendingInvocation {
         }
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.COMPLETED, attemptCount, maxAttempts, lastAttemptAt, lastError,
-                createdAt, claimedAt, claimedBy, Instant.now(), null);
+                failureType, createdAt, claimedAt, claimedBy, Instant.now(), null);
     }
 
     /**
@@ -179,7 +186,7 @@ public final class PendingInvocation {
      * @return a new PENDING invocation with the claim cleared and {@code nextAttemptAt} set
      * @throws InvalidPendingInvocationTransitionException if not PROCESSING
      * @throws MaxRetriesExceededException if the attempt budget is already exhausted; the
-     *     caller must use {@link #fail(String)} or {@link #abandon(String)} instead
+     *     caller must use {@link #fail} or {@link #abandon} instead
      * @throws IllegalArgumentException if {@code baseIntervalSeconds} is not strictly positive
      */
     public PendingInvocation releaseForRetry(String errorMessage, long baseIntervalSeconds) {
@@ -200,7 +207,7 @@ public final class PendingInvocation {
         Instant next = Instant.now().plusSeconds(delaySeconds);
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.PENDING, attemptCount, maxAttempts, lastAttemptAt,
-                truncateError(errorMessage), createdAt, null, null, completedAt, next);
+                truncateError(errorMessage), failureType, createdAt, null, null, completedAt, next);
     }
 
     /**
@@ -208,17 +215,19 @@ public final class PendingInvocation {
      * {@link PendingInvocationStatus#PROCESSING}.
      *
      * @param errorMessage the failure reason; must not be blank, truncated to 1000 chars
+     * @param failureType the taxonomy entry for the failure; must not be null
      * @return a new FAILED invocation with {@code completedAt} set to now
      * @throws InvalidPendingInvocationTransitionException if not PROCESSING
      */
-    public PendingInvocation fail(String errorMessage) {
+    public PendingInvocation fail(String errorMessage, InvocationFailureType failureType) {
         if (status != PendingInvocationStatus.PROCESSING) {
             throw new InvalidPendingInvocationTransitionException(
                     transitionError(PendingInvocationStatus.FAILED));
         }
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.FAILED, attemptCount, maxAttempts, lastAttemptAt,
-                truncateError(requireText(errorMessage, "errorMessage")), createdAt, claimedAt,
+                truncateError(requireText(errorMessage, "errorMessage")),
+                Objects.requireNonNull(failureType, "failureType"), createdAt, claimedAt,
                 claimedBy, Instant.now(), null);
     }
 
@@ -227,17 +236,19 @@ public final class PendingInvocation {
      * {@link PendingInvocationStatus#PROCESSING}.
      *
      * @param errorMessage the abandonment reason; must not be blank, truncated to 1000 chars
+     * @param failureType the taxonomy entry for the abandonment; must not be null
      * @return a new ABANDONED invocation with {@code completedAt} set to now
      * @throws InvalidPendingInvocationTransitionException if not PROCESSING
      */
-    public PendingInvocation abandon(String errorMessage) {
+    public PendingInvocation abandon(String errorMessage, InvocationFailureType failureType) {
         if (status != PendingInvocationStatus.PROCESSING) {
             throw new InvalidPendingInvocationTransitionException(
                     transitionError(PendingInvocationStatus.ABANDONED));
         }
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.ABANDONED, attemptCount, maxAttempts, lastAttemptAt,
-                truncateError(requireText(errorMessage, "errorMessage")), createdAt, claimedAt,
+                truncateError(requireText(errorMessage, "errorMessage")),
+                Objects.requireNonNull(failureType, "failureType"), createdAt, claimedAt,
                 claimedBy, Instant.now(), null);
     }
 
@@ -295,6 +306,10 @@ public final class PendingInvocation {
 
     public String lastError() {
         return lastError;
+    }
+
+    public InvocationFailureType failureType() {
+        return failureType;
     }
 
     public Instant createdAt() {

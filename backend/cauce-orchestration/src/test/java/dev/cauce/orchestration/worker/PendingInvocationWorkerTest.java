@@ -116,8 +116,8 @@ class PendingInvocationWorkerTest {
         verify(orchestratorService).respondToMessage(claimed.id(), conversationId, triggerMessageId);
         verify(pendingInvocationService).markCompleted(claimed.id());
         verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
-        verify(pendingInvocationService, never()).markFailed(any(), anyString());
-        verify(pendingInvocationService, never()).markAbandoned(any(), anyString());
+        verify(pendingInvocationService, never()).markFailed(any(), anyString(), any());
+        verify(pendingInvocationService, never()).markAbandoned(any(), anyString(), any());
     }
 
     @Test
@@ -146,8 +146,8 @@ class PendingInvocationWorkerTest {
         verify(pendingInvocationService)
                 .releaseForRetry(eq(claimed.id()), anyString(), eq(30L));
         verify(pendingInvocationService, never()).markCompleted(any());
-        verify(pendingInvocationService, never()).markFailed(any(), anyString());
-        verify(pendingInvocationService, never()).markAbandoned(any(), anyString());
+        verify(pendingInvocationService, never()).markFailed(any(), anyString(), any());
+        verify(pendingInvocationService, never()).markAbandoned(any(), anyString(), any());
     }
 
     @Test
@@ -158,7 +158,8 @@ class PendingInvocationWorkerTest {
 
         worker.processInvocation(claimed);
 
-        verify(pendingInvocationService).markFailed(eq(claimed.id()), anyString());
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.LLM_ERROR));
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
         assertThat(publishedFailure().failureType()).isEqualTo(InvocationFailureType.LLM_ERROR);
@@ -172,10 +173,11 @@ class PendingInvocationWorkerTest {
 
         worker.processInvocation(claimed);
 
-        verify(pendingInvocationService).markAbandoned(eq(claimed.id()), anyString());
+        verify(pendingInvocationService).markAbandoned(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.LLM_RETRIES_EXHAUSTED));
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
-        verify(pendingInvocationService, never()).markFailed(any(), anyString());
+        verify(pendingInvocationService, never()).markFailed(any(), anyString(), any());
         assertThat(publishedFailure().failureType())
                 .isEqualTo(InvocationFailureType.LLM_RETRIES_EXHAUSTED);
     }
@@ -188,7 +190,8 @@ class PendingInvocationWorkerTest {
 
         worker.processInvocation(claimed);
 
-        verify(pendingInvocationService).markFailed(eq(claimed.id()), anyString());
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.SETUP_ERROR));
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
         InvocationFailed failed = publishedFailure();
@@ -205,7 +208,8 @@ class PendingInvocationWorkerTest {
 
         worker.processInvocation(claimed);
 
-        verify(pendingInvocationService).markFailed(eq(claimed.id()), anyString());
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.MAX_TOOL_ITERATIONS));
         assertThat(publishedFailure().failureType())
                 .isEqualTo(InvocationFailureType.MAX_TOOL_ITERATIONS);
     }
@@ -227,7 +231,7 @@ class PendingInvocationWorkerTest {
         Mockito.doThrow(new LlmAuthenticationException("anthropic", "claude-sonnet-4-7", "401"))
                 .when(orchestratorService).respondToMessage(any(), any(), any());
         Mockito.doThrow(new RuntimeException("DB outage"))
-                .when(pendingInvocationService).markFailed(any(), anyString());
+                .when(pendingInvocationService).markFailed(any(), anyString(), any());
 
         worker.processInvocation(claimed);
 

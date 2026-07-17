@@ -3,6 +3,7 @@ package dev.cauce.orchestration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.InvalidPendingInvocationTransitionException;
 import dev.cauce.orchestration.exception.MaxRetriesExceededException;
 import java.time.Duration;
@@ -35,6 +36,7 @@ class PendingInvocationTest {
         assertThat(invocation.maxAttempts()).isEqualTo(3);
         assertThat(invocation.lastAttemptAt()).isNull();
         assertThat(invocation.lastError()).isNull();
+        assertThat(invocation.failureType()).isNull();
         assertThat(invocation.createdAt()).isNotNull();
         assertThat(invocation.claimedAt()).isNull();
         assertThat(invocation.claimedBy()).isNull();
@@ -136,7 +138,7 @@ class PendingInvocationTest {
     void releaseForRetry_thirdAttempt_schedulesQuadrupleBackoff() {
         // Bump the budget so we can release after attempt 3 instead of hitting the max.
         PendingInvocation third = PendingInvocation.rehydrate(UUID.randomUUID(), TENANT, CONVERSATION,
-                TRIGGER, PendingInvocationStatus.PROCESSING, 3, 5, Instant.now(), "prev",
+                TRIGGER, PendingInvocationStatus.PROCESSING, 3, 5, Instant.now(), "prev", null,
                 Instant.now(), Instant.now(), "w3", null, null);
 
         Instant before = Instant.now();
@@ -200,11 +202,13 @@ class PendingInvocationTest {
 
     @Test
     void fail_whenProcessing_transitionsToFailed() {
-        PendingInvocation failed = pending().claim("worker-1").fail("401 unauthorized");
+        PendingInvocation failed = pending().claim("worker-1")
+                .fail("401 unauthorized", InvocationFailureType.LLM_ERROR);
 
         assertThat(failed.status()).isEqualTo(PendingInvocationStatus.FAILED);
         assertThat(failed.completedAt()).isNotNull();
         assertThat(failed.lastError()).isEqualTo("401 unauthorized");
+        assertThat(failed.failureType()).isEqualTo(InvocationFailureType.LLM_ERROR);
         assertThat(failed.nextAttemptAt()).isNull();
     }
 
@@ -212,30 +216,58 @@ class PendingInvocationTest {
     void fail_whenBlankError_throwsIllegalArgument() {
         PendingInvocation processing = pending().claim("worker-1");
 
-        assertThatThrownBy(() -> processing.fail(" "))
+        assertThatThrownBy(() -> processing.fail(" ", InvocationFailureType.SETUP_ERROR))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("errorMessage");
     }
 
     @Test
+    void fail_whenNullFailureType_throwsNpe() {
+        PendingInvocation processing = pending().claim("worker-1");
+
+        assertThatThrownBy(() -> processing.fail("boom", null))
+                .isInstanceOf(NullPointerException.class).hasMessageContaining("failureType");
+    }
+
+    @Test
     void fail_whenNotProcessing_throwsInvalidTransition() {
-        assertThatThrownBy(() -> pending().fail("x"))
+        assertThatThrownBy(() -> pending().fail("x", InvocationFailureType.SETUP_ERROR))
                 .isInstanceOf(InvalidPendingInvocationTransitionException.class);
     }
 
     @Test
     void abandon_whenProcessing_transitionsToAbandoned() {
-        PendingInvocation abandoned = pending().claim("worker-1").abandon("gave up after retries");
+        PendingInvocation abandoned = pending().claim("worker-1")
+                .abandon("gave up after retries", InvocationFailureType.LLM_RETRIES_EXHAUSTED);
 
         assertThat(abandoned.status()).isEqualTo(PendingInvocationStatus.ABANDONED);
         assertThat(abandoned.completedAt()).isNotNull();
         assertThat(abandoned.lastError()).isEqualTo("gave up after retries");
+        assertThat(abandoned.failureType()).isEqualTo(InvocationFailureType.LLM_RETRIES_EXHAUSTED);
         assertThat(abandoned.nextAttemptAt()).isNull();
     }
 
     @Test
+    void abandon_whenNullFailureType_throwsNpe() {
+        PendingInvocation processing = pending().claim("worker-1");
+
+        assertThatThrownBy(() -> processing.abandon("boom", null))
+                .isInstanceOf(NullPointerException.class).hasMessageContaining("failureType");
+    }
+
+    @Test
     void abandon_whenNotProcessing_throwsInvalidTransition() {
-        assertThatThrownBy(() -> pending().abandon("x"))
+        assertThatThrownBy(() -> pending().abandon("x", InvocationFailureType.REAPER_ABANDONED))
                 .isInstanceOf(InvalidPendingInvocationTransitionException.class);
+    }
+
+    @Test
+    void releaseForRetry_whenProcessing_keepsFailureTypeNull() {
+        PendingInvocation released =
+                pending().claim("worker-1").releaseForRetry("transient", BASE_INTERVAL);
+
+        assertThat(released.failureType())
+                .as("a retry release is not a permanent failure; no taxonomy entry is recorded")
+                .isNull();
     }
 
     @Test
@@ -244,9 +276,9 @@ class PendingInvocationTest {
 
         assertThatThrownBy(completed::complete)
                 .isInstanceOf(InvalidPendingInvocationTransitionException.class);
-        assertThatThrownBy(() -> completed.fail("x"))
+        assertThatThrownBy(() -> completed.fail("x", InvocationFailureType.SETUP_ERROR))
                 .isInstanceOf(InvalidPendingInvocationTransitionException.class);
-        assertThatThrownBy(() -> completed.abandon("x"))
+        assertThatThrownBy(() -> completed.abandon("x", InvocationFailureType.REAPER_ABANDONED))
                 .isInstanceOf(InvalidPendingInvocationTransitionException.class);
     }
 
@@ -266,7 +298,8 @@ class PendingInvocationTest {
     void fail_whenErrorExceeds1000Chars_truncatesTo1000() {
         String longError = "x".repeat(1500);
 
-        PendingInvocation failed = pending().claim("worker-1").fail(longError);
+        PendingInvocation failed = pending().claim("worker-1")
+                .fail(longError, InvocationFailureType.LLM_ERROR);
 
         assertThat(failed.lastError()).hasSize(1000);
     }

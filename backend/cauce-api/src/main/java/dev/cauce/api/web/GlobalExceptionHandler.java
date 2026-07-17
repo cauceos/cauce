@@ -76,7 +76,7 @@ public class GlobalExceptionHandler {
             Map.entry(ConversationNotFoundException.class, "conversation_not_found"),
             Map.entry(MessageNotFoundException.class, "message_not_found"),
             Map.entry(ApiKeyNotFoundException.class, "api_key_not_found"),
-            Map.entry(PendingInvocationNotFoundException.class, "pending_invocation_not_found"),
+            Map.entry(PendingInvocationNotFoundException.class, "invocation_not_found"),
             Map.entry(ChannelConfigNotFoundException.class, "channel_config_not_found"),
             // 400 BAD_REQUEST
             Map.entry(InvalidConversationTransitionException.class, "invalid_conversation_transition"),

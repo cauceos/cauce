@@ -238,6 +238,7 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
                 "SELECT count(*) FROM messages WHERE conversation_id = ? AND role = 'AGENT'",
                 Integer.class, conversation.id());
         assertThat(agentMessages).isZero();
+        assertThat(failureTypeOf(enqueued.id())).isEqualTo("LLM_ERROR");
     }
 
     @Test
@@ -258,6 +259,7 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
                 "SELECT attempt_count FROM pending_invocations WHERE id = ?",
                 Integer.class, enqueued.id());
         assertThat(attemptCount).isEqualTo(3);
+        assertThat(failureTypeOf(enqueued.id())).isEqualTo("LLM_RETRIES_EXHAUSTED");
     }
 
     @Test
@@ -323,6 +325,7 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
         reaper.reapOrphanedInvocations();
 
         awaitInvocationStatus(enqueued.id(), PendingInvocationStatus.ABANDONED);
+        assertThat(failureTypeOf(enqueued.id())).isEqualTo("REAPER_ABANDONED");
     }
 
     @Test
@@ -501,5 +504,11 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
                     String.class, invocationId);
             assertThat(status).isEqualTo(expected.name());
         });
+    }
+
+    private String failureTypeOf(UUID invocationId) {
+        return jdbc.queryForObject(
+                "SELECT failure_type FROM pending_invocations WHERE id = ?",
+                String.class, invocationId);
     }
 }
