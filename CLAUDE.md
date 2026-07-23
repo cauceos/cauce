@@ -273,6 +273,15 @@ least-privilege `cauce_app` login role) run **only on a fresh volume**. After pu
 change that adds or edits one, recreate the volume to pick it up:
 `docker compose down -v && docker compose up -d`.
 
+**Quickstart profile.** `docker compose --profile quickstart up -d --build` additionally
+runs the app itself (image built from `backend/Dockerfile`; no local JDK needed) and a
+containerized Ollama with an automatic model pull; `scripts/quickstart.sh` (or
+`quickstart.ps1`) then bootstraps a demo agent and sends the first tool-calling message.
+See [QUICKSTART.md](QUICKSTART.md). The profile is additive: without `--profile
+quickstart` compose stays infra-only, and the dev flow below is unchanged. Devs who only
+want a local Ollama for bootRun can use `docker compose --profile ollama up -d`
+(publishes `11434`, pulls `OLLAMA_MODEL`, default `qwen2.5:3b`).
+
 ### Backend
 
 ```bash
@@ -406,8 +415,16 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
   (`SystemDefaultLlmCredential`, env-var based); there is no per-tenant/BYO-key path. Token usage
   (`LlmUsage`) is logged but never persisted or attributed per tenant. Both gate the commercial
   model and billing.
-- **OSS quickstart.** docker-compose runs only PostgreSQL, Redis, and Adminer; there is no
-  clone → compose up → agent-responding path (app + Ollama in compose). Adoption surface.
+- **OSS quickstart — landed** (packaging only, zero backend behavior changes).
+  `docker compose --profile quickstart up -d --build` adds the app (built from
+  `backend/Dockerfile`, dev profile with env-var overrides for the compose hostnames) and
+  Ollama (+ a one-shot `ollama-init` model pull) to the stack; `scripts/quickstart.sh` /
+  `quickstart.ps1` extract the bootstrap key from the logs into the gitignored
+  `.quickstart.env`, create the demo partner → client → agent chain, and drive the first
+  tool-calling message (see QUICKSTART.md). Plain `docker compose up -d` remains
+  infra-only, so compose-up + bootRun development is unchanged. Remaining deferrals: no
+  published image (always built locally from source) and no `docker compose watch`/dev
+  reload for the containerized app.
 - **Channel delivery guarantee (the "module-after").** Outbound delivery is live but explicitly
   **best-effort**: fire-and-forget on the `channelOutboundExecutor`, no outbox, no retries, no
   delivery dedup. Failures are logged and the reply stays readable by polling. The hook is in

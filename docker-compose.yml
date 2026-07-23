@@ -4,10 +4,16 @@
 # and exist only to make local onboarding frictionless.
 #
 # Usage (from the repo root):
-#   docker compose up -d      # start
+#   docker compose up -d      # start infra only (dev flow: pair with bootRun)
 #   docker compose ps         # check health
 #   docker compose down       # stop, keep data
 #   docker compose down -v    # stop and wipe volumes
+#
+# Quickstart (app + Ollama in containers, no local JDK needed — see QUICKSTART.md):
+#   docker compose --profile quickstart up -d --build
+#
+# Devs running bootRun who only want a local Ollama:
+#   docker compose --profile ollama up -d
 name: cauce
 
 services:
@@ -62,11 +68,88 @@ services:
     networks:
       - cauce-net
 
+  # --- Quickstart profile ----------------------------------------------------
+  # The services below only start with `--profile quickstart` (Ollama also with
+  # `--profile ollama`). A plain `docker compose up -d` stays infra-only, so the
+  # regular dev flow (compose up + bootRun) is unchanged.
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: cauce-ollama
+    profiles: [quickstart, ollama]
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - cauce_ollamadata:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - cauce-net
+
+  # One-shot: pulls the default model into the ollama volume, then exits.
+  # Re-runs are cheap (the model is already in cauce_ollamadata).
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: cauce-ollama-init
+    profiles: [quickstart, ollama]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama"]
+    command: ["pull", "${OLLAMA_MODEL:-qwen2.5:3b}"]
+    restart: "no"
+    networks:
+      - cauce-net
+
+  cauce-api:
+    build: ./backend
+    container_name: cauce-api
+    profiles: [quickstart]
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      # The dev profile points at localhost; inside the compose network the
+      # services live under their service names. Credentials keep the dev-profile
+      # defaults (cauce_app / owner roles), created by the postgres init scripts.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-cauce_dev}
+      CAUCE_ADMIN_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-cauce_dev}
+      CAUCE_ADMIN_DATASOURCE_USERNAME: ${POSTGRES_USER:-cauce}
+      CAUCE_ADMIN_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-cauce_dev}
+      SPRING_DATA_REDIS_HOST: redis
+      CAUCE_LLM_OPENAICOMPATIBLE_PROVIDERS_OLLAMA_BASEURL: http://ollama:11434/v1
+      # CPU inference loads the model on first request; the 60s default is too
+      # tight for that cold load on modest hardware.
+      CAUCE_LLM_OPENAICOMPATIBLE_PROVIDERS_OLLAMA_TIMEOUT: 180s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - cauce-net
+
 volumes:
   cauce_pgdata:
     name: cauce_pgdata
   cauce_redisdata:
     name: cauce_redisdata
+  cauce_ollamadata:
+    name: cauce_ollamadata
 
 networks:
   cauce-net:

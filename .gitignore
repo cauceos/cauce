@@ -37,3 +37,6 @@ build/
 # --- Local environment / Docker overrides (.example templates ARE tracked) ---
 .env
 docker-compose.override.yml
+
+# --- Quickstart state (bootstrap API key and demo ids — never commit) ---
+.quickstart.env

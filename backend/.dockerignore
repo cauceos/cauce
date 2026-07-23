@@ -1,0 +1,6 @@
+# Keep the image build context small and the layer cache stable.
+.gradle/
+build/
+*/build/
+Dockerfile
+.dockerignore
