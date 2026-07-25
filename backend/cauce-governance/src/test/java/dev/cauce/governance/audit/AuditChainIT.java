@@ -72,6 +72,10 @@ class AuditChainIT extends AbstractGovernanceIntegrationTest {
         clientA = tenantService.createClient("Client A", partner.id());
         clientB = tenantService.createClient("Client B", partner.id());
         TenantContext.clear();
+        // Seeding emits Family-B admin events by design; these ITs assert the CHAIN
+        // mechanism in isolation, so the audit tables start empty (admin events are
+        // asserted in cauce-tenancy's AuditAdminIT).
+        jdbc.execute("TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox");
     }
 
     @AfterEach

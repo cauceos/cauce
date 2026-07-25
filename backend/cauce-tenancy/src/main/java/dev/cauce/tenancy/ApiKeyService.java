@@ -4,12 +4,15 @@ import dev.cauce.core.apikey.ApiKey;
 import dev.cauce.core.apikey.ApiKeyGenerator;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.apikey.ApiKeyNotFoundException;
+import dev.cauce.core.audit.AuditEventRecorder;
+import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.memory.apikey.ApiKeyEntity;
 import dev.cauce.memory.apikey.ApiKeyMapper;
 import dev.cauce.memory.apikey.ApiKeyRepository;
 import dev.cauce.memory.tenant.TenantRepository;
 import dev.cauce.tenancy.apikey.ApiKeyCache;
+import dev.cauce.tenancy.audit.AdminAuditEvents;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -38,17 +41,20 @@ public class ApiKeyService {
     private final ApiKeyMapper apiKeyMapper;
     private final ApiKeyHasher apiKeyHasher;
     private final ApiKeyCache apiKeyCache;
+    private final AuditEventRecorder auditRecorder;
 
     public ApiKeyService(ApiKeyRepository apiKeyRepository,
                          TenantRepository tenantRepository,
                          ApiKeyMapper apiKeyMapper,
                          ApiKeyHasher apiKeyHasher,
-                         ApiKeyCache apiKeyCache) {
+                         ApiKeyCache apiKeyCache,
+                         AuditEventRecorder auditRecorder) {
         this.apiKeyRepository = apiKeyRepository;
         this.tenantRepository = tenantRepository;
         this.apiKeyMapper = apiKeyMapper;
         this.apiKeyHasher = apiKeyHasher;
         this.apiKeyCache = apiKeyCache;
+        this.auditRecorder = auditRecorder;
     }
 
     /**
@@ -69,6 +75,10 @@ public class ApiKeyService {
         ApiKey apiKey = ApiKey.create(tenantId, name, plaintext, apiKeyHasher);
         ApiKey saved = apiKeyMapper.toDomain(
                 apiKeyRepository.save(apiKeyMapper.toEntity(apiKey)));
+        // Admin audit in the same tx: key_id + public prefix + actor only — neither the
+        // plaintext nor the stored HMAC hash may ever reach the append-only sink.
+        auditRecorder.record(AdminAuditEvents.apiKeyIssued(
+                saved, TenantContext.getCurrentTenantId().orElseThrow()));
         return new ApiKeyCreationResult(saved, plaintext);
     }
 
@@ -84,6 +94,8 @@ public class ApiKeyService {
         ApiKey saved = apiKeyMapper.toDomain(
                 apiKeyRepository.save(apiKeyMapper.toEntity(revoked)));
         apiKeyCache.invalidateById(apiKeyId);
+        auditRecorder.record(AdminAuditEvents.apiKeyRevoked(
+                saved, TenantContext.getCurrentTenantId().orElseThrow()));
         return saved;
     }
 

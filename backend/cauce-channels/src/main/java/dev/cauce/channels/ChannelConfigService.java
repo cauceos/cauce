@@ -1,5 +1,6 @@
 package dev.cauce.channels;
 
+import dev.cauce.channels.audit.ChannelAuditEvents;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.config.ChannelConfigStatus;
 import dev.cauce.channels.persistence.ChannelConfigMapper;
@@ -8,8 +9,10 @@ import dev.cauce.channels.spi.ChannelAdapterRegistry;
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.apikey.ApiKeyGenerator;
 import dev.cauce.core.apikey.ApiKeyHasher;
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.InvalidChannelTypeException;
 import dev.cauce.core.tenant.NoTenantContext;
+import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentRepository;
 import java.util.List;
@@ -33,17 +36,20 @@ public class ChannelConfigService {
     private final AgentRepository agentRepository;
     private final ChannelAdapterRegistry adapterRegistry;
     private final ApiKeyHasher hasher;
+    private final AuditEventRecorder auditRecorder;
 
     public ChannelConfigService(ChannelConfigRepository channelConfigRepository,
                                 ChannelConfigMapper channelConfigMapper,
                                 AgentRepository agentRepository,
                                 ChannelAdapterRegistry adapterRegistry,
-                                ApiKeyHasher hasher) {
+                                ApiKeyHasher hasher,
+                                AuditEventRecorder auditRecorder) {
         this.channelConfigRepository = channelConfigRepository;
         this.channelConfigMapper = channelConfigMapper;
         this.agentRepository = agentRepository;
         this.adapterRegistry = adapterRegistry;
         this.hasher = hasher;
+        this.auditRecorder = auditRecorder;
     }
 
     /**
@@ -74,6 +80,10 @@ public class ChannelConfigService {
                 credential, hasher.hash(webhookSecret));
         ChannelConfig saved = channelConfigMapper.toDomain(
                 channelConfigRepository.save(channelConfigMapper.toEntity(config)));
+        // Admin audit in the same tx, in the owning tenant's chain: ids + channel type +
+        // actor only — never the provider credential, the webhook secret, or its hash.
+        auditRecorder.record(ChannelAuditEvents.channelConfigured(
+                saved, TenantContext.getCurrentTenantId().orElseThrow()));
         return new ChannelConfigCreationResult(saved, webhookSecret);
     }
 

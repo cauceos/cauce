@@ -71,6 +71,11 @@ class AuditCaptureIT extends AbstractGovernanceIntegrationTest {
         clientA = tenantService.createClient("Client A", partner.id());
         clientB = tenantService.createClient("Client B", partner.id());
         TenantContext.clear();
+        // Seeding through the tenancy services itself emits admin audit events (Family B) —
+        // exactly as designed. These ITs assert the capture MECHANISM in isolation, so the
+        // audit tables start empty; the admin events themselves are asserted in
+        // cauce-tenancy's AuditAdminIT.
+        jdbc.execute("TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox");
     }
 
     @AfterEach

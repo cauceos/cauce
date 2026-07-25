@@ -1,7 +1,9 @@
 package dev.cauce.tenancy;
 
 import dev.cauce.core.agent.Agent;
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.tenant.InvalidTenantTierException;
+import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.agent.AgentEntity;
@@ -9,6 +11,7 @@ import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.tenant.TenantEntity;
 import dev.cauce.memory.tenant.TenantRepository;
+import dev.cauce.tenancy.audit.AdminAuditEvents;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -31,12 +34,14 @@ public class AgentService {
     private final AgentRepository agentRepository;
     private final TenantRepository tenantRepository;
     private final AgentMapper agentMapper;
+    private final AuditEventRecorder auditRecorder;
 
     public AgentService(AgentRepository agentRepository, TenantRepository tenantRepository,
-                        AgentMapper agentMapper) {
+                        AgentMapper agentMapper, AuditEventRecorder auditRecorder) {
         this.agentRepository = agentRepository;
         this.tenantRepository = tenantRepository;
         this.agentMapper = agentMapper;
+        this.auditRecorder = auditRecorder;
     }
 
     /** Creates an agent with the default LLM configuration. */
@@ -67,7 +72,12 @@ public class AgentService {
 
         Agent agent = Agent.create(tenantId, name, systemPrompt, modelProvider, modelName,
                 temperature, maxResponseTokens);
-        return agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(agent)));
+        Agent saved = agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(agent)));
+        // Admin audit in the same tx, in the owning tenant's chain; the prompt enters only
+        // as a hash (sensitive, mutable business logic never lands in the append-only sink).
+        auditRecorder.record(AdminAuditEvents.agentCreated(
+                saved, TenantContext.getCurrentTenantId().orElseThrow()));
+        return saved;
     }
 
     /**

@@ -124,6 +124,10 @@ class AuditConductIT extends AbstractOrchestrationIntegrationTest {
         agentB = agentService.createAgent(clientB.id(), "BotB",
                 "You are helpful.", "anthropic", "claude-sonnet-4-7");
         TenantContext.clear();
+        // Seeding emits Family-B admin events by design; this IT asserts Family A
+        // (conduct) in isolation, so the audit tables start empty (admin events are
+        // asserted in cauce-tenancy's AuditAdminIT).
+        jdbc.execute("TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox");
         mockLlmProvider.respondWith(invocation ->
                 new LlmResponse("default reply", List.of(), FinishReason.STOP, LlmUsage.of(1, 1)));
     }

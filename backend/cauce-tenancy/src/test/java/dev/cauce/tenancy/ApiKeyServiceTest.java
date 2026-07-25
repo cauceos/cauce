@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.core.apikey.ApiKey;
 import dev.cauce.core.apikey.ApiKeyGenerator;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.apikey.ApiKeyNotFoundException;
+import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditEventRecorder;
+import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.apikey.ApiKeyEntity;
@@ -19,10 +23,12 @@ import dev.cauce.memory.tenant.TenantEntity;
 import dev.cauce.memory.tenant.TenantRepository;
 import dev.cauce.tenancy.apikey.ApiKeyCache;
 import dev.cauce.tenancy.apikey.ApiKeyCacheProperties;
+import dev.cauce.tenancy.audit.AdminAuditEvents;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -31,12 +37,14 @@ import org.mockito.Mockito;
 class ApiKeyServiceTest {
 
     private final UUID tenantId = UUID.randomUUID();
+    private final UUID actorTenantId = UUID.randomUUID();
 
     private ApiKeyRepository apiKeyRepository;
     private TenantRepository tenantRepository;
     private ApiKeyMapper mapper;
     private ApiKeyHasher hasher;
     private ApiKeyCache cache;
+    private AuditEventRecorder auditRecorder;
     private ApiKeyService service;
 
     @BeforeEach
@@ -51,9 +59,17 @@ class ApiKeyServiceTest {
         ApiKeyCacheProperties properties = new ApiKeyCacheProperties();
         properties.setTtlSeconds(60);
         cache = new ApiKeyCache(properties);
-        service = new ApiKeyService(apiKeyRepository, tenantRepository, mapper, hasher, cache);
+        auditRecorder = Mockito.mock(AuditEventRecorder.class);
+        service = new ApiKeyService(apiKeyRepository, tenantRepository, mapper, hasher, cache,
+                auditRecorder);
         when(apiKeyRepository.save(any(ApiKeyEntity.class)))
                 .thenAnswer(call -> call.getArgument(0));
+        TenantContext.setCurrentTenantId(actorTenantId);
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     @Test
@@ -78,6 +94,28 @@ class ApiKeyServiceTest {
 
         assertThatThrownBy(() -> service.createApiKey(tenantId, "name"))
                 .isInstanceOf(TenantNotFoundException.class);
+        verifyNoInteractions(auditRecorder); // no fact, no audit record
+    }
+
+    @Test
+    void createApiKey_recordsAdminAuditWithoutPlaintextOrHash() {
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant()));
+
+        ApiKeyCreationResult result = service.createApiKey(tenantId, "Production");
+
+        ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditRecorder).record(captor.capture());
+        AuditEvent event = captor.getValue();
+        assertThat(event.tenantId()).isEqualTo(tenantId); // the owning tenant's chain
+        assertThat(event.eventType()).isEqualTo(AdminAuditEvents.APIKEY_ISSUED);
+        assertThat(event.payload())
+                .containsEntry("api_key_id", result.apiKey().id().toString())
+                .containsEntry("tenant_id", tenantId.toString())
+                .containsEntry("key_prefix", result.apiKey().keyPrefix())
+                .containsEntry("actor_tenant_id", actorTenantId.toString());
+        // Neither the plaintext nor the stored HMAC hash may ever reach the sink.
+        assertThat(event.payload().values())
+                .doesNotContain(result.plaintextKey(), result.apiKey().keyHash());
     }
 
     @Test
@@ -95,6 +133,13 @@ class ApiKeyServiceTest {
         assertThat(captor.getValue().getRevokedAt()).isNotNull();
         // The cache no longer carries the revoked id.
         assertThat(cache.size()).isZero();
+
+        ArgumentCaptor<AuditEvent> audit = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditRecorder).record(audit.capture());
+        assertThat(audit.getValue().eventType()).isEqualTo(AdminAuditEvents.APIKEY_REVOKED);
+        assertThat(audit.getValue().payload())
+                .containsEntry("api_key_id", existing.id().toString())
+                .containsEntry("actor_tenant_id", actorTenantId.toString());
     }
 
     @Test
@@ -117,6 +162,7 @@ class ApiKeyServiceTest {
         ArgumentCaptor<ApiKeyEntity> captor = ArgumentCaptor.forClass(ApiKeyEntity.class);
         verify(apiKeyRepository).save(captor.capture());
         assertThat(captor.getValue().getLastUsedAt()).isNotNull();
+        verifyNoInteractions(auditRecorder); // usage stamping is not an admin fact
     }
 
     @Test

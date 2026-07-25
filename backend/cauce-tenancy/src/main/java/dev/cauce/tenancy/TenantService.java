@@ -1,12 +1,15 @@
 package dev.cauce.tenancy;
 
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.Tenant;
+import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
 import dev.cauce.memory.tenant.TenantEntity;
 import dev.cauce.memory.tenant.TenantMapper;
 import dev.cauce.memory.tenant.TenantRepository;
+import dev.cauce.tenancy.audit.AdminAuditEvents;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Limit;
@@ -26,12 +29,15 @@ public class TenantService {
     private final TenantRepository repository;
     private final TenantMapper mapper;
     private final OperatorBootstrap operatorBootstrap;
+    private final AuditEventRecorder auditRecorder;
 
     public TenantService(TenantRepository repository, TenantMapper mapper,
-                         OperatorBootstrap operatorBootstrap) {
+                         OperatorBootstrap operatorBootstrap,
+                         AuditEventRecorder auditRecorder) {
         this.repository = repository;
         this.mapper = mapper;
         this.operatorBootstrap = operatorBootstrap;
+        this.auditRecorder = auditRecorder;
     }
 
     /**
@@ -50,13 +56,13 @@ public class TenantService {
     @Transactional
     public Tenant createPartner(String name, UUID operatorId) {
         requireTier(operatorId, Tier.OPERATOR, "an OPERATOR");
-        return persist(Tenant.partner(name, operatorId));
+        return persistAudited(Tenant.partner(name, operatorId));
     }
 
     @Transactional
     public Tenant createClient(String name, UUID partnerId) {
         requireTier(partnerId, Tier.PARTNER, "a PARTNER");
-        return persist(Tenant.client(name, partnerId));
+        return persistAudited(Tenant.client(name, partnerId));
     }
 
     /**
@@ -94,7 +100,16 @@ public class TenantService {
         }
     }
 
-    private Tenant persist(Tenant tenant) {
-        return mapper.toDomain(repository.save(mapper.toEntity(tenant)));
+    /**
+     * Persists the new tenant and records the admin audit event in the same transaction —
+     * in the NEW tenant's own chain, with the acting tenant as actor. RLS permits the
+     * cross-tenant outbox write because the actor is by construction the subject's
+     * ancestor (self/child/grandchild is exactly what {@code tenant_is_visible} allows).
+     */
+    private Tenant persistAudited(Tenant tenant) {
+        Tenant saved = mapper.toDomain(repository.save(mapper.toEntity(tenant)));
+        auditRecorder.record(AdminAuditEvents.tenantCreated(
+                saved, TenantContext.getCurrentTenantId().orElseThrow()));
+        return saved;
     }
 }
