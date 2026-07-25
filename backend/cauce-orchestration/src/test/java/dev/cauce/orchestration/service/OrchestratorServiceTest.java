@@ -11,6 +11,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.core.agent.Agent;
+import dev.cauce.core.audit.AuditContentHash;
+import dev.cauce.core.audit.AuditEvent;
 import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
@@ -27,6 +29,7 @@ import dev.cauce.llm.model.LlmResponse;
 import dev.cauce.llm.model.LlmUsage;
 import dev.cauce.llm.spi.LlmProvider;
 import dev.cauce.llm.spi.LlmProviderRegistry;
+import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.context.ContextBuilder;
 import dev.cauce.orchestration.events.ContextAssembled;
 import dev.cauce.orchestration.events.InvocationCompleted;
@@ -144,14 +147,15 @@ class OrchestratorServiceTest {
         assertThat(result.role()).isEqualTo(MessageRole.AGENT);
         assertThat(result.content()).isEqualTo("It is 2026-06-13T10:15:30Z.");
 
-        // Persisted in order: TOOL_CALL, TOOL_RESULT (the clock output), then the final AGENT reply.
-        List<Message> persisted = capturedAppends(3);
+        // Persisted in order: TOOL_CALL, TOOL_RESULT (the clock output) via plain appends;
+        // the final AGENT reply goes through the audited append (asserted via the result).
+        List<Message> persisted = capturedAppends(2);
         assertThat(persisted.get(0).role()).isEqualTo(MessageRole.TOOL_CALL);
         assertThat(persisted.get(1).role()).isEqualTo(MessageRole.TOOL_RESULT);
         ToolResult result1 = (ToolResult) persisted.get(1).toolContent().orElseThrow();
         assertThat(result1.output()).isEqualTo("2026-06-13T10:15:30Z");
         assertThat(result1.isError()).isFalse();
-        assertThat(persisted.get(2).role()).isEqualTo(MessageRole.AGENT);
+        verify(gateway).appendAudited(eq(result), any());
         verify(provider, times(2)).invoke(any());
         verifyNoInteractions(errorRecorder);
     }
@@ -166,7 +170,7 @@ class OrchestratorServiceTest {
                 .respondToMessage(invocationId, conversationId, triggerId);
 
         assertThat(result.content()).isEqualTo("Recovered."); // invocation completes, not failed
-        ToolResult toolResult = (ToolResult) capturedAppends(3).get(1).toolContent().orElseThrow();
+        ToolResult toolResult = (ToolResult) capturedAppends(2).get(1).toolContent().orElseThrow();
         assertThat(toolResult.isError()).isTrue();
         assertThat(toolResult.output()).contains("Tool execution failed");
         verifyNoInteractions(errorRecorder);
@@ -181,7 +185,7 @@ class OrchestratorServiceTest {
         Message result = serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId);
 
         assertThat(result.content()).isEqualTo("Done.");
-        ToolResult toolResult = (ToolResult) capturedAppends(3).get(1).toolContent().orElseThrow();
+        ToolResult toolResult = (ToolResult) capturedAppends(2).get(1).toolContent().orElseThrow();
         assertThat(toolResult.isError()).isTrue();
         assertThat(toolResult.output()).contains("Unknown tool");
         verifyNoInteractions(errorRecorder);
@@ -218,6 +222,7 @@ class OrchestratorServiceTest {
         verify(errorRecorder).recordError(eq(conversationId), content.capture());
         assertThat(content.getValue()).startsWith("[orchestration_error] LlmRateLimitException: ");
         verify(gateway, never()).append(any()); // no message persisted on failure
+        verify(gateway, never()).appendAudited(any(), any()); // and no audit record either
     }
 
     @Test
@@ -406,6 +411,49 @@ class OrchestratorServiceTest {
         verifyNoInteractions(usageRecorder);
     }
 
+    // === AUDIT CAPTURE (conduct.agent.responded rides the final append's transaction) ===
+
+    @Test
+    void respondToMessage_finalReply_auditsAgentRespondedWithContentHashNotContent() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(reply("Hola, soy un agente"));
+
+        Message result = serviceWith(emptyRegistry())
+                .respondToMessage(invocationId, conversationId, triggerId);
+
+        AuditEvent event = capturedFinalAudit();
+        assertThat(event.tenantId()).isEqualTo(tenantId);
+        assertThat(event.eventType()).isEqualTo(ConductAuditEvents.AGENT_RESPONDED);
+        assertThat(event.payload())
+                .containsEntry("invocation_id", invocationId.toString())
+                .containsEntry("conversation_id", conversationId.toString())
+                .containsEntry("message_id", result.id().toString())
+                .containsEntry("agent_id", agent.id().toString())
+                .containsEntry("finish_reason", "STOP")
+                .containsEntry("rounds", 1)
+                .containsEntry("content_hash",
+                        AuditContentHash.of(tenantId, "Hola, soy un agente"))
+                .containsEntry("content_length", 19);
+        assertThat(event.payload().values()).doesNotContain("Hola, soy un agente");
+    }
+
+    @Test
+    void respondToMessage_toolRound_auditsOnlyTheFinalReplyWithRoundCount() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(
+                toolRequest("get_current_time"),
+                reply("It is 2026-06-13T10:15:30Z."));
+
+        serviceWith(clockRegistry()).respondToMessage(invocationId, conversationId, triggerId);
+
+        // Intermediate tool messages go through the plain (unaudited) append; the single
+        // audited append is the terminal conduct fact, carrying the real round count.
+        AuditEvent event = capturedFinalAudit();
+        assertThat(event.payload()).containsEntry("rounds", 2);
+    }
+
     // === OUTBOUND DISPATCH (explicit port) ===
 
     @Test
@@ -486,12 +534,20 @@ class OrchestratorServiceTest {
         when(gateway.load(conversationId, triggerId))
                 .thenReturn(new LoadedConversation(conversation, agent, List.of(user)));
         when(gateway.append(any())).thenAnswer(call -> call.getArgument(0));
+        when(gateway.appendAudited(any(), any())).thenAnswer(call -> call.getArgument(0));
     }
 
     private List<Message> capturedAppends(int times) {
         ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
         verify(gateway, times(times)).append(captor.capture());
         return captor.getAllValues();
+    }
+
+    /** The single audited (final) append and its audit event. */
+    private AuditEvent capturedFinalAudit() {
+        ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(gateway).appendAudited(any(), captor.capture());
+        return captor.getValue();
     }
 
     private static ToolRegistry emptyRegistry() {

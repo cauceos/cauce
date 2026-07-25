@@ -1,4 +1,4 @@
-package dev.cauce.governance.audit;
+package dev.cauce.core.audit;
 
 /**
  * The write port of the audit trail: a business call site records an auditable action as
@@ -6,9 +6,12 @@ package dev.cauce.governance.audit;
  * transaction (never opens its own), so the audit capture commits or rolls back atomically
  * with the business fact it describes — the transactional-outbox guarantee.
  *
- * <p>No production callers exist yet: wiring the real auditable actions (orchestrator loop,
- * tenancy operations) is a follow-up unit. Future callers add a dependency on
- * cauce-governance (acyclic: governance depends only on cauce-core and cauce-memory).
+ * <p>Port in cauce-core, adapter in cauce-governance ({@code OutboxAuditEventRecorder}) —
+ * the same shape as {@code AgentReplyDispatcher}/{@code ApiKeyHasher}: emitting modules
+ * (orchestration now, tenancy later) depend only on core, and governance stays an adapter
+ * rather than a hub. Injection is REQUIRED by design: audit capture is a guarantee, not an
+ * option — a deployment missing the adapter must fail at startup, not run with a silent
+ * hole in its trail.
  */
 public interface AuditEventRecorder {
 

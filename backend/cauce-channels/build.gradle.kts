@@ -26,6 +26,9 @@ dependencies {
     // ITs seed the tenant->agent hierarchy through the tenancy services (implementation
     // deps are not transitive at compile time, so orchestration's tenancy does not leak here).
     testImplementation(project(":cauce-tenancy"))
+    // Channels ITs boot InboundMessageService (orchestration), whose required
+    // AuditEventRecorder port (cauce-core) is implemented by the governance outbox adapter.
+    testImplementation(project(":cauce-governance"))
     testImplementation(libs.wiremock)
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:postgresql")

@@ -1,4 +1,4 @@
-package dev.cauce.governance.audit;
+package dev.cauce.core.audit;
 
 import java.util.Map;
 import java.util.Objects;
@@ -7,10 +7,13 @@ import java.util.UUID;
 /**
  * One auditable action as its business call site reports it: the owning tenant, an event
  * type, and an opaque payload document. The caller hands this to {@link AuditEventRecorder}
- * inside its own transaction; capture, ordering, and the ledger are governance's concern.
+ * inside its own transaction; capture, ordering, and the ledger are the audit adapter's
+ * concern (cauce-governance).
  *
- * <p>{@code eventType} carries no semantics yet — the real auditable vocabulary is a
- * follow-up unit (this unit is the capture container). The payload is copied defensively and
+ * <p>The payload must contain NON-SENSITIVE metadata only — never raw message text or any
+ * erasable personal data. Content is bound by hash instead ({@link AuditContentHash}):
+ * erasable content lives in the mutable business tables, where deletion operates; the
+ * append-only audit ledger keeps only its hash. The payload is copied defensively and
  * exposed immutable.
  */
 public record AuditEvent(UUID tenantId, String eventType, Map<String, Object> payload) {

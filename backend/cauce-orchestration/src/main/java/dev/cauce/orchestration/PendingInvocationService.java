@@ -1,9 +1,11 @@
 package dev.cauce.orchestration;
 
 import dev.cauce.core.agent.AgentNotFoundException;
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.MessageNotFoundException;
 import dev.cauce.core.tenant.NoTenantContext;
+import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
@@ -43,17 +45,20 @@ public class PendingInvocationService {
     private final MessageRepository messageRepository;
     private final AgentRepository agentRepository;
     private final PendingInvocationMapper pendingInvocationMapper;
+    private final AuditEventRecorder auditRecorder;
 
     public PendingInvocationService(PendingInvocationRepository pendingInvocationRepository,
                                     ConversationRepository conversationRepository,
                                     MessageRepository messageRepository,
                                     AgentRepository agentRepository,
-                                    PendingInvocationMapper pendingInvocationMapper) {
+                                    PendingInvocationMapper pendingInvocationMapper,
+                                    AuditEventRecorder auditRecorder) {
         this.pendingInvocationRepository = pendingInvocationRepository;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.agentRepository = agentRepository;
         this.pendingInvocationMapper = pendingInvocationMapper;
+        this.auditRecorder = auditRecorder;
     }
 
     /**
@@ -160,6 +165,11 @@ public class PendingInvocationService {
                            InvocationFailureType failureType) {
         PendingInvocation failed = loadVisible(invocationId).fail(errorMessage, failureType);
         pendingInvocationRepository.save(pendingInvocationMapper.toEntity(failed));
+        // The terminal conduct fact of a failed invocation commits WITH the transition.
+        // Only the taxonomy is audited: errorMessage can echo content and stays on the
+        // mutable row's last_error.
+        auditRecorder.record(ConductAuditEvents.invocationFailed(failed.tenantId(),
+                failed.id(), failed.conversationId(), failureType.name()));
     }
 
     /**
@@ -172,6 +182,9 @@ public class PendingInvocationService {
                               InvocationFailureType failureType) {
         PendingInvocation abandoned = loadVisible(invocationId).abandon(errorMessage, failureType);
         pendingInvocationRepository.save(pendingInvocationMapper.toEntity(abandoned));
+        // ABANDONED is terminal (publicly it collapses into FAILED) — audited like markFailed.
+        auditRecorder.record(ConductAuditEvents.invocationFailed(abandoned.tenantId(),
+                abandoned.id(), abandoned.conversationId(), failureType.name()));
     }
 
     /**

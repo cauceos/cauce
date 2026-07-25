@@ -1,5 +1,8 @@
 package dev.cauce.governance.audit;
 
+import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditEventRecorder;
+
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 

@@ -25,6 +25,7 @@ import dev.cauce.orchestration.events.OrchestrationEvent;
 import dev.cauce.orchestration.events.ToolCallRequested;
 import dev.cauce.orchestration.events.ToolExecuted;
 import dev.cauce.orchestration.support.AbstractOrchestrationIntegrationTest;
+import dev.cauce.orchestration.support.MockLlmProviderTestConfig;
 import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.orchestration.worker.PendingInvocationWorkerProperties;
 import dev.cauce.orchestration.worker.WorkerIdentity;
@@ -38,9 +39,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.test.context.event.ApplicationEvents;
@@ -53,16 +52,8 @@ import org.springframework.test.context.event.RecordApplicationEvents;
  * worker with a {@link SyncTaskExecutor} stands in, wired with the real beans).
  */
 @RecordApplicationEvents
-@Import(OrchestrationEventFlowIT.EventFlowMockProviderConfig.class)
+@Import(MockLlmProviderTestConfig.class)
 class OrchestrationEventFlowIT extends AbstractOrchestrationIntegrationTest {
-
-    @TestConfiguration
-    static class EventFlowMockProviderConfig {
-        @Bean
-        MockLlmProvider mockLlmProvider() {
-            return new MockLlmProvider();
-        }
-    }
 
     @Autowired
     private TenantService tenantService;

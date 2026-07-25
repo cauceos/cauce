@@ -32,6 +32,11 @@ dependencies {
     implementation(project(":cauce-tenancy"))
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
+    // Main code emits audit events through the cauce-core AuditEventRecorder port only;
+    // the outbox adapter (cauce-governance) is test-scope so ITs boot with the real
+    // recorder and can drain/verify the actual audit chain. Production wiring lives in
+    // cauce-api, which depends on both.
+    testImplementation(project(":cauce-governance"))
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:junit-jupiter")

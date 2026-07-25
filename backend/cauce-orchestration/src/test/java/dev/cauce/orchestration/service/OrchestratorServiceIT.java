@@ -16,6 +16,7 @@ import dev.cauce.llm.model.FinishReason;
 import dev.cauce.llm.model.LlmResponse;
 import dev.cauce.llm.model.LlmUsage;
 import dev.cauce.orchestration.support.AbstractOrchestrationIntegrationTest;
+import dev.cauce.orchestration.support.MockLlmProviderTestConfig;
 import dev.cauce.tenancy.AgentService;
 import dev.cauce.tenancy.ConversationService;
 import dev.cauce.tenancy.MessageService;
@@ -35,8 +36,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -46,16 +45,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * RLS filtering of persisted data is verified through a dedicated restricted role, while the
  * service-level path is exercised across hierarchy levels.
  */
-@Import(OrchestratorServiceIT.MockProviderConfig.class)
+@Import(MockLlmProviderTestConfig.class)
 class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
-
-    @TestConfiguration
-    static class MockProviderConfig {
-        @Bean
-        MockLlmProvider mockLlmProvider() {
-            return new MockLlmProvider();
-        }
-    }
 
     @Autowired
     private TenantService tenantService;

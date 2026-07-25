@@ -6,10 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.agent.AgentStatus;
+import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.conversation.ConversationStatus;
 import dev.cauce.core.message.Message;
@@ -28,6 +31,7 @@ import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +52,7 @@ class ConversationGatewayTest {
     private ConversationRepository conversationRepository;
     private MessageRepository messageRepository;
     private AgentRepository agentRepository;
+    private AuditEventRecorder auditRecorder;
     private ConversationGateway gateway;
 
     @BeforeEach
@@ -55,8 +60,10 @@ class ConversationGatewayTest {
         conversationRepository = Mockito.mock(ConversationRepository.class);
         messageRepository = Mockito.mock(MessageRepository.class);
         agentRepository = Mockito.mock(AgentRepository.class);
+        auditRecorder = Mockito.mock(AuditEventRecorder.class);
         gateway = new ConversationGateway(conversationRepository, new ConversationMapper(),
-                messageRepository, new MessageMapper(), agentRepository, new AgentMapper());
+                messageRepository, new MessageMapper(), agentRepository, new AgentMapper(),
+                auditRecorder);
     }
 
     @Test
@@ -124,6 +131,22 @@ class ConversationGatewayTest {
         verify(messageRepository).save(argThat(entity ->
                 entity.getRole() == MessageRole.AGENT && entity.getContent().equals("Reply")));
         verify(conversationRepository).touchLastMessageAt(eq(conversationId), any());
+        verifyNoInteractions(auditRecorder); // the plain append is deliberately unaudited
+    }
+
+    @Test
+    void appendAudited_persistsMessageAndRecordsTheAuditEventTogether() {
+        when(messageRepository.save(any(MessageEntity.class))).thenAnswer(call -> call.getArgument(0));
+        Message message = Message.from(conversationId, MessageRole.AGENT, "Reply");
+        AuditEvent audit = new AuditEvent(tenantId, "conduct.agent.responded",
+                Map.of("message_id", message.id().toString()));
+
+        Message saved = gateway.appendAudited(message, audit);
+
+        assertThat(saved.content()).isEqualTo("Reply");
+        verify(messageRepository).save(any(MessageEntity.class));
+        verify(conversationRepository).touchLastMessageAt(eq(conversationId), any());
+        verify(auditRecorder).record(audit); // both writes in the same transactional unit
     }
 
     // === fixtures ===

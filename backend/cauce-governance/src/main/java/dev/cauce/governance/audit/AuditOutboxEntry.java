@@ -1,5 +1,7 @@
 package dev.cauce.governance.audit;
 
+import dev.cauce.core.audit.AuditEvent;
+
 import dev.cauce.core.UuidGenerator;
 import java.time.Instant;
 import java.util.Map;
@@ -8,7 +10,7 @@ import java.util.UUID;
 
 /**
  * One captured auditable action awaiting its move to the append-only ledger. Written by
- * {@link AuditEventRecorder} in the SAME transaction as the business fact it audits (the
+ * {@link dev.cauce.core.audit.AuditEventRecorder} in the SAME transaction as the business fact it audits (the
  * transactional-outbox guarantee: both commit or neither does), then drained per tenant, in
  * capture order, by the background drainer.
  *

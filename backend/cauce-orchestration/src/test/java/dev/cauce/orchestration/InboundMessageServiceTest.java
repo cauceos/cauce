@@ -12,9 +12,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import dev.cauce.core.audit.AuditContentHash;
+import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
+import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.events.InvocationRequested;
 import dev.cauce.orchestration.exception.InvalidIdempotencyKeyException;
 import dev.cauce.orchestration.persistence.IngestIdempotencyRecordEntity;
@@ -38,6 +42,7 @@ class InboundMessageServiceTest {
     private PendingInvocationService pendingInvocationService;
     private IngestIdempotencyRecordRepository idempotencyRecordRepository;
     private ApplicationEventPublisher eventPublisher;
+    private AuditEventRecorder auditRecorder;
     private InboundMessageService service;
 
     @BeforeEach
@@ -47,9 +52,10 @@ class InboundMessageServiceTest {
         pendingInvocationService = mock(PendingInvocationService.class);
         idempotencyRecordRepository = mock(IngestIdempotencyRecordRepository.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
+        auditRecorder = mock(AuditEventRecorder.class);
         service = new InboundMessageService(conversationService, messageService,
                 pendingInvocationService, idempotencyRecordRepository,
-                new IngestIdempotencyRecordMapper(), eventPublisher);
+                new IngestIdempotencyRecordMapper(), eventPublisher, auditRecorder);
     }
 
     @Test
@@ -127,6 +133,43 @@ class InboundMessageServiceTest {
         verify(conversationService).resolveOrStartConversation(agentId, "whatsapp", "+34600111222");
     }
 
+    // === AUDIT CAPTURE ===
+
+    @Test
+    void ingest_validMessage_recordsConductAuditEventWithContentHashNotContent() {
+        UUID agentId = UUID.randomUUID();
+        UUID owningTenantId = UUID.randomUUID();
+        Conversation conversation = Conversation.start(agentId, "api", "user-1");
+        Message userMessage = Message.from(conversation.id(), MessageRole.USER, "Hola");
+        PendingInvocation invocation =
+                PendingInvocation.create(owningTenantId, conversation.id(), userMessage.id());
+
+        when(conversationService.resolveOrStartConversation(agentId, "api", "user-1"))
+                .thenReturn(conversation);
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
+                .thenReturn(userMessage);
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
+                .thenReturn(invocation);
+
+        service.ingest(agentId, "api", "user-1", "Hola");
+
+        ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditRecorder).record(captor.capture());
+        AuditEvent event = captor.getValue();
+        assertThat(event.tenantId()).isEqualTo(owningTenantId);
+        assertThat(event.eventType()).isEqualTo(ConductAuditEvents.MESSAGE_RECEIVED);
+        assertThat(event.payload())
+                .containsEntry("invocation_id", invocation.id().toString())
+                .containsEntry("conversation_id", conversation.id().toString())
+                .containsEntry("message_id", userMessage.id().toString())
+                .containsEntry("agent_id", agentId.toString())
+                .containsEntry("channel_type", "api")
+                .containsEntry("content_hash", AuditContentHash.of(owningTenantId, "Hola"))
+                .containsEntry("content_length", 4);
+        // The binding is by hash: the raw text never enters the audit payload.
+        assertThat(event.payload().values()).doesNotContain("Hola");
+    }
+
     // === IDEMPOTENCY ===
 
     @Test
@@ -161,7 +204,7 @@ class InboundMessageServiceTest {
         assertThat(result.messageId()).isEqualTo(stored.getMessageId());
         assertThat(result.invocationId()).isEqualTo(stored.getInvocationId());
         verifyNoInteractions(conversationService, messageService, pendingInvocationService,
-                eventPublisher);
+                eventPublisher, auditRecorder);
         verify(idempotencyRecordRepository, never()).insertLockIfAbsent(any(), any(), anyString());
     }
 
@@ -184,7 +227,7 @@ class InboundMessageServiceTest {
         assertThat(result.conversationId()).isEqualTo(winner.getConversationId());
         assertThat(result.messageId()).isEqualTo(winner.getMessageId());
         assertThat(result.invocationId()).isEqualTo(winner.getInvocationId());
-        verifyNoInteractions(messageService, pendingInvocationService, eventPublisher);
+        verifyNoInteractions(messageService, pendingInvocationService, eventPublisher, auditRecorder);
         verify(idempotencyRecordRepository, never()).recordResult(any(), any(), any(), any());
     }
 
@@ -224,7 +267,7 @@ class InboundMessageServiceTest {
                 .isInstanceOf(InvalidIdempotencyKeyException.class)
                 .hasMessageContaining("blank");
         verifyNoInteractions(conversationService, messageService, pendingInvocationService,
-                idempotencyRecordRepository, eventPublisher);
+                idempotencyRecordRepository, eventPublisher, auditRecorder);
     }
 
     @Test
@@ -234,7 +277,7 @@ class InboundMessageServiceTest {
                 .isInstanceOf(InvalidIdempotencyKeyException.class)
                 .hasMessageContaining("255");
         verifyNoInteractions(conversationService, messageService, pendingInvocationService,
-                idempotencyRecordRepository, eventPublisher);
+                idempotencyRecordRepository, eventPublisher, auditRecorder);
     }
 
     private static IngestIdempotencyRecordEntity storedRecord(UUID agentId, String key) {

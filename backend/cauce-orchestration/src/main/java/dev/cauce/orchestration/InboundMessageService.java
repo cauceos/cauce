@@ -1,9 +1,11 @@
 package dev.cauce.orchestration;
 
 import dev.cauce.core.UuidGenerator;
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
+import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.events.InvocationRequested;
 import dev.cauce.orchestration.exception.InvalidIdempotencyKeyException;
 import dev.cauce.orchestration.persistence.IngestIdempotencyRecordMapper;
@@ -61,19 +63,22 @@ public class InboundMessageService {
     private final IngestIdempotencyRecordRepository idempotencyRecordRepository;
     private final IngestIdempotencyRecordMapper idempotencyRecordMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final AuditEventRecorder auditRecorder;
 
     public InboundMessageService(ConversationService conversationService,
                                  MessageService messageService,
                                  PendingInvocationService pendingInvocationService,
                                  IngestIdempotencyRecordRepository idempotencyRecordRepository,
                                  IngestIdempotencyRecordMapper idempotencyRecordMapper,
-                                 ApplicationEventPublisher eventPublisher) {
+                                 ApplicationEventPublisher eventPublisher,
+                                 AuditEventRecorder auditRecorder) {
         this.conversationService = conversationService;
         this.messageService = messageService;
         this.pendingInvocationService = pendingInvocationService;
         this.idempotencyRecordRepository = idempotencyRecordRepository;
         this.idempotencyRecordMapper = idempotencyRecordMapper;
         this.eventPublisher = eventPublisher;
+        this.auditRecorder = auditRecorder;
     }
 
     /**
@@ -147,6 +152,12 @@ public class InboundMessageService {
             idempotencyRecordRepository.recordResult(
                     lockId, conversation.id(), userMessage.id(), invocation.id());
         }
+        // Audit capture (conduct.message.received) joins THIS transaction: if the ingest
+        // rolls back, no audit record survives — absence of the fact means absence of the
+        // record. Only the winning path records: an idempotent replay is audit-silent, like
+        // it is event-silent.
+        auditRecorder.record(ConductAuditEvents.messageReceived(invocation.tenantId(),
+                invocation.id(), agentId, channelType, userMessage));
         // Published synchronously INSIDE the ingest transaction: if it rolls back, the event
         // will have fired for work that never existed. Harmless with no consumers; TODO when a
         // persisting consumer lands, it must listen with

@@ -2,7 +2,7 @@ package dev.cauce.governance.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.cauce.governance.audit.AuditEvent;
+import dev.cauce.core.audit.AuditEvent;
 import dev.cauce.governance.audit.AuditLogEntry;
 import dev.cauce.governance.audit.AuditOutboxEntry;
 import java.time.Instant;

@@ -2,6 +2,8 @@ package dev.cauce.orchestration.service;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentNotFoundException;
+import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.Message;
@@ -43,19 +45,22 @@ public class ConversationGateway {
     private final MessageMapper messageMapper;
     private final AgentRepository agentRepository;
     private final AgentMapper agentMapper;
+    private final AuditEventRecorder auditRecorder;
 
     public ConversationGateway(ConversationRepository conversationRepository,
                                ConversationMapper conversationMapper,
                                MessageRepository messageRepository,
                                MessageMapper messageMapper,
                                AgentRepository agentRepository,
-                               AgentMapper agentMapper) {
+                               AgentMapper agentMapper,
+                               AuditEventRecorder auditRecorder) {
         this.conversationRepository = conversationRepository;
         this.conversationMapper = conversationMapper;
         this.messageRepository = messageRepository;
         this.messageMapper = messageMapper;
         this.agentRepository = agentRepository;
         this.agentMapper = agentMapper;
+        this.auditRecorder = auditRecorder;
     }
 
     /**
@@ -115,6 +120,20 @@ public class ConversationGateway {
     public Message append(Message message) {
         Message saved = messageMapper.toDomain(messageRepository.save(messageMapper.toEntity(message)));
         conversationRepository.touchLastMessageAt(message.conversationId(), saved.createdAt());
+        return saved;
+    }
+
+    /**
+     * Persists {@code message} exactly like {@link #append} AND records {@code audit} in the
+     * same transaction — the transactional-outbox guarantee for a message that is itself an
+     * auditable conduct fact (today: the final AGENT reply). The caller builds the complete
+     * event beforehand (message ids are minted client-side by the domain factory), so this
+     * stays a plain two-write transactional unit.
+     */
+    @Transactional
+    public Message appendAudited(Message message, AuditEvent audit) {
+        Message saved = append(message);
+        auditRecorder.record(audit);
         return saved;
     }
 }

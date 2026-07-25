@@ -1,5 +1,7 @@
 package dev.cauce.governance.audit;
 
+import dev.cauce.core.audit.AuditEvent;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;

@@ -18,6 +18,7 @@ import dev.cauce.llm.spi.LlmCredential;
 import dev.cauce.llm.spi.LlmProvider;
 import dev.cauce.llm.spi.LlmProviderRegistry;
 import dev.cauce.llm.spi.SystemDefaultLlmCredential;
+import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.context.ContextBuilder;
 import dev.cauce.orchestration.context.LlmInvocationContext;
 import dev.cauce.orchestration.events.ContextAssembled;
@@ -186,9 +187,15 @@ public class OrchestratorService {
                     response.usage().totalTokens(), Instant.now()));
 
             if (response.toolCalls().isEmpty()) {
-                // Final reply: persist the AGENT message and finish (the no-tools path).
-                Message finalMessage = conversationGateway.append(
-                        Message.from(conversationId, MessageRole.AGENT, response.content()));
+                // Final reply: persist the AGENT message and finish. The append is the
+                // terminal conduct fact, so the conduct.agent.responded audit record (with
+                // finish_reason and rounds — the completion record; there is no separate
+                // COMPLETED audit event) commits in the SAME transaction as the message.
+                // The message id is minted client-side, so the event is complete up front.
+                Message reply = Message.from(conversationId, MessageRole.AGENT, response.content());
+                Message finalMessage = conversationGateway.appendAudited(reply,
+                        ConductAuditEvents.agentResponded(agent.tenantId(), invocationId,
+                                agent.id(), reply, response.finishReason().name(), iteration + 1));
                 eventPublisher.publishEvent(new InvocationCompleted(invocationId, iteration + 1,
                         finalMessage.id(), Instant.now()));
                 dispatchReply(loaded.conversation(), finalMessage);

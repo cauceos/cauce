@@ -1,5 +1,8 @@
 package dev.cauce.governance.audit;
 
+import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditEventRecorder;
+
 import dev.cauce.governance.persistence.AuditOutboxEntryMapper;
 import dev.cauce.governance.persistence.AuditOutboxEntryRepository;
 import java.util.Objects;

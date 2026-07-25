@@ -1,8 +1,8 @@
 package dev.cauce.governance.support;
 
 import dev.cauce.core.agent.Agent;
-import dev.cauce.governance.audit.AuditEvent;
-import dev.cauce.governance.audit.AuditEventRecorder;
+import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;
 import java.util.Map;

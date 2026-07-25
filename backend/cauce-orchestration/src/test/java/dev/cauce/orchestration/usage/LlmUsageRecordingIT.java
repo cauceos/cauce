@@ -16,6 +16,7 @@ import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.service.MockLlmProvider;
 import dev.cauce.orchestration.service.OrchestratorService;
 import dev.cauce.orchestration.support.AbstractOrchestrationIntegrationTest;
+import dev.cauce.orchestration.support.MockLlmProviderTestConfig;
 import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.orchestration.worker.PendingInvocationWorkerProperties;
 import dev.cauce.orchestration.worker.WorkerIdentity;
@@ -29,9 +30,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -44,16 +43,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * (owner) connection; RLS is exercised through the runtime cauce_app role via
  * {@link #countAs}.
  */
-@Import(LlmUsageRecordingIT.UsageMockProviderConfig.class)
+@Import(MockLlmProviderTestConfig.class)
 class LlmUsageRecordingIT extends AbstractOrchestrationIntegrationTest {
-
-    @TestConfiguration
-    static class UsageMockProviderConfig {
-        @Bean
-        MockLlmProvider mockLlmProvider() {
-            return new MockLlmProvider();
-        }
-    }
 
     @Autowired
     private TenantService tenantService;

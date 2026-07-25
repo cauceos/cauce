@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.core.agent.AgentStatus;
+import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.conversation.ConversationStatus;
 import dev.cauce.core.message.MessageNotFoundException;
@@ -18,6 +20,7 @@ import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageEntity;
 import dev.cauce.memory.message.MessageRepository;
+import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.persistence.PendingInvocationEntity;
 import dev.cauce.orchestration.persistence.PendingInvocationMapper;
@@ -42,6 +45,7 @@ class PendingInvocationServiceTest {
     private MessageRepository messageRepository;
     private AgentRepository agentRepository;
     private PendingInvocationMapper mapper;
+    private AuditEventRecorder auditRecorder;
     private PendingInvocationService service;
 
     @BeforeEach
@@ -51,8 +55,9 @@ class PendingInvocationServiceTest {
         messageRepository = Mockito.mock(MessageRepository.class);
         agentRepository = Mockito.mock(AgentRepository.class);
         mapper = new PendingInvocationMapper();
+        auditRecorder = Mockito.mock(AuditEventRecorder.class);
         service = new PendingInvocationService(pendingInvocationRepository, conversationRepository,
-                messageRepository, agentRepository, mapper);
+                messageRepository, agentRepository, mapper, auditRecorder);
         when(pendingInvocationRepository.save(any(PendingInvocationEntity.class)))
                 .thenAnswer(call -> call.getArgument(0));
     }
@@ -173,6 +178,9 @@ class PendingInvocationServiceTest {
         verify(pendingInvocationRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PendingInvocationStatus.COMPLETED);
         assertThat(captor.getValue().getCompletedAt()).isNotNull();
+        // Success is audited by conduct.agent.responded in the final append's tx; the
+        // PROCESSING -> COMPLETED flip is queue bookkeeping, deliberately unaudited.
+        Mockito.verifyNoInteractions(auditRecorder);
     }
 
     @Test
@@ -189,6 +197,42 @@ class PendingInvocationServiceTest {
         assertThat(captor.getValue().getStatus()).isEqualTo(PendingInvocationStatus.FAILED);
         assertThat(captor.getValue().getLastError()).isEqualTo("401 unauthorized");
         assertThat(captor.getValue().getFailureType()).isEqualTo(InvocationFailureType.LLM_ERROR);
+    }
+
+    @Test
+    void markFailed_recordsConductFailedAuditWithTaxonomyOnlyNotRawError() {
+        PendingInvocation processing = processingInvocation();
+        when(pendingInvocationRepository.findById(processing.id()))
+                .thenReturn(Optional.of(mapper.toEntity(processing)));
+
+        service.markFailed(processing.id(), "401 unauthorized", InvocationFailureType.LLM_ERROR);
+
+        ArgumentCaptor<AuditEvent> audit = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditRecorder).record(audit.capture());
+        assertThat(audit.getValue().tenantId()).isEqualTo(tenantId);
+        assertThat(audit.getValue().eventType())
+                .isEqualTo(ConductAuditEvents.INVOCATION_FAILED);
+        assertThat(audit.getValue().payload())
+                .containsEntry("invocation_id", processing.id().toString())
+                .containsEntry("conversation_id", conversationId.toString())
+                .containsEntry("failure_type", "LLM_ERROR");
+        // The raw provider error can echo content: it stays on the mutable row only.
+        assertThat(audit.getValue().payload().values()).doesNotContain("401 unauthorized");
+    }
+
+    @Test
+    void markAbandoned_recordsConductFailedAuditLikeMarkFailed() {
+        PendingInvocation processing = processingInvocation();
+        when(pendingInvocationRepository.findById(processing.id()))
+                .thenReturn(Optional.of(mapper.toEntity(processing)));
+
+        service.markAbandoned(processing.id(), "exhausted retries",
+                InvocationFailureType.LLM_RETRIES_EXHAUSTED);
+
+        ArgumentCaptor<AuditEvent> audit = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditRecorder).record(audit.capture());
+        assertThat(audit.getValue().payload())
+                .containsEntry("failure_type", "LLM_RETRIES_EXHAUSTED");
     }
 
     @Test
@@ -224,6 +268,8 @@ class PendingInvocationServiceTest {
         assertThat(captor.getValue().getNextAttemptAt()).isNotNull();
         assertThat(captor.getValue().getClaimedAt()).isNull();
         assertThat(captor.getValue().getClaimedBy()).isNull();
+        // A retry release is not terminal: nothing is audited.
+        Mockito.verifyNoInteractions(auditRecorder);
     }
 
     @Test
