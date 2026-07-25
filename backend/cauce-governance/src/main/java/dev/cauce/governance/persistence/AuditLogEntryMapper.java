@@ -19,8 +19,10 @@ public final class AuditLogEntryMapper {
                 entry.eventType(),
                 entry.payload(),
                 entry.drainedAt(),
+                entry.payloadHash(),
                 entry.prevHash(),
                 entry.entryHash(),
+                entry.hashScheme(),
                 entry.signature());
     }
 
@@ -33,8 +35,10 @@ public final class AuditLogEntryMapper {
                 entity.getEventType(),
                 entity.getPayload(),
                 entity.getDrainedAt(),
+                entity.getPayloadHash(),
                 entity.getPrevHash(),
                 entity.getEntryHash(),
+                entity.getHashScheme(),
                 entity.getSignature());
     }
 }

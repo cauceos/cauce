@@ -2,19 +2,28 @@ package dev.cauce.governance.audit;
 
 import dev.cauce.core.UuidGenerator;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
 /**
  * One entry of the append-only audit ledger: a drained outbox row plus its per-tenant,
- * contiguous {@code sequenceNumber} (starting at 1). Entries are immutable facts — the
- * database enforces it (UPDATE/DELETE are revoked from the runtime role), the domain type
- * merely mirrors it.
+ * contiguous {@code sequenceNumber} (starting at 1) and its hash-chain fields. Entries are
+ * immutable facts — the database enforces it (UPDATE/DELETE are revoked from the runtime
+ * role), the domain type merely mirrors it.
  *
- * <p>{@code prevHash}, {@code entryHash}, and {@code signature} are RESERVED for the
- * hash-chain unit: this unit never fills them (always null here), but the ledger shape is
- * final so the chain lands additively.
+ * <p>Chain fields (all written on the drain INSERT, never by a later UPDATE):
+ * {@code payloadHash} is the persisted hash of the payload document — the only form of the
+ * payload the chain commits to, so verification survives a payload redaction;
+ * {@code prevHash} links to the previous entry's {@code entryHash} (the tenant-derived
+ * genesis hash for the tenant's first entry); {@code entryHash} is the v1 hash over the
+ * explicit preimage (see {@link AuditChainHasher}); {@code hashScheme} names the scheme
+ * ({@code "v1"}). All four are null only on rows drained before the chain unit (pre-chain
+ * rows — the verifier treats them as an unverifiable prefix, never backfilled).
+ *
+ * <p>{@code payload} is null when the owner redacted it post hoc (an operation the runtime
+ * role cannot perform); {@code signature} is RESERVED for the signing unit (always null).
  *
  * <p>Pure domain type: no persistence or framework dependencies.
  */
@@ -25,8 +34,10 @@ public record AuditLogEntry(UUID id,
                             String eventType,
                             Map<String, Object> payload,
                             Instant drainedAt,
+                            String payloadHash,
                             String prevHash,
                             String entryHash,
+                            String hashScheme,
                             String signature) {
 
     public AuditLogEntry {
@@ -34,7 +45,6 @@ public record AuditLogEntry(UUID id,
         Objects.requireNonNull(tenantId, "tenantId must not be null");
         Objects.requireNonNull(outboxId, "outboxId must not be null");
         Objects.requireNonNull(eventType, "eventType must not be null");
-        Objects.requireNonNull(payload, "payload must not be null");
         Objects.requireNonNull(drainedAt, "drainedAt must not be null");
         if (eventType.isBlank()) {
             throw new IllegalArgumentException("eventType must not be blank");
@@ -42,17 +52,34 @@ public record AuditLogEntry(UUID id,
         if (sequenceNumber < 1) {
             throw new IllegalArgumentException("sequenceNumber must be >= 1");
         }
-        payload = Map.copyOf(payload);
+        if (payload != null) {
+            payload = Map.copyOf(payload);
+        }
     }
 
     /**
      * Numbers {@code outboxEntry} into the ledger as sequence {@code sequenceNumber} of its
-     * tenant. The chain columns stay null — reserved for the hash-chain unit.
+     * tenant, chained: {@code prevHash} is the tenant's current head hash (or genesis) and
+     * the hashes were computed by {@link AuditChainHasher} over this entry's
+     * {@code drainedAt} — which is why the caller passes it in, minted with
+     * {@link #mintDrainedAt()} so the stored value equals the hashed value (PostgreSQL keeps
+     * microseconds; an untruncated instant would read back different from what was hashed).
      */
-    public static AuditLogEntry fromOutbox(AuditOutboxEntry outboxEntry, long sequenceNumber) {
+    public static AuditLogEntry chained(AuditOutboxEntry outboxEntry, long sequenceNumber,
+                                        Instant drainedAt, String payloadHash, String prevHash,
+                                        String entryHash, String hashScheme) {
         Objects.requireNonNull(outboxEntry, "outboxEntry must not be null");
+        Objects.requireNonNull(payloadHash, "payloadHash must not be null");
+        Objects.requireNonNull(prevHash, "prevHash must not be null");
+        Objects.requireNonNull(entryHash, "entryHash must not be null");
+        Objects.requireNonNull(hashScheme, "hashScheme must not be null");
         return new AuditLogEntry(UuidGenerator.newV7(), outboxEntry.tenantId(), sequenceNumber,
-                outboxEntry.id(), outboxEntry.eventType(), outboxEntry.payload(), Instant.now(),
-                null, null, null);
+                outboxEntry.id(), outboxEntry.eventType(), outboxEntry.payload(), drainedAt,
+                payloadHash, prevHash, entryHash, hashScheme, null);
+    }
+
+    /** A drain timestamp truncated to what PostgreSQL round-trips (microseconds). */
+    public static Instant mintDrainedAt() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 }

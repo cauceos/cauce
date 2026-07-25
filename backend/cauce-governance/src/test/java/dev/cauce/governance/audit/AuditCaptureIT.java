@@ -192,7 +192,7 @@ class AuditCaptureIT extends AbstractGovernanceIntegrationTest {
     void auditTables_areFilteredByRlsHierarchy() {
         seedAndDrain(clientA.id(), "e.one");
 
-        for (String table : List.of("audit_outbox", "audit_log_entries")) {
+        for (String table : List.of("audit_outbox", "audit_log_entries", "audit_chain_heads")) {
             assertThat(countAs(table, clientA.id())).as("%s owner", table).isEqualTo(1);
             assertThat(countAs(table, partner.id())).as("%s partner", table).isEqualTo(1);
             assertThat(countAs(table, operator.id())).as("%s operator", table).isEqualTo(1);
