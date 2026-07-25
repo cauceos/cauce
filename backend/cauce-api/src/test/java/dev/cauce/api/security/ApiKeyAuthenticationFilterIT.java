@@ -51,7 +51,7 @@ class ApiKeyAuthenticationFilterIT extends AbstractApiIntegrationTest {
         // Raw DB pokes (truncate, backdating expiry, reading last_used_at) go through the owner
         // connection: cauce_app is subject to RLS and cannot TRUNCATE or read rows out of context.
         jdbc = new JdbcTemplate(adminDataSource);
-        jdbc.execute("TRUNCATE TABLE channel_configs, api_keys, ingest_idempotency_records, pending_invocations, "
+        jdbc.execute("TRUNCATE TABLE llm_usage_records, channel_configs, api_keys, ingest_idempotency_records, pending_invocations, "
                 + "messages, "
                 + "conversations, agents, tenants CASCADE");
         TenantContext.clear();

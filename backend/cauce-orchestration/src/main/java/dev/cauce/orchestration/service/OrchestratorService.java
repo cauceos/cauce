@@ -30,6 +30,8 @@ import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
+import dev.cauce.orchestration.usage.LlmUsageRecord;
+import dev.cauce.orchestration.usage.LlmUsageRecorder;
 import dev.cauce.tools.spi.Tool;
 import dev.cauce.tools.spi.ToolRegistry;
 import java.time.Instant;
@@ -66,6 +68,11 @@ import org.springframework.stereotype.Service;
  * or fails it as before); exceeding {@link #MAX_TOOL_ITERATIONS} records a SYSTEM error and
  * throws {@link MaxToolIterationsExceededException} (the worker fails the invocation).
  *
+ * <p><b>Usage:</b> every provider response writes one row to the per-tenant usage ledger via
+ * {@link LlmUsageRecorder}, synchronously and before the {@code LlmResponded} event, so the
+ * billing fact is committed before any consumer can observe the call. A failed usage INSERT
+ * fails the invocation — deliberate: usage is never lost silently.
+ *
  * <p><b>Events:</b> each step publishes its lifecycle event (see
  * {@code dev.cauce.orchestration.events}) synchronously, always outside any transaction and
  * after the step's messages have committed. Purely observational: emission changes no
@@ -99,6 +106,7 @@ public class OrchestratorService {
     private final ToolRegistry toolRegistry;
     private final Environment environment;
     private final OrchestrationErrorRecorder errorRecorder;
+    private final LlmUsageRecorder usageRecorder;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectProvider<AgentReplyDispatcher> replyDispatcher;
 
@@ -108,6 +116,7 @@ public class OrchestratorService {
                                ToolRegistry toolRegistry,
                                Environment environment,
                                OrchestrationErrorRecorder errorRecorder,
+                               LlmUsageRecorder usageRecorder,
                                ApplicationEventPublisher eventPublisher,
                                ObjectProvider<AgentReplyDispatcher> replyDispatcher) {
         this.conversationGateway = conversationGateway;
@@ -116,6 +125,7 @@ public class OrchestratorService {
         this.toolRegistry = toolRegistry;
         this.environment = environment;
         this.errorRecorder = errorRecorder;
+        this.usageRecorder = usageRecorder;
         this.eventPublisher = eventPublisher;
         this.replyDispatcher = replyDispatcher;
     }
@@ -165,6 +175,11 @@ public class OrchestratorService {
             eventPublisher.publishEvent(new LlmInvoked(invocationId, provider.id(),
                     agent.modelName(), iteration, Instant.now()));
             LlmResponse response = invoke(provider, invocation, conversationId, agent);
+            // Billing fact: committed in its own short transaction before the event is
+            // observable; a failure here fails the invocation rather than losing usage.
+            usageRecorder.record(LlmUsageRecord.create(agent.tenantId(), agent.id(),
+                    conversationId, invocationId, provider.id(), agent.modelName(), iteration,
+                    response.usage(), response.finishReason().name()));
             eventPublisher.publishEvent(new LlmResponded(invocationId, provider.id(),
                     agent.modelName(), iteration, response.finishReason().name(),
                     response.usage().inputTokens(), response.usage().outputTokens(),

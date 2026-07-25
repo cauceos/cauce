@@ -38,6 +38,8 @@ import dev.cauce.orchestration.events.ToolExecuted;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
+import dev.cauce.orchestration.usage.LlmUsageRecord;
+import dev.cauce.orchestration.usage.LlmUsageRecorder;
 import dev.cauce.tools.clock.ClockTool;
 import dev.cauce.tools.spi.Tool;
 import dev.cauce.tools.spi.ToolRegistry;
@@ -71,11 +73,13 @@ class OrchestratorServiceTest {
     private ConversationGateway gateway;
     private LlmProviderRegistry registry;
     private OrchestrationErrorRecorder errorRecorder;
+    private LlmUsageRecorder usageRecorder;
     private LlmProvider provider;
     private ApplicationEventPublisher eventPublisher;
     private AgentReplyDispatcher replyDispatcher;
     private ObjectProvider<AgentReplyDispatcher> replyDispatcherProvider;
     private Conversation conversation;
+    private Agent agent;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -83,6 +87,7 @@ class OrchestratorServiceTest {
         gateway = Mockito.mock(ConversationGateway.class);
         registry = Mockito.mock(LlmProviderRegistry.class);
         errorRecorder = Mockito.mock(OrchestrationErrorRecorder.class);
+        usageRecorder = Mockito.mock(LlmUsageRecorder.class);
         provider = Mockito.mock(LlmProvider.class);
         when(provider.id()).thenReturn(PROVIDER);
         eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
@@ -339,6 +344,68 @@ class OrchestratorServiceTest {
                 .hasExactlyElementsOfTypes(ContextAssembled.class, LlmInvoked.class);
     }
 
+    // === USAGE RECORDING (per LLM call, before the LlmResponded event) ===
+
+    @Test
+    void respondToMessage_singleRound_recordsOneUsageRecordWithPayload() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(reply("Hola, soy un agente"));
+
+        serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId);
+
+        ArgumentCaptor<LlmUsageRecord> captor = ArgumentCaptor.forClass(LlmUsageRecord.class);
+        verify(usageRecorder).record(captor.capture());
+        LlmUsageRecord record = captor.getValue();
+        assertThat(record.tenantId()).isEqualTo(tenantId);
+        assertThat(record.agentId()).isEqualTo(agent.id());
+        assertThat(record.conversationId()).isEqualTo(conversationId);
+        assertThat(record.invocationId()).isEqualTo(invocationId);
+        assertThat(record.provider()).isEqualTo(PROVIDER);
+        assertThat(record.model()).isEqualTo(MODEL);
+        assertThat(record.roundIndex()).isZero();
+        assertThat(record.inputTokens()).isEqualTo(5);
+        assertThat(record.outputTokens()).isEqualTo(5);
+        assertThat(record.totalTokens()).isEqualTo(10);
+        assertThat(record.finishReason()).isEqualTo("STOP");
+    }
+
+    @Test
+    void respondToMessage_withToolRound_recordsOneUsageRecordPerLlmCall() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(
+                toolRequest("get_current_time"),
+                reply("It is 2026-06-13T10:15:30Z."));
+
+        serviceWith(clockRegistry()).respondToMessage(invocationId, conversationId, triggerId);
+
+        ArgumentCaptor<LlmUsageRecord> captor = ArgumentCaptor.forClass(LlmUsageRecord.class);
+        verify(usageRecorder, times(2)).record(captor.capture());
+        List<LlmUsageRecord> records = captor.getAllValues();
+        assertThat(records.get(0).roundIndex()).isZero();
+        assertThat(records.get(0).finishReason()).isEqualTo("TOOL_USE");
+        assertThat(records.get(0).totalTokens()).isEqualTo(7);
+        assertThat(records.get(1).roundIndex()).isEqualTo(1);
+        assertThat(records.get(1).finishReason()).isEqualTo("STOP");
+        assertThat(records.get(1).totalTokens()).isEqualTo(10);
+    }
+
+    @Test
+    void respondToMessage_whenProviderFails_recordsNoUsage() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any()))
+                .thenThrow(new LlmRateLimitException(PROVIDER, MODEL, "429 throttled"));
+
+        assertThatThrownBy(() -> serviceWith(emptyRegistry())
+                .respondToMessage(invocationId, conversationId, triggerId))
+                .isInstanceOf(LlmRateLimitException.class);
+
+        // No response, no billed tokens reported: nothing to record for the failed call.
+        verifyNoInteractions(usageRecorder);
+    }
+
     // === OUTBOUND DISPATCH (explicit port) ===
 
     @Test
@@ -400,7 +467,8 @@ class OrchestratorServiceTest {
 
     private OrchestratorService serviceWith(ToolRegistry toolRegistry) {
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
-                new MockEnvironment(), errorRecorder, eventPublisher, replyDispatcherProvider);
+                new MockEnvironment(), errorRecorder, usageRecorder, eventPublisher,
+                replyDispatcherProvider);
     }
 
     /** All lifecycle events published so far, in publication order. */
@@ -412,7 +480,7 @@ class OrchestratorServiceTest {
     }
 
     private void stubLoadAndEchoAppend() {
-        Agent agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL);
+        agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL);
         conversation = Conversation.start(agent.id(), "telegram", "987654321");
         Message user = Message.from(conversationId, MessageRole.USER, "Hola");
         when(gateway.load(conversationId, triggerId))
