@@ -80,7 +80,7 @@ class MessageToolContentPersistenceIT {
 
     @BeforeEach
     void setUp() {
-        new JdbcTemplate(dataSource).execute("TRUNCATE TABLE llm_usage_records, channel_configs, api_keys, ingest_idempotency_records, "
+        new JdbcTemplate(dataSource).execute("TRUNCATE TABLE audit_log_entries, audit_outbox, llm_usage_records, channel_configs, api_keys, ingest_idempotency_records, "
                 + "pending_invocations, "
                 + "messages, conversations, agents, tenants CASCADE");
 
