@@ -24,6 +24,25 @@ Cauce is an open-source platform for building, operating, and governing AI agent
 
 Today's agent platforms are either Python-only frameworks (LangGraph, CrewAI), closed-source US products (Vapi, Retell, Sierra), or single-channel gateways (Evolution API). None of them offer a complete, open, sovereign-by-design platform with multi-tenant operations and unified cross-channel memory for European businesses. Cauce fills that gap.
 
+## Try it
+
+A local quickstart — from clone to a responding agent with a local LLM (Ollama), no
+paid API keys and no JDK required, everything in Docker:
+
+```bash
+git clone https://github.com/cauceos/cauce.git
+cd cauce
+docker compose --profile quickstart up -d --build
+./scripts/quickstart.sh    # Windows: powershell -ExecutionPolicy Bypass -File scripts\quickstart.ps1
+```
+
+See **[QUICKSTART.md](QUICKSTART.md)** for requirements (~8 GB RAM for Docker, ~15 GB
+disk) and honest timings: measured ~5 minutes clone → answer on a modern laptop with
+fast internet, but the ≈6 GB of initial downloads dominate — budget 15–30 minutes on a
+slower connection. The demo shows the agentic tool loop (the model calls a real tool and
+answers from its result), not just chat, and ends with how to optionally connect a
+Telegram bot.
+
 ## Status
 
 **Early development.** This repository is part of a multi-year project being built in the open. Architectural and design decisions are documented as Architecture Decision Records (ADRs) and will be published here as they stabilize. Code is not yet ready for production use.

@@ -273,6 +273,15 @@ least-privilege `cauce_app` login role) run **only on a fresh volume**. After pu
 change that adds or edits one, recreate the volume to pick it up:
 `docker compose down -v && docker compose up -d`.
 
+**Quickstart profile.** `docker compose --profile quickstart up -d --build` additionally
+runs the app itself (image built from `backend/Dockerfile`; no local JDK needed) and a
+containerized Ollama with an automatic model pull; `scripts/quickstart.sh` (or
+`quickstart.ps1`) then bootstraps a demo agent and sends the first tool-calling message.
+See [QUICKSTART.md](QUICKSTART.md). The profile is additive: without `--profile
+quickstart` compose stays infra-only, and the dev flow below is unchanged. Devs who only
+want a local Ollama for bootRun can use `docker compose --profile ollama up -d`
+(publishes `11434`, pulls `OLLAMA_MODEL`, default `qwen2.5:3b`).
+
 ### Backend
 
 ```bash
@@ -402,28 +411,10 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
   by key only; the threat model is byte-identical webhook redelivery, not a client reusing a key
   with a different body) and **no retention purge** for `ingest_idempotency_records` (the table
   has `created_at` + an index so a scheduled `DELETE WHERE created_at < …` is a pure add).
-- **Per-tenant LLM credentials.** Only the system-default credential exists
-  (`SystemDefaultLlmCredential`, env-var based); there is no per-tenant/BYO-key path. Gates the
-  commercial model.
-- **Usage accounting — capture landed** (V19 `llm_usage_records`: one immutable row per LLM
-  call, attributed to the tenant under RLS, written synchronously by the orchestrator).
-  Remaining deferrals: the **query/aggregation surface** (the table is write-only today; the
-  endpoint arrives with the dashboard, which defines the aggregations it needs),
-  **pricing/cost as a view** over the facts via a separate versioned price table (a stored
-  cost would turn a tariff change into retroactive ledger corruption, so it is deliberately
-  never materialized on the rows), and per-agent/per-model indexes beyond
-  `(tenant_id, created_at)` if the dashboard's aggregations need them.
-- **Audit trail — capture skeleton landed** (cauce-governance: `AuditEventRecorder` port +
-  V20 `audit_outbox` written in the caller's business tx, V21 append-only `audit_log_entries`
-  with UPDATE/DELETE revoked from `cauce_app` by grant, per-tenant drainer assigning the
-  contiguous `sequence_number`). Remaining units, in intended order: the **hash chain +
-  signature** over the reserved `prev_hash`/`entry_hash`/`signature` columns (per-tenant chain
-  computed at drain time; a chain-heads table caching `(last_seq, last_hash)` is an additive
-  option); **wiring real auditable events** (the orchestrator loop and tenancy/API-key
-  operations call the port inside their txs; defines the real `event_type` vocabulary —
-  today's values are semantics-free placeholders); **retention purge of DRAINED outbox rows**
-  (the ledger's `outbox_id` deliberately has no FK so the purge is a pure add); and RGPD
-  endpoints / policy engine (the module's broader charter).
+- **Per-tenant LLM credentials and usage accounting.** Only the system-default credential exists
+  (`SystemDefaultLlmCredential`, env-var based); there is no per-tenant/BYO-key path. Token usage
+  (`LlmUsage`) is logged but never persisted or attributed per tenant. Both gate the commercial
+  model and billing.
 - **OSS quickstart.** docker-compose runs only PostgreSQL, Redis, and Adminer; there is no
   clone → compose up → agent-responding path (app + Ollama in compose). Adoption surface.
 - **Channel delivery guarantee (the "module-after").** Outbound delivery is live but explicitly

@@ -19,3 +19,16 @@
 #   adminer:
 #     ports:
 #       - "18081:8080"
+#
+#   # Quickstart on a machine with a native Ollama install (e.g. Apple Silicon,
+#   # where the containerized Ollama cannot use the GPU): point the app at the
+#   # host's Ollama and skip the containerized one. Note that plain
+#   # 'up cauce-api' would still start the ollama service (it is a depends_on
+#   # dependency) and collide with the native one on port 11434 — use --no-deps
+#   # and start the infra first:
+#   #   ollama pull qwen2.5:3b          # on the host, once
+#   #   docker compose up -d            # infra only; let it get healthy
+#   #   docker compose --profile quickstart up -d --build --no-deps cauce-api
+#   cauce-api:
+#     environment:
+#       CAUCE_LLM_OPENAICOMPATIBLE_PROVIDERS_OLLAMA_BASEURL: http://host.docker.internal:11434/v1
