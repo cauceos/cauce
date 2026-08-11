@@ -40,3 +40,8 @@ docker-compose.override.yml
 
 # --- Quickstart state (bootstrap API key and demo ids — never commit) ---
 .quickstart.env
+
+# --- Frontend (npm / Vite) ---
+node_modules/
+frontend/**/dist/
+frontend/**/*.local

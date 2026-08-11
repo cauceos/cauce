@@ -1,0 +1,97 @@
+/* Cauce Playground — design tokens (brand.md v1.0, mirrored from the
+   reference mockup). Tailwind v4 CSS-first configuration: this @theme block
+   IS the Tailwind config. Every token is emitted as a :root custom
+   property, so the structured CSS in shell.css / session.css and any
+   Tailwind utility read the exact same values — single-sourced. */
+
+@import "tailwindcss";
+
+@theme {
+  /* Brand colors are the only colors: reset Tailwind's default palette so
+     e.g. its own stone-500 cannot silently coexist with brand stone. */
+  --color-*: initial;
+
+  --color-teal-300: #90E8E1;
+  --color-teal-400: #5EDDD0;
+  --color-teal-500: #2DD4C0;
+  --color-teal-600: #1BB8A6;
+  --color-moss-400: #6FAF82;
+  --color-moss-500: #4E8B62;
+  --color-slate-400: #8AB4CC;
+  --color-slate-500: #5A8CAB;
+  --color-stone-950: #0E0F0D;
+  --color-stone-900: #161713;
+  --color-stone-800: #252620;
+  --color-stone-700: #35362E;
+  --color-stone-600: #4A4B42;
+  --color-stone-400: #8C8D82;
+  --color-stone-200: #D4D5CC;
+  --color-stone-100: #ECEEE8;
+  --color-border: #2E2F28;
+  --color-text-2: #C8CAC2;
+
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Geist", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Courier New", monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 100px;
+}
+
+/* Semantic aliases (`inline` so the var() references resolve correctly). */
+@theme inline {
+  --color-bg: var(--color-stone-950);
+  --color-surface: var(--color-stone-900);
+  --color-surface-2: var(--color-stone-800);
+  --color-text: var(--color-stone-100);
+  --color-muted: var(--color-stone-600);
+  --color-subtle: var(--color-stone-400);
+}
+
+/* Layout constants — not utility material. The responsive breakpoints
+   (700px / 1024px) cannot be variables (CSS forbids var() inside media
+   conditions); they live as literals in shell.css / session.css with a
+   comment naming the contract. */
+:root {
+  --sidebar-w: 248px;
+  --rail-w: 68px;
+  --topbar-h: 58px;
+}
+
+/* Base element styles (mockup body / focus ring). */
+html {
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.65;
+  min-height: 100vh;
+}
+:focus-visible {
+  outline: 2px solid var(--color-teal-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ══════════ Motion (keyframes + .nadir policy) ══════════
+   The reduced-motion overrides for .sidebar and .status-dot.connecting live
+   at the END of shell.css: media queries add no specificity, so only source
+   order lets them beat the base declarations in that file. Only .nadir is
+   handled here, because its base rule is in this same file, above. */
+@keyframes nadirPulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.35; }
+}
+.nadir {
+  animation: nadirPulse 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nadir {
+    animation: none;
+  }
+}

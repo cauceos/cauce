@@ -1,0 +1,121 @@
+/* Cauce Playground — session screen, plus the shared main-column visual
+   language (eyebrow / h1 / lede) reused by the placeholder views.
+   Transplanted from referencias/01-shell-session.html against tokens.css. */
+
+.main { flex: 1; position: relative; overflow: hidden; min-width: 0; }
+
+.topo {
+  position: absolute; inset: 0 0 auto 0; height: 340px;
+  pointer-events: none; user-select: none;
+}
+.topo svg { width: 100%; height: 100%; display: block; }
+
+.session-wrap {
+  position: relative; z-index: 1;
+  max-width: 560px; margin: 0 auto;
+  padding: 120px 32px 80px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 4px;
+  text-transform: uppercase; color: var(--color-teal-500); margin-bottom: 14px;
+}
+h1 {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: clamp(30px, 4vw, 42px); letter-spacing: -1.5px; line-height: 1.05;
+  margin-bottom: 12px;
+}
+h1 em { font-style: italic; color: var(--color-teal-500); }
+.lede {
+  color: var(--color-text-2); font-weight: 300; font-size: 15px;
+  max-width: 46ch; margin-bottom: 36px;
+}
+
+.card {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); padding: 28px;
+}
+.field { margin-bottom: 22px; }
+.field label {
+  display: block; font-size: 13px; font-weight: 500; color: var(--color-text);
+  margin-bottom: 7px;
+}
+.input {
+  width: 100%; background: var(--color-bg); border: 1px solid var(--color-stone-700);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  font-family: var(--font-mono); font-size: 13px; color: var(--color-text);
+  line-height: 1.5;
+}
+.input::placeholder { color: var(--color-muted); }
+.input-key { display: flex; gap: 8px; }
+.input-key .input { flex: 1; min-width: 0; }
+.reveal-btn {
+  background: var(--color-surface-2); border: 1px solid var(--color-stone-700);
+  border-radius: var(--radius-sm); padding: 0 12px;
+  color: var(--color-subtle); font-size: 12px; font-family: var(--font-body);
+  cursor: pointer; flex-shrink: 0;
+}
+.helper { font-size: 12px; color: var(--color-subtle); margin-top: 7px; line-height: 1.55; }
+.helper code { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-2); }
+
+.bootstrap-hint {
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 24px;
+}
+.bootstrap-hint .t { font-size: 12.5px; color: var(--color-text-2); margin-bottom: 8px; }
+.bootstrap-hint .t strong { color: var(--color-text); font-weight: 500; }
+.log-line {
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.7;
+  color: var(--color-subtle); white-space: nowrap; overflow-x: auto; display: block;
+  -webkit-overflow-scrolling: touch;
+}
+.log-line .warn { color: var(--color-moss-400); }
+.log-line .key { color: var(--color-teal-500); }
+
+/* Connect failure detail — a state the mockup does not define. The palette
+   has no danger color and none is invented: errors are quiet text. */
+.error-note {
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 24px;
+}
+.error-note .t { font-size: 12.5px; color: var(--color-text); margin-bottom: 4px; }
+.error-note .log-line { color: var(--color-muted); }
+
+.connect-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.btn-primary {
+  background: var(--color-teal-500); color: var(--color-stone-950);
+  border: none; border-radius: var(--radius-full);
+  font-family: var(--font-body); font-weight: 600; font-size: 14px;
+  padding: 11px 28px; cursor: pointer;
+}
+.btn-primary:hover { background: var(--color-teal-600); }
+.btn-primary:disabled { opacity: 0.55; cursor: default; }
+.btn-primary:disabled:hover { background: var(--color-teal-500); }
+.probe {
+  font-family: var(--font-mono); font-size: 11px; color: var(--color-muted);
+  text-align: right; line-height: 1.6;
+}
+.probe .path { color: var(--color-subtle); }
+.probe .pending { color: var(--color-stone-600); }
+.probe .ok { color: var(--color-teal-500); }
+.probe .fail { color: var(--color-subtle); }
+
+/* ═════ TABLET · 701–1024px (contract: icon-rail regime) ═════ */
+@media (max-width: 1024px) and (min-width: 701px) {
+  .session-wrap { padding: 100px 28px 64px; }
+}
+
+/* ═════ MOBILE · ≤700px (contract: topbar + drawer regime) ═════ */
+@media (max-width: 700px) {
+  .main { padding-top: var(--topbar-h); }
+  .topo { top: var(--topbar-h); height: 210px; }
+  .topo svg { transform: scale(1.4); transform-origin: top center; }
+
+  .session-wrap { padding: 64px 20px 56px; max-width: 100%; }
+  .lede { font-size: 14px; margin-bottom: 28px; }
+  .card { padding: 20px; border-radius: var(--radius-md); }
+
+  .connect-row { flex-direction: column; align-items: stretch; gap: 12px; }
+  .btn-primary { width: 100%; padding: 13px 28px; }
+  .probe { text-align: left; }
+}

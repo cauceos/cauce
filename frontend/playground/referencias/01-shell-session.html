@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cauce Playground — Session</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================
+   CAUCE PLAYGROUND · Mockup 01 — Shell + Session
+   Static reference. Fake data. Not production code.
+   Tokens mirror tokens.css (brand.md v1.0)
+
+   Responsive contract (for implementation):
+   · ≥1025px  desktop — full sidebar, 248px
+   · 701–1024 tablet  — icon rail, 68px, labels as tooltips
+   · ≤700px   mobile  — topbar + slide-in drawer with backdrop
+   ============================================ */
+:root {
+  --teal-300:#90E8E1; --teal-400:#5EDDD0; --teal-500:#2DD4C0; --teal-600:#1BB8A6;
+  --moss-400:#6FAF82; --moss-500:#4E8B62;
+  --slate-400:#8AB4CC; --slate-500:#5A8CAB;
+  --stone-950:#0E0F0D; --stone-900:#161713; --stone-800:#252620;
+  --stone-700:#35362E; --stone-600:#4A4B42; --stone-400:#8C8D82;
+  --stone-200:#D4D5CC; --stone-100:#ECEEE8;
+
+  --bg:var(--stone-950); --surface:var(--stone-900); --surface-2:var(--stone-800);
+  --border:#2E2F28; --text:var(--stone-100); --text-2:#C8CAC2;
+  --muted:var(--stone-600); --subtle:var(--stone-400);
+
+  --font-display:'Fraunces', Georgia, serif;
+  --font-body:'Geist', system-ui, sans-serif;
+  --font-mono:'JetBrains Mono','Courier New', monospace;
+
+  --sidebar-w:248px;
+  --rail-w:68px;
+  --topbar-h:58px;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-full:100px;
+}
+
+* { box-sizing:border-box; margin:0; padding:0; }
+html { -webkit-font-smoothing:antialiased; }
+body {
+  background:var(--bg); color:var(--text);
+  font-family:var(--font-body); font-size:14px; line-height:1.65;
+  min-height:100vh;
+}
+:focus-visible { outline:2px solid var(--teal-500); outline-offset:2px; border-radius:4px; }
+
+.app { display:flex; min-height:100vh; }
+
+/* ══════════ TOPBAR (mobile only) ══════════ */
+.topbar {
+  display:none;
+  position:fixed; top:0; left:0; right:0; z-index:40;
+  height:var(--topbar-h);
+  background:var(--surface); border-bottom:1px solid var(--border);
+  align-items:center; justify-content:space-between;
+  padding:0 14px 0 18px;
+}
+.topbar .logo-lockup { padding:0; }
+.menu-btn {
+  background:none; border:1px solid var(--stone-700); border-radius:var(--radius-sm);
+  width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+  color:var(--text-2); cursor:pointer;
+}
+.menu-btn svg { width:18px; height:18px; }
+
+/* ══════════ SIDEBAR ══════════ */
+.sidebar {
+  width:var(--sidebar-w); flex-shrink:0;
+  background:var(--surface); border-right:1px solid var(--border);
+  display:flex; flex-direction:column;
+  padding:24px 0 16px;
+  position:sticky; top:0; height:100vh;
+  transition:transform .25s ease;
+}
+.logo-lockup { display:flex; align-items:center; gap:10px; padding:0 20px 22px; }
+.logo-lockup svg { display:block; flex-shrink:0; }
+.wordmark {
+  font-family:var(--font-display); font-size:22px; font-weight:600;
+  letter-spacing:-0.8px; color:var(--text); line-height:1;
+}
+.wordmark em { font-style:italic; color:var(--teal-500); }
+.playground-badge {
+  font-family:var(--font-mono); font-size:10px; letter-spacing:1px;
+  color:var(--subtle); border:1px solid var(--stone-700);
+  border-radius:var(--radius-full); padding:2px 8px; margin-left:2px;
+  text-transform:uppercase;
+}
+
+.nav { flex:1; overflow-y:auto; padding:4px 12px; }
+.nav-eyebrow {
+  font-family:var(--font-mono); font-size:10px; letter-spacing:4px;
+  text-transform:uppercase; color:var(--muted);
+  padding:18px 10px 8px;
+}
+.nav-item {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 10px; border-radius:var(--radius-sm);
+  color:var(--text-2); font-size:13px; font-weight:500;
+  text-decoration:none; position:relative;
+}
+.nav-item .ico { width:15px; height:15px; flex-shrink:0; opacity:.75; }
+.nav-item .lbl { white-space:nowrap; }
+.nav-item.active { background:var(--surface-2); color:var(--text); }
+.nav-item.active::before {
+  content:""; position:absolute; left:-12px; top:6px; bottom:6px;
+  width:2px; border-radius:2px; background:var(--teal-500);
+}
+.nav-item.active .ico { opacity:1; stroke:var(--teal-500) !important; }
+.nav-item.locked { color:var(--muted); pointer-events:none; }
+.nav-item.locked .ico { opacity:.4; }
+
+.sidebar-foot { padding:14px 20px 0; border-top:1px solid var(--border); margin-top:8px; }
+.session-status { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--subtle); }
+.status-dot { width:7px; height:7px; border-radius:50%; background:var(--stone-600); flex-shrink:0; }
+.sidebar-foot .hint { font-size:11px; color:var(--muted); margin-top:3px; }
+.version-chip {
+  font-family:var(--font-mono); font-size:10px; letter-spacing:1px;
+  color:var(--muted); margin-top:12px; display:block;
+}
+
+/* Backdrop for the mobile drawer */
+.backdrop {
+  display:none; position:fixed; inset:0; z-index:45;
+  background:rgba(14,15,13,.65);
+}
+.backdrop.show { display:block; }
+
+/* ══════════ MAIN — Session ══════════ */
+.main { flex:1; position:relative; overflow:hidden; min-width:0; }
+
+.topo {
+  position:absolute; inset:0 0 auto 0; height:340px;
+  pointer-events:none; user-select:none;
+}
+.topo svg { width:100%; height:100%; display:block; }
+
+.session-wrap {
+  position:relative; z-index:1;
+  max-width:560px; margin:0 auto;
+  padding:120px 32px 80px;
+}
+
+.eyebrow {
+  font-family:var(--font-mono); font-size:10px; letter-spacing:4px;
+  text-transform:uppercase; color:var(--teal-500); margin-bottom:14px;
+}
+h1 {
+  font-family:var(--font-display); font-weight:600;
+  font-size:clamp(30px,4vw,42px); letter-spacing:-1.5px; line-height:1.05;
+  margin-bottom:12px;
+}
+h1 em { font-style:italic; color:var(--teal-500); }
+.lede { color:var(--text-2); font-weight:300; font-size:15px; max-width:46ch; margin-bottom:36px; }
+
+.card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:28px;
+}
+.field { margin-bottom:22px; }
+.field label {
+  display:block; font-size:13px; font-weight:500; color:var(--text);
+  margin-bottom:7px;
+}
+.input {
+  width:100%; background:var(--bg); border:1px solid var(--stone-700);
+  border-radius:var(--radius-sm); padding:10px 12px;
+  font-family:var(--font-mono); font-size:13px; color:var(--text);
+  line-height:1.5;
+}
+.input::placeholder { color:var(--muted); }
+.input-key { display:flex; gap:8px; }
+.input-key .input { flex:1; min-width:0; }
+.reveal-btn {
+  background:var(--surface-2); border:1px solid var(--stone-700);
+  border-radius:var(--radius-sm); padding:0 12px;
+  color:var(--subtle); font-size:12px; font-family:var(--font-body);
+  cursor:pointer; flex-shrink:0;
+}
+.helper { font-size:12px; color:var(--subtle); margin-top:7px; line-height:1.55; }
+.helper code { font-family:var(--font-mono); font-size:11px; color:var(--text-2); }
+
+.bootstrap-hint {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:24px;
+}
+.bootstrap-hint .t { font-size:12.5px; color:var(--text-2); margin-bottom:8px; }
+.bootstrap-hint .t strong { color:var(--text); font-weight:500; }
+.log-line {
+  font-family:var(--font-mono); font-size:11px; line-height:1.7;
+  color:var(--subtle); white-space:nowrap; overflow-x:auto; display:block;
+  -webkit-overflow-scrolling:touch;
+}
+.log-line .warn { color:var(--moss-400); }
+.log-line .key { color:var(--teal-500); }
+
+.connect-row { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.btn-primary {
+  background:var(--teal-500); color:var(--stone-950);
+  border:none; border-radius:var(--radius-full);
+  font-family:var(--font-body); font-weight:600; font-size:14px;
+  padding:11px 28px; cursor:pointer;
+}
+.btn-primary:hover { background:var(--teal-600); }
+.probe { font-family:var(--font-mono); font-size:11px; color:var(--muted); text-align:right; line-height:1.6; }
+.probe .path { color:var(--subtle); }
+.probe .pending { color:var(--stone-600); }
+
+/* ═════════════════════════════════════════
+   TABLET · 701–1024px — icon rail
+   Shell stays present; labels become tooltips
+   ═════════════════════════════════════════ */
+@media (max-width:1024px) and (min-width:701px) {
+  .sidebar { width:var(--rail-w); padding:20px 0 12px; }
+  .logo-lockup { justify-content:center; padding:0 0 18px; }
+  .logo-lockup svg { width:34px; height:26px; }
+  .wordmark, .playground-badge { display:none; }
+
+  .nav { padding:4px 10px; }
+  .nav-eyebrow {
+    padding:14px 0 6px; text-align:center; letter-spacing:0;
+    font-size:0;                 /* hide the word… */
+    border-top:1px solid var(--border); margin:8px 6px 0;  /* …keep the grouping as a divider */
+  }
+  .nav-eyebrow:first-child { border-top:none; margin-top:0; }
+  .nav-item { justify-content:center; padding:10px 0; }
+  .nav-item .lbl { display:none; }         /* title attr acts as tooltip */
+  .nav-item .ico { width:17px; height:17px; }
+  .nav-item.active::before { left:-10px; }
+
+  .sidebar-foot { padding:12px 0 0; text-align:center; }
+  .session-status { justify-content:center; }
+  .session-status .status-txt, .sidebar-foot .hint, .version-chip { display:none; }
+
+  .session-wrap { padding:100px 28px 64px; }
+}
+
+/* ═════════════════════════════════════════
+   MOBILE · ≤700px — topbar + drawer
+   ═════════════════════════════════════════ */
+@media (max-width:700px) {
+  .topbar { display:flex; }
+
+  .sidebar {
+    position:fixed; z-index:50; top:0; left:0; height:100vh; height:100dvh;
+    width:min(300px, 84vw);
+    transform:translateX(-100%);
+    box-shadow:8px 0 32px rgba(0,0,0,.45);
+    padding-top:20px;
+  }
+  .sidebar.open { transform:translateX(0); }
+
+  .main { padding-top:var(--topbar-h); }
+  .topo { top:var(--topbar-h); height:210px; }
+  .topo svg { transform:scale(1.4); transform-origin:top center; }
+
+  .session-wrap { padding:64px 20px 56px; max-width:100%; }
+  .lede { font-size:14px; margin-bottom:28px; }
+  .card { padding:20px; border-radius:var(--radius-md); }
+
+  .connect-row { flex-direction:column; align-items:stretch; gap:12px; }
+  .btn-primary { width:100%; padding:13px 28px; }
+  .probe { text-align:left; }
+}
+
+/* ══════════ Motion ══════════ */
+@keyframes nadirPulse { 0%,100% { opacity:.85; } 50% { opacity:.35; } }
+.nadir { animation:nadirPulse 3.2s ease-in-out infinite; }
+@media (prefers-reduced-motion:reduce) {
+  .nadir { animation:none; }
+  .sidebar { transition:none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══════════ TOPBAR — mobile only ══════════ -->
+  <header class="topbar">
+    <div class="logo-lockup">
+      <svg width="34" height="26" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3.0" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4.0" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+      <span class="wordmark" style="font-size:19px;">Cau<em>ce</em></span>
+      <span class="playground-badge">play</span>
+    </div>
+    <button class="menu-btn" id="menuBtn" aria-label="Open navigation" aria-expanded="false" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </header>
+
+  <!-- ══════════ SIDEBAR / DRAWER ══════════ -->
+  <aside class="sidebar" id="drawer">
+    <div class="logo-lockup">
+      <!-- Estrato V4 — dark variant, exact spec from brand.md -->
+      <svg width="42" height="32" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3.0" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4.0" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+      <span class="wordmark">Cau<em>ce</em></span>
+      <span class="playground-badge">play</span>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-eyebrow">Session</div>
+      <a class="nav-item active" href="#" title="Session">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
+        <span class="lbl">Session</span>
+      </a>
+
+      <div class="nav-eyebrow">Workspace</div>
+      <a class="nav-item locked" href="#" title="Tenants — connect to unlock">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>
+        <span class="lbl">Tenants</span>
+      </a>
+      <a class="nav-item locked" href="#" title="Agents — connect to unlock">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg>
+        <span class="lbl">Agents</span>
+      </a>
+      <a class="nav-item locked" href="#" title="API keys — connect to unlock">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg>
+        <span class="lbl">API keys</span>
+      </a>
+
+      <div class="nav-eyebrow">Runtime</div>
+      <a class="nav-item locked" href="#" title="Conversation — connect to unlock">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg>
+        <span class="lbl">Conversation</span>
+      </a>
+      <a class="nav-item locked" href="#" title="Invocations — connect to unlock">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>
+        <span class="lbl">Invocations</span>
+      </a>
+
+      <div class="nav-eyebrow">Trust</div>
+      <a class="nav-item locked" href="#" title="Audit chain — connect to unlock">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg>
+        <span class="lbl">Audit chain</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="session-status">
+        <span class="status-dot"></span><span class="status-txt">No session</span>
+      </div>
+      <div class="hint">Connect to unlock the areas above.</div>
+      <span class="version-chip">playground · dev</span>
+    </div>
+  </aside>
+
+  <div class="backdrop" id="backdrop"></div>
+
+  <!-- ══════════ MAIN — Session screen ══════════ -->
+  <main class="main">
+
+    <!-- Signature: Estrato topography, wide and quiet -->
+    <div class="topo" aria-hidden="true">
+      <svg viewBox="0 0 1200 340" preserveAspectRatio="xMidYMin slice" fill="none">
+        <path d="M -40 60 Q 600 560 1240 60" stroke="#4A4B42" stroke-width="1" opacity="0.5"/>
+        <path d="M 80 60 Q 600 480 1120 60" stroke="#5A8CAB" stroke-width="1" opacity="0.32"/>
+        <path d="M 200 60 Q 600 400 1000 60" stroke="#6FAF82" stroke-width="1" opacity="0.32"/>
+        <path d="M 320 60 Q 600 320 880 60" stroke="#2DD4C0" stroke-width="1.2" opacity="0.4"/>
+        <circle class="nadir" cx="600" cy="256" r="3" fill="#2DD4C0"/>
+      </svg>
+    </div>
+
+    <div class="session-wrap">
+      <div class="eyebrow">Playground · Session</div>
+      <h1>Point it at a running <em>instance</em>.</h1>
+      <p class="lede">Everything the playground does goes through the same REST surface your clients use — authenticated with an API key, scoped to its tenant.</p>
+
+      <div class="card">
+        <div class="field">
+          <label for="url">Instance URL</label>
+          <input class="input" id="url" type="text" value="http://localhost:8080" spellcheck="false">
+          <div class="helper">The Cauce API you want to exercise. The local quickstart serves here by default.</div>
+        </div>
+
+        <div class="field">
+          <label for="key">API key</label>
+          <div class="input-key">
+            <input class="input" id="key" type="password" placeholder="cauce_k_…" spellcheck="false">
+            <button class="reveal-btn" type="button">Show</button>
+          </div>
+          <div class="helper">Sent as <code>Authorization: Bearer</code> on every request. Kept in memory only — refreshing the page forgets it.</div>
+        </div>
+
+        <div class="bootstrap-hint">
+          <div class="t"><strong>First run?</strong> The root operator key is printed once at first startup and can't be recovered later — look for the WARN line in the API log:</div>
+          <span class="log-line"><span class="warn">WARN</span> OperatorKeyBootstrapRunner — root operator API key (shown once): <span class="key">cauce_k_9f2…</span></span>
+        </div>
+
+        <div class="connect-row">
+          <button class="btn-primary" type="button">Connect</button>
+          <div class="probe">
+            <span class="path">GET /actuator/health</span> → <span class="pending">runs on connect</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* Drawer behavior (mobile). Documents the intended interaction for implementation:
+   hamburger toggles, backdrop click closes, Escape closes, aria-expanded tracked. */
+(function () {
+  var btn = document.getElementById('menuBtn');
+  var drawer = document.getElementById('drawer');
+  var backdrop = document.getElementById('backdrop');
+
+  function setOpen(open) {
+    drawer.classList.toggle('open', open);
+    backdrop.classList.toggle('show', open);
+    btn.setAttribute('aria-expanded', String(open));
+  }
+  btn.addEventListener('click', function () {
+    setOpen(!drawer.classList.contains('open'));
+  });
+  backdrop.addEventListener('click', function () { setOpen(false); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') setOpen(false);
+  });
+})();
+</script>
+</body>
+</html>

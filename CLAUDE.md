@@ -22,7 +22,15 @@ See [README.md](README.md) for the user-facing project description.
 - OpenTelemetry for observability (planned; no OTel dependency yet)
 - JUnit 5, Mockito, AssertJ, Testcontainers for testing
 
-**Frontend** (planned — `frontend/` does not exist yet)
+**Frontend — playground** (`frontend/playground` — developer testing tool, exists)
+- React 19 + Vite 7 + TypeScript 5 (strict)
+- Tailwind CSS 4, CSS-first: the design tokens live in the `@theme` block of
+  `src/styles/tokens.css` (that block IS the Tailwind config in v4)
+- react-router 7; native `fetch`; React Context for session state (no state library)
+- Dev-only tool: runs via `npm run dev`; its Vite dev proxy bridges the missing backend
+  CORS configuration (see Deferred)
+
+**Frontend — dashboard** (planned — `frontend/cauce-dashboard` does not exist yet)
 - Angular 17+ with standalone components and Signals
 - TypeScript 5+ (strict mode)
 - Tailwind CSS
@@ -36,7 +44,7 @@ See [README.md](README.md) for the user-facing project description.
 
 ## Repository structure
 
-> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V23), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint (202 with `invocation_id`, an invocation-status endpoint with a public failure vocabulary backed by the V17 persisted failure taxonomy, and uniform keyset pagination on the three list endpoints), the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop) with its first consumer (Micrometer metrics in `cauce-observability`, exposed via the authenticated `/actuator/metrics`; no exporter yet), the per-tenant LLM usage ledger (V19 `llm_usage_records`: one immutable row per LLM call, written synchronously by the orchestrator before `LlmResponded` — capture only, no query endpoint or pricing yet), and the channel layer in `cauce-channels`: the complete channel SPI (inbound + outbound halves), the `ChannelConfig` agent/tenant binding (V16, RLS + SECURITY DEFINER webhook resolution), and the full Telegram round-trip (webhook → normalization → idempotent ingest, and best-effort outbound delivery of the agent reply via the `AgentReplyDispatcher` port in cauce-core — explicit port, not an event consumer). `cauce-governance` now holds the guaranteed-capture audit skeleton with a per-tenant hash chain: the transactional `audit_outbox` (V20, written in the caller's business tx via the `AuditEventRecorder` port), the append-only `audit_log_entries` ledger (V21 — UPDATE/DELETE revoked from `cauce_app` at the grant layer) hash-chained per tenant on the drain INSERT (V22 `payload_hash`/`hash_scheme`; `signature` still reserved, null), the V23 `audit_chain_heads` head row (single source of next sequence + `prev_hash`), the per-tenant scheduled drainer, and the internal `AuditChainVerifier` (reports the exact first-break sequence; verification survives an owner payload redaction via the persisted `payload_hash`); now fed by its first REAL callers: the loop's Family-A conduct events (`conduct.message.received` in the ingest tx, `conduct.agent.responded` in the final AGENT append tx with `finish_reason`+`rounds`, `conduct.invocation.failed` in the terminal FAILED/ABANDONED transition tx), each recorded through the `AuditEventRecorder` port — now in `cauce-core` (`dev.cauce.core.audit`, with `AuditContentHash`: payloads carry non-sensitive metadata plus a tenant-bound content hash, never raw text; governance is the adapter) — and by Family B (administration): tenancy and channels audit tenant/agent/API-key/channel-config operations inside the operation's own tx, into the SUBJECT tenant's chain with the acting tenant as `actor_tenant_id` (ADR 0002), never carrying key plaintext/HMAC, channel credentials, webhook secrets, raw prompts (hash only), or business names; signature and verification endpoint still pending. `cauce-evals` and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend has not been started. Last build at reconciliation (2026-07-25): 824 tests, 0 failures.
+> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V23), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint (202 with `invocation_id`, an invocation-status endpoint with a public failure vocabulary backed by the V17 persisted failure taxonomy, and uniform keyset pagination on the three list endpoints), the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop) with its first consumer (Micrometer metrics in `cauce-observability`, exposed via the authenticated `/actuator/metrics`; no exporter yet), the per-tenant LLM usage ledger (V19 `llm_usage_records`: one immutable row per LLM call, written synchronously by the orchestrator before `LlmResponded` — capture only, no query endpoint or pricing yet), and the channel layer in `cauce-channels`: the complete channel SPI (inbound + outbound halves), the `ChannelConfig` agent/tenant binding (V16, RLS + SECURITY DEFINER webhook resolution), and the full Telegram round-trip (webhook → normalization → idempotent ingest, and best-effort outbound delivery of the agent reply via the `AgentReplyDispatcher` port in cauce-core — explicit port, not an event consumer). `cauce-governance` now holds the guaranteed-capture audit skeleton with a per-tenant hash chain: the transactional `audit_outbox` (V20, written in the caller's business tx via the `AuditEventRecorder` port), the append-only `audit_log_entries` ledger (V21 — UPDATE/DELETE revoked from `cauce_app` at the grant layer) hash-chained per tenant on the drain INSERT (V22 `payload_hash`/`hash_scheme`; `signature` still reserved, null), the V23 `audit_chain_heads` head row (single source of next sequence + `prev_hash`), the per-tenant scheduled drainer, and the internal `AuditChainVerifier` (reports the exact first-break sequence; verification survives an owner payload redaction via the persisted `payload_hash`); now fed by its first REAL callers: the loop's Family-A conduct events (`conduct.message.received` in the ingest tx, `conduct.agent.responded` in the final AGENT append tx with `finish_reason`+`rounds`, `conduct.invocation.failed` in the terminal FAILED/ABANDONED transition tx), each recorded through the `AuditEventRecorder` port — now in `cauce-core` (`dev.cauce.core.audit`, with `AuditContentHash`: payloads carry non-sensitive metadata plus a tenant-bound content hash, never raw text; governance is the adapter) — and by Family B (administration): tenancy and channels audit tenant/agent/API-key/channel-config operations inside the operation's own tx, into the SUBJECT tenant's chain with the acting tenant as `actor_tenant_id` (ADR 0002), never carrying key plaintext/HMAC, channel credentials, webhook secrets, raw prompts (hash only), or business names; signature and verification endpoint still pending. `cauce-evals` and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend playground (React developer testing tool, `frontend/playground`) has its first unit: the app shell (responsive sidebar/rail/drawer), the session screen with a working health-probe Connect, the central `ApiClient`, and placeholder views for the six remaining areas; the product dashboard has not been started. Last build at reconciliation (2026-07-25): 824 tests, 0 failures.
 
 **Backend modules** (Gradle subprojects under `backend/`; the Gradle build — `settings.gradle.kts`, wrapper, `gradle/` — lives under `backend/`, not the repo root):
 
@@ -46,19 +54,27 @@ See [README.md](README.md) for the user-facing project description.
 - `cauce-llm` — provider-neutral LLM SPI: `LlmProvider`, `LlmProviderRegistry`, credentials, and the neutral invocation/response model, which carries the `cauce-core` tool model (`LlmInvocation.tools`, `LlmMessage` tool content, `LlmResponse.toolCalls`, `FinishReason.TOOL_USE`). Depends on `cauce-core`. Adapters live in separate modules
 - `cauce-llm-anthropic` — native Anthropic adapter (`POST /v1/messages`); maps the neutral tool model to/from Anthropic's `tool_use`/`tool_result` content blocks. Its bean is registered only when an Anthropic API key is configured
 - `cauce-llm-openai` — single OpenAI-compatible adapter (`POST /chat/completions`) mapping tools to/from the `tools`/`tool_calls`/`role:"tool"` format (`arguments` as a JSON string), registered as three conditional providers: `ollama` (keyless, dev default), `openai`, `mistral`
-- `cauce-tools` — executable tool SPI: the `Tool` contract (`definition()` + `execute(ToolCall)`), a Spring-managed `ToolRegistry` mirroring `LlmProviderRegistry`, and the built-in `get_current_time` clock tool (injectable `java.time.Clock`). Depends only on `cauce-core` (plus spring-context); the neutral tool model lives in core. Global registry; per-agent tool scoping is deferred. Format mapping in the adapters (B) and the orchestrator loop (C) are not built yet
+- `cauce-tools` — executable tool SPI: the `Tool` contract (`definition()` + `execute(ToolCall)`), a Spring-managed `ToolRegistry` mirroring `LlmProviderRegistry`, and the built-in `get_current_time` clock tool (injectable `java.time.Clock`). Depends only on `cauce-core` (plus spring-context); the neutral tool model lives in core. Global registry; per-agent tool scoping is deferred
 - `cauce-evals` — evaluation framework, conversation testing, regression detection — empty skeleton, not started
 - `cauce-observability` — observability layer; first content: `OrchestrationMetrics`, the first consumer of the orchestration event stream — a guarded `@EventListener` translating the 8 `OrchestrationEvent`s into Micrometer meters (`cauce.orchestration.*`: invocation counters incl. `failure_type`, LLM calls/responses and token usage by `provider`/`model`, tool-call counters and an execution timer; low-cardinality tags only, ids never become tags). Pure consumer: the whole dispatch is try/caught so a metrics failure can never break the synchronous publication path. Depends only on `cauce-orchestration-events`, spring-context, and micrometer-core; the `MeterRegistry` is wired by cauce-api's Actuator. Traces (OTel) and exporters (OTLP/Prometheus) are planned, separate units
 - `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance. First content: the guaranteed-capture skeleton of the audit trail (`dev.cauce.governance.audit` + `persistence`). `OutboxAuditEventRecorder` — the adapter of the cauce-core `AuditEventRecorder` port (`@Transactional(MANDATORY)` — one INSERT that joins the caller's business tx, so capture commits or rolls back with the fact it audits; throws outside a tx); `audit_outbox` (V20: RLS, `(tenant_id, drain_status, created_at)` index, `audit_outbox_pending_tenants()` SECURITY DEFINER discovery — ADR 0001); the **append-only** `audit_log_entries` ledger (V21: `REVOKE UPDATE, DELETE ... FROM cauce_app` — enforced by role at the DB, not by code; `UNIQUE (tenant_id, sequence_number)` + `UNIQUE (outbox_id)`; `signature` created nullable, RESERVED for the signing unit); the **per-tenant hash chain** (V22/V23): `AuditChainHasher` (scheme `v1` — SHA-256 over a canonical-JSON preimage of explicit fields incl. the persisted `payload_hash` and `prev_hash`, NEVER the raw payload, so verification survives an owner redaction of `payload`, now nullable; genesis hash derived from the tenant id; hashes written on the drain INSERT, so the V21 REVOKE stays untouched), the `audit_chain_heads` head row (single source of next sequence + `prev_hash`, read `FOR UPDATE` and advanced in the drain tx — the per-tenant row lock serializes within a tenant, MAX+1 survives only as one-time lazy init), and `AuditChainVerifier` (internal service: valid, or the exact first-break sequence + `ChainBreakKind`; pre-chain rows legal only as an honestly-reported prefix, never backfilled); and `AuditOutboxDrainer`/`AuditOutboxDrainService` (worker-pattern `@Scheduled` cousin, `cauce.governance.audit.drainer.*`, default 5s/batch 100: per tenant under its `TenantContext`, one tx per batch — chained ledger INSERTs, PENDING→DRAINED flips, and the head advance commit together, restart-safe). `event_type` now carries its first real vocabulary: the Family-A conduct events emitted by cauce-orchestration (`conduct.message.received`, `conduct.agent.responded`, `conduct.invocation.failed` — payloads are non-sensitive metadata + `content_hash`, never raw text; four hook types reserved without emission). Family B (tenancy/keys), the signature, and outbox retention are follow-up units. Depends on `cauce-core` + `cauce-memory` only (cauce-tenancy and cauce-orchestration never appear in its graph); cauce-api already depended on it and wires the adapter to the emitters
 - `cauce-tenancy` — application services for tenants, agents, conversations, messages, and API keys; operator bootstrap; HMAC-SHA256 API-key hashing with a Caffeine cache. Second real audit emitter (`dev.cauce.tenancy.audit.AdminAuditEvents`, Family B — administration): createPartner/createClient/createAgent/createApiKey/revokeApiKey record `admin.*` events in the operation's tx through the cauce-core `AuditEventRecorder` port — subject-tenant chain, `actor_tenant_id` = the acting tenant (ADR 0002's authority identity; per-key actor attribution deferred with fine-grained auth). Payload doctrine: ids + non-sensitive metadata only — the agent prompt enters as `AuditContentHash`, never raw; key plaintext/HMAC and business names never. The operator bootstrap is the documented genesis exception (no tx, no context, no actor — unaudited). Hooks reserved unemitted: `admin.agent.updated` (no update operation exists yet), `admin.credential.changed` (no per-tenant credential path). cauce-governance is test-scope here (the admin IT drains/verifies the real chain)
 - `cauce-orchestration` — async invocation engine and the bounded agentic tool loop: pending-invocation queue, context assembly with a per-model context-window registry (`ModelContextWindow`; conservative 16,384-token fallback with a `WARN` for unknown models) that renders tool messages, the orchestrator loop (offers all registered tools, dispatches tool calls via the `cauce-tools` `ToolRegistry`, feeds results back, capped at 10 iterations — tool failures feed back as errored results, the cap fails the invocation), background worker/reaper (12-minute orphan timeout sized for the multi-step loop), and `InboundMessageService` (the inbound message ingest unit, with optional idempotency-key deduplication: an insert-first lock on the V15 `(agent_id, idempotency_key)` unique constraint inside the single ingest transaction; a replay returns the stored result with no second message, invocation, or `InvocationRequested` event). Also owns the per-tenant LLM usage ledger (`usage` package: `LlmUsageRecord` + `LlmUsageRecorder`; V19 `llm_usage_records`, tenant_id + RLS like `PendingInvocation`): one immutable row per LLM call (provider, model, round_index, tokens, finish_reason), written synchronously in its own short transaction between the provider response and the `LlmResponded` publication — a failed usage INSERT fails the invocation, so billing facts are never lost silently; cost is deliberately not materialized (pricing will be a versioned table + view, a future unit). Depends on `cauce-tenancy`, `cauce-tools`, and `cauce-orchestration-events`. Publishes the invocation lifecycle events synchronously via `ApplicationEventPublisher` at each step of the loop (ingest, context assembly, each LLM call/response with token usage, each tool dispatch, completion, permanent failure). Also the first real audit emitter (`dev.cauce.orchestration.audit.ConductAuditEvents`, Family A — runtime conduct): `conduct.message.received` rides the ingest tx, `conduct.agent.responded` rides the final AGENT append tx (`ConversationGateway.appendAudited` — message + audit capture in one tx; it doubles as the terminal success record via `finish_reason`+`rounds`, deliberately no separate COMPLETED audit), and `conduct.invocation.failed` rides the `markFailed`/`markAbandoned` transition tx (worker and reaper paths); all through the cauce-core `AuditEventRecorder` port — the module never depends on governance (the adapter is wired by cauce-api; governance is test-scope here for the conduct ITs). Payloads: non-sensitive metadata + `AuditContentHash` (never raw text, `external_identity_ref`, or raw provider errors). Four hook types reserved unemitted: `conduct.external.action`, `conduct.data.access`, `conduct.human.escalation`, `conduct.reply.delivered`
-- `cauce-orchestration-events` — the invocation lifecycle event contract: sealed `OrchestrationEvent` with 8 immutable records (`InvocationRequested`, `ContextAssembled`, `LlmInvoked`, `LlmResponded`, `ToolCallRequested`, `ToolExecuted`, `InvocationCompleted`, `InvocationFailed` + `InvocationFailureType`). Leaf module with zero dependencies (plain JDK payloads; no Spring) so future consumers (observability, governance, usage accounting) can listen without depending on orchestration internals. No consumers exist yet; the stream is at-least-once, and `InvocationRequested` is published inside the ingest transaction (persisting consumers must use `AFTER_COMMIT` or an outbox — TODO in `InboundMessageService`)
+- `cauce-orchestration-events` — the invocation lifecycle event contract: sealed `OrchestrationEvent` with 8 immutable records (`InvocationRequested`, `ContextAssembled`, `LlmInvoked`, `LlmResponded`, `ToolCallRequested`, `ToolExecuted`, `InvocationCompleted`, `InvocationFailed` + `InvocationFailureType`). Leaf module with zero dependencies (plain JDK payloads; no Spring) so future consumers (observability, governance, usage accounting) can listen without depending on orchestration internals. First consumer: `OrchestrationMetrics` in cauce-observability (in-memory only); the stream is at-least-once, and `InvocationRequested` is published inside the ingest transaction (persisting consumers must use `AFTER_COMMIT` or an outbox — TODO in `InboundMessageService`)
 - `cauce-api` — REST API surface; the Spring Boot application module. Compiles against the `cauce-llm` SPI only and wires both LLM adapters plus `cauce-tools` as `runtimeOnly` (the built-in tools register via the `dev.cauce` component scan)
 - `cauce-enterprise` — commercial modules under separate license — empty skeleton
 
-**Frontend** (planned — `frontend/` does not exist yet):
+**Frontend** (under `frontend/`):
 
+- `playground` — developer testing tool against a running Cauce instance (React 19 + Vite 7 +
+  TypeScript strict + Tailwind 4 + react-router 7). Exists: shell + session screen + central
+  API client; the remaining areas (tenants, agents, API keys, conversation, invocations,
+  audit chain) are placeholders for the next units. Sessions are memory-only (the API key is
+  never persisted in the browser); requests reach the instance through the Vite dev proxy
+  (`/proxy/*` + `X-Cauce-Target` header) because the backend has no CORS config. The static
+  HTML mockups under `frontend/playground/referencias/` are the visual specification, not code
 - `cauce-dashboard` — operator interface for managing workspaces, agents, conversations, costs
+  (planned — Angular; does not exist yet)
 
 **Other top-level directories**:
 
@@ -167,7 +183,17 @@ When introducing a new domain entity that participates in the tenant hierarchy, 
 - Transaction boundaries belong in the application service layer, not in repositories.
 - Repositories extend Spring Data interfaces. Custom queries use `@Query` with named parameters.
 
-### Angular
+### React (playground)
+
+- Function components + hooks only. React Context for the session state — no state library.
+- Design tokens single-sourced in the Tailwind v4 `@theme` block (`src/styles/tokens.css`);
+  the shell's structured CSS and any utility class read the same custom properties. Never
+  hardcode a palette hex in a component.
+- All HTTP goes through the central `ApiClient` (`src/api/client.ts`); backend wire types
+  keep snake_case verbatim (no mapping layer).
+- The API key is memory-only — never localStorage, sessionStorage, or cookies.
+
+### Angular (dashboard — future)
 
 - Standalone components only. No NgModules.
 - Signals for reactive state. RxJS only when truly streaming (HTTP, WebSockets, server-sent events).
@@ -180,6 +206,9 @@ When introducing a new domain entity that participates in the tenant hierarchy, 
 - Integration tests use Testcontainers for PostgreSQL and Redis. Filename suffix `IT.java`.
 - Every new public method requires at least one test. Every bug fix requires a regression test.
 - Aim for behavior coverage, not line coverage.
+- These rules cover the backend. The frontend playground ships without a test harness for
+  now (a conscious deferral of its first unit): its gate is `npm run build` (strict
+  type-check + build) plus manual browser verification.
 
 ## Working with this codebase
 
@@ -249,7 +278,8 @@ summary — that information stays in the full response for local review.
 ## Build and run
 
 > The backend Gradle build lives under `backend/` — run Gradle from there.
-> The Angular frontend under `frontend/` does not exist yet.
+> The frontend playground lives under `frontend/playground` (npm; outside the Gradle build).
+> The Angular dashboard under `frontend/cauce-dashboard` does not exist yet.
 
 ### Local development environment
 
@@ -385,15 +415,27 @@ non-2xx), 401 on a bad secret, 404 on an unknown/disabled config, 400 on a malfo
 Local development against real Telegram needs a public URL (tunnel, e.g. cloudflared/ngrok) +
 `setWebhook`; the ITs drive the endpoint directly.
 
-### Frontend
+### Frontend (playground)
 
-> Not present yet. Will be added under `frontend/cauce-dashboard`.
+```bash
+cd frontend/playground
+npm install
+npm run dev        # http://localhost:5173 (Vite picks the next port if busy)
+```
+
+Needs a running Cauce instance to connect to (see Backend above or QUICKSTART.md). The
+session screen takes the instance URL + an API key; the key lives in memory only and a page
+refresh forgets it. `npm run build` (tsc + vite build) is the type-check/build gate. See
+[frontend/playground/README.md](frontend/playground/README.md).
+
+The product dashboard (`frontend/cauce-dashboard`, Angular) is not present yet.
 
 ## Deferred / Known gaps
 
 A durable register of work that is consciously deferred. Each item is verified against the code as
 of the reconciliation date; this is a backlog record, not a commitment to build these next.
-(Last reconciled: 2026-07-25.)
+(Last reconciled: 2026-07-25; the playground/Dashboard/CORS entries were added and verified
+2026-08-12 with the playground unit.)
 
 ### Large / strategic deferrals
 
@@ -471,7 +513,17 @@ of the reconciliation date; this is a backlog record, not a commitment to build 
   hardcoded `SUPPORTED_CHANNELS` set in `ConversationService` with SPI-driven validation (needs a
   port — direct dependency is a cycle); WhatsApp adapter (the SPI was designed against it);
   outbound delivery metrics (log-only today; an outbound event would let observability count it).
-- **Dashboard.** The frontend does not exist.
+- **Dashboard.** The product frontend (`frontend/cauce-dashboard`, Angular) does not exist.
+  The React playground under `frontend/playground` is a developer testing tool, not the
+  dashboard; its first unit (shell + session + API client) landed, the six remaining areas
+  are placeholders. The playground also ships without a frontend test harness for now
+  (deliberate — `npm run build` + manual browser verification are its gate).
+- **Backend CORS configuration.** The API has no CORS config, so browsers block cross-origin
+  calls to it. The playground bridges this with a dev-server proxy (`/proxy/*` +
+  `X-Cauce-Target` header, `frontend/playground/vite.config.ts`) — dev-only by construction.
+  When a browser client must target instances without the proxy, add property-driven CORS to
+  cauce-api (`cauce.api.cors.allowed-origins`, default empty = disabled) as its own unit; the
+  playground unit deliberately made zero backend changes.
 - **Observability instrumentation.** Invariant 4 ("observable by default") is partially
   covered: the orchestrator emits invocation lifecycle events (`cauce-orchestration-events`,
   incl. per-call token usage on `LlmResponded`) and `cauce-observability` now consumes them
@@ -514,7 +566,7 @@ This project uses Conventional Commits in English.
 
 **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 
-**Scope** is the module name (`core`, `memory`, `channels`, `llm`, `evals`, `observability`, `governance`, `tenancy`, `orchestration`, `api`, `enterprise`, `dashboard`) or a cross-cutting area (`deps`, `gradle`, `docker`, `actions`).
+**Scope** is the module name (`core`, `memory`, `channels`, `llm`, `evals`, `observability`, `governance`, `tenancy`, `orchestration`, `api`, `enterprise`, `playground`, `dashboard`) or a cross-cutting area (`deps`, `gradle`, `docker`, `actions`).
 
 **Examples**:
 - feat(core): add Agent interface and ConversationState entity

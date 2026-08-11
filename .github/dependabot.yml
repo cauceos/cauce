@@ -17,10 +17,9 @@ updates:
     commit-message:
       prefix: chore(deps)
 
-  # Frontend npm. Inert until frontend/package.json exists; kept here so the
-  # config is ready the moment the Angular app lands.
+  # Frontend npm — the React playground (frontend/playground/package.json).
   - package-ecosystem: npm
-    directory: /frontend
+    directory: /frontend/playground
     schedule:
       interval: weekly
     commit-message:
