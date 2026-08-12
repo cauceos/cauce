@@ -25,6 +25,17 @@ the API log by `OperatorKeyBootstrapRunner`; it cannot be recovered later.
 The session lives in memory only: the API key is never written to localStorage,
 sessionStorage, or cookies, so refreshing the page forgets it. That is deliberate.
 
+## Areas
+
+- **Session** — connect to an instance (health probe validates reachability and the key).
+- **Conversation** — talk to a real agent. Paste the tenant id that owns the agents (the
+  API has no "who am I" endpoint — the id is in the bootstrap WARN log line or the
+  quickstart state file), load and pick an agent, and send. The playground polls
+  `GET /v1/invocations/{id}` every 2s and fetches new messages incrementally until the
+  invocation ends — no fake streaming. Consecutive TOOL_CALL/TOOL_RESULT messages render
+  as the collapsible agent-loop trace. Polling stops after 5 minutes (Resume restarts it).
+- The other areas (Tenants, Agents, API keys, Invocations, Audit chain) are placeholders.
+
 ## How requests reach the instance
 
 The backend has no CORS configuration (see the deferred register in the root `CLAUDE.md`),

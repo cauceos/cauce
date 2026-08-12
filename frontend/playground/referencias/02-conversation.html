@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cauce Playground — Conversation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================
+   CAUCE PLAYGROUND · Mockup 02 — Conversation
+   Static reference. Fake data. Not production code.
+
+   Implementation contract:
+   · Thread = GET /v1/conversations/{id}/messages (keyset; "Load earlier" = next_cursor)
+   · TOOL_CALL / TOOL_RESULT are real messages in the thread → rendered as the loop trace
+   · Send = POST /v1/agents/{agentId}/messages {external_identity_ref, content} → 202
+   · While in flight: poll GET /v1/invocations/{id} (~2s) + refresh messages; NO fake streaming
+   · Invocation status vocabulary: PENDING/PROCESSING/COMPLETED/FAILED + failure classification
+   · SYSTEM messages (e.g. [orchestration_error]) render as system cards
+   · Same identity ref reuses the OPEN conversation; changing it starts a new one
+   · Responsive contract identical to mockup 01 (≥1025 sidebar / 701–1024 rail / ≤700 drawer)
+   ============================================ */
+:root {
+  --teal-300:#90E8E1; --teal-400:#5EDDD0; --teal-500:#2DD4C0; --teal-600:#1BB8A6;
+  --moss-400:#6FAF82; --moss-500:#4E8B62;
+  --slate-400:#8AB4CC; --slate-500:#5A8CAB;
+  --stone-950:#0E0F0D; --stone-900:#161713; --stone-800:#252620;
+  --stone-700:#35362E; --stone-600:#4A4B42; --stone-400:#8C8D82;
+  --stone-200:#D4D5CC; --stone-100:#ECEEE8;
+
+  --bg:var(--stone-950); --surface:var(--stone-900); --surface-2:var(--stone-800);
+  --border:#2E2F28; --text:var(--stone-100); --text-2:#C8CAC2;
+  --muted:var(--stone-600); --subtle:var(--stone-400);
+
+  --font-display:'Fraunces', Georgia, serif;
+  --font-body:'Geist', system-ui, sans-serif;
+  --font-mono:'JetBrains Mono','Courier New', monospace;
+
+  --sidebar-w:248px; --rail-w:68px; --topbar-h:58px;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-full:100px;
+}
+
+* { box-sizing:border-box; margin:0; padding:0; }
+html { -webkit-font-smoothing:antialiased; }
+body {
+  background:var(--bg); color:var(--text);
+  font-family:var(--font-body); font-size:14px; line-height:1.65;
+  min-height:100vh;
+}
+:focus-visible { outline:2px solid var(--teal-500); outline-offset:2px; border-radius:4px; }
+
+.app { display:flex; min-height:100vh; }
+
+/* ══════════ SIDEBAR (connected state) ══════════ */
+.sidebar {
+  width:var(--sidebar-w); flex-shrink:0;
+  background:var(--surface); border-right:1px solid var(--border);
+  display:flex; flex-direction:column;
+  padding:24px 0 16px;
+  position:sticky; top:0; height:100vh;
+}
+.logo-lockup { display:flex; align-items:center; gap:10px; padding:0 20px 22px; }
+.wordmark {
+  font-family:var(--font-display); font-size:22px; font-weight:600;
+  letter-spacing:-0.8px; color:var(--text); line-height:1;
+}
+.wordmark em { font-style:italic; color:var(--teal-500); }
+.playground-badge {
+  font-family:var(--font-mono); font-size:10px; letter-spacing:1px;
+  color:var(--subtle); border:1px solid var(--stone-700);
+  border-radius:var(--radius-full); padding:2px 8px; margin-left:2px;
+  text-transform:uppercase;
+}
+.nav { flex:1; overflow-y:auto; padding:4px 12px; }
+.nav-eyebrow {
+  font-family:var(--font-mono); font-size:10px; letter-spacing:4px;
+  text-transform:uppercase; color:var(--muted); padding:18px 10px 8px;
+}
+.nav-item {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 10px; border-radius:var(--radius-sm);
+  color:var(--text-2); font-size:13px; font-weight:500;
+  text-decoration:none; position:relative;
+}
+.nav-item .ico { width:15px; height:15px; flex-shrink:0; opacity:.75; }
+.nav-item.active { background:var(--surface-2); color:var(--text); }
+.nav-item.active::before {
+  content:""; position:absolute; left:-12px; top:6px; bottom:6px;
+  width:2px; border-radius:2px; background:var(--teal-500);
+}
+.nav-item.active .ico { opacity:1; stroke:var(--teal-500) !important; }
+.sidebar-foot { padding:14px 20px 0; border-top:1px solid var(--border); margin-top:8px; }
+.session-status { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-2); }
+.status-dot { width:7px; height:7px; border-radius:50%; background:var(--moss-400); flex-shrink:0; }
+.sidebar-foot .hint { font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:3px; }
+.version-chip { font-family:var(--font-mono); font-size:10px; letter-spacing:1px; color:var(--muted); margin-top:12px; display:block; }
+
+/* ══════════ TOPBAR (mobile only) + backdrop ══════════ */
+.topbar {
+  display:none;
+  position:fixed; top:0; left:0; right:0; z-index:40;
+  height:var(--topbar-h);
+  background:var(--surface); border-bottom:1px solid var(--border);
+  align-items:center; justify-content:space-between;
+  padding:0 14px 0 18px;
+}
+.topbar .logo-lockup { padding:0; }
+.menu-btn {
+  background:none; border:1px solid var(--stone-700); border-radius:var(--radius-sm);
+  width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+  color:var(--text-2); cursor:pointer;
+}
+.menu-btn svg { width:18px; height:18px; }
+.backdrop {
+  display:none; position:fixed; inset:0; z-index:45;
+  background:rgba(14,15,13,.65);
+}
+.backdrop.show { display:block; }
+@media (prefers-reduced-motion:reduce) { .sidebar { transition:none; } }
+
+/* ══════════ MAIN — Conversation ══════════ */
+.main { flex:1; min-width:0; display:flex; flex-direction:column; height:100vh; }
+
+/* Context bar: agent + identity + conversation meta */
+.convo-bar {
+  border-bottom:1px solid var(--border); background:var(--surface);
+  padding:14px 28px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+}
+.convo-field { display:flex; flex-direction:column; gap:3px; }
+.convo-field label {
+  font-family:var(--font-mono); font-size:9px; letter-spacing:2px;
+  text-transform:uppercase; color:var(--muted);
+}
+.select-like, .ident-input {
+  background:var(--bg); border:1px solid var(--stone-700); border-radius:var(--radius-sm);
+  padding:7px 12px; font-size:13px; color:var(--text); min-width:180px;
+}
+.select-like { display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; }
+.select-like .chev { color:var(--muted); font-size:10px; }
+.ident-input { font-family:var(--font-mono); font-size:12px; min-width:150px; }
+.convo-meta { margin-left:auto; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
+.chip {
+  font-family:var(--font-mono); font-size:10px; letter-spacing:.5px;
+  border:1px solid var(--stone-700); border-radius:var(--radius-full);
+  padding:3px 10px; color:var(--subtle); white-space:nowrap;
+}
+.chip.open { color:var(--moss-400); border-color:rgba(111,175,130,.35); }
+.chip.mono-id { color:var(--muted); }
+
+/* Thread */
+.thread { flex:1; overflow-y:auto; padding:28px 28px 12px; }
+.thread-inner { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:18px; }
+
+.load-earlier {
+  align-self:center; background:none; border:1px solid var(--stone-700);
+  border-radius:var(--radius-full); color:var(--subtle);
+  font-family:var(--font-mono); font-size:11px; padding:6px 16px; cursor:pointer;
+}
+.load-earlier:hover { color:var(--text-2); border-color:var(--stone-600); }
+
+/* Messages */
+.msg { display:flex; flex-direction:column; gap:5px; max-width:82%; }
+.msg .who {
+  font-family:var(--font-mono); font-size:10px; letter-spacing:2px;
+  text-transform:uppercase; color:var(--muted);
+}
+.msg .bubble {
+  border:1px solid var(--border); border-radius:var(--radius-md);
+  padding:12px 16px; font-size:14px; color:var(--text); background:var(--surface);
+}
+.msg.user { align-self:flex-end; align-items:flex-end; }
+.msg.user .bubble { background:var(--surface-2); border-color:rgba(45,212,192,.25); }
+.msg.agent { align-self:flex-start; }
+.msg .meta {
+  font-family:var(--font-mono); font-size:10px; color:var(--muted); letter-spacing:.5px;
+}
+.msg .meta .ok { color:var(--moss-400); }
+.msg .meta .bad { color:var(--subtle); }
+
+/* The signature: the agentic loop trace */
+.loop-trace {
+  align-self:stretch; max-width:82%;
+  border-left:2px solid var(--slate-500);
+  padding-left:14px; margin:2px 0;
+  display:flex; flex-direction:column; gap:8px;
+}
+.loop-summary {
+  display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+  font-family:var(--font-mono); font-size:11px; color:var(--slate-400); letter-spacing:.5px;
+}
+.loop-summary .tri { font-size:9px; color:var(--muted); }
+.tool-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:10px 14px;
+  font-family:var(--font-mono); font-size:11.5px; line-height:1.7;
+}
+.tool-card .k { color:var(--slate-400); }
+.tool-card .r { color:var(--moss-400); }
+.tool-card .payload { color:var(--text-2); white-space:pre-wrap; word-break:break-word; }
+.tool-card .flag { color:var(--subtle); }
+
+/* System / error card */
+.msg.system { align-self:stretch; max-width:100%; }
+.msg.system .bubble {
+  background:var(--bg); border-style:dashed; color:var(--text-2);
+  font-family:var(--font-mono); font-size:12px;
+}
+
+/* In-flight (pending invocation) */
+.pending-row {
+  align-self:flex-start; display:flex; flex-direction:column; gap:5px; max-width:82%;
+}
+.pending-card {
+  display:flex; align-items:center; gap:10px;
+  border:1px dashed var(--stone-700); border-radius:var(--radius-md);
+  padding:11px 16px; color:var(--text-2); font-size:13px; background:transparent;
+}
+.pulse { width:8px; height:8px; border-radius:50%; background:var(--teal-500); flex-shrink:0; }
+@keyframes workPulse { 0%,100% { opacity:1; } 50% { opacity:.25; } }
+.pulse { animation:workPulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion:reduce) { .pulse { animation:none; } }
+.pending-row .meta { font-family:var(--font-mono); font-size:10px; color:var(--muted); }
+
+/* Composer */
+.composer-wrap { border-top:1px solid var(--border); background:var(--surface); padding:14px 28px 12px; }
+.composer { max-width:720px; margin:0 auto; }
+.composer-box { display:flex; gap:10px; align-items:flex-end; }
+.composer textarea {
+  flex:1; resize:none; min-height:46px; max-height:140px;
+  background:var(--bg); border:1px solid var(--stone-700); border-radius:var(--radius-md);
+  padding:12px 14px; font-family:var(--font-body); font-size:14px; color:var(--text);
+  line-height:1.5;
+}
+.composer textarea::placeholder { color:var(--muted); }
+.btn-send {
+  background:var(--teal-500); color:var(--stone-950); border:none;
+  border-radius:var(--radius-full); font-weight:600; font-size:14px;
+  padding:12px 26px; cursor:pointer; flex-shrink:0;
+}
+.btn-send:hover { background:var(--teal-600); }
+.wire {
+  max-width:720px; margin:8px auto 0;
+  font-family:var(--font-mono); font-size:10px; color:var(--muted);
+  display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
+}
+.wire .path { color:var(--subtle); }
+.wire .code-ok { color:var(--moss-400); }
+
+/* ══════════ TABLET · 701–1024 — rail (contract as mockup 01) ══════════ */
+@media (max-width:1024px) and (min-width:701px) {
+  .sidebar { width:var(--rail-w); padding:20px 0 12px; }
+  .logo-lockup { justify-content:center; padding:0 0 18px; }
+  .wordmark, .playground-badge { display:none; }
+  .nav { padding:4px 10px; }
+  .nav-eyebrow { font-size:0; padding:14px 0 6px; border-top:1px solid var(--border); margin:8px 6px 0; }
+  .nav-eyebrow:first-child { border-top:none; margin-top:0; }
+  .nav-item { justify-content:center; padding:10px 0; }
+  .nav-item .lbl { display:none; }
+  .nav-item.active::before { left:-10px; }
+  .sidebar-foot { padding:12px 0 0; text-align:center; }
+  .session-status { justify-content:center; }
+  .session-status .status-txt, .sidebar-foot .hint, .version-chip { display:none; }
+  .convo-bar, .thread, .composer-wrap { padding-left:22px; padding-right:22px; }
+}
+
+/* ══════════ MOBILE · ≤700 — topbar + drawer (same shell as mockup 01) ══════════ */
+@media (max-width:700px) {
+  .topbar { display:flex; }
+
+  .sidebar {
+    position:fixed; z-index:50; top:0; left:0; height:100vh; height:100dvh;
+    width:min(300px, 84vw);
+    transform:translateX(-100%);
+    transition:transform .25s ease;
+    box-shadow:8px 0 32px rgba(0,0,0,.45);
+    padding-top:20px;
+  }
+  .sidebar.open { transform:translateX(0); }
+
+  .main { height:100vh; height:100dvh; padding-top:var(--topbar-h); }
+  .convo-bar { padding:10px 14px; gap:10px; }
+  .convo-field.agent-field { flex:1 1 100%; }
+  .select-like { min-width:0; width:100%; }
+  .ident-input { min-width:0; flex:1; }
+  .convo-meta { margin-left:0; }
+  .thread { padding:18px 14px 10px; }
+  .msg, .loop-trace, .pending-row { max-width:94%; }
+  .composer-wrap { padding:10px 14px 10px; }
+  .btn-send { padding:12px 20px; }
+  .wire { flex-direction:column; gap:2px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══════════ TOPBAR — mobile only ══════════ -->
+  <header class="topbar">
+    <div class="logo-lockup">
+      <svg width="34" height="26" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3.0" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4.0" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+      <span class="wordmark" style="font-size:19px;">Cau<em>ce</em></span>
+      <span class="playground-badge">play</span>
+    </div>
+    <button class="menu-btn" id="menuBtn" aria-label="Open navigation" aria-expanded="false" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </header>
+
+  <!-- ══════════ SIDEBAR / DRAWER — connected, Conversation active ══════════ -->
+  <aside class="sidebar" id="drawer">
+    <div class="logo-lockup">
+      <svg width="42" height="32" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3.0" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4.0" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+      <span class="wordmark">Cau<em>ce</em></span>
+      <span class="playground-badge">play</span>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-eyebrow">Session</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg><span class="lbl">Session</span></a>
+
+      <div class="nav-eyebrow">Workspace</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg><span class="lbl">Tenants</span></a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg><span class="lbl">Agents</span></a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg><span class="lbl">API keys</span></a>
+
+      <div class="nav-eyebrow">Runtime</div>
+      <a class="nav-item active" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg><span class="lbl">Conversation</span></a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span class="lbl">Invocations</span></a>
+
+      <div class="nav-eyebrow">Trust</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg><span class="lbl">Audit chain</span></a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="session-status">
+        <span class="status-dot"></span><span class="status-txt">Connected</span>
+      </div>
+      <div class="hint">http://localhost:8080</div>
+      <span class="version-chip">playground · dev</span>
+    </div>
+  </aside>
+
+  <!-- ══════════ MAIN — Conversation ══════════ -->
+  <main class="main">
+
+    <!-- Context bar -->
+    <div class="convo-bar">
+      <div class="convo-field agent-field">
+        <label>Agent</label>
+        <div class="select-like" role="button" tabindex="0">
+          support-agent <span class="chev">▾</span>
+        </div>
+      </div>
+      <div class="convo-field">
+        <label>Identity ref</label>
+        <input class="ident-input" type="text" value="playground-user-1" spellcheck="false">
+      </div>
+      <div class="convo-meta">
+        <span class="chip mono-id">conv 019ff6a2…</span>
+        <span class="chip open">OPEN</span>
+        <span class="chip">channel api</span>
+      </div>
+    </div>
+
+    <!-- Thread -->
+    <div class="thread">
+      <div class="thread-inner">
+
+        <button class="load-earlier" type="button">Load earlier messages</button>
+
+        <!-- USER -->
+        <div class="msg user">
+          <span class="who">You · playground-user-1</span>
+          <div class="bubble">What time is it right now?</div>
+        </div>
+
+        <!-- THE SIGNATURE: the agentic loop, visible -->
+        <div class="loop-trace">
+          <div class="loop-summary" role="button" tabindex="0" aria-expanded="true">
+            <span class="tri">▼</span> agent loop · 1 tool call · round 1
+          </div>
+          <div class="tool-card">
+            <span class="k">TOOL_CALL</span> · get_current_time<br>
+            <span class="payload">args {}</span>
+          </div>
+          <div class="tool-card">
+            <span class="r">TOOL_RESULT</span> · get_current_time · <span class="flag">is_error: false</span><br>
+            <span class="payload">"2026-08-12T16:45:03Z"</span>
+          </div>
+        </div>
+
+        <!-- AGENT -->
+        <div class="msg agent">
+          <span class="who">Agent · support-agent</span>
+          <div class="bubble">It's 16:45 UTC — that's 18:45 in Madrid right now.</div>
+          <span class="meta">invocation 019ff6a3… · <span class="ok">COMPLETED</span></span>
+        </div>
+
+        <!-- USER (second exchange — this one failed) -->
+        <div class="msg user">
+          <span class="who">You · playground-user-1</span>
+          <div class="bubble">Summarise our conversation so far.</div>
+        </div>
+
+        <!-- SYSTEM error, as the backend actually writes it -->
+        <div class="msg system">
+          <span class="who">System</span>
+          <div class="bubble">[orchestration_error] The provider could not complete this invocation.</div>
+        </div>
+        <div class="msg agent" style="margin-top:-8px;">
+          <span class="meta">invocation 019ff6a4… · <span class="bad">FAILED · PROVIDER_UNAVAILABLE</span></span>
+        </div>
+
+        <!-- USER (retry — currently in flight) -->
+        <div class="msg user">
+          <span class="who">You · playground-user-1</span>
+          <div class="bubble">Try again, please.</div>
+        </div>
+
+        <!-- IN FLIGHT: honest polling, no fake streaming -->
+        <div class="pending-row">
+          <div class="pending-card">
+            <span class="pulse" aria-hidden="true"></span>
+            Agent is working…
+          </div>
+          <span class="meta">invocation 019ff6a5… · PROCESSING · polling every 2s</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Composer -->
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="composer-box">
+          <textarea rows="1" placeholder="Message support-agent…"></textarea>
+          <button class="btn-send" type="button">Send</button>
+        </div>
+        <div class="wire">
+          <span><span class="path">POST /v1/agents/{id}/messages</span> → <span class="code-ok">202</span></span>
+          <span><span class="path">GET /v1/invocations/019ff6a5…</span> → PROCESSING</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+
+<script>
+/* Drawer behavior (mobile) — same contract as mockup 01:
+   hamburger toggles, backdrop click closes, Escape closes, aria-expanded tracked,
+   and (per implementation) it also closes on navigation, returning focus to the button. */
+(function () {
+  var btn = document.getElementById('menuBtn');
+  var drawer = document.getElementById('drawer');
+  var backdrop = document.getElementById('backdrop');
+  function setOpen(open) {
+    drawer.classList.toggle('open', open);
+    backdrop.classList.toggle('show', open);
+    btn.setAttribute('aria-expanded', String(open));
+  }
+  btn.addEventListener('click', function () { setOpen(!drawer.classList.contains('open')); });
+  backdrop.addEventListener('click', function () { setOpen(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+})();
+</script>
+</body>
+</html>

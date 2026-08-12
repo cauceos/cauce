@@ -26,6 +26,14 @@ export interface SessionContextValue {
    * forgets the session by design.
    */
   client: ApiClient | null
+  /**
+   * Workspace tenant id the user pasted (the API has no "who am I"
+   * endpoint, so the caller's tenant cannot be discovered — see the
+   * Deferred register). Shared session-wide so every area reuses it.
+   * Memory-only, like everything here.
+   */
+  tenantId: string
+  setTenantId(tenantId: string): void
   connect(instanceUrl: string, apiKey: string): Promise<boolean>
   disconnect(): void
 }
@@ -39,6 +47,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('disconnected')
   const [error, setError] = useState<SessionError | null>(null)
   const [client, setClient] = useState<ApiClient | null>(null)
+  const [tenantId, setTenantId] = useState('')
   // Mirror of `client`, readable inside connect() without re-creating the
   // callback whenever the session changes.
   const clientRef = useRef<ApiClient | null>(null)
@@ -115,11 +124,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setClient(null)
     setStatus('disconnected')
     setError(null)
+    // Cleared here only: a FAILED re-connect restores the live session and
+    // must keep its workspace tenant.
+    setTenantId('')
   }, [])
 
   const value = useMemo(
-    () => ({ instanceUrl, status, error, client, connect, disconnect }),
-    [instanceUrl, status, error, client, connect, disconnect],
+    () => ({ instanceUrl, status, error, client, tenantId, setTenantId, connect, disconnect }),
+    [instanceUrl, status, error, client, tenantId, connect, disconnect],
   )
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

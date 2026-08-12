@@ -1,5 +1,14 @@
 import { ApiError, NetworkError } from './errors'
-import type { ErrorEnvelope, HealthResponse } from './types'
+import type {
+  AgentResponse,
+  ConversationResponse,
+  CursorPage,
+  ErrorEnvelope,
+  HealthResponse,
+  InvocationResponse,
+  MessageResponse,
+  SendMessageAccepted,
+} from './types'
 
 /** Header naming the real instance for the dev proxy (see vite.config.ts). */
 const TARGET_HEADER = 'X-Cauce-Target'
@@ -33,6 +42,60 @@ export class ApiClient {
     return this.request<HealthResponse>('/actuator/health')
   }
 
+  /** GET /v1/tenants/{tenantId}/agents — one keyset page. */
+  listAgents(
+    tenantId: string,
+    opts: { limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
+  ): Promise<CursorPage<AgentResponse>> {
+    return this.request<CursorPage<AgentResponse>>(
+      `/v1/tenants/${tenantId}/agents${pageQuery(opts)}`,
+      { signal },
+    )
+  }
+
+  /**
+   * POST /v1/agents/{agentId}/messages → 202. The optional Idempotency-Key
+   * makes a network-level retry of the same submission replay the original
+   * 202 instead of ingesting a duplicate.
+   */
+  sendMessage(
+    agentId: string,
+    body: { external_identity_ref: string; content: string },
+    idempotencyKey?: string,
+  ): Promise<SendMessageAccepted> {
+    return this.request<SendMessageAccepted>(`/v1/agents/${agentId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: idempotencyKey != null ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    })
+  }
+
+  /** GET /v1/conversations/{id}. */
+  getConversation(conversationId: string, signal?: AbortSignal): Promise<ConversationResponse> {
+    return this.request<ConversationResponse>(`/v1/conversations/${conversationId}`, { signal })
+  }
+
+  /**
+   * GET /v1/conversations/{id}/messages — one keyset page, ascending by id,
+   * forward-only (`cursor` = id of the last message already held).
+   */
+  listMessages(
+    conversationId: string,
+    opts: { limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
+  ): Promise<CursorPage<MessageResponse>> {
+    return this.request<CursorPage<MessageResponse>>(
+      `/v1/conversations/${conversationId}/messages${pageQuery(opts)}`,
+      { signal },
+    )
+  }
+
+  /** GET /v1/invocations/{id} — processing status, for polling after a 202. */
+  getInvocation(invocationId: string, signal?: AbortSignal): Promise<InvocationResponse> {
+    return this.request<InvocationResponse>(`/v1/invocations/${invocationId}`, { signal })
+  }
+
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers)
     headers.set(TARGET_HEADER, this.instanceUrl)
@@ -41,11 +104,18 @@ export class ApiClient {
       headers.set('Content-Type', 'application/json')
     }
 
+    // A caller-provided signal (poll cancellation) must combine with the
+    // 30s timeout, not replace it.
+    const signal =
+      init.signal != null
+        ? AbortSignal.any([AbortSignal.timeout(REQUEST_TIMEOUT_MS), init.signal])
+        : AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+
     let response: Response
     try {
       response = await fetch(`/proxy${path}`, {
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         ...init,
+        signal,
         headers,
       })
     } catch (cause) {
@@ -68,6 +138,14 @@ export class ApiClient {
       })
     }
   }
+}
+
+function pageQuery({ limit, cursor }: { limit?: number; cursor?: string }): string {
+  const params = new URLSearchParams()
+  if (limit != null) params.set('limit', String(limit))
+  if (cursor != null) params.set('cursor', cursor)
+  const query = params.toString()
+  return query === '' ? '' : `?${query}`
 }
 
 async function parseEnvelope(response: Response): Promise<ErrorEnvelope> {

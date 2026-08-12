@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './styles/tokens.css'
 import './styles/shell.css'
 import './styles/session.css'
+import './styles/conversation.css'
 import { App } from './App'
 
 createRoot(document.getElementById('root')!).render(
