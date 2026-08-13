@@ -1,5 +1,10 @@
 package dev.cauce.api.web;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelPayloadException;
@@ -24,13 +29,18 @@ import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxRetriesExceededException;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -103,6 +113,19 @@ public class GlobalExceptionHandler {
             // 504 GATEWAY_TIMEOUT
             Map.entry(LlmTimeoutException.class, "llm_timeout"));
 
+    /**
+     * The configured Jackson property-naming strategy, so validation/parse errors report the
+     * <em>wire</em> field name (e.g. {@code model_name}) rather than the Java property
+     * ({@code modelName}). Derived from the real {@link ObjectMapper} config, never a hand-rolled
+     * transform; null (identity mapping) if no {@code NamingBase} strategy is configured.
+     */
+    private final PropertyNamingStrategies.NamingBase namingStrategy;
+
+    public GlobalExceptionHandler(ObjectMapper objectMapper) {
+        PropertyNamingStrategy strategy = objectMapper.getSerializationConfig().getPropertyNamingStrategy();
+        this.namingStrategy = strategy instanceof PropertyNamingStrategies.NamingBase base ? base : null;
+    }
+
     // === 4xx — client errors: safe to echo the exception message ===
 
     @ExceptionHandler({
@@ -137,7 +160,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         List<ErrorResponse.FieldError> fields = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> new ErrorResponse.FieldError(fe.getField(), fe.getDefaultMessage()))
+                .map(fe -> new ErrorResponse.FieldError(toWireName(fe.getField()), fe.getDefaultMessage()))
                 .toList();
         log.warn("validation_failed [{}]: {} field error(s)", HttpStatus.BAD_REQUEST.value(), fields.size());
         return ResponseEntity.badRequest()
@@ -149,6 +172,32 @@ public class GlobalExceptionHandler {
         log.warn("invalid_path_parameter [{}]: {}", HttpStatus.BAD_REQUEST.value(), ex.getMessage());
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("invalid_path_parameter", "Invalid value for parameter '" + ex.getName() + "'"));
+    }
+
+    /**
+     * An unreadable request body — the caller's error, not ours. The common case is a malformed
+     * value that Jackson cannot deserialize (e.g. a non-UUID string for a UUID field), which
+     * previously fell through to the generic 500. Now it is a 400 with the standard envelope,
+     * naming the offending field (in wire case) and the expected format when we can pinpoint it,
+     * consistent with the path-parameter 400. Broader parse failures (malformed JSON, empty body)
+     * map to a generic 400. This never shadows the specific 5xx handlers — it matches only the
+     * (client-side) unreadable-body case.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException ex) {
+        if (ex.getCause() instanceof InvalidFormatException ife) {
+            String field = wireFieldPath(ife.getPath());
+            String expected = describeExpectedType(ife.getTargetType());
+            String message = field != null
+                    ? "Invalid value for field '" + field + "': expected " + expected
+                    : "Invalid value in request body: expected " + expected;
+            log.warn("invalid_request_body [{}]: {}", HttpStatus.BAD_REQUEST.value(), message);
+            return ResponseEntity.badRequest().body(ErrorResponse.of("invalid_request_body", message));
+        }
+        log.warn("invalid_request_body [{}]: request body is missing or not valid JSON",
+                HttpStatus.BAD_REQUEST.value());
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of("invalid_request_body", "Request body is missing or is not valid JSON"));
     }
 
     @ExceptionHandler(MissingTenantContextException.class)
@@ -230,5 +279,53 @@ public class GlobalExceptionHandler {
 
     private static String codeFor(Throwable ex) {
         return ERROR_CODES.getOrDefault(ex.getClass(), FALLBACK_CODE);
+    }
+
+    /**
+     * Translates a Java property name to its serialized wire name using the configured Jackson
+     * strategy (so it stays in lockstep with the actual JSON). Applied per dot-segment so a
+     * nested path (should one arise) translates each element. Identity when no strategy is set.
+     */
+    private String toWireName(String javaField) {
+        if (namingStrategy == null || javaField == null || javaField.isBlank()) {
+            return javaField;
+        }
+        return Arrays.stream(javaField.split("\\."))
+                .map(namingStrategy::translate)
+                .collect(Collectors.joining("."));
+    }
+
+    /** Builds the wire-cased dotted field path from a Jackson deserialization reference chain. */
+    private String wireFieldPath(List<JsonMappingException.Reference> path) {
+        if (path == null || path.isEmpty()) {
+            return null;
+        }
+        String joined = path.stream()
+                .map(JsonMappingException.Reference::getFieldName)
+                .filter(Objects::nonNull)
+                .map(this::toWireName)
+                .collect(Collectors.joining("."));
+        return joined.isEmpty() ? null : joined;
+    }
+
+    /** A human-readable hint for the type Jackson expected but could not parse. */
+    private static String describeExpectedType(Class<?> targetType) {
+        if (targetType == null) {
+            return "a different type";
+        }
+        if (targetType == UUID.class) {
+            return "a UUID (e.g. 019ff668-5449-7bc2-b3fd-7b4bf9ba01b3)";
+        }
+        if (Number.class.isAssignableFrom(targetType)
+                || targetType == int.class || targetType == long.class || targetType == double.class) {
+            return "a number";
+        }
+        if (targetType == boolean.class || targetType == Boolean.class) {
+            return "a boolean";
+        }
+        if (Enum.class.isAssignableFrom(targetType)) {
+            return "one of the allowed values";
+        }
+        return "a value of type " + targetType.getSimpleName();
     }
 }

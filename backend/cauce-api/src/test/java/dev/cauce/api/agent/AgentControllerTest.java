@@ -80,7 +80,7 @@ class AgentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("validation_failed"))
-                .andExpect(jsonPath("$.errors[0].field").value("systemPrompt"));
+                .andExpect(jsonPath("$.errors[0].field").value("system_prompt"));
     }
 
     @Test

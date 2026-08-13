@@ -186,6 +186,33 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.error").value("unauthorized"));
     }
 
+    @Test
+    void createClient_malformedUuidInBody_returns400NamingTheField() throws Exception {
+        // Regression: a non-UUID partner_id in the BODY used to surface as 500 internal_error
+        // (unhandled Jackson deserialization). It is now a 400 with the standard envelope naming
+        // the offending field — consistent with the path-parameter 400.
+        mockMvc.perform(post("/v1/tenants/client")
+                        .header(HttpHeaders.AUTHORIZATION, operatorAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Clinic\",\"partner_id\":\"not-a-uuid\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_request_body"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("partner_id")));
+    }
+
+    @Test
+    void createAgent_blankModelName_reportsWireCasedFieldName() throws Exception {
+        UUID partnerId = createPartner();
+        UUID clientId = createClient(bearerFor(partnerId), partnerId);
+        // Regression: validation field names report the wire name (model_name), not the Java
+        // property (modelName), derived from the configured Jackson naming strategy.
+        mockMvc.perform(postAs(bearerFor(clientId), "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "  ", null, null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"))
+                .andExpect(jsonPath("$.errors[0].field").value("model_name"));
+    }
+
     // --- helpers ---
 
     /** Mints a fresh API key for {@code tenantId} via the admin path and returns the Bearer value. */
