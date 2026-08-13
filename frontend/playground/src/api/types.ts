@@ -41,6 +41,8 @@ export interface CursorPage<T> {
 export type MessageRole = 'USER' | 'AGENT' | 'SYSTEM' | 'TOOL_CALL' | 'TOOL_RESULT'
 export type ConversationStatus = 'OPEN' | 'CLOSED' | 'ESCALATED' | 'ARCHIVED'
 export type AgentStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED'
+/** The three fixed tiers of the tenant hierarchy (enum name, verbatim). */
+export type Tier = 'OPERATOR' | 'PARTNER' | 'CLIENT'
 /** Public invocation vocabulary (internal ABANDONED collapses into FAILED). */
 export type InvocationStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
 export type FailureReason =
@@ -49,6 +51,19 @@ export type FailureReason =
   | 'AGENT_LOOP_LIMIT'
   | 'INTERNAL_ERROR'
   | 'TIMEOUT'
+
+/**
+ * API representation of a tenant. `parent_tenant_id` is null for the
+ * operator (the hierarchy root). `tier` is the enum name, verbatim.
+ */
+export interface TenantResponse {
+  id: string
+  parent_tenant_id: string | null
+  tier: Tier
+  name: string
+  created_at: string
+  updated_at: string
+}
 
 export interface AgentResponse {
   id: string
@@ -62,6 +77,20 @@ export interface AgentResponse {
   status: AgentStatus
   created_at: string
   updated_at: string
+}
+
+/**
+ * Request body for creating an agent. `temperature` and
+ * `max_response_tokens` are optional: omitted → the domain applies its
+ * defaults (verified against `CreateAgentRequest`).
+ */
+export interface CreateAgentBody {
+  name: string
+  system_prompt: string
+  model_provider: string
+  model_name: string
+  temperature?: number
+  max_response_tokens?: number
 }
 
 export interface ConversationResponse {

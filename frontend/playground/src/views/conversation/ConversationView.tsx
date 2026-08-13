@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router'
 import type { ApiClient } from '../../api/client'
 import { useSession } from '../../session/SessionContext'
 import { Composer } from './Composer'
@@ -19,6 +20,7 @@ const DEFAULT_IDENTITY_REF = 'playground-user-1'
 
 function ConnectedConversation({ client }: { client: ApiClient }) {
   const { tenantId, setTenantId } = useSession()
+  const location = useLocation()
   const agents = useAgents(client)
   const { state, send, resume, loadEarlier } = useConversationMachine(client)
 
@@ -26,14 +28,27 @@ function ConnectedConversation({ client }: { client: ApiClient }) {
   const [identityRef, setIdentityRef] = useState(DEFAULT_IDENTITY_REF)
 
   // If a workspace tenant already sits in the session (set here earlier, or
-  // by a future area), load its agents on mount. Idempotent GET — safe
-  // under StrictMode's double mount (useAgents aborts the first).
+  // by the Agents/Tenants areas), load its agents on mount. Idempotent GET —
+  // safe under StrictMode's double mount (useAgents aborts the first).
   const loadRef = useRef(agents.load)
   loadRef.current = agents.load
   useEffect(() => {
     if (tenantId.trim() !== '') void loadRef.current(tenantId.trim())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Preselect the agent handed over by "Open conversation →" (Agents area),
+  // once its list has loaded and contains the id. Consumed once so a manual
+  // reselect afterwards is not overridden.
+  const preselectId = (location.state as { agentId?: string } | null)?.agentId
+  const preselectDone = useRef(false)
+  useEffect(() => {
+    if (preselectDone.current || preselectId == null) return
+    if (agents.agents.some((agent) => agent.id === preselectId)) {
+      setSelectedAgentId(preselectId)
+      preselectDone.current = true
+    }
+  }, [preselectId, agents.agents])
 
   const busy = state.phase !== 'idle'
   const selectedAgent = agents.agents.find((agent) => agent.id === selectedAgentId) ?? null

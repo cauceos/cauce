@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cauce Playground — Tenants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================
+   CAUCE PLAYGROUND · Mockup 03 — Tenants
+   Static reference. Fake data. Not production code.
+
+   Implementation contract:
+   · Discovery is children-walking only: paste a root tenant id → GET /v1/tenants/{id},
+     expand via GET /v1/tenants/{id}/children (keyset envelope {data, next_cursor}).
+     There is NO "list all tenants" endpoint — the root input is honest, not a shortcut.
+   · Create partner: POST /v1/tenants/partner {name, operator_id}
+     Create client:  POST /v1/tenants/client  {name, partner_id}
+     Parent ids are ALWAYS taken from the selected node — the form only asks for a name.
+     (Kills the manual-UUID failure mode.)
+   · Tier rule surfaced in UI: agents only under CLIENT ("Agents →" link on client rows).
+   · Every id is copyable (mono + copy affordance) — ids are the currency between areas
+     until a "who am I" introspection endpoint exists.
+   · Validation errors from the backend envelope render inline in the create form.
+   · Responsive contract identical to mockups 01/02 (≥1025 sidebar / 701–1024 rail / ≤700 drawer).
+   ============================================ */
+:root {
+  --teal-300:#90E8E1; --teal-400:#5EDDD0; --teal-500:#2DD4C0; --teal-600:#1BB8A6;
+  --moss-400:#6FAF82; --moss-500:#4E8B62;
+  --slate-400:#8AB4CC; --slate-500:#5A8CAB;
+  --stone-950:#0E0F0D; --stone-900:#161713; --stone-800:#252620;
+  --stone-700:#35362E; --stone-600:#4A4B42; --stone-400:#8C8D82;
+  --stone-200:#D4D5CC; --stone-100:#ECEEE8;
+  --bg:var(--stone-950); --surface:var(--stone-900); --surface-2:var(--stone-800);
+  --border:#2E2F28; --text:var(--stone-100); --text-2:#C8CAC2;
+  --muted:var(--stone-600); --subtle:var(--stone-400);
+  --font-display:'Fraunces', Georgia, serif;
+  --font-body:'Geist', system-ui, sans-serif;
+  --font-mono:'JetBrains Mono','Courier New', monospace;
+  --sidebar-w:248px; --rail-w:68px; --topbar-h:58px;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-full:100px;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html { -webkit-font-smoothing:antialiased; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-body); font-size:14px; line-height:1.65; min-height:100vh; }
+:focus-visible { outline:2px solid var(--teal-500); outline-offset:2px; border-radius:4px; }
+.app { display:flex; min-height:100vh; }
+
+/* ── Topbar (mobile) + backdrop ── */
+.topbar { display:none; position:fixed; top:0; left:0; right:0; z-index:40; height:var(--topbar-h);
+  background:var(--surface); border-bottom:1px solid var(--border);
+  align-items:center; justify-content:space-between; padding:0 14px 0 18px; }
+.topbar .logo-lockup { padding:0; }
+.menu-btn { background:none; border:1px solid var(--stone-700); border-radius:var(--radius-sm);
+  width:40px; height:40px; display:flex; align-items:center; justify-content:center; color:var(--text-2); cursor:pointer; }
+.menu-btn svg { width:18px; height:18px; }
+.backdrop { display:none; position:fixed; inset:0; z-index:45; background:rgba(14,15,13,.65); }
+.backdrop.show { display:block; }
+
+/* ── Sidebar ── */
+.sidebar { width:var(--sidebar-w); flex-shrink:0; background:var(--surface); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; padding:24px 0 16px; position:sticky; top:0; height:100vh; transition:transform .25s ease; }
+.logo-lockup { display:flex; align-items:center; gap:10px; padding:0 20px 22px; }
+.wordmark { font-family:var(--font-display); font-size:22px; font-weight:600; letter-spacing:-0.8px; color:var(--text); line-height:1; }
+.wordmark em { font-style:italic; color:var(--teal-500); }
+.playground-badge { font-family:var(--font-mono); font-size:10px; letter-spacing:1px; color:var(--subtle);
+  border:1px solid var(--stone-700); border-radius:var(--radius-full); padding:2px 8px; margin-left:2px; text-transform:uppercase; }
+.nav { flex:1; overflow-y:auto; padding:4px 12px; }
+.nav-eyebrow { font-family:var(--font-mono); font-size:10px; letter-spacing:4px; text-transform:uppercase; color:var(--muted); padding:18px 10px 8px; }
+.nav-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:var(--radius-sm);
+  color:var(--text-2); font-size:13px; font-weight:500; text-decoration:none; position:relative; }
+.nav-item .ico { width:15px; height:15px; flex-shrink:0; opacity:.75; }
+.nav-item.active { background:var(--surface-2); color:var(--text); }
+.nav-item.active::before { content:""; position:absolute; left:-12px; top:6px; bottom:6px; width:2px; border-radius:2px; background:var(--teal-500); }
+.nav-item.active .ico { opacity:1; stroke:var(--teal-500) !important; }
+.sidebar-foot { padding:14px 20px 0; border-top:1px solid var(--border); margin-top:8px; }
+.session-status { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-2); }
+.status-dot { width:7px; height:7px; border-radius:50%; background:var(--moss-400); flex-shrink:0; }
+.sidebar-foot .hint { font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:3px; }
+.version-chip { font-family:var(--font-mono); font-size:10px; letter-spacing:1px; color:var(--muted); margin-top:12px; display:block; }
+
+/* ── Main ── */
+.main { flex:1; min-width:0; padding:28px 32px 48px; }
+.page-eyebrow { font-family:var(--font-mono); font-size:10px; letter-spacing:4px; text-transform:uppercase; color:var(--teal-500); margin-bottom:8px; }
+.page-title { font-family:var(--font-display); font-weight:600; font-size:26px; letter-spacing:-0.8px; margin-bottom:6px; }
+.page-sub { color:var(--subtle); font-size:13px; max-width:60ch; margin-bottom:22px; }
+
+/* Root loader */
+.root-row { display:flex; gap:8px; align-items:center; margin-bottom:24px; flex-wrap:wrap; }
+.root-row .lab { font-family:var(--font-mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); flex-basis:100%; }
+.mono-input { background:var(--surface); border:1px solid var(--stone-700); border-radius:var(--radius-sm);
+  padding:8px 12px; font-family:var(--font-mono); font-size:12px; color:var(--text); min-width:320px; }
+.btn-ghost { background:var(--surface); border:1px solid var(--stone-700); border-radius:var(--radius-full);
+  color:var(--text-2); font-family:var(--font-mono); font-size:11px; padding:8px 16px; cursor:pointer; }
+.btn-ghost:hover { color:var(--text); border-color:var(--stone-600); }
+
+/* Two columns: tree + detail */
+.cols { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr); gap:22px; align-items:start; }
+
+/* Tree */
+.tree { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:10px; }
+.node { border-radius:var(--radius-sm); }
+.node-row { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:var(--radius-sm); cursor:pointer; }
+.node-row:hover { background:var(--surface-2); }
+.node-row.selected { background:var(--surface-2); box-shadow:inset 2px 0 0 var(--teal-500); }
+.caret { width:14px; text-align:center; font-size:9px; color:var(--muted); flex-shrink:0; }
+.node-name { font-size:13px; font-weight:500; color:var(--text); }
+.tier { font-family:var(--font-mono); font-size:9px; letter-spacing:1px; border:1px solid var(--stone-700);
+  border-radius:var(--radius-full); padding:2px 8px; color:var(--subtle); }
+.tier.operator { color:var(--subtle); }
+.tier.partner  { color:var(--slate-400); border-color:rgba(138,180,204,.3); }
+.tier.client   { color:var(--moss-400); border-color:rgba(111,175,130,.3); }
+.node-id { font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-left:auto; display:flex; align-items:center; gap:5px; }
+.copy { border:none; background:none; color:var(--muted); cursor:pointer; font-size:11px; padding:2px; }
+.copy:hover { color:var(--teal-500); }
+.agents-link { font-family:var(--font-mono); font-size:10px; color:var(--teal-500); text-decoration:none; margin-left:8px; white-space:nowrap; }
+.children { margin-left:22px; border-left:1px solid var(--border); padding-left:6px; }
+.load-more-children { font-family:var(--font-mono); font-size:10px; color:var(--muted); background:none; border:none;
+  cursor:pointer; padding:6px 10px; }
+.load-more-children:hover { color:var(--subtle); }
+
+/* Detail / create panel */
+.panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:22px; position:sticky; top:24px; }
+.panel h3 { font-family:var(--font-display); font-weight:600; font-size:18px; letter-spacing:-0.5px; margin-bottom:2px; }
+.panel .tier-line { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+.kv { display:flex; flex-direction:column; gap:2px; margin-bottom:12px; }
+.kv .k { font-family:var(--font-mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); }
+.kv .v { font-family:var(--font-mono); font-size:11.5px; color:var(--text-2); display:flex; align-items:center; gap:6px; word-break:break-all; }
+.panel hr { border:none; border-top:1px solid var(--border); margin:16px 0; }
+.panel .create-title { font-size:13px; font-weight:500; color:var(--text); margin-bottom:4px; }
+.panel .create-sub { font-size:12px; color:var(--subtle); margin-bottom:12px; }
+.panel .create-sub code { font-family:var(--font-mono); font-size:10.5px; color:var(--text-2); }
+.field { margin-bottom:14px; }
+.field label { display:block; font-size:12.5px; font-weight:500; color:var(--text); margin-bottom:6px; }
+.input { width:100%; background:var(--bg); border:1px solid var(--stone-700); border-radius:var(--radius-sm);
+  padding:9px 12px; font-size:13px; color:var(--text); font-family:var(--font-body); }
+.input::placeholder { color:var(--muted); }
+.btn-primary { background:var(--teal-500); color:var(--stone-950); border:none; border-radius:var(--radius-full);
+  font-weight:600; font-size:13px; padding:10px 24px; cursor:pointer; }
+.btn-primary:hover { background:var(--teal-600); }
+.form-error { font-family:var(--font-mono); font-size:11px; color:var(--subtle); border:1px dashed var(--stone-700);
+  border-radius:var(--radius-sm); padding:8px 12px; margin-bottom:12px; }
+.rule-note { font-size:11.5px; color:var(--muted); margin-top:14px; line-height:1.6; }
+
+/* ── Tablet rail ── */
+@media (max-width:1024px) and (min-width:701px) {
+  .sidebar { width:var(--rail-w); padding:20px 0 12px; }
+  .logo-lockup { justify-content:center; padding:0 0 18px; }
+  .wordmark, .playground-badge { display:none; }
+  .nav { padding:4px 10px; }
+  .nav-eyebrow { font-size:0; padding:14px 0 6px; border-top:1px solid var(--border); margin:8px 6px 0; }
+  .nav-eyebrow:first-child { border-top:none; margin-top:0; }
+  .nav-item { justify-content:center; padding:10px 0; }
+  .nav-item .lbl { display:none; }
+  .nav-item.active::before { left:-10px; }
+  .sidebar-foot { padding:12px 0 0; text-align:center; }
+  .session-status { justify-content:center; }
+  .session-status .status-txt, .sidebar-foot .hint, .version-chip { display:none; }
+  .cols { grid-template-columns:1fr; }
+  .panel { position:static; }
+}
+
+/* ── Mobile: topbar + drawer ── */
+@media (max-width:700px) {
+  .topbar { display:flex; }
+  .sidebar { position:fixed; z-index:50; top:0; left:0; height:100vh; height:100dvh;
+    width:min(300px, 84vw); transform:translateX(-100%); box-shadow:8px 0 32px rgba(0,0,0,.45); padding-top:20px; }
+  .sidebar.open { transform:translateX(0); }
+  .main { padding:calc(var(--topbar-h) + 18px) 16px 40px; }
+  .cols { grid-template-columns:1fr; }
+  .panel { position:static; }
+  .mono-input { min-width:0; flex:1; }
+  .node-id { display:none; }           /* ids live in the detail panel on small screens */
+}
+@media (prefers-reduced-motion:reduce) { .sidebar { transition:none; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="logo-lockup">
+      <svg width="34" height="26" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3.0" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4.0" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+      <span class="wordmark" style="font-size:19px;">Cau<em>ce</em></span>
+      <span class="playground-badge">play</span>
+    </div>
+    <button class="menu-btn" id="menuBtn" aria-label="Open navigation" aria-expanded="false" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </header>
+
+  <aside class="sidebar" id="drawer">
+    <div class="logo-lockup">
+      <svg width="42" height="32" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3.0" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4.0" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+      <span class="wordmark">Cau<em>ce</em></span>
+      <span class="playground-badge">play</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-eyebrow">Session</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg><span class="lbl">Session</span></a>
+      <div class="nav-eyebrow">Workspace</div>
+      <a class="nav-item active" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg><span class="lbl">Tenants</span></a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg><span class="lbl">Agents</span></a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg><span class="lbl">API keys</span></a>
+      <div class="nav-eyebrow">Runtime</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg><span class="lbl">Conversation</span></a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span class="lbl">Invocations</span></a>
+      <div class="nav-eyebrow">Trust</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg><span class="lbl">Audit chain</span></a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="session-status"><span class="status-dot"></span><span class="status-txt">Connected</span></div>
+      <div class="hint">http://localhost:8080</div>
+      <span class="version-chip">playground · dev</span>
+    </div>
+  </aside>
+
+  <div class="backdrop" id="backdrop"></div>
+
+  <main class="main">
+    <div class="page-eyebrow">Playground · Workspace</div>
+    <h1 class="page-title">Tenants</h1>
+    <p class="page-sub">The three-tier hierarchy: operator → partner → client. Agents live only under clients. Discovery walks children from a known root — there is no global listing.</p>
+
+    <div class="root-row">
+      <span class="lab">Root tenant id</span>
+      <input class="mono-input" type="text" value="019ff668-5449-7bc2-b3fd-7b4bf9ba01b3" spellcheck="false">
+      <button class="btn-ghost" type="button">Load tree</button>
+    </div>
+
+    <div class="cols">
+
+      <!-- TREE -->
+      <div class="tree">
+        <div class="node">
+          <div class="node-row">
+            <span class="caret">▼</span>
+            <span class="node-name">Operator</span>
+            <span class="tier operator">OPERATOR</span>
+            <span class="node-id">019ff668… <button class="copy" title="Copy id">⧉</button></span>
+          </div>
+          <div class="children">
+            <div class="node">
+              <div class="node-row selected">
+                <span class="caret">▼</span>
+                <span class="node-name">demo-partner</span>
+                <span class="tier partner">PARTNER</span>
+                <span class="node-id">019ff805… <button class="copy" title="Copy id">⧉</button></span>
+              </div>
+              <div class="children">
+                <div class="node">
+                  <div class="node-row">
+                    <span class="caret">›</span>
+                    <span class="node-name">demo-client</span>
+                    <span class="tier client">CLIENT</span>
+                    <a class="agents-link" href="#">agents →</a>
+                    <span class="node-id">019ff806… <button class="copy" title="Copy id">⧉</button></span>
+                  </div>
+                </div>
+                <button class="load-more-children" type="button">load more children…</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DETAIL + CONTEXTUAL CREATE -->
+      <div class="panel">
+        <h3>demo-partner</h3>
+        <div class="tier-line"><span class="tier partner">PARTNER</span></div>
+
+        <div class="kv">
+          <span class="k">Tenant id</span>
+          <span class="v">019ff805-f0f3-74b4-ac13-93a2874bf1ed <button class="copy" title="Copy id">⧉</button></span>
+        </div>
+        <div class="kv">
+          <span class="k">Parent</span>
+          <span class="v">Operator · 019ff668… <button class="copy" title="Copy id">⧉</button></span>
+        </div>
+        <div class="kv">
+          <span class="k">Created</span>
+          <span class="v">2026-08-12 22:09 UTC</span>
+        </div>
+
+        <hr>
+
+        <div class="create-title">New client under demo-partner</div>
+        <div class="create-sub">The parent is taken from this node — <code>partner_id</code> is filled for you. No UUIDs to paste.</div>
+
+        <!-- Inline backend validation error, rendered from the envelope (example state) -->
+        <div class="form-error">name · must not be blank</div>
+
+        <div class="field">
+          <label for="cname">Name</label>
+          <input class="input" id="cname" type="text" placeholder="e.g. clinica-sonrisa">
+        </div>
+        <button class="btn-primary" type="button">Create client</button>
+
+        <p class="rule-note">Agents can only belong to a CLIENT tenant — create the client first, then add agents from its row. Selecting the Operator offers “New partner” here instead.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('menuBtn');
+  var drawer = document.getElementById('drawer');
+  var backdrop = document.getElementById('backdrop');
+  function setOpen(open) {
+    drawer.classList.toggle('open', open);
+    backdrop.classList.toggle('show', open);
+    btn.setAttribute('aria-expanded', String(open));
+  }
+  btn.addEventListener('click', function () { setOpen(!drawer.classList.contains('open')); });
+  backdrop.addEventListener('click', function () { setOpen(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+})();
+</script>
+</body>
+</html>

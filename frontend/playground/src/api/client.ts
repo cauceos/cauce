@@ -2,12 +2,14 @@ import { ApiError, NetworkError } from './errors'
 import type {
   AgentResponse,
   ConversationResponse,
+  CreateAgentBody,
   CursorPage,
   ErrorEnvelope,
   HealthResponse,
   InvocationResponse,
   MessageResponse,
   SendMessageAccepted,
+  TenantResponse,
 } from './types'
 
 /** Header naming the real instance for the dev proxy (see vite.config.ts). */
@@ -42,6 +44,39 @@ export class ApiClient {
     return this.request<HealthResponse>('/actuator/health')
   }
 
+  /** GET /v1/tenants/{id} — a single tenant (the tree root, or a lookup). */
+  getTenant(tenantId: string, signal?: AbortSignal): Promise<TenantResponse> {
+    return this.request<TenantResponse>(`/v1/tenants/${tenantId}`, { signal })
+  }
+
+  /** GET /v1/tenants/{id}/children — one keyset page of direct children. */
+  listChildren(
+    tenantId: string,
+    opts: { limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
+  ): Promise<CursorPage<TenantResponse>> {
+    return this.request<CursorPage<TenantResponse>>(
+      `/v1/tenants/${tenantId}/children${pageQuery(opts)}`,
+      { signal },
+    )
+  }
+
+  /** POST /v1/tenants/partner → 201. The parent operator id comes from the tree node. */
+  createPartner(body: { name: string; operator_id: string }): Promise<TenantResponse> {
+    return this.request<TenantResponse>('/v1/tenants/partner', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
+  /** POST /v1/tenants/client → 201. The parent partner id comes from the tree node. */
+  createClient(body: { name: string; partner_id: string }): Promise<TenantResponse> {
+    return this.request<TenantResponse>('/v1/tenants/client', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
   /** GET /v1/tenants/{tenantId}/agents — one keyset page. */
   listAgents(
     tenantId: string,
@@ -52,6 +87,14 @@ export class ApiClient {
       `/v1/tenants/${tenantId}/agents${pageQuery(opts)}`,
       { signal },
     )
+  }
+
+  /** POST /v1/tenants/{tenantId}/agents → 201. */
+  createAgent(tenantId: string, body: CreateAgentBody): Promise<AgentResponse> {
+    return this.request<AgentResponse>(`/v1/tenants/${tenantId}/agents`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
   }
 
   /**
