@@ -129,6 +129,10 @@
 .tool-card .k { color: var(--color-slate-400); }
 .tool-card .r { color: var(--color-moss-400); }
 .tool-card .payload { color: var(--color-text-2); white-space: pre-wrap; word-break: break-word; }
+.tool-card .flag { color: var(--color-subtle); }
+/* The brand has no danger color and none is invented (errors are quiet
+   text): an errored result flags itself with full-brightness text. */
+.tool-card .flag.err { color: var(--color-text); }
 
 /* System / error card */
 .msg.system { align-self: stretch; max-width: 100%; }

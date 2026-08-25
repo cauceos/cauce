@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import type { ReactNode } from 'react'
 import { ApiClient } from '../api/client'
 import { ApiError, NetworkError } from '../api/errors'
+import type { MeResponse } from '../api/types'
 
 export type SessionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -27,9 +28,16 @@ export interface SessionContextValue {
    */
   client: ApiClient | null
   /**
-   * Workspace tenant id the user pasted (the API has no "who am I"
-   * endpoint, so the caller's tenant cannot be discovered — see the
-   * Deferred register). Shared session-wide so every area reuses it.
+   * Who the API key is (GET /v1/me), fetched once on a successful connect.
+   * Null when the instance predates the endpoint or the call failed — the
+   * session works without it, there is just no autocompletion. Memory-only,
+   * like everything here.
+   */
+  identity: MeResponse | null
+  /**
+   * Workspace tenant id every area shares. Prefilled from the key's own
+   * tenant (/v1/me) on a successful connect — ONLY there: views never
+   * re-autocomplete it, so a manual edit sticks for the whole session.
    * Memory-only, like everything here.
    */
   tenantId: string
@@ -47,6 +55,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('disconnected')
   const [error, setError] = useState<SessionError | null>(null)
   const [client, setClient] = useState<ApiClient | null>(null)
+  const [identity, setIdentity] = useState<MeResponse | null>(null)
   const [tenantId, setTenantId] = useState('')
   // Mirror of `client`, readable inside connect() without re-creating the
   // callback whenever the session changes.
@@ -108,8 +117,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           message: `The instance answered but reports health status "${healthStatus}".`,
         })
       }
+      // The connect outcome is already decided by the health probe. The
+      // introspection call is best-effort on top: an instance without
+      // /v1/me (or a transient failure) leaves identity null and the user
+      // pastes the tenant id by hand, exactly as before the endpoint.
+      let me: MeResponse | null = null
+      try {
+        me = await candidate.me()
+      } catch {
+        me = null
+      }
       clientRef.current = candidate
       setClient(candidate)
+      setIdentity(me)
+      // Prefill happens here and ONLY here: a new key means a new workspace
+      // focus (the old tenant may not even be visible to it). Within a
+      // session, manual edits via setTenantId are never overridden.
+      if (me !== null) setTenantId(me.tenant_id)
       setInstanceUrl(origin)
       setStatus('connected')
       setError(null)
@@ -122,6 +146,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(() => {
     clientRef.current = null
     setClient(null)
+    setIdentity(null)
     setStatus('disconnected')
     setError(null)
     // Cleared here only: a FAILED re-connect restores the live session and
@@ -130,8 +155,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ instanceUrl, status, error, client, tenantId, setTenantId, connect, disconnect }),
-    [instanceUrl, status, error, client, tenantId, connect, disconnect],
+    () => ({
+      instanceUrl,
+      status,
+      error,
+      client,
+      identity,
+      tenantId,
+      setTenantId,
+      connect,
+      disconnect,
+    }),
+    [instanceUrl, status, error, client, identity, tenantId, connect, disconnect],
   )
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

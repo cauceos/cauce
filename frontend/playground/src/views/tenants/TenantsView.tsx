@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import type { ApiClient } from '../../api/client'
 import { useSession } from '../../session/SessionContext'
@@ -16,10 +16,23 @@ export function TenantsView() {
 }
 
 function ConnectedTenants({ client }: { client: ApiClient }) {
-  const { setTenantId } = useSession()
+  const { tenantId, setTenantId } = useSession()
   const navigate = useNavigate()
   const tree = useTenantTree(client)
-  const [rootInput, setRootInput] = useState('')
+  // Prefilled with the session's workspace tenant (the key's own tenant
+  // after connect, or whatever the user set elsewhere) — still editable to
+  // walk from any other visible root.
+  const [rootInput, setRootInput] = useState(tenantId)
+
+  // Auto-load the tree on mount when a root is already known — same
+  // precedent as the Agents area. Idempotent GETs, safe under StrictMode's
+  // double mount (useTenantTree aborts the first).
+  const loadRootRef = useRef(tree.loadRoot)
+  loadRootRef.current = tree.loadRoot
+  useEffect(() => {
+    if (tenantId.trim() !== '') void loadRootRef.current(tenantId.trim())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const selected = tree.selectedId !== null ? findNode(tree.root, tree.selectedId) : null
   const selectedParent =

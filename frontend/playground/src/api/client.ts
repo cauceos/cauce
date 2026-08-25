@@ -7,6 +7,7 @@ import type {
   ErrorEnvelope,
   HealthResponse,
   InvocationResponse,
+  MeResponse,
   MessageResponse,
   SendMessageAccepted,
   TenantResponse,
@@ -42,6 +43,15 @@ export class ApiClient {
    */
   health(): Promise<HealthResponse> {
     return this.request<HealthResponse>('/actuator/health')
+  }
+
+  /**
+   * GET /v1/me — key introspection: the caller's tenant id/name/tier and
+   * key id, derived entirely from the authenticated key. 404s on older
+   * instances without the endpoint — callers degrade gracefully.
+   */
+  me(signal?: AbortSignal): Promise<MeResponse> {
+    return this.request<MeResponse>('/v1/me', { signal })
   }
 
   /** GET /v1/tenants/{id} — a single tenant (the tree root, or a lookup). */

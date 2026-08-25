@@ -3,10 +3,10 @@ import type { AgentsState } from './useAgents'
 import { shortId } from './useConversationMachine'
 
 /**
- * The context bar: tenant (an addition to the mockup — the API has no
- * "who am I", so the workspace tenant id must be pasted), agent selector,
- * identity ref, and the conversation chips. All inputs are read at send
- * time and disabled while an invocation is in flight.
+ * The context bar: tenant (an addition to the mockup — prefilled from the
+ * key's own tenant via /v1/me, still editable to browse child tenants),
+ * agent selector, identity ref, and the conversation chips. All inputs are
+ * read at send time and disabled while an invocation is in flight.
  */
 export function ConvoBar({
   tenantId,
@@ -41,7 +41,7 @@ export function ConvoBar({
             className="ident-input"
             id="convo-tenant"
             type="text"
-            placeholder="tenant id that owns the agents"
+            placeholder="tenant id that owns the agents (prefilled from your key)"
             value={tenantId}
             onChange={(event) => onTenantIdChange(event.target.value)}
             spellCheck={false}
@@ -79,7 +79,7 @@ export function ConvoBar({
             </option>
             {agents.agents.map((agent: AgentResponse) => (
               <option key={agent.id} value={agent.id}>
-                {agent.name} · {agent.status}
+                {agentOptionLabel(agent, agents.agents)}
               </option>
             ))}
           </select>
@@ -112,4 +112,15 @@ export function ConvoBar({
       </div>
     </div>
   )
+}
+
+/**
+ * Option text built for disambiguation — the same criterion as the Agents
+ * card: names are not unique, so the model chip always shows, and the short
+ * id is appended only when the name is actually duplicated in the list.
+ */
+function agentOptionLabel(agent: AgentResponse, all: AgentResponse[]): string {
+  const base = `${agent.name} · ${agent.model_provider} · ${agent.model_name} · ${agent.status}`
+  const nameIsDuplicated = all.some((other) => other.id !== agent.id && other.name === agent.name)
+  return nameIsDuplicated ? `${base} · ${shortId(agent.id)}` : base
 }

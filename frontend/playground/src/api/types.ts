@@ -107,14 +107,30 @@ export interface ConversationResponse {
 }
 
 /**
- * A thread message. The wire carries no `tool_content` and no invocation
- * link: for TOOL_CALL messages `content` is the tool name, for TOOL_RESULT
- * it is the output text (`"[empty result]"` when blank).
+ * Structured tool payload of a TOOL_CALL / TOOL_RESULT message (backend
+ * `ToolContentResponse`, NON_NULL serialization): a call carries `input`,
+ * a result carries `output` + `is_error` — the other variant's keys are
+ * omitted, so the message `role` is the discriminator.
+ */
+export interface ToolContentResponse {
+  tool_call_id: string
+  tool_name: string
+  input?: Record<string, unknown>
+  output?: string
+  is_error?: boolean
+}
+
+/**
+ * A thread message. `tool_content` travels only on TOOL_CALL / TOOL_RESULT
+ * messages (omitted entirely for text roles, and absent on older
+ * instances); `content` still flattens them (tool name / output text). The
+ * wire carries no invocation link — a known, accepted gap.
  */
 export interface MessageResponse {
   id: string
   role: MessageRole
   content: string
+  tool_content?: ToolContentResponse
   created_at: string
 }
 
@@ -127,6 +143,18 @@ export interface InvocationResponse {
   failure_reason: FailureReason | null
   created_at: string
   completed_at: string | null
+}
+
+/**
+ * Body of GET /v1/me — who the API key is, per the backend `MeResponse`.
+ * The identity authentication already established: nothing here widens
+ * visibility beyond what the key could already reach.
+ */
+export interface MeResponse {
+  tenant_id: string
+  tenant_name: string
+  tier: Tier
+  key_id: string
 }
 
 /** 202 body of POST /v1/agents/{agentId}/messages. */

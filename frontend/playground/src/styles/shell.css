@@ -105,6 +105,8 @@
   animation: nadirPulse 3.2s ease-in-out infinite;
 }
 .status-dot.connected { background: var(--color-moss-400); }
+.sidebar-foot .identity-line { font-size: 11px; color: var(--color-subtle); margin-top: 3px; }
+.sidebar-foot .identity-line .name { color: var(--color-text-2); }
 .sidebar-foot .hint { font-size: 11px; color: var(--color-muted); margin-top: 3px; }
 .version-chip {
   font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px;
@@ -142,7 +144,8 @@
 
   .sidebar-foot { padding: 12px 0 0; text-align: center; }
   .session-status { justify-content: center; }
-  .session-status .status-txt, .sidebar-foot .hint, .version-chip { display: none; }
+  .session-status .status-txt, .sidebar-foot .identity-line, .sidebar-foot .hint,
+  .version-chip { display: none; }
 }
 
 /* ═════════════════════════════════════════
