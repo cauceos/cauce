@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Cauce Playground — 03 Tenants · MOBILE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Geist:wght@300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CAUCE PLAYGROUND · 03 — TENANTS
+   ▸ MOBILE spec (≤700px). View at ~390px to judge.
+
+   WHAT CHANGES FROM TABLET, AND WHY
+   1. Topbar + drawer shell (contract from 01/02-mobile).
+   2. There is no room for two columns, so the DETAIL PANEL BECOMES
+      A BOTTOM SHEET: tapping a row opens it (drag-handle, backdrop,
+      Escape/backdrop/handle to close, body scroll locked). The
+      contextual create lives inside the sheet. Tap a row in this
+      file — the sheet is live.
+   3. Tree rows become TWO LINES: name + tier badge on top, short
+      id · "agents →" below. Copy moves into the sheet — a 32px
+      copy button per row is clutter at 390px; the full id with
+      copy is one tap away.
+   4. Name inputs are 16px (iOS zoom rule). Rows are 52px min.
+
+   WIRE TRUTHS — identical to desktop/tablet: children-walk (no
+   global listing), root prefilled once from /v1/me, CLIENT rows
+   are leaves, optimistic 201 insert, envelope errors inline, 404
+   deliberately ambiguous, no rename/delete, tiers OPERATOR teal ·
+   PARTNER slate · CLIENT moss with matching depth guides.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  --teal-300:#90E8E1;--teal-400:#5EDDD0;--teal-500:#2DD4C0;--teal-600:#1BB8A6;
+  --moss-300:#96C9A6;--moss-400:#6FAF82;--moss-500:#4E8B62;
+  --slate-400:#8AB4CC;--slate-500:#5A8CAB;
+  --stone-950:#0E0F0D;--stone-900:#161713;--stone-800:#252620;
+  --stone-700:#35362E;--stone-600:#4A4B42;--stone-400:#8C8D82;
+  --stone-200:#D4D5CC;--stone-100:#ECEEE8;
+  --bg:var(--stone-950);--surface:var(--stone-900);--surface-2:var(--stone-800);
+  --border:#2E2F28;--border-soft:#232419;
+  --text:var(--stone-100);--text-2:#C8CAC2;--muted:var(--stone-600);--subtle:var(--stone-400);
+  --font-display:'Fraunces',Georgia,serif;
+  --font-body:'Geist',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Courier New',monospace;
+  --topbar-h:58px;
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-full:100px;
+  --ease:cubic-bezier(.2,.7,.3,1);--t-fast:.14s;--t-mid:.26s;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.65;
+  -webkit-tap-highlight-color:transparent;overflow-x:hidden}
+::selection{background:rgba(45,212,192,.22);color:var(--text)}
+:focus-visible{outline:2px solid var(--teal-500);outline-offset:2px;border-radius:4px}
+*{scrollbar-width:thin;scrollbar-color:var(--stone-700) transparent}
+*::-webkit-scrollbar{width:6px;height:6px}
+*::-webkit-scrollbar-thumb{background:var(--stone-700);border-radius:99px}
+
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.022;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── TOPBAR ── */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:40;height:calc(var(--topbar-h) + env(safe-area-inset-top));
+  padding:env(safe-area-inset-top) 10px 0 16px;
+  background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.lockup{display:flex;align-items:center;gap:9px}
+.wordmark{font-family:var(--font-display);font-size:20px;font-weight:600;color:var(--text);
+  letter-spacing:-.7px;line-height:1;font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.wordmark em{font-style:italic;color:var(--teal-500)}
+.badge-play{font-family:var(--font-mono);font-size:9px;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--subtle);border:1px solid var(--stone-700);border-radius:var(--r-full);padding:2px 7px}
+.menu-btn{background:none;border:1px solid var(--stone-700);border-radius:var(--r-sm);
+  width:44px;height:44px;display:grid;place-items:center;color:var(--text-2);cursor:pointer}
+.menu-btn:active{background:var(--surface-2)}
+.menu-btn svg{width:19px;height:19px}
+
+/* ── DRAWER ── */
+.drawer{position:fixed;z-index:50;top:0;left:0;bottom:0;width:min(300px,84vw);
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:calc(20px + env(safe-area-inset-top)) 0 calc(16px + env(safe-area-inset-bottom));
+  transform:translateX(-110%);transition:transform var(--t-mid) var(--ease);box-shadow:12px 0 44px rgba(0,0,0,.5)}
+.drawer.open{transform:translateX(0)}
+.drawer .lockup{padding:0 20px 24px}
+.nav{flex:1;overflow-y:auto;padding:2px 12px}
+.nav-eyebrow{font-family:var(--font-mono);font-size:9.5px;letter-spacing:3.5px;text-transform:uppercase;
+  color:var(--muted);padding:16px 10px 7px}
+.nav-item{display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 10px;border-radius:var(--r-sm);
+  color:var(--text-2);font-size:14px;font-weight:500;text-decoration:none;position:relative}
+.nav-item .ico{width:16px;height:16px;flex-shrink:0;opacity:.7}
+.nav-item.active{background:var(--surface-2);color:var(--text)}
+.nav-item.active::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:2px;
+  border-radius:0 2px 2px 0;background:var(--teal-500)}
+.nav-item.active .ico{opacity:1;stroke:var(--teal-500)}
+.drawer-foot{padding:14px 20px 0;border-top:1px solid var(--border);margin-top:6px}
+.status{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--text-2)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--moss-400);flex-shrink:0;position:relative}
+.dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--moss-400);
+  opacity:.35;animation:halo 2.8s var(--ease) infinite}
+@keyframes halo{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.15);opacity:.08}}
+.drawer-foot .hint{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin-top:4px}
+.ver{font-family:var(--font-mono);font-size:9.5px;letter-spacing:1px;color:var(--muted);margin-top:12px;display:block}
+.backdrop{position:fixed;inset:0;z-index:45;background:rgba(8,9,8,.72);backdrop-filter:blur(2px);
+  opacity:0;pointer-events:none;transition:opacity var(--t-mid) var(--ease)}
+.backdrop.show{opacity:1;pointer-events:auto}
+
+/* ── MAIN ── */
+.main{padding:calc(var(--topbar-h) + env(safe-area-inset-top) + 20px) 16px calc(48px + env(safe-area-inset-bottom))}
+.eyebrow{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.eyebrow .rule{width:20px;height:1px;background:var(--teal-500);opacity:.7}
+.eyebrow span{font-family:var(--font-mono);font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--teal-500)}
+h1{font-family:var(--font-display);font-weight:600;font-size:27px;letter-spacing:-1px;margin-bottom:8px;
+  font-variation-settings:'opsz' 96,'SOFT' 0,'WONK' 1}
+.sub{color:var(--subtle);font-size:12.5px;line-height:1.7;margin-bottom:18px}
+.sub b{color:var(--text-2);font-weight:500}
+
+.rootrow{display:grid;gap:9px;margin-bottom:18px}
+.rootrow label{font-family:var(--font-mono);font-size:9px;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted);
+  display:flex;gap:8px;align-items:baseline}
+.rootrow label .tag{color:var(--teal-600);letter-spacing:1px;text-transform:none}
+.inp{background:var(--surface);border:1px solid var(--stone-700);border-radius:var(--r-sm);min-height:48px;
+  padding:12px 14px;color:var(--text);font-family:var(--font-mono);
+  font-size:16px; /* ← iOS zooms below 16px. Keep. */
+  width:100%;font-variant-numeric:tabular-nums;caret-color:var(--teal-500)}
+.inp:focus{outline:none;border-color:var(--teal-500);box-shadow:0 0 0 3px rgba(45,212,192,.13)}
+.btn{background:var(--teal-500);color:#08120F;border:none;border-radius:var(--r-full);
+  font-weight:600;font-size:14.5px;min-height:48px;padding:0 22px;cursor:pointer;width:100%;
+  box-shadow:0 6px 18px -8px rgba(45,212,192,.5)}
+.btn:active{transform:translateY(1px);background:var(--teal-600)}
+
+/* ── TREE — two-line rows ── */
+.tree{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:8px}
+.trow{display:flex;align-items:center;gap:10px;min-height:52px;padding:7px 10px;border-radius:var(--r-sm);
+  cursor:pointer;position:relative}
+.trow:active{background:rgba(255,255,255,.05)}
+.trow.sel{background:var(--surface-2)}
+.trow.sel::before{content:"";position:absolute;left:-8px;top:9px;bottom:9px;width:2px;
+  border-radius:0 2px 2px 0;background:var(--teal-500)}
+.lvl{position:relative}
+.lvl-1{margin-left:18px}
+.lvl-2{margin-left:36px}
+.lvl-1::before,.lvl-2::before{content:"";position:absolute;top:0;bottom:0;width:1px;opacity:.35;left:-10px}
+.lvl-1::before{background:var(--slate-500)}
+.lvl-2::before{background:var(--moss-500)}
+.caret{width:14px;height:14px;color:var(--muted);flex-shrink:0;transition:transform var(--t-fast) var(--ease)}
+.open>.caret{transform:rotate(90deg)}
+.caret.ph{visibility:hidden}
+.tcol{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.trow-top{display:flex;align-items:center;gap:8px;min-width:0}
+.tname{font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tier{font-family:var(--font-mono);font-size:8px;letter-spacing:1.2px;border-radius:var(--r-full);
+  padding:2px 8px;flex-shrink:0}
+.tier.op{color:var(--teal-500);border:1px solid rgba(45,212,192,.35)}
+.tier.pa{color:var(--slate-400);border:1px solid rgba(138,180,204,.35)}
+.tier.cl{color:var(--moss-400);border:1px solid rgba(111,175,130,.35)}
+.trow-sub{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.agents-link{color:var(--teal-500);text-decoration:none;padding:2px 0}
+.chevR{width:14px;height:14px;color:var(--muted);flex-shrink:0}
+.leafnote,.morerow{font-family:var(--font-mono);font-size:10px;color:var(--muted);min-height:40px;
+  display:flex;align-items:center;padding:0 10px}
+.morerow{cursor:pointer;color:var(--subtle);border-radius:var(--r-sm)}
+.morerow:active{background:rgba(255,255,255,.04)}
+
+/* ── BOTTOM SHEET — the detail panel on mobile ── */
+.sheet-back{position:fixed;inset:0;z-index:55;background:rgba(8,9,8,.72);backdrop-filter:blur(2px);
+  opacity:0;pointer-events:none;transition:opacity var(--t-mid) var(--ease)}
+.sheet-back.show{opacity:1;pointer-events:auto}
+.sheet{position:fixed;z-index:56;left:0;right:0;bottom:0;background:var(--surface);
+  border:1px solid var(--border);border-bottom:none;border-radius:20px 20px 0 0;
+  padding:10px 20px calc(22px + env(safe-area-inset-bottom));
+  transform:translateY(105%);transition:transform var(--t-mid) var(--ease);
+  box-shadow:0 -18px 50px rgba(0,0,0,.55);max-height:82vh;overflow-y:auto}
+.sheet.open{transform:translateY(0)}
+.handle{width:38px;height:4px;border-radius:99px;background:var(--stone-700);margin:4px auto 16px;cursor:pointer}
+.p-name{font-family:var(--font-display);font-size:20px;font-weight:600;letter-spacing:-.6px;margin-bottom:8px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.p-kv{margin-top:14px}
+.p-kv .k{font-family:var(--font-mono);font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+  display:block;margin-bottom:4px}
+.p-kv .v{font-family:var(--font-mono);font-size:11px;color:var(--text-2);word-break:break-all;
+  display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
+.copy{width:36px;height:36px;display:grid;place-items:center;border-radius:8px;border:1px solid var(--stone-700);
+  background:none;color:var(--muted);cursor:pointer;flex-shrink:0}
+.copy:active{color:var(--text);background:rgba(255,255,255,.06)}
+.copy svg{width:14px;height:14px}
+.p-sep{height:1px;background:var(--border);margin:18px 0 16px}
+.p-form h3{font-size:14px;font-weight:600;margin-bottom:5px}
+.p-form .why{font-size:12px;color:var(--subtle);line-height:1.6;margin-bottom:12px}
+.p-form .why code{font-family:var(--font-mono);font-size:11px;color:var(--text-2)}
+.p-form label{font-size:12.5px;font-weight:500;display:block;margin-bottom:7px}
+.p-form .inp{background:var(--bg)}
+.p-form .btn{margin-top:12px}
+.p-note{font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:12px}
+.gap-note{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-top:14px;line-height:1.7}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01ms!important}
+}
+
+/* ── STATE SPEC ── */
+.spec{border-top:1px solid var(--border);background:#0B0C0A;margin:38px -16px 0;
+  padding:36px 16px calc(46px + env(safe-area-inset-bottom))}
+.spec-h{margin-bottom:8px}
+.spec-h .n{font-family:var(--font-display);font-size:18px;font-weight:600;letter-spacing:-.5px;display:block;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.spec-h .s{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.spec-note{font-size:12.5px;color:var(--subtle);margin-bottom:20px;line-height:1.65}
+.spec-note b{color:var(--text-2);font-weight:500}
+.spec-grid{display:grid;gap:15px}
+.spec-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:16px}
+.spec-card>.lab{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:13px}
+.spec-card .desc{font-size:12px;color:var(--muted);line-height:1.65;margin-top:13px}
+.spec-card .desc code{font-family:var(--font-mono);font-size:11px;color:var(--text-2)}
+.err-inline{border:1px solid rgba(90,140,171,.32);background:rgba(90,140,171,.05);border-radius:var(--r-sm);
+  padding:12px 13px}
+.err-inline .f{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-400);margin-bottom:3px}
+.err-inline .m{font-size:12px;color:var(--text-2);line-height:1.6}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<!-- ══ TOPBAR ══ -->
+<header class="topbar">
+  <div class="lockup">
+    <svg width="32" height="25" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+      <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3" stroke-linecap="round"/>
+      <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+    </svg>
+    <span class="wordmark">Cau<em>ce</em></span>
+    <span class="badge-play">play</span>
+  </div>
+  <button class="menu-btn" id="menu" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="drawer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+</header>
+
+<!-- ══ DRAWER ══ -->
+<aside class="drawer" id="drawer">
+  <div class="lockup">
+    <svg width="38" height="29" viewBox="0 0 80 60" fill="none" aria-hidden="true">
+      <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3" stroke-linecap="round"/>
+      <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+    </svg>
+    <span class="wordmark">Cau<em>ce</em></span>
+    <span class="badge-play">play</span>
+  </div>
+  <nav class="nav">
+    <div class="nav-eyebrow">Session</div>
+    <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>Session</a>
+    <div class="nav-eyebrow">Workspace</div>
+    <a class="nav-item active" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>Tenants</a>
+    <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg>Agents</a>
+    <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg>API keys</a>
+    <div class="nav-eyebrow">Runtime</div>
+    <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg>Conversation</a>
+    <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Invocations</a>
+    <div class="nav-eyebrow">Trust</div>
+    <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg>Audit chain</a>
+  </nav>
+  <div class="drawer-foot">
+    <div class="status"><span class="dot"></span>Connected · Operator</div>
+    <div class="hint">http://localhost:8080</div>
+    <span class="ver">playground · dev</span>
+  </div>
+</aside>
+<div class="backdrop" id="backdrop"></div>
+
+<!-- ══ MAIN ══ -->
+<main class="main">
+  <div class="eyebrow"><span class="rule"></span><span>Playground · Workspace</span></div>
+  <h1>Tenants</h1>
+  <p class="sub">The hierarchy: <b>operator → partner → client</b>. Agents live only under clients. Discovery walks children from a known root — there is no global listing.</p>
+
+  <div class="rootrow">
+    <label>Root tenant id <span class="tag">· from your key</span></label>
+    <input class="inp" type="text" value="019ff668-5449-7bc2-b3fd-7b4bf9ba01b3" spellcheck="false" autocapitalize="off" autocorrect="off">
+    <button class="btn" type="button">Load tree</button>
+  </div>
+
+  <div class="tree">
+    <div class="trow open">
+      <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+      <div class="tcol">
+        <div class="trow-top"><span class="tname">Operator</span><span class="tier op">OPERATOR</span></div>
+        <div class="trow-sub"><span>019ff668…</span></div>
+      </div>
+      <svg class="chevR" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+
+    <div class="lvl lvl-1">
+      <div class="trow open">
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+        <div class="tcol">
+          <div class="trow-top"><span class="tname">demo-partner</span><span class="tier pa">PARTNER</span></div>
+          <div class="trow-sub"><span>019ff805…</span></div>
+        </div>
+        <svg class="chevR" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
+
+      <div class="lvl lvl-2">
+        <div class="trow">
+          <svg class="caret ph" viewBox="0 0 24 24"></svg>
+          <div class="tcol">
+            <div class="trow-top"><span class="tname">demo-client</span><span class="tier cl">CLIENT</span></div>
+            <div class="trow-sub"><span>019ff806…</span><a class="agents-link" href="#">agents →</a></div>
+          </div>
+          <svg class="chevR" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="trow">
+          <svg class="caret ph" viewBox="0 0 24 24"></svg>
+          <div class="tcol">
+            <div class="trow-top"><span class="tname">clinica-hijo-demo</span><span class="tier cl">CLIENT</span></div>
+            <div class="trow-sub"><span>01a03966…</span><a class="agents-link" href="#">agents →</a></div>
+          </div>
+          <svg class="chevR" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="morerow" role="button" tabindex="0">load more children…</div>
+      </div>
+    </div>
+
+    <div class="lvl lvl-1">
+      <div class="trow open sel" id="openSheet">
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+        <div class="tcol">
+          <div class="trow-top"><span class="tname">clinica-prueba</span><span class="tier pa">PARTNER</span></div>
+          <div class="trow-sub"><span>01a03965…</span></div>
+        </div>
+        <svg class="chevR" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
+      <div class="lvl lvl-2">
+        <div class="leafnote">no children yet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ STATE SPEC ══ -->
+  <section class="spec">
+    <div class="spec-h"><span class="n">Tenants — the states that matter</span><span class="s">Spec</span></div>
+    <p class="spec-note">Tap <b>clinica-prueba</b> above — the detail sheet is live in this file. OPERATOR selected offers <b>New partner</b>; PARTNER offers <b>New client</b>; CLIENT offers no form, only the rule and <b>agents →</b>.</p>
+
+    <div class="spec-grid">
+      <div class="spec-card">
+        <span class="lab">Create · envelope error, inline</span>
+        <div class="err-inline">
+          <div class="f">name</div>
+          <div class="m">must not be blank</div>
+        </div>
+        <p class="desc">The envelope's <code>errors[].field</code> lands at the field inside the sheet, in slate.</p>
+      </div>
+
+      <div class="spec-card">
+        <span class="lab">Not found · deliberate ambiguity</span>
+        <div class="err-inline" style="border-color:var(--stone-700);background:rgba(255,255,255,.015)">
+          <div class="m" style="color:var(--subtle)">No tenant is visible at that id.</div>
+        </div>
+        <p class="desc">A wrong id and one outside your key's scope are both 404 — on purpose. The copy owns it.</p>
+      </div>
+
+      <div class="spec-card">
+        <span class="lab">After create · optimistic insert</span>
+        <p class="desc" style="margin-top:0">The 201 body inserts into the parent's loaded children with a brief teal wash, and the sheet closes. A fresh UUIDv7 can land on an unfetched page — a blind refetch would make the new tenant vanish.</p>
+      </div>
+
+      <div class="spec-card">
+        <span class="lab">Rows · why two lines</span>
+        <p class="desc" style="margin-top:0">Name + tier on top; short id and <code>agents →</code> below. The per-row copy button moves into the sheet — at 390px it was clutter; the full id with copy is one tap away. CLIENT rows stay leaves: hidden caret, aligned gutter.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ══ BOTTOM SHEET — live ══ -->
+<div class="sheet-back" id="sheetBack"></div>
+<aside class="sheet" id="sheet" role="dialog" aria-label="Tenant detail">
+  <div class="handle" id="handle"></div>
+  <div class="p-name">clinica-prueba</div>
+  <span class="tier pa">PARTNER</span>
+
+  <div class="p-kv">
+    <span class="k">Tenant id</span>
+    <span class="v">01a03965-9b67-70fb-b24c-5bca7da86199
+      <button class="copy" type="button" aria-label="Copy id"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+    </span>
+  </div>
+  <div class="p-kv"><span class="k">Parent</span><span class="v">Operator · 019ff668…</span></div>
+  <div class="p-kv"><span class="k">Created</span><span class="v">2026-08-25 14:49 UTC</span></div>
+
+  <div class="p-sep"></div>
+
+  <div class="p-form">
+    <h3>New client under clinica-prueba</h3>
+    <p class="why">The parent is taken from this node — <code>partner_id</code> is filled for you. No UUIDs to paste.</p>
+    <label for="nm">Name</label>
+    <input class="inp" id="nm" type="text" placeholder="e.g. clinica-sonrisa" spellcheck="false" autocapitalize="off" autocorrect="off">
+    <button class="btn" type="button">Create client</button>
+    <p class="p-note">Agents can only belong to a CLIENT tenant — create the client first, then add agents from its row.</p>
+  </div>
+
+  <div class="gap-note">No rename · no delete — the API doesn't expose them yet.</div>
+</aside>
+
+<script>
+(function(){
+  var menu=document.getElementById('menu'),drawer=document.getElementById('drawer'),
+      back=document.getElementById('backdrop');
+  function setDrawer(open){
+    drawer.classList.toggle('open',open);
+    back.classList.toggle('show',open);
+    menu.setAttribute('aria-expanded',String(open));
+    document.body.style.overflow=open?'hidden':'';
+    if(!open) menu.focus();
+  }
+  menu.addEventListener('click',function(){setDrawer(!drawer.classList.contains('open'));});
+  back.addEventListener('click',function(){setDrawer(false);});
+  drawer.querySelectorAll('.nav-item').forEach(function(i){i.addEventListener('click',function(){setDrawer(false);});});
+
+  var sheet=document.getElementById('sheet'),sBack=document.getElementById('sheetBack'),
+      opener=document.getElementById('openSheet'),handle=document.getElementById('handle');
+  function setSheet(open){
+    sheet.classList.toggle('open',open);
+    sBack.classList.toggle('show',open);
+    document.body.style.overflow=open?'hidden':'';
+    if(!open) opener.focus();
+  }
+  opener.addEventListener('click',function(){setSheet(true);});
+  sBack.addEventListener('click',function(){setSheet(false);});
+  handle.addEventListener('click',function(){setSheet(false);});
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'){setSheet(false);setDrawer(false);}
+  });
+})();
+</script>
+</body>
+</html>

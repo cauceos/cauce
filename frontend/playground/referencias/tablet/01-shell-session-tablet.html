@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cauce Playground — 01 Shell + Session · TABLET</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Geist:wght@300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CAUCE PLAYGROUND · 01 — SHELL + SESSION
+   ▸ TABLET spec (701–1024px). Desktop and mobile: sibling files.
+     View this file at ~834px wide to judge it.
+
+   WHAT CHANGES FROM DESKTOP, AND WHY
+   1. Sidebar collapses to a 68px ICON RAIL. Labels don't vanish —
+      they become real tooltips on hover, positioned outside the
+      rail (so .nav must NOT clip: overflow is visible here).
+      Rail rows are 44px tall: touch targets, not mouse targets.
+   2. Group names (Session / Workspace / Runtime / Trust) can't be
+      read at 68px, so the grouping survives as HAIRLINE DIVIDERS.
+      The structure is kept; only the words go.
+   3. The desktop two-column split doesn't fit in ~766px of content,
+      so it becomes ONE centred column — and the outcome legend
+      turns from a vertical list into a horizontal rail under the
+      lede, which keeps the teaching without adding height.
+   4. Type steps down: h1 44px (from 54), lede 15px.
+
+   Everything else — states, focus rings, autofill, caret, grain,
+   reduced-motion — is identical to the desktop file by design.
+   The state spec below the fold is the same contract.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  --teal-300:#90E8E1;--teal-400:#5EDDD0;--teal-500:#2DD4C0;--teal-600:#1BB8A6;
+  --moss-300:#96C9A6;--moss-400:#6FAF82;--moss-500:#4E8B62;
+  --slate-400:#8AB4CC;--slate-500:#5A8CAB;
+  --stone-950:#0E0F0D;--stone-900:#161713;--stone-800:#252620;
+  --stone-700:#35362E;--stone-600:#4A4B42;--stone-400:#8C8D82;
+  --stone-200:#D4D5CC;--stone-100:#ECEEE8;
+
+  --bg:var(--stone-950);--surface:var(--stone-900);--surface-2:var(--stone-800);
+  --border:#2E2F28;--border-soft:#232419;
+  --text:var(--stone-100);--text-2:#C8CAC2;--muted:var(--stone-600);--subtle:var(--stone-400);
+
+  --font-display:'Fraunces',Georgia,serif;
+  --font-body:'Geist',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Courier New',monospace;
+
+  --rail-w:68px;
+  --r-sm:8px;--r-md:12px;--r-lg:18px;--r-full:100px;
+  --ease:cubic-bezier(.2,.7,.3,1);--t-fast:.14s;--t-mid:.24s;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.65}
+
+::selection{background:rgba(45,212,192,.22);color:var(--text)}
+:focus-visible{outline:2px solid var(--teal-500);outline-offset:2px;border-radius:4px}
+*{scrollbar-width:thin;scrollbar-color:var(--stone-700) transparent}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--stone-700);border-radius:99px}
+*::-webkit-scrollbar-track{background:transparent}
+
+.app{display:flex;min-height:100vh}
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.022;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── RAIL ── */
+.rail{width:var(--rail-w);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:22px 0 14px;position:sticky;top:0;height:100vh}
+.rail-mark{display:flex;justify-content:center;padding:0 0 20px}
+.rail-mark svg{display:block}
+
+.nav{flex:1;padding:2px 10px;overflow:visible} /* visible: tooltips must escape the rail */
+.nav-sep{height:1px;background:var(--border);margin:9px 8px 3px}
+.nav-item{display:flex;align-items:center;justify-content:center;height:44px;border-radius:var(--r-sm);
+  color:var(--text-2);text-decoration:none;position:relative;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.nav-item .ico{width:17px;height:17px;opacity:.7;transition:opacity var(--t-fast) var(--ease)}
+.nav-item:not(.locked):hover{background:rgba(255,255,255,.03);color:var(--text)}
+.nav-item:not(.locked):hover .ico{opacity:1}
+.nav-item.active{background:var(--surface-2);color:var(--text)}
+.nav-item.active::before{content:"";position:absolute;left:-10px;top:9px;bottom:9px;width:2px;
+  border-radius:0 2px 2px 0;background:var(--teal-500)}
+.nav-item.active .ico{opacity:1;stroke:var(--teal-500)}
+.nav-item.locked{color:var(--muted);cursor:not-allowed}
+.nav-item.locked .ico{opacity:.34}
+
+/* real tooltips — the label doesn't disappear, it relocates */
+.nav-item::after{
+  content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%) translateX(-4px);
+  background:var(--surface-2);border:1px solid var(--stone-700);border-radius:6px;
+  padding:6px 10px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.3px;color:var(--text);
+  white-space:nowrap;opacity:0;pointer-events:none;z-index:70;
+  box-shadow:0 8px 20px -10px rgba(0,0,0,.9);
+  transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.nav-item:hover::after{opacity:1;transform:translateY(-50%) translateX(0)}
+.nav-item.locked::after{color:var(--subtle)}
+
+.rail-foot{padding:13px 0 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--stone-600);position:relative}
+.dot.live{background:var(--moss-400)}
+.dot.live::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--moss-400);
+  opacity:.35;animation:halo 2.8s var(--ease) infinite}
+@keyframes halo{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.15);opacity:.08}}
+/* the foot dot gets a tooltip too — state is never mute */
+.rail-foot .dot::before{content:"No session";position:absolute;left:calc(100% + 14px);top:50%;
+  transform:translateY(-50%) translateX(-4px);background:var(--surface-2);border:1px solid var(--stone-700);
+  border-radius:6px;padding:6px 10px;font-family:var(--font-mono);font-size:10.5px;color:var(--text);
+  white-space:nowrap;opacity:0;pointer-events:none;z-index:70;
+  transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.rail-foot:hover .dot::before{opacity:1;transform:translateY(-50%) translateX(0)}
+
+/* ── MAIN ── */
+.main{flex:1;min-width:0;position:relative}
+.topo{position:absolute;inset:0 0 auto 0;height:430px;pointer-events:none;z-index:0}
+.topo svg{width:100%;height:100%;display:block}
+.arc{fill:none;stroke-linecap:round}
+.draw{stroke-dasharray:2200;stroke-dashoffset:2200;animation:draw 1.6s var(--ease) forwards}
+.draw.d2{animation-delay:.1s}.draw.d3{animation-delay:.2s}.draw.d4{animation-delay:.3s}
+@keyframes draw{to{stroke-dashoffset:0}}
+.nadir{opacity:0;animation:fade .6s var(--ease) 1.55s forwards}
+@keyframes fade{to{opacity:1}}
+.glow{position:absolute;top:-150px;left:50%;transform:translateX(-50%);width:760px;height:460px;z-index:0;
+  pointer-events:none;background:radial-gradient(ellipse at center,rgba(45,212,192,.05),transparent 66%)}
+
+.stage{position:relative;z-index:1;min-height:100vh;display:grid;place-items:center;padding:56px 40px}
+.col{width:100%;max-width:576px}
+
+.eyebrow{display:flex;align-items:center;gap:11px;margin-bottom:18px}
+.eyebrow .rule{width:24px;height:1px;background:var(--teal-500);opacity:.7}
+.eyebrow span{font-family:var(--font-mono);font-size:9.5px;letter-spacing:3.5px;text-transform:uppercase;color:var(--teal-500)}
+h1{font-family:var(--font-display);font-weight:600;font-size:44px;letter-spacing:-1.8px;line-height:1.03;
+  margin-bottom:16px;font-variation-settings:'opsz' 144,'SOFT' 0,'WONK' 1}
+h1 em{font-style:italic;color:var(--teal-500)}
+.lede{color:var(--text-2);font-weight:300;font-size:15px;line-height:1.7;max-width:46ch;margin-bottom:22px}
+
+/* legend becomes a horizontal rail here — same teaching, less height */
+.legend{display:flex;align-items:center;gap:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  padding:11px 0;margin-bottom:30px;flex-wrap:wrap}
+.legend .item{display:flex;align-items:baseline;gap:8px;padding:0 16px;position:relative}
+.legend .item:first-child{padding-left:0}
+.legend .item+.item::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:1px;background:var(--border)}
+.legend .code{font-family:var(--font-mono);font-size:11px;font-variant-numeric:tabular-nums}
+.legend .code.ok{color:var(--moss-400)}
+.legend .code.bad{color:var(--slate-400)}
+.legend .t{font-size:11.5px;color:var(--text-2)}
+.legend .cap{font-family:var(--font-mono);font-size:9px;letter-spacing:2.5px;text-transform:uppercase;
+  color:var(--muted);width:100%;margin-bottom:9px}
+
+/* ── CARD ── */
+.card{background:linear-gradient(180deg,var(--surface),color-mix(in srgb,var(--surface) 92%,#000));
+  border:1px solid var(--border);border-radius:var(--r-lg);padding:28px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 22px 50px -28px rgba(0,0,0,.95)}
+.field{margin-bottom:22px}
+.f-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.f-top label{font-size:12.5px;font-weight:500;color:var(--text)}
+.f-top .req{font-family:var(--font-mono);font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
+.control{display:flex;align-items:center;gap:8px}
+.input-wrap{position:relative;flex:1;min-width:0;display:flex;align-items:center}
+.input-wrap .lead{position:absolute;left:12px;width:14px;height:14px;color:var(--muted);pointer-events:none;
+  transition:color var(--t-fast) var(--ease)}
+.input{width:100%;background:var(--bg);border:1px solid var(--stone-700);border-radius:var(--r-sm);
+  padding:11px 12px 11px 34px;color:var(--text);line-height:1.5;height:44px; /* touch */
+  font-family:var(--font-mono);font-size:12.5px;font-variant-numeric:tabular-nums;caret-color:var(--teal-500);
+  transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.input::placeholder{color:var(--muted)}
+.input:hover{border-color:var(--stone-600)}
+.input:focus{outline:none;border-color:var(--teal-500);box-shadow:0 0 0 3px rgba(45,212,192,.13);
+  background:color-mix(in srgb,var(--bg) 70%,var(--surface))}
+.input-wrap:focus-within .lead{color:var(--teal-500)}
+.input:-webkit-autofill,.input:-webkit-autofill:focus{-webkit-text-fill-color:var(--text);
+  -webkit-box-shadow:0 0 0 1000px var(--bg) inset;caret-color:var(--teal-500)}
+.input.err{border-color:var(--slate-500)}
+.input.err:focus{box-shadow:0 0 0 3px rgba(90,140,171,.16)}
+
+.ghost-btn{background:var(--surface-2);border:1px solid var(--stone-700);border-radius:var(--r-sm);
+  color:var(--subtle);font-family:var(--font-body);font-size:12px;font-weight:500;
+  padding:0 14px;height:44px;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;gap:6px;
+  transition:color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
+.ghost-btn:hover{color:var(--text);border-color:var(--stone-600)}
+.ghost-btn svg{width:13px;height:13px}
+
+.helper{font-size:11.5px;color:var(--subtle);margin-top:8px;line-height:1.6}
+.helper code{font-family:var(--font-mono);font-size:10.5px;color:var(--text-2);
+  background:rgba(255,255,255,.035);padding:1px 5px;border-radius:4px}
+
+.logbox{margin:22px 0 24px;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--r-sm);overflow:hidden}
+.logbox-h{display:flex;align-items:center;gap:9px;padding:9px 13px;border-bottom:1px solid var(--border-soft);
+  background:rgba(255,255,255,.015)}
+.logbox-h .k{font-family:var(--font-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.logbox-h .t{font-size:12px;color:var(--text-2)}
+.logbox-h .t b{color:var(--text);font-weight:500}
+.logline{font-family:var(--font-mono);font-size:11px;line-height:1.75;color:var(--subtle);white-space:nowrap;
+  overflow-x:auto;padding:11px 13px;
+  -webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent)}
+.logline::-webkit-scrollbar{height:0}
+.logline .lv{color:var(--moss-400)}
+.logline .key{color:var(--teal-500)}
+
+.foot-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.btn{background:var(--teal-500);color:#08120F;border:none;border-radius:var(--r-full);
+  font-family:var(--font-body);font-weight:600;font-size:13.5px;padding:13px 26px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:9px;box-shadow:0 6px 18px -8px rgba(45,212,192,.5);
+  transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease),box-shadow var(--t-mid) var(--ease)}
+.btn:hover{background:var(--teal-400);box-shadow:0 8px 24px -8px rgba(45,212,192,.6)}
+.btn:hover .arw{transform:translateX(2px)}
+.btn:active{transform:translateY(1px)}
+.btn .arw{width:14px;height:14px;transition:transform var(--t-fast) var(--ease)}
+.btn[disabled]{background:var(--stone-700);color:var(--stone-400);box-shadow:none;cursor:not-allowed}
+.btn .spin{width:13px;height:13px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.probe{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-align:right;line-height:1.7;
+  font-variant-numeric:tabular-nums;margin-left:auto}
+.probe .p{color:var(--subtle)}
+.probe .ok{color:var(--moss-400)}
+.probe .wait{color:var(--stone-600)}
+.probe .bad{color:var(--slate-400)}
+
+.err-box{border:1px solid rgba(90,140,171,.32);background:rgba(90,140,171,.05);border-radius:var(--r-sm);
+  padding:13px 15px;margin-bottom:20px}
+.err-box .t{font-size:12.5px;color:var(--text);font-weight:500;margin-bottom:4px}
+.err-box .d{font-size:12px;color:var(--text-2);line-height:1.6}
+.err-box .rid{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:8px;display:block}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01ms!important}
+  .draw{stroke-dashoffset:0}.nadir{opacity:1}
+}
+
+/* ── STATE SPEC ── */
+.spec{border-top:1px solid var(--border);background:#0B0C0A;padding:46px 40px 56px}
+.spec-in{max-width:720px;margin:0 auto}
+.spec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.spec-h .n{font-family:var(--font-display);font-size:18px;font-weight:600;letter-spacing:-.5px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.spec-h .s{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.spec-note{font-size:12.5px;color:var(--subtle);margin-bottom:24px;line-height:1.65}
+.spec-note b{color:var(--text-2);font-weight:500}
+.spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.spec-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:18px}
+.spec-card>.lab{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:14px}
+.spec-card .desc{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:14px}
+.spec-card .desc code{font-family:var(--font-mono);font-size:10.5px;color:var(--text-2)}
+.spec-card .foot-row .btn{padding:11px 20px;font-size:12.5px}
+.spec-card .probe{font-size:10px}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="app">
+
+  <!-- ══ ICON RAIL ══ -->
+  <aside class="rail">
+    <div class="rail-mark">
+      <svg width="34" height="26" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+    </div>
+
+    <nav class="nav">
+      <a class="nav-item active" href="#" data-tip="Session">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
+      </a>
+
+      <div class="nav-sep"></div>
+      <span class="nav-item locked" aria-disabled="true" data-tip="Tenants — locked">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>
+      </span>
+      <span class="nav-item locked" aria-disabled="true" data-tip="Agents — locked">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg>
+      </span>
+      <span class="nav-item locked" aria-disabled="true" data-tip="API keys — locked">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg>
+      </span>
+
+      <div class="nav-sep"></div>
+      <span class="nav-item locked" aria-disabled="true" data-tip="Conversation — locked">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg>
+      </span>
+      <span class="nav-item locked" aria-disabled="true" data-tip="Invocations — locked">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>
+      </span>
+
+      <div class="nav-sep"></div>
+      <span class="nav-item locked" aria-disabled="true" data-tip="Audit chain — locked">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg>
+      </span>
+    </nav>
+
+    <div class="rail-foot"><span class="dot"></span></div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <main class="main">
+    <div class="glow"></div>
+
+    <div class="topo" aria-hidden="true">
+      <svg viewBox="0 0 900 430" preserveAspectRatio="xMidYMin slice" fill="none">
+        <defs>
+          <linearGradient id="gS" x1="0" x2="1"><stop offset="0" stop-color="#4A4B42" stop-opacity="0"/><stop offset=".5" stop-color="#4A4B42" stop-opacity=".8"/><stop offset="1" stop-color="#4A4B42" stop-opacity="0"/></linearGradient>
+          <linearGradient id="gL" x1="0" x2="1"><stop offset="0" stop-color="#5A8CAB" stop-opacity="0"/><stop offset=".5" stop-color="#5A8CAB" stop-opacity=".5"/><stop offset="1" stop-color="#5A8CAB" stop-opacity="0"/></linearGradient>
+          <linearGradient id="gM" x1="0" x2="1"><stop offset="0" stop-color="#6FAF82" stop-opacity="0"/><stop offset=".5" stop-color="#6FAF82" stop-opacity=".46"/><stop offset="1" stop-color="#6FAF82" stop-opacity="0"/></linearGradient>
+          <linearGradient id="gT" x1="0" x2="1"><stop offset="0" stop-color="#2DD4C0" stop-opacity="0"/><stop offset=".5" stop-color="#2DD4C0" stop-opacity=".58"/><stop offset="1" stop-color="#2DD4C0" stop-opacity="0"/></linearGradient>
+          <linearGradient id="gW" x1="0" x2="1"><stop offset="0" stop-color="#2DD4C0" stop-opacity="0"/><stop offset=".5" stop-color="#2DD4C0" stop-opacity=".15"/><stop offset="1" stop-color="#2DD4C0" stop-opacity="0"/></linearGradient>
+        </defs>
+        <path class="arc draw"    d="M -60 40 Q 450 640 960 40" stroke="url(#gS)" stroke-width="1"/>
+        <path class="arc draw d2" d="M  50 40 Q 450 548 850 40" stroke="url(#gL)" stroke-width="1"/>
+        <path class="arc draw d3" d="M 160 40 Q 450 456 740 40" stroke="url(#gM)" stroke-width="1.1"/>
+        <path class="arc draw d4" d="M 270 40 Q 450 364 630 40" stroke="url(#gT)" stroke-width="1.3"/>
+        <path class="nadir" d="M 190 276 H 710" stroke="url(#gW)" stroke-width="1"/>
+        <circle class="nadir" cx="450" cy="276" r="2.8" fill="#2DD4C0"/>
+      </svg>
+    </div>
+
+    <div class="stage">
+      <div class="col">
+        <div class="eyebrow"><span class="rule"></span><span>Playground · Session</span></div>
+        <h1>Point it at a running <em>instance</em>.</h1>
+        <p class="lede">Everything here goes through the same REST surface your own clients use — one API key, scoped to its tenant, sent on every request.</p>
+
+        <div class="legend">
+          <span class="cap">Connect sends one authenticated health check</span>
+          <span class="item"><span class="code ok">200</span><span class="t">key accepted</span></span>
+          <span class="item"><span class="code bad">401</span><span class="t">answered, key rejected</span></span>
+          <span class="item"><span class="code bad">502</span><span class="t">nothing answered</span></span>
+        </div>
+
+        <div class="card">
+          <div class="field">
+            <div class="f-top"><label for="u">Instance URL</label><span class="req">required</span></div>
+            <div class="control">
+              <div class="input-wrap">
+                <svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+                <input class="input" id="u" type="text" value="http://localhost:8080" spellcheck="false">
+              </div>
+            </div>
+            <p class="helper">Origin only — no path. The local quickstart serves here by default.</p>
+          </div>
+
+          <div class="field">
+            <div class="f-top"><label for="k">API key</label><span class="req">required</span></div>
+            <div class="control">
+              <div class="input-wrap">
+                <svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg>
+                <input class="input" id="k" type="password" placeholder="ck_…" spellcheck="false" autocomplete="new-password">
+              </div>
+              <button class="ghost-btn" id="eye" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span id="eyet">Show</span>
+              </button>
+            </div>
+            <p class="helper">Sent as <code>Authorization: Bearer</code>. Held in memory only — reloading the page forgets it.</p>
+          </div>
+
+          <div class="logbox">
+            <div class="logbox-h">
+              <span class="k">API log</span>
+              <span class="t"><b>First run?</b> The root operator key is printed once and can't be recovered.</span>
+            </div>
+            <span class="logline"><span class="lv">WARN</span> OperatorKeyBootstrapRunner — Bootstrapped operator. Store its API key now: <span class="key">ck_9f2…</span></span>
+          </div>
+
+          <div class="foot-row">
+            <button class="btn" type="button">
+              Connect
+              <svg class="arw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+            </button>
+            <span class="probe"><span class="p">GET /actuator/health</span> → <span class="wait">runs on connect</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ STATE SPEC ══ -->
+    <section class="spec">
+      <div class="spec-in">
+        <div class="spec-h"><span class="n">Session card — the other states</span><span class="s">Spec</span></div>
+        <p class="spec-note">Above is <b>idle</b>. These are the rest, and they are identical across viewports — only the layout changes, never the meaning. A rejected key and a dead instance are different facts and must read differently.</p>
+
+        <div class="spec-grid">
+          <div class="spec-card">
+            <span class="lab">Connecting</span>
+            <div class="foot-row">
+              <button class="btn" type="button" disabled>
+                <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
+                Connecting
+              </button>
+            </div>
+            <p class="desc">Button disabled, fields stay editable, no blocking overlay.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Rejected · 401</span>
+            <div class="err-box">
+              <div class="t">The instance answered and rejected this key.</div>
+              <div class="d">Check the key. The root operator key is printed once at first startup, as a WARN line in the API log.</div>
+              <span class="rid">request_id 019ff66f-180c-79d3…</span>
+            </div>
+            <p class="desc">Key field takes <code>.err</code>. Slate, not red — the palette has no danger colour and we don't invent one.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Unreachable · 502</span>
+            <div class="err-box">
+              <div class="t">Nothing answered at that address.</div>
+              <div class="d">Check the instance is running and the URL is right. The local quickstart serves on port 8080.</div>
+            </div>
+            <p class="desc">No <code>request_id</code> — nothing answered, so there is none. Absent, not faked.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Connected · rail foot</span>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+                        padding:16px;display:flex;align-items:center;gap:12px">
+              <span class="dot live"></span>
+              <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--text-2)">Connected · hover for the URL</span>
+            </div>
+            <p class="desc">On the rail the foot is just the dot; the instance URL lives in its tooltip. All seven icons unlock.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  var eye=document.getElementById('eye'),t=document.getElementById('eyet'),k=document.getElementById('k');
+  eye.addEventListener('click',function(){
+    var shown=k.type==='text'; k.type=shown?'password':'text'; t.textContent=shown?'Show':'Hide';
+  });
+})();
+</script>
+</body>
+</html>
