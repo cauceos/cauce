@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cauce Playground — 07 Audit chain · TABLET</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Geist:wght@300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CAUCE PLAYGROUND · 07 — AUDIT CHAIN
+   ▸ TABLET spec (701–1024px). View at ~834px to judge.
+
+   WHAT CHANGES FROM DESKTOP, AND WHY
+   1. Icon rail shell (contract from 01–06-tablet).
+   2. One column: the verdict, then the limit panel DIRECTLY under
+      it — not in a footer, not collapsed. Rank is preserved by
+      adjacency and by giving the limit the same card treatment.
+      It must be on screen with the verdict, never a scroll away
+      in spirit.
+   3. Figures move to a row of two with their explanations kept.
+   4. Touch sizing on the input and Run button.
+
+   WIRE TRUTHS — identical to desktop: verdict not event browser,
+   verification_scope verbatim from the API, full recomputation
+   O(n) (no cache, no fake progress), pre_chain_entries as a
+   neutral third figure, 404 ambiguity, five public classifications
+   rendered never invented. Verify field names before building.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  --teal-300:#90E8E1;--teal-400:#5EDDD0;--teal-500:#2DD4C0;--teal-600:#1BB8A6;
+  --moss-300:#96C9A6;--moss-400:#6FAF82;--moss-500:#4E8B62;
+  --slate-400:#8AB4CC;--slate-500:#5A8CAB;
+  --stone-950:#0E0F0D;--stone-900:#161713;--stone-800:#252620;
+  --stone-700:#35362E;--stone-600:#4A4B42;--stone-400:#8C8D82;
+  --stone-200:#D4D5CC;--stone-100:#ECEEE8;
+  --bg:var(--stone-950);--surface:var(--stone-900);--surface-2:var(--stone-800);
+  --border:#2E2F28;--border-soft:#232419;
+  --text:var(--stone-100);--text-2:#C8CAC2;--muted:var(--stone-600);--subtle:var(--stone-400);
+  --font-display:'Fraunces',Georgia,serif;
+  --font-body:'Geist',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Courier New',monospace;
+  --rail-w:68px;
+  --r-sm:8px;--r-md:12px;--r-lg:18px;--r-full:100px;
+  --ease:cubic-bezier(.2,.7,.3,1);--t-fast:.14s;--t-mid:.24s;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.65}
+::selection{background:rgba(45,212,192,.22);color:var(--text)}
+:focus-visible{outline:2px solid var(--teal-500);outline-offset:2px;border-radius:4px}
+*{scrollbar-width:thin;scrollbar-color:var(--stone-700) transparent}
+*::-webkit-scrollbar{width:8px;height:8px}
+*::-webkit-scrollbar-thumb{background:var(--stone-700);border-radius:99px}
+
+.app{display:flex;min-height:100vh}
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.022;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── ICON RAIL ── */
+.rail{width:var(--rail-w);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:22px 0 14px;position:sticky;top:0;height:100vh}
+.rail-mark{display:flex;justify-content:center;padding:0 0 20px}
+.nav{flex:1;padding:2px 10px;overflow:visible}
+.nav-sep{height:1px;background:var(--border);margin:9px 8px 3px}
+.nav-item{display:flex;align-items:center;justify-content:center;height:44px;border-radius:var(--r-sm);
+  color:var(--text-2);text-decoration:none;position:relative;transition:background var(--t-fast) var(--ease)}
+.nav-item .ico{width:17px;height:17px;opacity:.7}
+.nav-item:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.nav-item:hover .ico{opacity:1}
+.nav-item.active{background:var(--surface-2);color:var(--text)}
+.nav-item.active::before{content:"";position:absolute;left:-10px;top:9px;bottom:9px;width:2px;
+  border-radius:0 2px 2px 0;background:var(--teal-500)}
+.nav-item.active .ico{opacity:1;stroke:var(--teal-500)}
+.nav-item::after{content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;
+  transform:translateY(-50%) translateX(-4px);
+  background:var(--surface-2);border:1px solid var(--stone-700);border-radius:6px;
+  padding:6px 10px;font-family:var(--font-mono);font-size:10.5px;color:var(--text);
+  white-space:nowrap;opacity:0;pointer-events:none;z-index:70;
+  box-shadow:0 8px 20px -10px rgba(0,0,0,.9);
+  transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.nav-item:hover::after{opacity:1;transform:translateY(-50%) translateX(0)}
+.rail-foot{padding:13px 0 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--moss-400);position:relative}
+.dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--moss-400);
+  opacity:.35;animation:halo 2.8s var(--ease) infinite}
+@keyframes halo{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.15);opacity:.08}}
+
+/* ── MAIN ── */
+.main{flex:1;min-width:0;padding:26px 24px 56px}
+.col{max-width:720px;margin:0 auto}
+.eyebrow{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+.eyebrow .rule{width:22px;height:1px;background:var(--teal-500);opacity:.7}
+.eyebrow span{font-family:var(--font-mono);font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--teal-500)}
+h1{font-family:var(--font-display);font-weight:600;font-size:28px;letter-spacing:-1px;margin-bottom:8px;
+  font-variation-settings:'opsz' 96,'SOFT' 0,'WONK' 1}
+.sub{color:var(--subtle);font-size:13px;line-height:1.7;margin-bottom:18px}
+.sub b{color:var(--text-2);font-weight:500}
+
+.runrow{display:flex;align-items:flex-end;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.runrow .f{display:flex;flex-direction:column;gap:6px;flex:1;min-width:280px}
+.runrow label{font-family:var(--font-mono);font-size:9px;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted);
+  display:flex;gap:8px;align-items:baseline}
+.runrow label .tag{color:var(--teal-600);letter-spacing:1px;text-transform:none}
+.inp{background:var(--surface);border:1px solid var(--stone-700);border-radius:var(--r-sm);height:44px;
+  padding:0 12px;color:var(--text);font-family:var(--font-mono);font-size:12px;width:100%;
+  font-variant-numeric:tabular-nums;caret-color:var(--teal-500)}
+.inp:focus{outline:none;border-color:var(--teal-500);box-shadow:0 0 0 3px rgba(45,212,192,.13)}
+.btn{background:var(--teal-500);color:#08120F;border:none;border-radius:var(--r-full);
+  font-weight:600;font-size:13px;height:44px;padding:0 22px;cursor:pointer;
+  box-shadow:0 6px 18px -8px rgba(45,212,192,.5)}
+.btn:active{transform:translateY(1px);background:var(--teal-600)}
+.cost{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:22px;line-height:1.7}
+
+/* ── VERDICT ── */
+.verdict{background:linear-gradient(180deg,var(--surface),color-mix(in srgb,var(--surface) 92%,#000));
+  border:1px solid var(--border);border-radius:var(--r-lg);padding:26px 24px;margin-bottom:18px;
+  position:relative;overflow:hidden}
+.verdict::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--moss-400) 30%,var(--moss-400) 70%,transparent);opacity:.7}
+.v-eyebrow{font-family:var(--font-mono);font-size:9px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:11px}
+.v-line{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.v-word{font-family:var(--font-display);font-weight:600;font-size:36px;letter-spacing:-1.4px;line-height:1;
+  color:var(--moss-400);font-variation-settings:'opsz' 144,'SOFT' 0,'WONK' 1}
+.v-word em{font-style:italic}
+.v-chip{font-family:var(--font-mono);font-size:10.5px;letter-spacing:1.2px;color:var(--moss-400);
+  border:1px solid rgba(111,175,130,.35);border-radius:var(--r-full);padding:4px 12px}
+.v-sub{color:var(--text-2);font-size:13px;line-height:1.65;margin-bottom:22px}
+.figs{display:flex;gap:30px;flex-wrap:wrap;margin-bottom:20px}
+.fig .n{font-family:var(--font-display);font-weight:600;font-size:28px;letter-spacing:-1px;color:var(--text);
+  font-variant-numeric:tabular-nums;display:block;line-height:1.1;
+  font-variation-settings:'opsz' 96,'SOFT' 0,'WONK' 1}
+.fig .l{font-family:var(--font-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+  display:block;margin-top:4px}
+.fig.pre .n{color:var(--subtle)}
+.fig .why{font-size:11px;color:var(--muted);margin-top:6px;max-width:26ch;line-height:1.5}
+.meta{font-family:var(--font-mono);font-size:10px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;
+  border-top:1px solid var(--border);padding-top:14px;font-variant-numeric:tabular-nums}
+.meta .v{color:var(--subtle)}
+.gap-note{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:14px}
+
+/* ── LIMIT — same card treatment, directly under ── */
+.scope{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:24px}
+.scope h3{font-family:var(--font-display);font-size:18px;font-weight:600;letter-spacing:-.5px;margin-bottom:6px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.scope .method{font-size:12.5px;color:var(--text-2);line-height:1.65;margin-bottom:18px}
+.sb{margin-bottom:16px}
+.sb .k{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;display:block;margin-bottom:9px}
+.sb.det .k{color:var(--moss-400)}
+.sb.lim .k{color:var(--slate-400)}
+.sb ul{list-style:none;columns:2;column-gap:20px}
+.sb li{font-size:12px;color:var(--text-2);padding-left:17px;position:relative;margin-bottom:7px;line-height:1.55;
+  break-inside:avoid}
+.sb.det li::before{content:"✓";position:absolute;left:0;color:var(--moss-400);font-size:11px}
+.sb.lim{border:1px solid rgba(138,180,204,.28);border-radius:var(--r-md);padding:15px 16px;background:var(--bg)}
+.sb.lim p{font-size:12px;color:var(--text-2);line-height:1.7}
+.sb.lim .soon{font-size:11px;color:var(--muted);line-height:1.6;margin-top:10px;padding-top:10px;
+  border-top:1px solid var(--border-soft)}
+.scope-foot{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);line-height:1.7}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01ms!important}
+}
+
+/* ── STATE SPEC ── */
+.spec{border-top:1px solid var(--border);background:#0B0C0A;padding:42px 24px 56px;margin-top:40px}
+.spec-in{max-width:720px;margin:0 auto}
+.spec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.spec-h .n{font-family:var(--font-display);font-size:18px;font-weight:600;letter-spacing:-.5px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.spec-h .s{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.spec-note{font-size:12.5px;color:var(--subtle);margin-bottom:22px;line-height:1.65}
+.spec-note b{color:var(--text-2);font-weight:500}
+.spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.spec-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:17px}
+.spec-card>.lab{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:13px}
+.spec-card .desc{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:13px}
+.spec-card .desc code{font-family:var(--font-mono);font-size:10.5px;color:var(--text-2)}
+.v-word.bad{color:var(--text);font-size:26px}
+.brk-chip{font-family:var(--font-mono);font-size:10px;color:var(--slate-400);
+  border:1px solid rgba(138,180,204,.35);border-radius:var(--r-full);padding:3px 10px}
+.brk-d{font-family:var(--font-mono);font-size:11px;color:var(--text-2);margin:9px 0 11px;line-height:1.6}
+.brk-d .seq{color:var(--teal-500)}
+.links{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.ld{width:9px;height:9px;border-radius:50%;background:var(--stone-700)}
+.ld.ok{background:var(--moss-500)}
+.ld.brk{background:transparent;border:2px solid var(--slate-400);width:13px;height:13px}
+.lg{font-family:var(--font-mono);font-size:9px;color:var(--muted)}
+.cls{display:flex;flex-wrap:wrap;gap:6px}
+.cls span{font-family:var(--font-mono);font-size:8.5px;color:var(--subtle);
+  border:1px solid var(--stone-700);border-radius:var(--r-full);padding:2px 8px}
+.err-inline{border:1px solid rgba(90,140,171,.32);background:rgba(90,140,171,.05);border-radius:var(--r-sm);padding:11px 13px}
+.err-inline .m{font-size:11.5px;color:var(--text-2);line-height:1.6}
+.err-inline .m2{font-size:10.5px;color:var(--muted);margin-top:4px}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="app">
+
+  <aside class="rail">
+    <div class="rail-mark">
+      <svg width="34" height="26" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+    </div>
+    <nav class="nav">
+      <a class="nav-item" href="#" data-tip="Session"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg></a>
+      <div class="nav-sep"></div>
+      <a class="nav-item" href="#" data-tip="Tenants"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg></a>
+      <a class="nav-item" href="#" data-tip="Agents"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg></a>
+      <a class="nav-item" href="#" data-tip="API keys"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg></a>
+      <div class="nav-sep"></div>
+      <a class="nav-item" href="#" data-tip="Conversation"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg></a>
+      <a class="nav-item" href="#" data-tip="Invocations"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></a>
+      <div class="nav-sep"></div>
+      <a class="nav-item active" href="#" data-tip="Audit chain"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg></a>
+    </nav>
+    <div class="rail-foot"><span class="dot"></span></div>
+  </aside>
+
+  <main class="main">
+    <div class="col">
+      <div class="eyebrow"><span class="rule"></span><span>Playground · Trust</span></div>
+      <h1>Audit chain</h1>
+      <p class="sub">Every runtime and administration event of a tenant is hash-chained into an append-only record. This screen <b>recomputes the whole chain</b> and reports a computational fact — together with what that fact cannot mean.</p>
+
+      <div class="runrow">
+        <div class="f">
+          <label>Tenant id <span class="tag">· from your key</span></label>
+          <input class="inp" type="text" value="019ff806-64a1-747a-ac2e-920113ca8de1" spellcheck="false">
+        </div>
+        <button class="btn" type="button">Run verification</button>
+      </div>
+      <p class="cost">Full recomputation on demand — O(n) in time and memory; long chains take longer. Nothing cached. Wrong id and out-of-scope both answer 404.</p>
+
+      <section class="verdict">
+        <div class="v-eyebrow">Verification result · demo-client</div>
+        <div class="v-line"><span class="v-word">Chain <em>intact</em>.</span><span class="v-chip">VALID</span></div>
+        <p class="v-sub">Recomputation is consistent from genesis to head. No break is detectable by recomputation.</p>
+        <div class="figs">
+          <div class="fig"><span class="n">37</span><span class="l">Entries verified</span></div>
+          <div class="fig pre"><span class="n">0</span><span class="l">Pre-chain entries</span>
+            <span class="why">Written before chaining began — not failures, and not verifiable.</span></div>
+        </div>
+        <div class="meta">
+          <span>verified_at <span class="v">2026-09-01 10:22:04 UTC</span></span>
+          <span>tenant <span class="v">019ff806…8de1</span></span>
+        </div>
+        <p class="gap-note">Browsing individual entries isn't exposed by the API — this is a verdict, not an event browser.</p>
+      </section>
+
+      <aside class="scope">
+        <h3>What this verifies</h3>
+        <p class="method">Full recomputation: every entry's hash is rebuilt from its stored fields and checked against the recorded value and its link to the previous entry.</p>
+        <div class="sb det">
+          <span class="k">Detects</span>
+          <ul>
+            <li>Any altered entry content</li>
+            <li>Any broken link between entries</li>
+            <li>Missing or out-of-order entries</li>
+            <li>Malformed entries</li>
+          </ul>
+        </div>
+        <div class="sb lim">
+          <span class="k">Does not detect</span>
+          <p>A wholesale rewrite by an actor holding database-owner privileges, recomputing every hash from the point of change onward and rewriting the chain head. Recomputation alone cannot tell that apart from an honest chain.</p>
+          <p class="soon">Telling them apart needs a per-entry signature with a key the database never holds. The slot exists in the schema; the capability does not yet. When it lands, this text changes — the layout does not.</p>
+        </div>
+        <span class="scope-foot">Scope text comes verbatim from the API. It is part of the verdict, not a footnote.</span>
+      </aside>
+    </div>
+
+    <!-- ══ STATE SPEC ══ -->
+    <section class="spec">
+      <div class="spec-in">
+        <div class="spec-h"><span class="n">Audit chain — the states that matter</span><span class="s">Spec</span></div>
+        <p class="spec-note">Above is <b>VALID</b>. The rule holds in every state: <b>the verdict changes, the honesty panel does not</b>. It renders identically in BROKEN — a limit that only appears when things go well is marketing, not disclosure.</p>
+
+        <div class="spec-grid">
+          <div class="spec-card">
+            <span class="lab">Broken · status = BROKEN</span>
+            <div class="v-line" style="margin-bottom:0"><span class="v-word bad">Chain broken.</span><span class="brk-chip">ENTRY_ALTERED</span></div>
+            <div class="brk-d">First break at sequence <span class="seq">14</span> — entries from there on can't be trusted by recomputation.</div>
+            <div class="links" aria-hidden="true">
+              <span class="ld ok"></span><span class="ld ok"></span><span class="ld ok"></span><span class="ld ok"></span>
+              <span class="lg">···</span><span class="ld ok"></span>
+              <span class="ld brk"></span><span class="ld"></span><span class="ld"></span><span class="lg">···</span>
+            </div>
+            <p class="desc">Moss up to the break, hollow slate ring at it, stone after. Slate, not red — no invented danger colour.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Classifications · render, never invent</span>
+            <div class="cls">
+              <span>ENTRY_ALTERED</span><span>LINK_BROKEN</span><span>ENTRY_MISSING</span>
+              <span>UNCHAINED_ENTRY_OUT_OF_ORDER</span><span>ENTRY_MALFORMED</span>
+            </div>
+            <p class="desc">Render whichever <code>classification</code> arrives, verbatim. Unrecognised values render as-is in neutral.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Running · no fake progress</span>
+            <p class="desc" style="margin-top:0">Button disabled with "Recomputing…", figures as skeletons. The API returns one answer at the end, so a percentage would be invented. On a long chain the wait itself is the honest signal.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Not found · deliberate ambiguity</span>
+            <div class="err-inline">
+              <div class="m">No tenant is visible at that id.</div>
+              <div class="m2">Wrong id and out-of-scope look the same on purpose.</div>
+            </div>
+            <p class="desc">Same rule as Tenants and API keys — never a hint that something exists.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cauce Playground — 06 Invocations · TABLET</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Geist:wght@300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CAUCE PLAYGROUND · 06 — INVOCATIONS
+   ▸ TABLET spec (701–1024px). View at ~834px to judge.
+
+   WHAT CHANGES FROM DESKTOP, AND WHY
+   1. Icon rail shell (contract from 01–05-tablet).
+   2. The 4-column ledger doesn't fit: rows become TWO LINES —
+      id + agent/conversation on top, waterfall + status below.
+      The bar keeps full width, which is the point of the row.
+   3. The detail panel stops being a sticky column and becomes an
+      expanding block under the selected row (tap a row here).
+   4. Touch sizing: rows ≥64px, controls 44px.
+
+   SAME CONTRACT AS DESKTOP — session ledger, not a server query
+   (no global invocation listing exists); client wall-clock
+   timings marked ≈ (poll granularity 2s); UNKNOWN ≠ FAILED;
+   reaper-abandoned named as a gap; no token/cost columns
+   (usage never persisted). Verify GET /v1/invocations/{id}
+   before building the lookup row — remove it if absent.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  --teal-300:#90E8E1;--teal-400:#5EDDD0;--teal-500:#2DD4C0;--teal-600:#1BB8A6;
+  --moss-300:#96C9A6;--moss-400:#6FAF82;--moss-500:#4E8B62;
+  --slate-400:#8AB4CC;--slate-500:#5A8CAB;
+  --stone-950:#0E0F0D;--stone-900:#161713;--stone-800:#252620;
+  --stone-700:#35362E;--stone-600:#4A4B42;--stone-400:#8C8D82;
+  --stone-200:#D4D5CC;--stone-100:#ECEEE8;
+  --bg:var(--stone-950);--surface:var(--stone-900);--surface-2:var(--stone-800);
+  --border:#2E2F28;--border-soft:#232419;
+  --text:var(--stone-100);--text-2:#C8CAC2;--muted:var(--stone-600);--subtle:var(--stone-400);
+  --font-display:'Fraunces',Georgia,serif;
+  --font-body:'Geist',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Courier New',monospace;
+  --rail-w:68px;
+  --r-sm:8px;--r-md:12px;--r-lg:18px;--r-full:100px;
+  --ease:cubic-bezier(.2,.7,.3,1);--t-fast:.14s;--t-mid:.24s;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.65}
+::selection{background:rgba(45,212,192,.22);color:var(--text)}
+:focus-visible{outline:2px solid var(--teal-500);outline-offset:2px;border-radius:4px}
+*{scrollbar-width:thin;scrollbar-color:var(--stone-700) transparent}
+*::-webkit-scrollbar{width:8px;height:8px}
+*::-webkit-scrollbar-thumb{background:var(--stone-700);border-radius:99px}
+
+.app{display:flex;min-height:100vh}
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.022;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── ICON RAIL ── */
+.rail{width:var(--rail-w);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:22px 0 14px;position:sticky;top:0;height:100vh}
+.rail-mark{display:flex;justify-content:center;padding:0 0 20px}
+.nav{flex:1;padding:2px 10px;overflow:visible}
+.nav-sep{height:1px;background:var(--border);margin:9px 8px 3px}
+.nav-item{display:flex;align-items:center;justify-content:center;height:44px;border-radius:var(--r-sm);
+  color:var(--text-2);text-decoration:none;position:relative;transition:background var(--t-fast) var(--ease)}
+.nav-item .ico{width:17px;height:17px;opacity:.7}
+.nav-item:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.nav-item:hover .ico{opacity:1}
+.nav-item.active{background:var(--surface-2);color:var(--text)}
+.nav-item.active::before{content:"";position:absolute;left:-10px;top:9px;bottom:9px;width:2px;
+  border-radius:0 2px 2px 0;background:var(--teal-500)}
+.nav-item.active .ico{opacity:1;stroke:var(--teal-500)}
+.nav-item::after{content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;
+  transform:translateY(-50%) translateX(-4px);
+  background:var(--surface-2);border:1px solid var(--stone-700);border-radius:6px;
+  padding:6px 10px;font-family:var(--font-mono);font-size:10.5px;color:var(--text);
+  white-space:nowrap;opacity:0;pointer-events:none;z-index:70;
+  box-shadow:0 8px 20px -10px rgba(0,0,0,.9);
+  transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.nav-item:hover::after{opacity:1;transform:translateY(-50%) translateX(0)}
+.rail-foot{padding:13px 0 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--moss-400);position:relative}
+.dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--moss-400);
+  opacity:.35;animation:halo 2.8s var(--ease) infinite}
+@keyframes halo{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.15);opacity:.08}}
+
+/* ── MAIN ── */
+.main{flex:1;min-width:0;padding:26px 24px 56px}
+.col{max-width:720px;margin:0 auto}
+.eyebrow{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+.eyebrow .rule{width:22px;height:1px;background:var(--teal-500);opacity:.7}
+.eyebrow span{font-family:var(--font-mono);font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--teal-500)}
+h1{font-family:var(--font-display);font-weight:600;font-size:28px;letter-spacing:-1px;margin-bottom:8px;
+  font-variation-settings:'opsz' 96,'SOFT' 0,'WONK' 1}
+.sub{color:var(--subtle);font-size:13px;line-height:1.7;margin-bottom:18px}
+.sub b{color:var(--text-2);font-weight:500}
+
+.banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid var(--border);
+  border-left:2px solid var(--slate-500);border-radius:var(--r-md);background:rgba(90,140,171,.04);
+  padding:12px 14px;margin-bottom:18px}
+.banner .t{font-size:12px;color:var(--text-2);line-height:1.6}
+.banner .t b{color:var(--text);font-weight:500}
+.banner .count{font-family:var(--font-mono);font-size:10px;color:var(--subtle);margin-left:auto;white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+
+.lookup{display:flex;align-items:flex-end;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.lookup .f{display:flex;flex-direction:column;gap:6px;flex:1;min-width:260px}
+.lookup label{font-family:var(--font-mono);font-size:9px;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted)}
+.inp{background:var(--surface);border:1px solid var(--stone-700);border-radius:var(--r-sm);height:44px;
+  padding:0 12px;color:var(--text);font-family:var(--font-mono);font-size:12px;width:100%;
+  font-variant-numeric:tabular-nums;caret-color:var(--teal-500)}
+.inp:focus{outline:none;border-color:var(--teal-500);box-shadow:0 0 0 3px rgba(45,212,192,.13)}
+.btn{background:var(--teal-500);color:#08120F;border:none;border-radius:var(--r-full);
+  font-weight:600;font-size:13px;height:44px;padding:0 20px;cursor:pointer;
+  box-shadow:0 6px 18px -8px rgba(45,212,192,.5)}
+.btn:active{transform:translateY(1px);background:var(--teal-600)}
+.ghost{background:none;border:1px solid var(--stone-700);border-radius:var(--r-full);color:var(--text-2);
+  font-size:12.5px;font-weight:500;height:44px;padding:0 16px;cursor:pointer}
+.lookup .cond{flex-basis:100%;font-family:var(--font-mono);font-size:9.5px;color:var(--muted)}
+
+/* ── LEDGER — two-line rows ── */
+.ledger{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.irow{padding:14px 16px;border-bottom:1px solid var(--border-soft);cursor:pointer;position:relative}
+.irow:last-of-type{border-bottom:none}
+.irow.sel{background:var(--surface-2)}
+.irow.sel::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:2px;background:var(--teal-500)}
+.r1{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:9px}
+.iid{font-family:var(--font-mono);font-size:11.5px;color:var(--text);font-variant-numeric:tabular-nums}
+.ag{font-size:12.5px;font-weight:500;color:var(--text-2)}
+.cv{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);font-variant-numeric:tabular-nums;margin-left:auto}
+.r2{display:flex;align-items:center;gap:14px}
+.barwrap{flex:1;min-width:0}
+.bar{height:8px;border-radius:99px;background:var(--bg);overflow:hidden;display:flex;border:1px solid var(--border-soft)}
+.bar i{display:block;height:100%}
+.bar .wait{background:var(--slate-500);opacity:.75}
+.bar .ans{background:var(--teal-500)}
+.bar .live{background:linear-gradient(90deg,var(--slate-500),var(--teal-500));animation:breathe 1.6s var(--ease) infinite}
+@keyframes breathe{0%,100%{opacity:.45}50%{opacity:1}}
+.btime{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:5px;display:flex;gap:12px;
+  font-variant-numeric:tabular-nums}
+.btime .v{color:var(--subtle)}
+.st{font-family:var(--font-mono);font-size:8.5px;letter-spacing:1.3px;border-radius:var(--r-full);padding:3px 9px;
+  display:inline-block;white-space:nowrap;flex-shrink:0}
+.st.done{color:var(--moss-400);border:1px solid rgba(111,175,130,.35)}
+.st.pending{color:var(--teal-500);border:1px solid rgba(45,212,192,.35)}
+.st.failed{color:var(--slate-400);border:1px solid rgba(138,180,204,.35)}
+.st.lost{color:var(--muted);border:1px dashed var(--stone-700)}
+.ledger-note{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);padding:12px 16px;
+  border-top:1px solid var(--border);line-height:1.7}
+
+/* detail as an expanding block */
+.detail{border-top:1px solid var(--border-soft);background:var(--bg);padding:16px}
+.kv{display:inline-block;margin:0 20px 10px 0}
+.kv .k{font-family:var(--font-mono);font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+  display:block;margin-bottom:3px}
+.kv .v{font-family:var(--font-mono);font-size:10.5px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.phases{display:grid;gap:0;margin-top:6px}
+.ph{display:flex;align-items:flex-start;gap:11px;padding:7px 0;position:relative}
+.ph::before{content:"";position:absolute;left:4px;top:19px;bottom:-3px;width:1px;background:var(--border)}
+.ph:last-child::before{display:none}
+.ph .d{width:9px;height:9px;border-radius:50%;background:var(--stone-700);flex-shrink:0;margin-top:5px;z-index:1}
+.ph.on .d{background:var(--teal-500)}
+.ph.ok .d{background:var(--moss-400)}
+.ph .t1{font-size:12px;color:var(--text-2)}
+.ph .t2{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.p-note{font-size:11px;color:var(--muted);line-height:1.6;margin-top:12px}
+.p-note b{color:var(--subtle);font-weight:500}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01ms!important}
+}
+
+/* ── STATE SPEC ── */
+.spec{border-top:1px solid var(--border);background:#0B0C0A;padding:42px 24px 56px;margin-top:40px}
+.spec-in{max-width:720px;margin:0 auto}
+.spec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.spec-h .n{font-family:var(--font-display);font-size:18px;font-weight:600;letter-spacing:-.5px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.spec-h .s{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.spec-note{font-size:12.5px;color:var(--subtle);margin-bottom:22px;line-height:1.65}
+.spec-note b{color:var(--text-2);font-weight:500}
+.spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.spec-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:17px}
+.spec-card>.lab{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:13px}
+.spec-card .desc{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:13px}
+.spec-card .desc code{font-family:var(--font-mono);font-size:10.5px;color:var(--text-2)}
+.gapbox{border:1px dashed var(--stone-700);border-radius:var(--r-sm);padding:12px 14px;
+  font-size:11.5px;color:var(--text-2);line-height:1.6}
+.gapbox b{color:var(--text);font-weight:500}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="app">
+
+  <aside class="rail">
+    <div class="rail-mark">
+      <svg width="34" height="26" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+    </div>
+    <nav class="nav">
+      <a class="nav-item" href="#" data-tip="Session"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg></a>
+      <div class="nav-sep"></div>
+      <a class="nav-item" href="#" data-tip="Tenants"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg></a>
+      <a class="nav-item" href="#" data-tip="Agents"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg></a>
+      <a class="nav-item" href="#" data-tip="API keys"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg></a>
+      <div class="nav-sep"></div>
+      <a class="nav-item" href="#" data-tip="Conversation"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg></a>
+      <a class="nav-item active" href="#" data-tip="Invocations"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></a>
+      <div class="nav-sep"></div>
+      <a class="nav-item" href="#" data-tip="Audit chain"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg></a>
+    </nav>
+    <div class="rail-foot"><span class="dot"></span></div>
+  </aside>
+
+  <main class="main">
+    <div class="col">
+      <div class="eyebrow"><span class="rule"></span><span>Playground · Runtime</span></div>
+      <h1>Invocations</h1>
+      <p class="sub">Everything this session sent to an agent, and what came back — <b>as this browser observed it</b>. Timings are client wall clock, not server metrics.</p>
+
+      <div class="banner">
+        <p class="t"><b>A session ledger, not a server query.</b> The API has no global invocation listing. A reload empties it.</p>
+        <span class="count">6 · 1 in flight</span>
+      </div>
+
+      <div class="lookup">
+        <div class="f">
+          <label>Look up an invocation by id</label>
+          <input class="inp" type="text" placeholder="01a03961-…" spellcheck="false">
+        </div>
+        <button class="btn" type="button">Look up</button>
+        <button class="ghost" type="button">Clear</button>
+        <p class="cond">Conditional — build only if GET /v1/invocations/{id} is verified. If absent, remove this row rather than stub it.</p>
+      </div>
+
+      <div class="ledger">
+
+        <div class="irow sel">
+          <div class="r1"><span class="iid">01a03963-9f2c…</span><span class="ag">support-agent · qwen2.5:3b</span><span class="cv">conv 019ff80a…</span></div>
+          <div class="r2">
+            <div class="barwrap">
+              <span class="bar"><i class="live" style="width:100%"></i></span>
+              <span class="btime"><span>waiting <span class="v">≈ 0:07</span></span><span>polls <span class="v">4</span></span><span>sent 18:52:09</span></span>
+            </div>
+            <span class="st pending">PENDING</span>
+          </div>
+
+          <!-- detail expands under the selected row on tablet -->
+          <div class="detail">
+            <div class="kv"><span class="k">Trigger message</span><span class="v">01a03963-9f19…</span></div>
+            <div class="kv"><span class="k">Idempotency-Key</span><span class="v">pg-01a03963-9f19-1</span></div>
+            <div class="phases">
+              <div class="ph ok"><span class="d"></span><div><div class="t1">Accepted — 202 from the API</div><div class="t2">18:52:09.412 · message_id returned</div></div></div>
+              <div class="ph ok"><span class="d"></span><div><div class="t1">Thread walked, invocation bound</div><div class="t2">18:52:09.688</div></div></div>
+              <div class="ph on"><span class="d"></span><div><div class="t1">Polling every 2s</div><div class="t2">4 ticks · ≈ 0:07 elapsed · cap 5:00</div></div></div>
+              <div class="ph"><span class="d"></span><div><div class="t1">Terminal status</div><div class="t2">not yet observed</div></div></div>
+            </div>
+            <p class="p-note"><b>Client-observed only.</b> Queue time, model latency and tool time are not separable — the API exposes no per-phase server timings.</p>
+          </div>
+        </div>
+
+        <div class="irow">
+          <div class="r1"><span class="iid">01a03961-4e7b…</span><span class="ag">support-agent · qwen2.5:3b</span><span class="cv">conv 019ff80a…</span></div>
+          <div class="r2">
+            <div class="barwrap">
+              <span class="bar"><i class="wait" style="width:62%"></i><i class="ans" style="width:38%"></i></span>
+              <span class="btime"><span>total <span class="v">≈ 2.8s</span></span><span>polls <span class="v">2</span></span><span>sent 18:51:44</span></span>
+            </div>
+            <span class="st done">COMPLETED</span>
+          </div>
+        </div>
+
+        <div class="irow">
+          <div class="r1"><span class="iid">01a0394a-c530…</span><span class="ag">support-agent · qwe5:3b</span><span class="cv">conv 019ff809…</span></div>
+          <div class="r2">
+            <div class="barwrap">
+              <span class="bar"><i class="wait" style="width:88%"></i></span>
+              <span class="btime"><span>failed at <span class="v">≈ 1.4s</span></span><span>polls <span class="v">1</span></span><span>sent 18:44:31</span></span>
+            </div>
+            <span class="st failed">FAILED</span>
+          </div>
+        </div>
+
+        <div class="irow">
+          <div class="r1"><span class="iid">01a03948-b1e6…</span><span class="ag">support-agent · qwen2.5:3b</span><span class="cv">conv 019ff809…</span></div>
+          <div class="r2">
+            <div class="barwrap">
+              <span class="bar"><i class="wait" style="width:91%"></i><i class="ans" style="width:9%"></i></span>
+              <span class="btime"><span>total <span class="v">≈ 3:24</span></span><span>polls <span class="v">98</span></span><span>recovered</span></span>
+            </div>
+            <span class="st done">COMPLETED</span>
+          </div>
+        </div>
+
+        <div class="irow">
+          <div class="r1"><span class="iid">01a03930-77aa…</span><span class="ag">support-agent · qwen2.5:3b</span><span class="cv">conv 019ff808…</span></div>
+          <div class="r2">
+            <div class="barwrap">
+              <span class="bar"><i class="wait" style="width:100%"></i></span>
+              <span class="btime"><span>polled <span class="v">5:00</span></span><span>gave up watching</span></span>
+            </div>
+            <span class="st lost">UNKNOWN</span>
+          </div>
+        </div>
+
+        <div class="ledger-note">Bars are client wall clock: <span style="color:var(--slate-400)">slate</span> waiting · <span style="color:var(--teal-500)">teal</span> answering; "waiting" includes poll latency (2s), hence ≈. No token or cost column — usage is logged server-side but never persisted.</div>
+      </div>
+    </div>
+
+    <!-- ══ STATE SPEC ══ -->
+    <section class="spec">
+      <div class="spec-in">
+        <div class="spec-h"><span class="n">Invocations — the states that matter</span><span class="s">Spec</span></div>
+        <p class="spec-note">All rows come from behaviour already seen in this project: clean completions, a provider failure on the typo'd model, one that sat <b>3:24</b> and completed alone when Ollama returned, one in flight, and one the client stopped watching at the cap.</p>
+
+        <div class="spec-grid">
+          <div class="spec-card">
+            <span class="lab">UNKNOWN ≠ FAILED</span>
+            <div style="display:flex;gap:10px"><span class="st lost">UNKNOWN</span><span class="st failed">FAILED</span></div>
+            <p class="desc">Dashed = the client stopped watching; the invocation kept living. Solid = the server said it failed. Conflating them is the easiest lie here.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Recovered · the 3:24 row</span>
+            <span class="bar"><i class="wait" style="width:91%"></i><i class="ans" style="width:9%"></i></span>
+            <p class="desc">A long slate bar with a thin teal tip: outage, then the queue delivered. No resend, no duplicate.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Reaper-abandoned · named gap</span>
+            <div class="gapbox"><b>Not shown, because it can't be.</b> An abandoned invocation leaves no client-visible terminal status; it would sit as UNKNOWN forever.</div>
+            <p class="desc">Listed in Deferred. Named rather than faked.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Absent on purpose</span>
+            <div class="gapbox"><b>No tokens, no cost, no per-phase server timings.</b> <code>LlmUsage</code> is logged but never persisted or attributed.</div>
+            <p class="desc">When usage persistence lands, this screen gains its first commercial column.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+document.querySelectorAll('.irow').forEach(function(r){
+  r.addEventListener('click',function(){
+    document.querySelectorAll('.irow').forEach(function(x){x.classList.remove('sel');});
+    r.classList.add('sel');
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cauce Playground — 05 API keys · DESKTOP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Geist:wght@300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CAUCE PLAYGROUND · 05 — API KEYS
+   ▸ DESKTOP spec (≥1025px). Tablet and mobile: sibling files.
+
+   WIRE TRUTHS THIS SCREEN OBEYS
+   · POST /v1/tenants/{tenantId}/api-keys → 201. The plaintext
+     key is returned EXACTLY ONCE. The server stores an
+     HMAC-SHA256(+pepper) hash; nothing can recover it later.
+   · GET /v1/tenants/{tenantId}/api-keys → metadata ONLY.
+     DELETE /v1/api-keys/{keyId} → 204, SOFT revoke (revoked_at).
+   · Hierarchical authority (ADR 0002): keys beget keys. A key may
+     issue keys for its own tenant and for visible subordinates;
+     the issued key sees only that tenant's scope. Out-of-scope
+     tenant → 404 (deliberately indistinguishable from "wrong").
+   · Keys carry NO scopes or roles (empty authorities, deferred).
+     Authority = tenant scope via RLS. The screen says so.
+   · last_used_at is APPROXIMATE: updated only on the auth cold
+     path; cache hits skip it; staleness is bounded by the cache
+     TTL. Rendered with a "≈" and a hover note — never as exact.
+   · /v1/me gives the session's key_id → the row of the key you
+     are connected with is MARKED, and revoking it needs a second
+     confirmation (your session dies with it).
+
+   THE SHOWN-ONCE RULE (design, not wire)
+   The reveal panel is the only irrecoverable moment in the
+   playground. Therefore: it is NEVER inside a sheet, a modal with
+   a backdrop, a toast, or anything with a timeout. The only way
+   to make it go away is the explicit "I've stored it" button.
+   Navigating away loses it (memory only) — the panel says so.
+
+   METADATA FIELDS — VERIFY AGAINST ApiKeyResponse before
+   building. This mockup assumes {id, tenant_id, created_at,
+   last_used_at?, revoked_at?}. If the DTO carries a label/name,
+   make it the row's primary text; if it doesn't, do NOT invent
+   one — the short id is the identity, as drawn. Verify too
+   whether the list includes revoked keys (drawn as dimmed rows).
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  --teal-300:#90E8E1;--teal-400:#5EDDD0;--teal-500:#2DD4C0;--teal-600:#1BB8A6;
+  --moss-300:#96C9A6;--moss-400:#6FAF82;--moss-500:#4E8B62;
+  --slate-400:#8AB4CC;--slate-500:#5A8CAB;
+  --stone-950:#0E0F0D;--stone-900:#161713;--stone-800:#252620;
+  --stone-700:#35362E;--stone-600:#4A4B42;--stone-400:#8C8D82;
+  --stone-200:#D4D5CC;--stone-100:#ECEEE8;
+  --bg:var(--stone-950);--surface:var(--stone-900);--surface-2:var(--stone-800);
+  --border:#2E2F28;--border-soft:#232419;
+  --text:var(--stone-100);--text-2:#C8CAC2;--muted:var(--stone-600);--subtle:var(--stone-400);
+  --font-display:'Fraunces',Georgia,serif;
+  --font-body:'Geist',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Courier New',monospace;
+  --sidebar-w:248px;
+  --r-sm:8px;--r-md:12px;--r-lg:18px;--r-full:100px;
+  --ease:cubic-bezier(.2,.7,.3,1);--t-fast:.14s;--t-mid:.24s;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.65}
+::selection{background:rgba(45,212,192,.22);color:var(--text)}
+:focus-visible{outline:2px solid var(--teal-500);outline-offset:2px;border-radius:4px}
+*{scrollbar-width:thin;scrollbar-color:var(--stone-700) transparent}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--stone-700);border-radius:99px}
+*::-webkit-scrollbar-track{background:transparent}
+
+.app{display:flex;min-height:100vh}
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.022;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:26px 0 16px;position:sticky;top:0;height:100vh}
+.lockup{display:flex;align-items:center;gap:10px;padding:0 20px 26px}
+.wordmark{font-family:var(--font-display);font-size:23px;font-weight:600;color:var(--text);
+  letter-spacing:-.9px;line-height:1;font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.wordmark em{font-style:italic;color:var(--teal-500)}
+.badge-play{font-family:var(--font-mono);font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--subtle);border:1px solid var(--stone-700);border-radius:var(--r-full);padding:2px 8px;line-height:1.5}
+.nav{flex:1;overflow-y:auto;padding:2px 12px}
+.nav-eyebrow{font-family:var(--font-mono);font-size:9.5px;letter-spacing:3.5px;text-transform:uppercase;
+  color:var(--muted);padding:17px 10px 7px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:var(--r-sm);
+  color:var(--text-2);font-size:13px;font-weight:500;text-decoration:none;position:relative;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.nav-item .ico{width:15px;height:15px;flex-shrink:0;opacity:.7}
+.nav-item:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.nav-item:hover .ico{opacity:1}
+.nav-item.active{background:var(--surface-2);color:var(--text)}
+.nav-item.active::before{content:"";position:absolute;left:-12px;top:7px;bottom:7px;width:2px;
+  border-radius:0 2px 2px 0;background:var(--teal-500)}
+.nav-item.active .ico{opacity:1;stroke:var(--teal-500)}
+.side-foot{padding:15px 20px 0;border-top:1px solid var(--border);margin-top:8px}
+.status{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text-2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--moss-400);flex-shrink:0;position:relative}
+.dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--moss-400);
+  opacity:.35;animation:halo 2.8s var(--ease) infinite}
+@keyframes halo{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.15);opacity:.08}}
+.side-foot .hint{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px}
+.ver{font-family:var(--font-mono);font-size:9.5px;letter-spacing:1px;color:var(--muted);margin-top:13px;display:block}
+
+/* ── MAIN ── */
+.main{flex:1;min-width:0;padding:30px 36px 64px}
+.col{max-width:960px;margin:0 auto}
+.eyebrow{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.eyebrow .rule{width:24px;height:1px;background:var(--teal-500);opacity:.7}
+.eyebrow span{font-family:var(--font-mono);font-size:9.5px;letter-spacing:3.5px;text-transform:uppercase;color:var(--teal-500)}
+h1{font-family:var(--font-display);font-weight:600;font-size:32px;letter-spacing:-1.2px;line-height:1.05;
+  margin-bottom:10px;font-variation-settings:'opsz' 96,'SOFT' 0,'WONK' 1}
+.sub{color:var(--subtle);font-size:13.5px;max-width:72ch;line-height:1.7;margin-bottom:24px}
+.sub b{color:var(--text-2);font-weight:500}
+
+.issue{display:flex;align-items:flex-end;gap:10px;margin-bottom:22px;flex-wrap:wrap}
+.issue .f{display:flex;flex-direction:column;gap:6px;flex:1;min-width:320px;max-width:480px}
+.issue label{font-family:var(--font-mono);font-size:9px;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted);
+  display:flex;gap:8px;align-items:baseline}
+.issue label .tag{color:var(--teal-600);letter-spacing:1px;text-transform:none}
+.inp{background:var(--surface);border:1px solid var(--stone-700);border-radius:var(--r-sm);height:41px;
+  padding:0 12px;color:var(--text);font-family:var(--font-mono);font-size:12px;width:100%;
+  font-variant-numeric:tabular-nums;caret-color:var(--teal-500);
+  transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
+.inp:hover{border-color:var(--stone-600)}
+.inp:focus{outline:none;border-color:var(--teal-500);box-shadow:0 0 0 3px rgba(45,212,192,.13)}
+.btn{background:var(--teal-500);color:#08120F;border:none;border-radius:var(--r-full);
+  font-weight:600;font-size:13px;height:41px;padding:0 22px;cursor:pointer;
+  box-shadow:0 6px 18px -8px rgba(45,212,192,.5);
+  transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.btn:hover{background:var(--teal-400)}
+.btn:active{transform:translateY(1px)}
+.issue .hint{font-size:11px;color:var(--muted);flex-basis:100%;margin-top:-4px}
+
+/* ── THE REVEAL — shown once ── */
+.reveal{background:linear-gradient(180deg,var(--surface),color-mix(in srgb,var(--surface) 92%,#000));
+  border:1px solid rgba(45,212,192,.35);border-radius:var(--r-lg);padding:26px 28px 24px;margin-bottom:26px;
+  position:relative;overflow:hidden;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 24px 56px -30px rgba(0,0,0,.95),0 0 0 4px rgba(45,212,192,.05)}
+.reveal::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--teal-500) 30%,var(--teal-500) 70%,transparent)}
+.r-eyebrow{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.r-eyebrow .k{font-family:var(--font-mono);font-size:9.5px;letter-spacing:3px;text-transform:uppercase;color:var(--teal-500)}
+.r-eyebrow .once{font-family:var(--font-mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--stone-950);background:var(--teal-500);border-radius:var(--r-full);padding:2px 9px;font-weight:500}
+.r-title{font-family:var(--font-display);font-size:22px;font-weight:600;letter-spacing:-.6px;margin-bottom:6px;
+  font-variation-settings:'opsz' 96,'SOFT' 0,'WONK' 1}
+.r-title em{font-style:italic;color:var(--teal-500)}
+.r-sub{font-size:13px;color:var(--text-2);max-width:64ch;line-height:1.65;margin-bottom:18px}
+.keybox{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--stone-700);
+  border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px}
+.keybox .key{font-family:var(--font-mono);font-size:17px;letter-spacing:.6px;color:var(--text);flex:1;
+  font-variant-numeric:tabular-nums;word-break:break-all;user-select:all}
+.keybox .key .pfx{color:var(--teal-500)}
+.copybtn{display:inline-flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--stone-700);
+  border-radius:var(--r-full);color:var(--text);font-family:var(--font-body);font-weight:500;font-size:12.5px;
+  height:38px;padding:0 15px;cursor:pointer;flex-shrink:0;
+  transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.copybtn:hover{border-color:var(--stone-600)}
+.copybtn svg{width:13px;height:13px}
+.copybtn.ok{color:var(--moss-400);border-color:rgba(111,175,130,.4)}
+.r-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;
+  margin-bottom:18px;font-variant-numeric:tabular-nums}
+.r-meta .v{color:var(--subtle)}
+.r-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.r-foot .btn{background:var(--text);color:var(--stone-950);box-shadow:none}
+.r-foot .btn:hover{background:#fff}
+.r-foot .warn{font-size:11.5px;color:var(--subtle);line-height:1.55}
+.r-foot .warn b{color:var(--text-2);font-weight:500}
+
+/* ── LIST ── */
+.list{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+.l-head{display:grid;grid-template-columns:1.2fr 1fr 1fr .8fr auto;gap:14px;padding:11px 20px;
+  border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:9px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--muted)}
+.row{display:grid;grid-template-columns:1.2fr 1fr 1fr .8fr auto;gap:14px;align-items:center;padding:13px 20px;
+  border-bottom:1px solid var(--border-soft);font-variant-numeric:tabular-nums;
+  transition:background var(--t-fast) var(--ease)}
+.row:last-of-type{border-bottom:none}
+.row:hover{background:rgba(255,255,255,.02)}
+.row .id{font-family:var(--font-mono);font-size:11.5px;color:var(--text);display:flex;align-items:center;gap:8px}
+.row .id .me{font-family:var(--font-mono);font-size:8.5px;letter-spacing:1.2px;color:var(--teal-500);
+  border:1px solid rgba(45,212,192,.35);border-radius:var(--r-full);padding:1px 8px}
+.row .t{font-family:var(--font-mono);font-size:11px;color:var(--subtle)}
+.row .t .approx{color:var(--muted);cursor:help;border-bottom:1px dotted var(--stone-600)}
+.st{font-family:var(--font-mono);font-size:8.5px;letter-spacing:1.4px;border-radius:var(--r-full);padding:2px 9px;
+  display:inline-block}
+.st.active{color:var(--moss-400);border:1px solid rgba(111,175,130,.35)}
+.st.revoked{color:var(--muted);border:1px solid var(--stone-700)}
+.row.revoked{opacity:.55}
+.row.revoked .id{color:var(--subtle)}
+.rev{background:none;border:1px solid var(--stone-700);border-radius:var(--r-full);color:var(--subtle);
+  font-family:var(--font-body);font-size:11.5px;font-weight:500;height:30px;padding:0 13px;cursor:pointer;
+  transition:color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
+.rev:hover{color:var(--text);border-color:var(--stone-600)}
+.rev[disabled]{opacity:.4;cursor:not-allowed}
+.list-note{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);padding:12px 20px;border-top:1px solid var(--border);
+  line-height:1.7}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01ms!important}
+}
+
+/* ── STATE SPEC ── */
+.spec{border-top:1px solid var(--border);background:#0B0C0A;padding:52px 36px 64px;margin-top:44px}
+.spec-in{max-width:1120px;margin:0 auto}
+.spec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.spec-h .n{font-family:var(--font-display);font-size:19px;font-weight:600;letter-spacing:-.5px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.spec-h .s{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.spec-note{font-size:13px;color:var(--subtle);max-width:82ch;margin-bottom:26px;line-height:1.65}
+.spec-note b{color:var(--text-2);font-weight:500}
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:22px}
+.spec-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:20px}
+.spec-card>.lab{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:15px}
+.spec-card .desc{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:15px}
+.spec-card .desc code{font-family:var(--font-mono);font-size:10.5px;color:var(--text-2)}
+.confirm{border:1px solid var(--stone-700);background:var(--surface);border-radius:var(--r-md);padding:16px 18px}
+.confirm .t{font-size:13.5px;font-weight:600;margin-bottom:5px}
+.confirm .d{font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:13px}
+.confirm .d code{font-family:var(--font-mono);font-size:11px}
+.confirm .acts{display:flex;gap:9px}
+.confirm .acts .btn{height:34px;padding:0 16px;font-size:12px}
+.confirm .acts .ghost{background:none;border:1px solid var(--stone-700);border-radius:var(--r-full);color:var(--text-2);
+  font-size:12px;font-weight:500;height:34px;padding:0 14px;cursor:pointer}
+.confirm.danger{border-color:rgba(138,180,204,.35);background:rgba(90,140,171,.05)}
+.err-inline{border:1px solid rgba(90,140,171,.32);background:rgba(90,140,171,.05);border-radius:var(--r-sm);
+  padding:12px 14px}
+.err-inline .m{font-size:12px;color:var(--text-2);line-height:1.6}
+.err-inline .m2{font-size:11px;color:var(--muted);margin-top:4px}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="app">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+    <div class="lockup">
+      <svg width="43" height="33" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+      <span class="wordmark">Cau<em>ce</em></span>
+      <span class="badge-play">play</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-eyebrow">Session</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>Session</a>
+      <div class="nav-eyebrow">Workspace</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>Tenants</a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg>Agents</a>
+      <a class="nav-item active" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg>API keys</a>
+      <div class="nav-eyebrow">Runtime</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg>Conversation</a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Invocations</a>
+      <div class="nav-eyebrow">Trust</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg>Audit chain</a>
+    </nav>
+    <div class="side-foot">
+      <div class="status"><span class="dot"></span>Connected · <b style="font-weight:500">Operator</b></div>
+      <div class="hint">http://localhost:8080</div>
+      <span class="ver">playground · dev</span>
+    </div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <main class="main">
+    <div class="col">
+
+      <div class="eyebrow"><span class="rule"></span><span>Playground · Workspace</span></div>
+      <h1>API keys</h1>
+      <p class="sub">Keys beget keys: a key can issue keys for its own tenant and any tenant it can see. The issued key sees <b>only that tenant's scope</b>. Keys carry no roles yet — authority is tenant scope.</p>
+
+      <div class="issue">
+        <div class="f">
+          <label>Issue a key for tenant <span class="tag">· from your key</span></label>
+          <input class="inp" type="text" value="019ff805-f0f3-74b4-ac13-93a2874bf1ed" spellcheck="false">
+        </div>
+        <button class="btn" type="button">Issue key</button>
+        <p class="hint">Your own tenant, or a visible subordinate — here, demo-partner. A tenant you can't see answers 404.</p>
+      </div>
+
+      <!-- ══ THE REVEAL — just issued, shown once ══ -->
+      <section class="reveal" aria-live="polite">
+        <div class="r-eyebrow"><span class="k">Issued · demo-partner</span><span class="once">shown once</span></div>
+        <div class="r-title">Store it now. It <em>won't</em> come back.</div>
+        <p class="r-sub">The server keeps only a hash of this key. Nothing — not the API, not this screen, not a reload — can show it again. Leaving this page forgets it.</p>
+
+        <div class="keybox">
+          <span class="key"><span class="pfx">ck_</span>4Qn7vXe2LpR9sTb1KwHc0MfYaZ8dGjUo</span>
+          <button class="copybtn" id="cp" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <span id="cpt">Copy key</span>
+          </button>
+        </div>
+
+        <div class="r-meta">
+          <span>key_id <span class="v">01a0a6f2-8c14-7b3e-9d02-4f7e1c9a5b60</span></span>
+          <span>tenant <span class="v">demo-partner · PARTNER</span></span>
+          <span>issued <span class="v">2026-09-01 10:14 UTC</span></span>
+        </div>
+
+        <div class="r-foot">
+          <button class="btn" type="button">I've stored it</button>
+          <span class="warn"><b>This button is the only way to dismiss.</b> No backdrop, no timeout, no accidental close.</span>
+        </div>
+      </section>
+
+      <!-- ══ LIST — metadata only ══ -->
+      <div class="list">
+        <div class="l-head"><span>Key</span><span>Created</span><span>Last used</span><span>State</span><span></span></div>
+
+        <div class="row">
+          <span class="id">019ff668-5472… <span class="me">this session</span></span>
+          <span class="t">2026-08-12 21:30 UTC</span>
+          <span class="t"><span class="approx" title="Approximate: updated on the auth cold path only; cache hits don't touch it. Staleness is bounded by the cache TTL.">≈ 2026-09-01 10:11 UTC</span></span>
+          <span><span class="st active">ACTIVE</span></span>
+          <button class="rev" type="button">Revoke…</button>
+        </div>
+
+        <div class="row">
+          <span class="id">01a0a6f2-8c14…</span>
+          <span class="t">2026-09-01 10:14 UTC</span>
+          <span class="t"><span class="approx" title="Never used yet.">—</span></span>
+          <span><span class="st active">ACTIVE</span></span>
+          <button class="rev" type="button">Revoke…</button>
+        </div>
+
+        <div class="row revoked">
+          <span class="id">019ff9c1-33ab…</span>
+          <span class="t">2026-08-14 09:02 UTC</span>
+          <span class="t">≈ 2026-08-20 16:47 UTC</span>
+          <span><span class="st revoked">REVOKED · 08-21</span></span>
+          <button class="rev" type="button" disabled>Revoked</button>
+        </div>
+
+        <div class="list-note">Metadata only — plaintext keys are never listed. <span style="color:var(--subtle)">≈</span> last used is approximate (auth cold path; bounded by cache TTL). Revoke is soft: the row stays, dated.</div>
+      </div>
+
+    </div>
+
+    <!-- ══ STATE SPEC ══ -->
+    <section class="spec">
+      <div class="spec-in">
+        <div class="spec-h"><span class="n">API keys — the states that matter</span><span class="s">Spec</span></div>
+        <p class="spec-note">Above: the reveal panel right after a 201, and the metadata list with the <b>session key marked</b> (its id comes from <code style="font-family:var(--font-mono);font-size:11.5px">/v1/me</code>). The reveal obeys one rule with no exceptions: <b>only "I've stored it" removes it</b>. Everything else that could make a shown-once secret disappear is forbidden on this screen.</p>
+
+        <div class="spec-grid">
+
+          <div class="spec-card">
+            <span class="lab">Revoke · confirm</span>
+            <div class="confirm">
+              <div class="t">Revoke 01a0a6f2-8c14…?</div>
+              <div class="d">Every client using it gets <code>401</code> on its next request. Soft revoke — the row stays, dated. This can't be undone.</div>
+              <div class="acts"><button class="btn" type="button" style="background:var(--text)">Revoke</button><button class="ghost" type="button">Keep it</button></div>
+            </div>
+            <p class="desc">Inline in the row, not a modal. The primary is neutral-bright, not teal — revoking isn't the happy path.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Revoke · the session key</span>
+            <div class="confirm danger">
+              <div class="t">This is the key you're connected with.</div>
+              <div class="d">Revoking it ends this session immediately — the next request answers <code>401</code>. Issue another key first if you still need access.</div>
+              <div class="acts"><button class="btn" type="button" style="background:var(--text)">Revoke anyway</button><button class="ghost" type="button">Keep it</button></div>
+            </div>
+            <p class="desc">A second, distinct confirmation. Slate framing (no danger colour invented). After it: the shell drops to "No session".</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Issue · out of scope</span>
+            <div class="err-inline">
+              <div class="m">No tenant is visible at that id.</div>
+              <div class="m2">A wrong id and one outside your key's scope look the same on purpose.</div>
+            </div>
+            <p class="desc">Hierarchical authority: you can only issue for what you can see. 404 either way — the copy owns the ambiguity, as in Tenants.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Copy · and the honest ≈</span>
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <button class="copybtn ok" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>Copied</button>
+              <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--subtle)">≈ 2026-09-01 10:11 UTC</span>
+            </div>
+            <p class="desc">Copy shows "Copied" in moss for 1.5s; the key text is <code>user-select: all</code> so a click selects it whole. <b style="color:var(--text-2)">≈</b> marks <code>last_used_at</code> as approximate — cache hits skip the update; staleness ≤ cache TTL. Never rendered as exact.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Empty list</span>
+            <div style="text-align:center;padding:16px 10px">
+              <div style="font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:-.4px;margin-bottom:5px;font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1">No keys for this tenant.</div>
+              <div style="font-size:12px;color:var(--subtle);line-height:1.6">Issue the first one above — it's shown once,<br>so have somewhere to put it.</div>
+            </div>
+            <p class="desc">The operator's own tenant is never empty (its bootstrap key exists). Subordinates can be.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Candidate · connect with this key</span>
+            <div class="confirm" style="border-style:dashed">
+              <div class="t" style="font-size:12.5px">Use this key for the session?</div>
+              <div class="d" style="margin-bottom:0">Reconnect as <code>demo-partner</code> — you'd see only its scope. The operator key stays in memory to switch back.</div>
+            </div>
+            <p class="desc"><b style="color:var(--text-2)">Not in the API contract</b> — pure client behaviour, optional. Worth it: it turns the reveal into a one-click way to verify hierarchical RLS from the UI. Decide in the plan, not here.</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  var b=document.getElementById('cp'),t=document.getElementById('cpt');
+  b.addEventListener('click',function(){
+    b.classList.add('ok');t.textContent='Copied';
+    setTimeout(function(){b.classList.remove('ok');t.textContent='Copy key';},1500);
+  });
+})();
+</script>
+</body>
+</html>

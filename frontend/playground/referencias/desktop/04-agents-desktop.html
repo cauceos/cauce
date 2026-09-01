@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cauce Playground — 04 Agents · DESKTOP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Geist:wght@300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CAUCE PLAYGROUND · 04 — AGENTS
+   ▸ DESKTOP spec (≥1025px). Tablet and mobile: sibling files.
+
+   WIRE TRUTHS THIS SCREEN OBEYS
+   · GET /v1/tenants/{tenantId}/agents → {data, next_cursor}
+     (keyset; page-by-page "Load more", NOT a full walk).
+     POST /v1/tenants/{tenantId}/agents → 201 bare body.
+   · Agents belong ONLY to CLIENT tenants → 422
+     invalid_tenant_tier otherwise. The screen says the rule.
+   · Create is SIX fields: name · provider · model name · system
+     prompt · temperature (0.0–1.0) · max_response_tokens
+     (positive). The last two are OPTIONAL: blank → server
+     defaults; the card then shows what the server returned.
+   · Provider set is hardcoded (openai · anthropic · mistral ·
+     ollama), mirroring AgentService.SUPPORTED_PROVIDERS
+     (TODO→SPI). The select prevents a 400; the API can still
+     answer one — render its envelope inline.
+   · Duplicate names are LEGAL. Creating one raises a SOFT
+     warning (informs, never blocks). Cards and the Conversation
+     selector disambiguate via provider · model, and the short id
+     when even that collides.
+   · The card renders what the API stores: a typo'd model
+     (qwe5:3b) shows as stored — the provider rejects it at
+     invocation time, not here. The playground doesn't validate
+     what the backend doesn't.
+   · Optimistic add of the 201 body (fresh UUIDv7 can land on an
+     unfetched page). Brief teal wash, then normal.
+   · No update, no delete — the API doesn't expose them. A note
+     says so; no dead buttons. Tenant prefills once from /v1/me.
+   · Status verbatim from the wire: DRAFT stone · ACTIVE moss ·
+     unknown values render neutral, never invented colours.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  --teal-300:#90E8E1;--teal-400:#5EDDD0;--teal-500:#2DD4C0;--teal-600:#1BB8A6;
+  --moss-300:#96C9A6;--moss-400:#6FAF82;--moss-500:#4E8B62;
+  --slate-400:#8AB4CC;--slate-500:#5A8CAB;
+  --stone-950:#0E0F0D;--stone-900:#161713;--stone-800:#252620;
+  --stone-700:#35362E;--stone-600:#4A4B42;--stone-400:#8C8D82;
+  --stone-200:#D4D5CC;--stone-100:#ECEEE8;
+  --bg:var(--stone-950);--surface:var(--stone-900);--surface-2:var(--stone-800);
+  --border:#2E2F28;--border-soft:#232419;
+  --text:var(--stone-100);--text-2:#C8CAC2;--muted:var(--stone-600);--subtle:var(--stone-400);
+  --font-display:'Fraunces',Georgia,serif;
+  --font-body:'Geist',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Courier New',monospace;
+  --sidebar-w:248px;
+  --r-sm:8px;--r-md:12px;--r-lg:18px;--r-full:100px;
+  --ease:cubic-bezier(.2,.7,.3,1);--t-fast:.14s;--t-mid:.24s;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.65}
+::selection{background:rgba(45,212,192,.22);color:var(--text)}
+:focus-visible{outline:2px solid var(--teal-500);outline-offset:2px;border-radius:4px}
+*{scrollbar-width:thin;scrollbar-color:var(--stone-700) transparent}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--stone-700);border-radius:99px}
+*::-webkit-scrollbar-track{background:transparent}
+
+.app{display:flex;min-height:100vh}
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.022;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:26px 0 16px;position:sticky;top:0;height:100vh}
+.lockup{display:flex;align-items:center;gap:10px;padding:0 20px 26px}
+.wordmark{font-family:var(--font-display);font-size:23px;font-weight:600;color:var(--text);
+  letter-spacing:-.9px;line-height:1;font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.wordmark em{font-style:italic;color:var(--teal-500)}
+.badge-play{font-family:var(--font-mono);font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--subtle);border:1px solid var(--stone-700);border-radius:var(--r-full);padding:2px 8px;line-height:1.5}
+.nav{flex:1;overflow-y:auto;padding:2px 12px}
+.nav-eyebrow{font-family:var(--font-mono);font-size:9.5px;letter-spacing:3.5px;text-transform:uppercase;
+  color:var(--muted);padding:17px 10px 7px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:var(--r-sm);
+  color:var(--text-2);font-size:13px;font-weight:500;text-decoration:none;position:relative;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.nav-item .ico{width:15px;height:15px;flex-shrink:0;opacity:.7}
+.nav-item:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.nav-item:hover .ico{opacity:1}
+.nav-item.active{background:var(--surface-2);color:var(--text)}
+.nav-item.active::before{content:"";position:absolute;left:-12px;top:7px;bottom:7px;width:2px;
+  border-radius:0 2px 2px 0;background:var(--teal-500)}
+.nav-item.active .ico{opacity:1;stroke:var(--teal-500)}
+.side-foot{padding:15px 20px 0;border-top:1px solid var(--border);margin-top:8px}
+.status{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text-2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--moss-400);flex-shrink:0;position:relative}
+.dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--moss-400);
+  opacity:.35;animation:halo 2.8s var(--ease) infinite}
+@keyframes halo{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.15);opacity:.08}}
+.side-foot .hint{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px}
+.ver{font-family:var(--font-mono);font-size:9.5px;letter-spacing:1px;color:var(--muted);margin-top:13px;display:block}
+
+/* ── MAIN ── */
+.main{flex:1;min-width:0;padding:30px 36px 64px}
+.head{max-width:1120px;margin:0 auto 24px}
+.eyebrow{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.eyebrow .rule{width:24px;height:1px;background:var(--teal-500);opacity:.7}
+.eyebrow span{font-family:var(--font-mono);font-size:9.5px;letter-spacing:3.5px;text-transform:uppercase;color:var(--teal-500)}
+h1{font-family:var(--font-display);font-weight:600;font-size:32px;letter-spacing:-1.2px;line-height:1.05;
+  margin-bottom:10px;font-variation-settings:'opsz' 96,'SOFT' 0,'WONK' 1}
+.sub{color:var(--subtle);font-size:13.5px;max-width:70ch;line-height:1.7}
+.sub b{color:var(--text-2);font-weight:500}
+
+.rootrow{max-width:1120px;margin:0 auto 22px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.rootrow .f{display:flex;flex-direction:column;gap:6px;flex:1;min-width:320px;max-width:480px}
+.rootrow label{font-family:var(--font-mono);font-size:9px;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted);
+  display:flex;gap:8px;align-items:baseline}
+.rootrow label .tag{color:var(--teal-600);letter-spacing:1px;text-transform:none}
+.inp{background:var(--surface);border:1px solid var(--stone-700);border-radius:var(--r-sm);height:41px;
+  padding:0 12px;color:var(--text);font-family:var(--font-mono);font-size:12px;width:100%;
+  font-variant-numeric:tabular-nums;caret-color:var(--teal-500);
+  transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
+.inp:hover{border-color:var(--stone-600)}
+.inp:focus{outline:none;border-color:var(--teal-500);box-shadow:0 0 0 3px rgba(45,212,192,.13)}
+.btn{background:var(--teal-500);color:#08120F;border:none;border-radius:var(--r-full);
+  font-weight:600;font-size:13px;height:41px;padding:0 22px;cursor:pointer;
+  box-shadow:0 6px 18px -8px rgba(45,212,192,.5);
+  transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.btn:hover{background:var(--teal-400)}
+.btn:active{transform:translateY(1px)}
+
+.split{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.5fr) 384px;gap:22px;align-items:start}
+
+/* ── AGENT CARDS ── */
+.cards{display:grid;gap:14px}
+.acard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px 22px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
+  transition:border-color var(--t-fast) var(--ease)}
+.acard:hover{border-color:var(--stone-700)}
+.a-top{display:flex;align-items:center;gap:11px;margin-bottom:6px;flex-wrap:wrap}
+.a-name{font-family:var(--font-display);font-size:19px;font-weight:600;letter-spacing:-.5px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.a-status{font-family:var(--font-mono);font-size:8.5px;letter-spacing:1.4px;border-radius:var(--r-full);padding:2px 9px}
+.a-status.draft{color:var(--subtle);border:1px solid var(--stone-700)}
+.a-status.active{color:var(--moss-400);border:1px solid rgba(111,175,130,.35)}
+.a-chip{font-family:var(--font-mono);font-size:10.5px;color:var(--teal-500);
+  border:1px solid rgba(45,212,192,.3);border-radius:var(--r-full);padding:3px 11px;margin-left:auto}
+.a-ids{font-family:var(--font-mono);font-size:10px;color:var(--muted);display:flex;align-items:center;gap:12px;
+  font-variant-numeric:tabular-nums;margin-bottom:11px;flex-wrap:wrap}
+.copy{width:24px;height:24px;display:grid;place-items:center;border-radius:6px;border:none;background:none;
+  color:var(--muted);cursor:pointer;transition:color var(--t-fast) var(--ease)}
+.copy:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.copy svg{width:12px;height:12px}
+.a-params{font-family:var(--font-mono);font-size:10.5px;color:var(--subtle);display:flex;gap:16px;margin-bottom:11px;
+  font-variant-numeric:tabular-nums}
+.a-params .k{color:var(--muted)}
+.a-prompt{font-size:12.5px;color:var(--text-2);line-height:1.65;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:14px}
+.a-foot{display:flex;align-items:center;gap:14px}
+.a-open{font-size:12.5px;font-weight:500;color:var(--teal-500);text-decoration:none;display:inline-flex;
+  align-items:center;gap:7px;padding:7px 14px;border:1px solid rgba(45,212,192,.3);border-radius:var(--r-full);
+  transition:background var(--t-fast) var(--ease)}
+.a-open:hover{background:rgba(45,212,192,.08)}
+.a-open svg{width:13px;height:13px}
+.a-gap{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-left:auto}
+.loadmore{display:flex;justify-content:center;margin-top:4px}
+.loadmore button{background:none;border:1px solid var(--stone-700);border-radius:var(--r-full);
+  color:var(--subtle);font-family:var(--font-mono);font-size:10.5px;padding:8px 18px;cursor:pointer;
+  transition:color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
+.loadmore button:hover{color:var(--text);border-color:var(--stone-600)}
+
+/* ── CREATE PANEL — six fields ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:24px;
+  position:sticky;top:28px;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+.panel h3{font-family:var(--font-display);font-size:18px;font-weight:600;letter-spacing:-.5px;margin-bottom:4px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.panel .why{font-size:11.5px;color:var(--subtle);line-height:1.6;margin-bottom:18px}
+.fld{margin-bottom:15px}
+.fld .lt{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.fld label{font-size:12px;font-weight:500}
+.fld .opt{font-family:var(--font-mono);font-size:8.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+.fld .inp,.fld select,.fld textarea{background:var(--bg);border:1px solid var(--stone-700);border-radius:var(--r-sm);
+  width:100%;color:var(--text);font-family:var(--font-mono);font-size:11.5px;padding:10px 12px;
+  caret-color:var(--teal-500)}
+.fld select{height:40px;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234A4B42' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;background-size:13px}
+.fld textarea{resize:vertical;min-height:64px;line-height:1.6;font-family:var(--font-body);font-size:12.5px}
+.fld .inp:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--teal-500);
+  box-shadow:0 0 0 3px rgba(45,212,192,.13)}
+.fld .hint{font-size:10.5px;color:var(--muted);margin-top:5px;line-height:1.5}
+.fld2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.warn{border:1px solid rgba(138,180,204,.3);background:rgba(90,140,171,.05);border-radius:var(--r-sm);
+  padding:9px 12px;font-size:11px;color:var(--text-2);line-height:1.55;margin-bottom:15px}
+.panel .btn{width:100%}
+.p-note{font-size:11px;color:var(--muted);line-height:1.6;margin-top:13px}
+.gap-note{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:14px;line-height:1.7}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01ms!important}
+}
+
+/* ── STATE SPEC ── */
+.spec{border-top:1px solid var(--border);background:#0B0C0A;padding:52px 36px 64px;margin-top:44px}
+.spec-in{max-width:1120px;margin:0 auto}
+.spec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.spec-h .n{font-family:var(--font-display);font-size:19px;font-weight:600;letter-spacing:-.5px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.spec-h .s{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.spec-note{font-size:13px;color:var(--subtle);max-width:82ch;margin-bottom:26px;line-height:1.65}
+.spec-note b{color:var(--text-2);font-weight:500}
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:22px}
+.spec-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:20px}
+.spec-card>.lab{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:15px}
+.spec-card .desc{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:15px}
+.spec-card .desc code{font-family:var(--font-mono);font-size:10.5px;color:var(--text-2)}
+.err-inline{border:1px solid rgba(90,140,171,.32);background:rgba(90,140,171,.05);border-radius:var(--r-sm);
+  padding:12px 14px}
+.err-inline .f{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-400);margin-bottom:3px}
+.err-inline .m{font-size:12px;color:var(--text-2);line-height:1.6}
+.err-inline .rid{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:7px;display:block}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="app">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+    <div class="lockup">
+      <svg width="43" height="33" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+      <span class="wordmark">Cau<em>ce</em></span>
+      <span class="badge-play">play</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-eyebrow">Session</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>Session</a>
+      <div class="nav-eyebrow">Workspace</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>Tenants</a>
+      <a class="nav-item active" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg>Agents</a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg>API keys</a>
+      <div class="nav-eyebrow">Runtime</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg>Conversation</a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Invocations</a>
+      <div class="nav-eyebrow">Trust</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg>Audit chain</a>
+    </nav>
+    <div class="side-foot">
+      <div class="status"><span class="dot"></span>Connected · <b style="font-weight:500">Operator</b></div>
+      <div class="hint">http://localhost:8080</div>
+      <span class="ver">playground · dev</span>
+    </div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <main class="main">
+
+    <div class="head">
+      <div class="eyebrow"><span class="rule"></span><span>Playground · Workspace</span></div>
+      <h1>Agents</h1>
+      <p class="sub">Agents belong to a <b>CLIENT</b> tenant. Same name twice is legal — cards disambiguate by <b>provider · model</b>, and by short id when even that collides.</p>
+    </div>
+
+    <div class="rootrow">
+      <div class="f">
+        <label>Client tenant id <span class="tag">· from your key</span></label>
+        <input class="inp" type="text" value="019ff806-64a1-747a-ac2e-920113ca8de1" spellcheck="false">
+      </div>
+      <button class="btn" type="button">Load agents</button>
+    </div>
+
+    <div class="split">
+
+      <!-- ══ CARD LIST — the real twins ══ -->
+      <div>
+        <div class="cards">
+
+          <article class="acard">
+            <div class="a-top">
+              <span class="a-name">support-agent</span>
+              <span class="a-status draft">DRAFT</span>
+              <span class="a-chip">ollama · qwen2.5:3b</span>
+            </div>
+            <div class="a-ids">
+              <span>id 019ff806-e7a9…</span>
+              <button class="copy" type="button" aria-label="Copy id"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+              <span>created 2026-08-12 21:58 UTC</span>
+            </div>
+            <div class="a-params">
+              <span><span class="k">temp</span> 0.7</span>
+              <span><span class="k">max</span> 4096</span>
+            </div>
+            <p class="a-prompt">You are a helpful support assistant. Answer briefly and honestly; if you don't know something, say so instead of guessing.</p>
+            <div class="a-foot">
+              <a class="a-open" href="#">Open conversation
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+              </a>
+              <span class="a-gap">no edit · no delete</span>
+            </div>
+          </article>
+
+          <article class="acard">
+            <div class="a-top">
+              <span class="a-name">support-agent</span>
+              <span class="a-status draft">DRAFT</span>
+              <span class="a-chip">ollama · qwe5:3b</span>
+            </div>
+            <div class="a-ids">
+              <span>id 019ff806-c944…</span>
+              <button class="copy" type="button" aria-label="Copy id"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+              <span>created 2026-08-12 21:44 UTC</span>
+            </div>
+            <div class="a-params">
+              <span><span class="k">temp</span> 0.7</span>
+              <span><span class="k">max</span> 4096</span>
+            </div>
+            <p class="a-prompt">You are a helpful support assistant. Answer briefly and honestly; if you don't know something, say so instead of guessing.</p>
+            <div class="a-foot">
+              <a class="a-open" href="#">Open conversation
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+              </a>
+              <span class="a-gap">no edit · no delete</span>
+            </div>
+          </article>
+
+        </div>
+        <div class="loadmore"><button type="button">Load more</button></div>
+      </div>
+
+      <!-- ══ CREATE PANEL — six fields ══ -->
+      <aside class="panel">
+        <h3>New agent</h3>
+        <p class="why">Under the tenant above. Two fields are optional — blank means the server decides, and the card shows what it decided.</p>
+
+        <div class="fld">
+          <div class="lt"><label for="an">Name</label></div>
+          <input class="inp" id="an" type="text" value="support-agent" spellcheck="false">
+        </div>
+
+        <div class="warn">An agent named <b style="font-weight:500">support-agent</b> already exists in this list. Duplicate names are legal — this only informs.</div>
+
+        <div class="fld">
+          <div class="lt"><label for="ap">Model provider</label></div>
+          <select class="inp" id="ap" style="height:40px">
+            <option>ollama</option><option>openai</option><option>anthropic</option><option>mistral</option>
+          </select>
+          <p class="hint">Mirrors the backend's supported set. The API validates it too.</p>
+        </div>
+
+        <div class="fld">
+          <div class="lt"><label for="am">Model name</label></div>
+          <input class="inp" id="am" type="text" placeholder="qwen2.5:3b" spellcheck="false">
+          <p class="hint">Stored as written — the provider rejects a wrong one at invocation time, not here.</p>
+        </div>
+
+        <div class="fld">
+          <div class="lt"><label for="asp">System prompt</label></div>
+          <textarea id="asp" placeholder="You are a helpful support assistant…"></textarea>
+        </div>
+
+        <div class="fld2">
+          <div class="fld" style="margin-bottom:0">
+            <div class="lt"><label for="at">Temperature</label><span class="opt">optional</span></div>
+            <input class="inp" id="at" type="text" placeholder="0.0 – 1.0" inputmode="decimal">
+          </div>
+          <div class="fld" style="margin-bottom:0">
+            <div class="lt"><label for="ax">Max tokens</label><span class="opt">optional</span></div>
+            <input class="inp" id="ax" type="text" placeholder="server default" inputmode="numeric">
+          </div>
+        </div>
+        <p class="hint" style="font-size:10.5px;color:var(--muted);margin:6px 0 16px">Blank → server defaults apply. The created card shows the returned values.</p>
+
+        <button class="btn" type="button">Create agent</button>
+        <p class="p-note">Agents can only belong to a CLIENT tenant — a partner or operator id above answers 422.</p>
+        <div class="gap-note">No update · no delete — recreate to change; the API doesn't expose them yet.</div>
+      </aside>
+
+    </div>
+
+    <!-- ══ STATE SPEC ══ -->
+    <section class="spec">
+      <div class="spec-in">
+        <div class="spec-h"><span class="n">Agents — the states that matter</span><span class="s">Spec</span></div>
+        <p class="spec-note">Above: the two real twins, told apart by the <b>provider · model</b> chip — the typo'd <b>qwe5:3b</b> renders exactly as stored, because the playground doesn't validate what the backend doesn't. The duplicate-name warning is live in the panel: it informs, it never blocks.</p>
+
+        <div class="spec-grid">
+
+          <div class="spec-card">
+            <span class="lab">Wrong tier · 422</span>
+            <div class="err-inline">
+              <div class="f">invalid_tenant_tier</div>
+              <div class="m">Agents can only be created under a CLIENT tenant.</div>
+              <span class="rid">request_id 01a039b2-6f01-7cc2-a3b7-90d2e1f44a08</span>
+            </div>
+            <p class="desc">A partner or operator id in the tenant field. The envelope renders inline at the top of the panel, in slate.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Validation · wire-cased fields</span>
+            <div class="err-inline">
+              <div class="f">model_name</div>
+              <div class="m">must not be blank</div>
+            </div>
+            <p class="desc">The envelope's <code>errors[].field</code> comes in snake_case from the wire and lands at its field verbatim — never translated back to Java names.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">After create · optimistic add</span>
+            <div class="acard" style="padding:14px 16px;background:rgba(45,212,192,.05);border-color:rgba(45,212,192,.25)">
+              <div class="a-top" style="margin-bottom:2px">
+                <span class="a-name" style="font-size:16px">billing-agent</span>
+                <span class="a-status draft">DRAFT</span>
+                <span class="a-chip">ollama · qwen2.5:3b</span>
+              </div>
+              <div class="a-params" style="margin-bottom:0"><span><span class="k">temp</span> 0.7</span><span><span class="k">max</span> 4096</span></div>
+            </div>
+            <p class="desc">The 201 body joins the loaded list (fresh UUIDv7 can land past the cursor). Left blank, temp/max show the <b style="color:var(--text-2)">server's</b> values — proof the defaults applied. Teal wash, then normal.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Empty list</span>
+            <div style="text-align:center;padding:16px 10px">
+              <div style="font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:-.4px;margin-bottom:5px;font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1">No agents here yet.</div>
+              <div style="font-size:12px;color:var(--subtle);line-height:1.6">Create the first one on the right —<br>it can be talking within a minute.</div>
+            </div>
+            <p class="desc">An empty tenant and a wrong id are indistinguishable (404 ambiguity holds for the tenant walk) — the copy says so instead of guessing.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Paging · keyset</span>
+            <p class="desc" style="margin-top:0"><code>Load more</code> appears only while <code>next_cursor</code> lives, fetches one page, appends. This list pages honestly — it is <b style="color:var(--text-2)">not</b> the Conversation selector's full walk, and the two stay separate on purpose.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Status mapping</span>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <span class="a-status draft">DRAFT</span>
+              <span class="a-status active">ACTIVE</span>
+              <span class="a-status" style="color:var(--subtle);border:1px solid var(--stone-700)">ANYTHING_ELSE</span>
+            </div>
+            <p class="desc">Status renders verbatim from the wire: DRAFT stone · ACTIVE moss · unknown values neutral. No invented colours, no invented states.</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

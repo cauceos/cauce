@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cauce Playground — 06 Invocations · DESKTOP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Geist:wght@300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CAUCE PLAYGROUND · 06 — INVOCATIONS
+   ▸ DESKTOP spec (≥1025px). Tablet and mobile: sibling files.
+
+   ⚠ THE DECISION THAT SHAPES THIS SCREEN
+   There is NO global invocation listing in the API. The public
+   202 returns {conversation_id, message_id} and drops the
+   invocation id; an invocation-status endpoint is a named gap in
+   Deferred. So this screen is NOT a server query tool — it is a
+   SESSION LEDGER: every invocation this playground session
+   started, with what the client itself observed (send time, poll
+   ticks, first status seen, terminal status, wall-clock spans).
+   It is honest about being client-side: a reload empties it.
+
+   ⚠ VERIFY BEFORE BUILDING (PC for the plan)
+   1. Does GET /v1/invocations/{id} exist today? The Conversation
+      view appears to poll something of that shape. If it exists,
+      the "Look up by id" row is real and rows can be refreshed
+      after a reload. If it does NOT, delete that row entirely —
+      do not stub it — and the ledger stays purely observational.
+   2. Does the 202 body carry the invocation id, or does the
+      client only learn it from the poll? Whichever is true, the
+      "known" column must say which, per row.
+   Build only what verification confirms. No invented endpoints.
+
+   WHAT IS DELIBERATELY ABSENT
+   · No token counts, no cost. LlmUsage is logged server-side but
+     never persisted or attributed per tenant — so there are no
+     numbers this screen could stand behind. Absent, not faked.
+   · No "round N" for tool loops (not derivable from the wire).
+   · Reaper-abandoned invocations leave NO conversation-visible
+     trace; this screen is the only place that gap is visible, so
+     it names it instead of showing a fake terminal state.
+
+   TIMING SEMANTICS — all client-observed wall clock, never server
+   metrics: "waiting" = send → first non-PENDING seen; it INCLUDES
+   poll latency (≤2s granularity). Marked ≈ everywhere. The
+   waterfall is slate (waiting) → teal (answered), same reading as
+   the strata elsewhere.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root{
+  --teal-300:#90E8E1;--teal-400:#5EDDD0;--teal-500:#2DD4C0;--teal-600:#1BB8A6;
+  --moss-300:#96C9A6;--moss-400:#6FAF82;--moss-500:#4E8B62;
+  --slate-400:#8AB4CC;--slate-500:#5A8CAB;
+  --stone-950:#0E0F0D;--stone-900:#161713;--stone-800:#252620;
+  --stone-700:#35362E;--stone-600:#4A4B42;--stone-400:#8C8D82;
+  --stone-200:#D4D5CC;--stone-100:#ECEEE8;
+  --bg:var(--stone-950);--surface:var(--stone-900);--surface-2:var(--stone-800);
+  --border:#2E2F28;--border-soft:#232419;
+  --text:var(--stone-100);--text-2:#C8CAC2;--muted:var(--stone-600);--subtle:var(--stone-400);
+  --font-display:'Fraunces',Georgia,serif;
+  --font-body:'Geist',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Courier New',monospace;
+  --sidebar-w:248px;
+  --r-sm:8px;--r-md:12px;--r-lg:18px;--r-full:100px;
+  --ease:cubic-bezier(.2,.7,.3,1);--t-fast:.14s;--t-mid:.24s;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.65}
+::selection{background:rgba(45,212,192,.22);color:var(--text)}
+:focus-visible{outline:2px solid var(--teal-500);outline-offset:2px;border-radius:4px}
+*{scrollbar-width:thin;scrollbar-color:var(--stone-700) transparent}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:var(--stone-700);border-radius:99px}
+*::-webkit-scrollbar-track{background:transparent}
+
+.app{display:flex;min-height:100vh}
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.022;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:26px 0 16px;position:sticky;top:0;height:100vh}
+.lockup{display:flex;align-items:center;gap:10px;padding:0 20px 26px}
+.wordmark{font-family:var(--font-display);font-size:23px;font-weight:600;color:var(--text);
+  letter-spacing:-.9px;line-height:1;font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.wordmark em{font-style:italic;color:var(--teal-500)}
+.badge-play{font-family:var(--font-mono);font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--subtle);border:1px solid var(--stone-700);border-radius:var(--r-full);padding:2px 8px;line-height:1.5}
+.nav{flex:1;overflow-y:auto;padding:2px 12px}
+.nav-eyebrow{font-family:var(--font-mono);font-size:9.5px;letter-spacing:3.5px;text-transform:uppercase;
+  color:var(--muted);padding:17px 10px 7px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:var(--r-sm);
+  color:var(--text-2);font-size:13px;font-weight:500;text-decoration:none;position:relative;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.nav-item .ico{width:15px;height:15px;flex-shrink:0;opacity:.7}
+.nav-item:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.nav-item:hover .ico{opacity:1}
+.nav-item.active{background:var(--surface-2);color:var(--text)}
+.nav-item.active::before{content:"";position:absolute;left:-12px;top:7px;bottom:7px;width:2px;
+  border-radius:0 2px 2px 0;background:var(--teal-500)}
+.nav-item.active .ico{opacity:1;stroke:var(--teal-500)}
+.side-foot{padding:15px 20px 0;border-top:1px solid var(--border);margin-top:8px}
+.status{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text-2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--moss-400);flex-shrink:0;position:relative}
+.dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--moss-400);
+  opacity:.35;animation:halo 2.8s var(--ease) infinite}
+@keyframes halo{0%,100%{transform:scale(.85);opacity:.35}50%{transform:scale(1.15);opacity:.08}}
+.side-foot .hint{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px}
+.ver{font-family:var(--font-mono);font-size:9.5px;letter-spacing:1px;color:var(--muted);margin-top:13px;display:block}
+
+/* ── MAIN ── */
+.main{flex:1;min-width:0;padding:30px 36px 64px}
+.head{max-width:1180px;margin:0 auto 22px}
+.eyebrow{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.eyebrow .rule{width:24px;height:1px;background:var(--teal-500);opacity:.7}
+.eyebrow span{font-family:var(--font-mono);font-size:9.5px;letter-spacing:3.5px;text-transform:uppercase;color:var(--teal-500)}
+h1{font-family:var(--font-display);font-weight:600;font-size:32px;letter-spacing:-1.2px;line-height:1.05;
+  margin-bottom:10px;font-variation-settings:'opsz' 96,'SOFT' 0,'WONK' 1}
+.sub{color:var(--subtle);font-size:13.5px;max-width:76ch;line-height:1.7}
+.sub b{color:var(--text-2);font-weight:500}
+
+/* session banner — the screen owns what it is */
+.banner{max-width:1180px;margin:0 auto 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  border:1px solid var(--border);border-left:2px solid var(--slate-500);border-radius:var(--r-md);
+  background:rgba(90,140,171,.04);padding:13px 16px}
+.banner .t{font-size:12.5px;color:var(--text-2);line-height:1.6}
+.banner .t b{color:var(--text);font-weight:500}
+.banner .count{font-family:var(--font-mono);font-size:10.5px;color:var(--subtle);margin-left:auto;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.lookup{max-width:1180px;margin:0 auto 22px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.lookup .f{display:flex;flex-direction:column;gap:6px;flex:1;min-width:320px;max-width:460px}
+.lookup label{font-family:var(--font-mono);font-size:9px;letter-spacing:2.2px;text-transform:uppercase;color:var(--muted)}
+.inp{background:var(--surface);border:1px solid var(--stone-700);border-radius:var(--r-sm);height:41px;
+  padding:0 12px;color:var(--text);font-family:var(--font-mono);font-size:12px;width:100%;
+  font-variant-numeric:tabular-nums;caret-color:var(--teal-500);
+  transition:border-color var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
+.inp:hover{border-color:var(--stone-600)}
+.inp:focus{outline:none;border-color:var(--teal-500);box-shadow:0 0 0 3px rgba(45,212,192,.13)}
+.btn{background:var(--teal-500);color:#08120F;border:none;border-radius:var(--r-full);
+  font-weight:600;font-size:13px;height:41px;padding:0 20px;cursor:pointer;
+  box-shadow:0 6px 18px -8px rgba(45,212,192,.5);
+  transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.btn:hover{background:var(--teal-400)}
+.btn:active{transform:translateY(1px)}
+.ghost{background:none;border:1px solid var(--stone-700);border-radius:var(--r-full);color:var(--text-2);
+  font-size:12.5px;font-weight:500;height:41px;padding:0 16px;cursor:pointer}
+.ghost:hover{color:var(--text);border-color:var(--stone-600)}
+.lookup .cond{flex-basis:100%;font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:-2px}
+
+/* ── SPLIT ── */
+.split{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.6fr) 360px;gap:22px;align-items:start}
+
+/* ── LEDGER ── */
+.ledger{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+.l-head{display:grid;grid-template-columns:132px 1fr 190px 78px;gap:14px;padding:11px 18px;
+  border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:9px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--muted)}
+.irow{display:grid;grid-template-columns:132px 1fr 190px 78px;gap:14px;align-items:center;padding:13px 18px;
+  border-bottom:1px solid var(--border-soft);cursor:pointer;position:relative;
+  transition:background var(--t-fast) var(--ease)}
+.irow:last-of-type{border-bottom:none}
+.irow:hover{background:rgba(255,255,255,.02)}
+.irow.sel{background:var(--surface-2)}
+.irow.sel::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;background:var(--teal-500)}
+.iid{font-family:var(--font-mono);font-size:11px;color:var(--text);font-variant-numeric:tabular-nums}
+.iid .sent{display:block;color:var(--muted);font-size:9.5px;margin-top:3px}
+.iwhat{min-width:0}
+.iwhat .ag{font-size:12.5px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iwhat .cv{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums}
+
+/* the waterfall — slate (waiting) → teal (answered) */
+.bar{height:8px;border-radius:99px;background:var(--bg);overflow:hidden;display:flex;border:1px solid var(--border-soft)}
+.bar i{display:block;height:100%}
+.bar .wait{background:var(--slate-500);opacity:.75}
+.bar .ans{background:var(--teal-500)}
+.bar .live{background:linear-gradient(90deg,var(--slate-500),var(--teal-500));
+  animation:breathe 1.6s var(--ease) infinite}
+@keyframes breathe{0%,100%{opacity:.45}50%{opacity:1}}
+.btime{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:5px;display:flex;gap:10px;
+  font-variant-numeric:tabular-nums}
+.btime .v{color:var(--subtle)}
+.st{font-family:var(--font-mono);font-size:8.5px;letter-spacing:1.3px;border-radius:var(--r-full);padding:2px 8px;
+  display:inline-block;white-space:nowrap}
+.st.done{color:var(--moss-400);border:1px solid rgba(111,175,130,.35)}
+.st.pending{color:var(--teal-500);border:1px solid rgba(45,212,192,.35)}
+.st.failed{color:var(--slate-400);border:1px solid rgba(138,180,204,.35)}
+.st.lost{color:var(--muted);border:1px dashed var(--stone-700)}
+.ledger-note{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);padding:12px 18px;
+  border-top:1px solid var(--border);line-height:1.7}
+
+/* ── DETAIL ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:22px;
+  position:sticky;top:28px;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+.p-h{font-family:var(--font-mono);font-size:11.5px;color:var(--text);margin-bottom:4px;word-break:break-all;
+  font-variant-numeric:tabular-nums}
+.p-st{margin-bottom:16px}
+.kv{margin-bottom:13px}
+.kv .k{font-family:var(--font-mono);font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+  display:block;margin-bottom:4px}
+.kv .v{font-family:var(--font-mono);font-size:11px;color:var(--text-2);word-break:break-all;
+  font-variant-numeric:tabular-nums}
+.p-sep{height:1px;background:var(--border);margin:16px 0}
+/* phase list — what the client actually saw */
+.phases{display:grid;gap:0}
+.ph{display:flex;align-items:flex-start;gap:11px;padding:8px 0;position:relative}
+.ph::before{content:"";position:absolute;left:4px;top:20px;bottom:-4px;width:1px;background:var(--border)}
+.ph:last-child::before{display:none}
+.ph .d{width:9px;height:9px;border-radius:50%;background:var(--stone-700);flex-shrink:0;margin-top:5px;z-index:1}
+.ph.on .d{background:var(--teal-500)}
+.ph.ok .d{background:var(--moss-400)}
+.ph .txt{min-width:0}
+.ph .t1{font-size:12px;color:var(--text-2)}
+.ph .t2{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.p-note{font-size:11px;color:var(--muted);line-height:1.6;margin-top:14px}
+.p-note b{color:var(--subtle);font-weight:500}
+.p-link{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:var(--teal-500);
+  text-decoration:none;padding:8px 14px;border:1px solid rgba(45,212,192,.3);border-radius:var(--r-full);margin-top:16px}
+.p-link:hover{background:rgba(45,212,192,.08)}
+.p-link svg{width:13px;height:13px}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01ms!important}
+}
+
+/* ── STATE SPEC ── */
+.spec{border-top:1px solid var(--border);background:#0B0C0A;padding:52px 36px 64px;margin-top:44px}
+.spec-in{max-width:1180px;margin:0 auto}
+.spec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.spec-h .n{font-family:var(--font-display);font-size:19px;font-weight:600;letter-spacing:-.5px;
+  font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1}
+.spec-h .s{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.spec-note{font-size:13px;color:var(--subtle);max-width:84ch;margin-bottom:26px;line-height:1.65}
+.spec-note b{color:var(--text-2);font-weight:500}
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:22px}
+.spec-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:20px}
+.spec-card>.lab{font-family:var(--font-mono);font-size:9.5px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:15px}
+.spec-card .desc{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:15px}
+.spec-card .desc code{font-family:var(--font-mono);font-size:10.5px;color:var(--text-2)}
+.gapbox{border:1px dashed var(--stone-700);border-radius:var(--r-sm);padding:13px 15px;
+  font-size:11.5px;color:var(--text-2);line-height:1.6}
+.gapbox b{color:var(--text);font-weight:500}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="app">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+    <div class="lockup">
+      <svg width="43" height="33" viewBox="0 0 80 60" fill="none" aria-label="Cauce">
+        <path d="M 4 22 Q 40 72 76 22" stroke="#4A4B42" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 12 22 Q 40 62 68 22" stroke="#5A8CAB" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M 20 22 Q 40 52 60 22" stroke="#6FAF82" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 28 22 Q 40 42 52 22" stroke="#2DD4C0" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="40" cy="40" r="3" fill="#2DD4C0"/>
+      </svg>
+      <span class="wordmark">Cau<em>ce</em></span>
+      <span class="badge-play">play</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-eyebrow">Session</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>Session</a>
+      <div class="nav-eyebrow">Workspace</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>Tenants</a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M9 15h6"/></svg>Agents</a>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l8-8M17 4l3 3M14 7l2 2"/></svg>API keys</a>
+      <div class="nav-eyebrow">Runtime</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16v10H8l-4 4z"/></svg>Conversation</a>
+      <a class="nav-item active" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Invocations</a>
+      <div class="nav-eyebrow">Trust</div>
+      <a class="nav-item" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 8a4 4 0 118 0v2M8 16a4 4 0 108 0v-2"/><path d="M8 10h8v4H8z"/></svg>Audit chain</a>
+    </nav>
+    <div class="side-foot">
+      <div class="status"><span class="dot"></span>Connected · <b style="font-weight:500">Operator</b></div>
+      <div class="hint">http://localhost:8080</div>
+      <span class="ver">playground · dev</span>
+    </div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <main class="main">
+
+    <div class="head">
+      <div class="eyebrow"><span class="rule"></span><span>Playground · Runtime</span></div>
+      <h1>Invocations</h1>
+      <p class="sub">Everything this session sent to an agent, and what came back — <b>as this browser observed it</b>. Timings are wall clock at the client, not server metrics.</p>
+    </div>
+
+    <div class="banner">
+      <p class="t"><b>This is a session ledger, not a server query.</b> The API has no global invocation listing, so this screen can only show what it started itself. A reload empties it.</p>
+      <span class="count">6 this session · 1 in flight</span>
+    </div>
+
+    <div class="lookup">
+      <div class="f">
+        <label>Look up an invocation by id</label>
+        <input class="inp" type="text" placeholder="01a03961-…" spellcheck="false">
+      </div>
+      <button class="btn" type="button">Look up</button>
+      <button class="ghost" type="button">Clear ledger</button>
+      <p class="cond">Conditional — build only if GET /v1/invocations/{id} is verified to exist. If it doesn't, remove this row rather than stub it.</p>
+    </div>
+
+    <div class="split">
+
+      <!-- ══ LEDGER ══ -->
+      <div class="ledger">
+        <div class="l-head"><span>Invocation</span><span>Agent · conversation</span><span>Observed</span><span>Status</span></div>
+
+        <!-- in flight -->
+        <div class="irow sel">
+          <span class="iid">01a03963-9f2c…<span class="sent">sent 18:52:09</span></span>
+          <span class="iwhat">
+            <span class="ag">support-agent · qwen2.5:3b</span>
+            <span class="cv">conv 019ff80a-11c2…</span>
+          </span>
+          <span>
+            <span class="bar"><i class="live" style="width:100%"></i></span>
+            <span class="btime"><span>waiting <span class="v">≈ 0:07</span></span><span>polls <span class="v">4</span></span></span>
+          </span>
+          <span><span class="st pending">PENDING</span></span>
+        </div>
+
+        <!-- completed, with a tool loop -->
+        <div class="irow">
+          <span class="iid">01a03961-4e7b…<span class="sent">sent 18:51:44</span></span>
+          <span class="iwhat">
+            <span class="ag">support-agent · qwen2.5:3b</span>
+            <span class="cv">conv 019ff80a-11c2…</span>
+          </span>
+          <span>
+            <span class="bar"><i class="wait" style="width:62%"></i><i class="ans" style="width:38%"></i></span>
+            <span class="btime"><span>total <span class="v">≈ 2.8s</span></span><span>polls <span class="v">2</span></span></span>
+          </span>
+          <span><span class="st done">COMPLETED</span></span>
+        </div>
+
+        <div class="irow">
+          <span class="iid">01a0395f-08d1…<span class="sent">sent 18:50:12</span></span>
+          <span class="iwhat">
+            <span class="ag">support-agent · qwen2.5:3b</span>
+            <span class="cv">conv 019ff80a-11c2…</span>
+          </span>
+          <span>
+            <span class="bar"><i class="wait" style="width:48%"></i><i class="ans" style="width:52%"></i></span>
+            <span class="btime"><span>total <span class="v">≈ 2.1s</span></span><span>polls <span class="v">2</span></span></span>
+          </span>
+          <span><span class="st done">COMPLETED</span></span>
+        </div>
+
+        <!-- provider failure -->
+        <div class="irow">
+          <span class="iid">01a0394a-c530…<span class="sent">sent 18:44:31</span></span>
+          <span class="iwhat">
+            <span class="ag">support-agent · qwe5:3b</span>
+            <span class="cv">conv 019ff809-7a30…</span>
+          </span>
+          <span>
+            <span class="bar"><i class="wait" style="width:88%"></i></span>
+            <span class="btime"><span>failed at <span class="v">≈ 1.4s</span></span><span>polls <span class="v">1</span></span></span>
+          </span>
+          <span><span class="st failed">FAILED</span></span>
+        </div>
+
+        <!-- recovered after provider came back -->
+        <div class="irow">
+          <span class="iid">01a03948-b1e6…<span class="sent">sent 18:41:02</span></span>
+          <span class="iwhat">
+            <span class="ag">support-agent · qwen2.5:3b</span>
+            <span class="cv">conv 019ff809-7a30…</span>
+          </span>
+          <span>
+            <span class="bar"><i class="wait" style="width:91%"></i><i class="ans" style="width:9%"></i></span>
+            <span class="btime"><span>total <span class="v">≈ 3:24</span></span><span>polls <span class="v">98</span></span></span>
+          </span>
+          <span><span class="st done">COMPLETED</span></span>
+        </div>
+
+        <!-- poll cap reached: unknown, not failed -->
+        <div class="irow">
+          <span class="iid">01a03930-77aa…<span class="sent">sent 18:33:58</span></span>
+          <span class="iwhat">
+            <span class="ag">support-agent · qwen2.5:3b</span>
+            <span class="cv">conv 019ff808-5c11…</span>
+          </span>
+          <span>
+            <span class="bar"><i class="wait" style="width:100%"></i></span>
+            <span class="btime"><span>polled <span class="v">5:00</span></span><span>gave up watching</span></span>
+          </span>
+          <span><span class="st lost">UNKNOWN</span></span>
+        </div>
+
+        <div class="ledger-note">Bars are client wall clock: <span style="color:var(--slate-400)">slate</span> waiting · <span style="color:var(--teal-500)">teal</span> answering. "Waiting" includes poll latency (2s granularity) — hence ≈ everywhere. No token or cost column: usage is logged server-side but never persisted, so there is nothing here we could stand behind.</div>
+      </div>
+
+      <!-- ══ DETAIL ══ -->
+      <aside class="panel">
+        <div class="p-h">01a03963-9f2c-7e04-b8d1-2a5f9c33e610</div>
+        <div class="p-st"><span class="st pending">PENDING</span></div>
+
+        <div class="kv"><span class="k">Agent</span><span class="v">support-agent · ollama · qwen2.5:3b</span></div>
+        <div class="kv"><span class="k">Conversation</span><span class="v">019ff80a-11c2-7f31-…</span></div>
+        <div class="kv"><span class="k">Trigger message</span><span class="v">01a03963-9f19-…</span></div>
+        <div class="kv"><span class="k">Idempotency-Key</span><span class="v">pg-01a03963-9f19-1</span></div>
+
+        <div class="p-sep"></div>
+
+        <div class="phases">
+          <div class="ph ok">
+            <span class="d"></span>
+            <span class="txt"><span class="t1">Accepted — 202 from the API</span><span class="t2">18:52:09.412 · message_id returned</span></span>
+          </div>
+          <div class="ph ok">
+            <span class="d"></span>
+            <span class="txt"><span class="t1">Thread walked, invocation bound</span><span class="t2">18:52:09.688</span></span>
+          </div>
+          <div class="ph on">
+            <span class="d"></span>
+            <span class="txt"><span class="t1">Polling every 2s</span><span class="t2">4 ticks · ≈ 0:07 elapsed · cap 5:00</span></span>
+          </div>
+          <div class="ph">
+            <span class="d"></span>
+            <span class="txt"><span class="t1">Terminal status</span><span class="t2">not yet observed</span></span>
+          </div>
+        </div>
+
+        <p class="p-note"><b>Client-observed only.</b> Queue time, model latency and tool time are not separable from here — the API exposes no per-phase server timings.</p>
+
+        <a class="p-link" href="#">Open in conversation
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+        </a>
+      </aside>
+
+    </div>
+
+    <!-- ══ STATE SPEC ══ -->
+    <section class="spec">
+      <div class="spec-in">
+        <div class="spec-h"><span class="n">Invocations — the states that matter</span><span class="s">Spec</span></div>
+        <p class="spec-note">Six rows above, all from real behaviour already seen in this project: two clean completions, one provider failure on the typo'd model, one that sat <b>3:24</b> and completed alone when Ollama came back, one still in flight, and one the client stopped watching at the 5:00 cap. That last one is <b>UNKNOWN</b>, not failed — the difference is the whole point of this screen.</p>
+
+        <div class="spec-grid">
+
+          <div class="spec-card">
+            <span class="lab">UNKNOWN ≠ FAILED</span>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+              <span class="st lost">UNKNOWN</span><span class="st failed">FAILED</span>
+            </div>
+            <p class="desc" style="margin-top:12px">Dashed border for UNKNOWN: the client stopped watching, the invocation kept living. FAILED means the server said so. Conflating them would be the easiest lie on this screen — the dashes exist to prevent it.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Recovered · the 3:24 row</span>
+            <span class="bar" style="max-width:220px"><i class="wait" style="width:91%"></i><i class="ans" style="width:9%"></i></span>
+            <p class="desc">A provider outage shows as a long slate bar with a thin teal tip. No resend, no duplicate — the queue held it and the reply arrived on poll 98. The shape tells the story before any text does.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Reaper-abandoned · named gap</span>
+            <div class="gapbox">
+              <b>Not shown, because it can't be.</b> An invocation abandoned by the reaper leaves no conversation-visible trace and no client-visible terminal status. It would appear here as UNKNOWN forever. Naming it is the honest move until a failure signal exists server-side.
+            </div>
+            <p class="desc">Listed in Deferred as "no failure signal for permanently failed invocations". This screen is where that gap is most visible — so it says it rather than inventing a state.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Empty ledger</span>
+            <div style="text-align:center;padding:16px 10px">
+              <div style="font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:-.4px;margin-bottom:5px;font-variation-settings:'opsz' 72,'SOFT' 0,'WONK' 1">Nothing sent yet this session.</div>
+              <div style="font-size:12px;color:var(--subtle);line-height:1.6">Send a message from Conversation —<br>it lands here as it happens.</div>
+            </div>
+            <p class="desc">Also the state after a reload. The empty copy says "this session", never "no invocations exist" — the screen can't know that.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Absent on purpose</span>
+            <div class="gapbox">
+              <b>No tokens. No cost. No per-phase server timings.</b> <code>LlmUsage</code> is logged but never persisted or attributed per tenant, and the API exposes no queue/model/tool split. Columns for them would be invention.
+            </div>
+            <p class="desc">When usage persistence lands, this is the screen that gains a column — and the first place the commercial model becomes visible.</p>
+          </div>
+
+          <div class="spec-card">
+            <span class="lab">Live row · in flight</span>
+            <span class="bar" style="max-width:220px"><i class="live" style="width:100%"></i></span>
+            <p class="desc">The gradient breathes only while PENDING, at the same 2s cadence as the poll, and freezes into slate+teal on the terminal status. One ambient motion per screen — here it means "still watching".</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+document.querySelectorAll('.irow').forEach(function(r){
+  r.addEventListener('click',function(){
+    document.querySelectorAll('.irow').forEach(function(x){x.classList.remove('sel');});
+    r.classList.add('sel');
+  });
+});
+</script>
+</body>
+</html>
