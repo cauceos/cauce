@@ -59,7 +59,7 @@
   display: grid; place-items: center;
   padding: 64px 56px;
 }
-.split {
+.session-screen .split {
   width: 100%; max-width: 1180px;
   display: grid; grid-template-columns: minmax(0, 1fr) 476px;
   gap: 88px; align-items: center;
@@ -128,7 +128,7 @@
   .stage { padding: 56px 40px; }
   .session-screen h1 { font-size: 44px; letter-spacing: -1.8px; line-height: 1.03; margin-bottom: 16px; }
   /* ~766px of content cannot hold the two-column split: one centred column. */
-  .split { grid-template-columns: 1fr; max-width: 576px; gap: 0; }
+  .session-screen .split { grid-template-columns: 1fr; max-width: 576px; gap: 0; }
 
   /* …and the legend turns into a horizontal rail, which keeps the teaching
      without spending the height the card needs. */
@@ -158,7 +158,7 @@
   .glow { top: -90px; width: 130%; height: 340px; }
   .stage { padding: 52px 18px calc(48px + env(safe-area-inset-bottom, 0px)); }
   .session-screen h1 { font-size: 34px; letter-spacing: -1.4px; line-height: 1.06; margin-bottom: 14px; }
-  .split { grid-template-columns: 1fr; gap: 0; }
+  .session-screen .split { grid-template-columns: 1fr; gap: 0; }
 
   .legend {
     border-left: none; padding: 13px 0; margin-bottom: 26px; gap: 9px;
