@@ -103,7 +103,7 @@ function ConnectedTenants({ client }: { client: ApiClient }) {
         </p>
       </div>
 
-      <div className="rootrow">
+      <div className="action-row">
         <div className="f">
           <label htmlFor="tenants-root">
             Root tenant id <span className="tag">· from your key</span>

@@ -8,6 +8,7 @@ import type {
   MessageResponse,
 } from '../../api/types'
 import { buildThreadItems, sortMessages, windowItems } from './thread-model'
+import type { LedgerRecorder } from '../../session/LedgerContext'
 import type { InvocationRecord, ThreadItem } from './thread-model'
 
 /**
@@ -112,8 +113,16 @@ const INITIAL_STATE: ConversationMachineState = {
   sessionAnchorMessageId: null,
 }
 
-export function useConversationMachine(client: ApiClient) {
+/**
+ * @param ledger Optional observer of what this machine sees (the session
+ *   ledger). It is only ever written to, at the points the machine already
+ *   passes through — it never steers polling, binding or sending.
+ */
+export function useConversationMachine(client: ApiClient, ledger: LedgerRecorder | null = null) {
   const [state, setState] = useState<ConversationMachineState>(INITIAL_STATE)
+  // Read through a ref so the emissions never enter a callback's deps.
+  const ledgerRef = useRef(ledger)
+  ledgerRef.current = ledger
   const machineRef = useRef<Machine>({
     gen: 0,
     timer: null,
@@ -129,6 +138,11 @@ export function useConversationMachine(client: ApiClient) {
     return () => {
       // Unmount is the single teardown (RequireSession unmounts the view on
       // disconnect too): kill in-flight fetches and the timer chain.
+      // An invocation still being watched loses its watcher here — say so,
+      // rather than leaving the ledger believing it is still being polled.
+      if (machine.live !== null) {
+        ledgerRef.current?.watchEnded(machine.live.invocationId, 'navigated', Date.now())
+      }
       machine.gen += 1
       machine.abort?.abort()
       if (machine.timer !== null) window.clearTimeout(machine.timer)
@@ -215,6 +229,7 @@ export function useConversationMachine(client: ApiClient) {
     async (invocation: InvocationResponse, gen: number) => {
       const machine = machineRef.current
       patch({ phase: 'settling' })
+      ledgerRef.current?.terminal(invocation.id, invocation, Date.now())
       const entry =
         machine.currentConvId !== null ? machine.cache.get(machine.currentConvId) : undefined
 
@@ -280,6 +295,7 @@ export function useConversationMachine(client: ApiClient) {
       const machine = machineRef.current
       if (gen !== machine.gen || machine.live === null) return
       if (Date.now() > machine.live.capDeadline) {
+        ledgerRef.current?.watchEnded(machine.live.invocationId, 'cap', Date.now())
         patch({ phase: 'stopped', stopReason: 'cap' })
         return
       }
@@ -290,6 +306,7 @@ export function useConversationMachine(client: ApiClient) {
         if (gen !== machine.gen || machine.live === null) return
         machine.live.status = invocation.status
         machine.live.failures = 0
+        ledgerRef.current?.polled(invocation.id, invocation.status, Date.now())
         let entry =
           machine.currentConvId !== null ? machine.cache.get(machine.currentConvId) : undefined
         if (entry === undefined && machine.currentConvId !== null) {
@@ -329,6 +346,7 @@ export function useConversationMachine(client: ApiClient) {
       } catch (cause) {
         if (gen !== machine.gen || machine.live === null) return
         if (isFatalPollError(cause)) {
+          ledgerRef.current?.watchEnded(machine.live.invocationId, 'fatal', Date.now())
           machine.live = null
           patch({
             phase: 'idle',
@@ -341,6 +359,7 @@ export function useConversationMachine(client: ApiClient) {
         machine.live.failures += 1
         patch({ wireRight: `poll failed (${machine.live.failures}) · retrying` })
         if (machine.live.failures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+          ledgerRef.current?.watchEnded(machine.live.invocationId, 'poll-failures', Date.now())
           patch({ phase: 'stopped', stopReason: 'poll-failures' })
           return
         }
@@ -361,7 +380,7 @@ export function useConversationMachine(client: ApiClient) {
    * bubble appear immediately).
    */
   const attach = useCallback(
-    async (conversationId: string, record: InvocationRecord, gen: number) => {
+    async (conversationId: string, record: InvocationRecord | null, gen: number) => {
       const machine = machineRef.current
       machine.currentConvId = conversationId
       const controller = new AbortController()
@@ -379,20 +398,27 @@ export function useConversationMachine(client: ApiClient) {
           revealSteps: 0,
         }
         machine.cache.set(conversationId, entry)
-        entry.invocations.push(record)
+        if (record !== null) entry.invocations.push(record)
         await fetchForward(entry, controller.signal, true)
       } else {
-        entry.invocations.push(record)
+        if (record !== null) entry.invocations.push(record)
         await fetchForward(entry, controller.signal, false)
       }
       if (gen !== machine.gen) return
       sync()
+      if (record !== null) ledgerRef.current?.bound(record.invocationId, Date.now())
     },
     [client, fetchForward, patch, sync],
   )
 
   const send = useCallback(
-    async (agentId: string, identityRef: string, content: string): Promise<boolean> => {
+    async (
+      agentId: string,
+      identityRef: string,
+      content: string,
+      /** The agent's name as listed when sent — for the ledger's row only. */
+      agentName: string | null = null,
+    ): Promise<boolean> => {
       const machine = machineRef.current
       const trimmed = content.trim()
       if (machine.live !== null || trimmed === '') return false
@@ -438,6 +464,15 @@ export function useConversationMachine(client: ApiClient) {
           wireLeft: 'POST /v1/agents/{id}/messages → 202',
           live: { invocationId: accepted.invocation_id, status: 'PENDING' },
         })
+        ledgerRef.current?.sent({
+          invocationId: accepted.invocation_id,
+          conversationId: accepted.conversation_id,
+          triggerMessageId: accepted.message_id,
+          agentId,
+          agentName,
+          idempotencyKey: key,
+          at: Date.now(),
+        })
         const record: InvocationRecord = {
           invocationId: accepted.invocation_id,
           triggerMessageId: accepted.message_id,
@@ -472,6 +507,7 @@ export function useConversationMachine(client: ApiClient) {
     if (machine.live === null) return
     machine.live.capDeadline = Date.now() + POLL_CAP_MS
     machine.live.failures = 0
+    ledgerRef.current?.resumed(machine.live.invocationId, Date.now())
     patch({ phase: 'polling', stopReason: null })
     scheduleTick(0)
   }, [patch, scheduleTick])
@@ -486,7 +522,33 @@ export function useConversationMachine(client: ApiClient) {
     sync()
   }, [sync])
 
-  return { state, send, resume, loadEarlier }
+  /**
+   * Bind an existing conversation WITHOUT sending — the way in from the
+   * ledger ("Open in conversation"). Same walk as a send's attach, minus
+   * the invocation record. Refused while something is being watched: a
+   * live poll is not hijacked by navigation.
+   */
+  const open = useCallback(
+    async (conversationId: string) => {
+      const machine = machineRef.current
+      if (machine.live !== null) return
+      machine.gen += 1
+      const gen = machine.gen
+      machine.abort?.abort()
+      patch({ sendError: null, fatalNote: null, stopReason: null })
+      try {
+        await attach(conversationId, null, gen)
+        if (gen !== machine.gen) return
+        patch({ phase: 'idle' })
+      } catch (cause) {
+        if (gen !== machine.gen) return
+        patch({ phase: 'idle', fatalNote: `Could not open the conversation: ${describeError(cause)}` })
+      }
+    },
+    [attach, patch],
+  )
+
+  return { state, send, resume, loadEarlier, open }
 }
 
 export function shortId(id: string): string {

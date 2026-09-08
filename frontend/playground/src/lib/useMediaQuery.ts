@@ -19,3 +19,5 @@ export function useMediaQuery(query: string): boolean {
 
 /** The shell breakpoint below which a side panel has no column of its own. */
 export const MOBILE_QUERY = '(max-width: 700px)'
+/** The icon-rail regime: one column, but room for a block under a row. */
+export const TABLET_QUERY = '(max-width: 1024px) and (min-width: 701px)'

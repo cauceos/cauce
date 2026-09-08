@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router'
 import { AppShell } from './components/shell/AppShell'
 import { RequireSession } from './session/RequireSession'
+import { LedgerProvider } from './session/LedgerContext'
 import { SessionProvider } from './session/SessionContext'
 import { AgentsView } from './views/agents/AgentsView'
 import { ApiKeysView } from './views/api-keys/ApiKeysView'
@@ -14,6 +15,7 @@ export function App() {
   return (
     <BrowserRouter>
       <SessionProvider>
+        <LedgerProvider>
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<SessionView />} />
@@ -67,6 +69,7 @@ export function App() {
             />
           </Route>
         </Routes>
+        </LedgerProvider>
       </SessionProvider>
     </BrowserRouter>
   )

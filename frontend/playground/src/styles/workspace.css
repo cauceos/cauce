@@ -20,27 +20,14 @@
   padding: 30px 36px 64px;
 }
 /* Everything sits on one working width, centred. */
-.workspace .rootrow, .workspace .cols { max-width: 1120px; margin-left: auto; margin-right: auto; }
+.workspace .action-row, .workspace .cols { max-width: 1120px; margin-left: auto; margin-right: auto; }
 
-/* ══════════ Root row: the id you walk from ══════════ */
-.rootrow { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
-.rootrow .f {
-  display: flex; flex-direction: column; gap: 6px;
-  flex: 1; min-width: 320px; max-width: 480px;
-}
-.rootrow label {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 2.2px;
-  text-transform: uppercase; color: var(--color-muted);
-  display: flex; gap: 8px; align-items: baseline;
-}
-/* "· from your key" — where the value came from, said once, next to it. */
-.rootrow label .tag { color: var(--color-teal-600); letter-spacing: 1px; text-transform: none; }
-.rootrow .input { background: var(--color-surface); font-size: 12px; }
-.rootrow .btn { height: 41px; padding: 0 22px; font-size: 13px; }
-.rootrow .tenant-ctx { font-family: var(--font-mono); font-size: 10px; color: var(--color-muted); padding-bottom: 12px; }
-.rootrow .tenant-ctx .name { color: var(--color-moss-400); }
-.rootrow .note { flex-basis: 100%; font-family: var(--font-mono); font-size: 10.5px; color: var(--color-subtle); line-height: 1.6; }
-.rootrow .note .d { color: var(--color-muted); }
+/* ══════════ The way in ══════════
+   The row itself is `.action-row` (primitives.css) — it left this file
+   when Invocations needed it outside Workspace. Only the tenant context
+   chip is this area's own. */
+.action-row .tenant-ctx { font-family: var(--font-mono); font-size: 10px; color: var(--color-muted); padding-bottom: 12px; }
+.action-row .tenant-ctx .name { color: var(--color-moss-400); }
 
 /* ══════════ Split: list + panel ══════════ */
 .cols {
@@ -207,16 +194,10 @@
 .panel .btn, .sheet .btn { width: 100%; justify-content: center; }
 
 /* ══════════ API keys (05) ══════════
-   Issue row (the shared .rootrow), the reveal, the metadata list and the
+   Issue row (the shared .action-row), the reveal, the metadata list and the
    revoke confirmation. Nothing here went up to primitives: the one
    candidate is .btn.neutral below — promote it if 06/07 want a non-teal
    primary. */
-.rootrow .hint { flex-basis: 100%; font-size: 11px; color: var(--color-muted); margin-top: -4px; line-height: 1.6; }
-.rootrow .error-note { flex-basis: 100%; margin-bottom: 0; }
-.rootrow .error-note.quiet { border-color: var(--color-stone-700); background: rgba(255, 255, 255, 0.015); }
-.rootrow .error-note.quiet .t { color: var(--color-subtle); font-weight: 400; font-size: 12px; }
-.rootrow .error-note.quiet .d { color: var(--color-muted); font-size: 11px; }
-
 /* Neutral-bright primary: for the dismissal of the reveal and for Revoke —
    actions that are final, but not the happy path teal celebrates. */
 .btn.neutral { background: var(--color-text); color: var(--color-stone-950); box-shadow: none; }
@@ -353,9 +334,6 @@
   .row .t .lbl { display: inline; }
   .rev { height: 40px; padding: 0 14px; }
   .reveal { padding: 22px 22px 20px; }
-  .rootrow { margin-bottom: 20px; }
-  .rootrow .f { min-width: 260px; }
-  .rootrow .btn { height: 44px; }
   /* Both columns stay — a tree without its panel loses the contextual
      create — but tighten. */
   .cols { grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; }
@@ -374,10 +352,7 @@
     height: calc(100dvh - var(--topbar-h));
     padding: 20px 16px calc(96px + env(safe-area-inset-bottom, 0px));
   }
-  .rootrow { margin-bottom: 18px; gap: 8px; }
-  .rootrow .f { min-width: 0; max-width: none; flex-basis: 100%; }
-  .rootrow .btn { height: 48px; flex: 1; justify-content: center; }
-  .rootrow .tenant-ctx { padding-bottom: 0; flex-basis: 100%; }
+  .action-row .tenant-ctx { padding-bottom: 0; flex-basis: 100%; }
 
   /* No second column: the panel becomes a bottom sheet (rendered by the
      view), so the in-grid one is simply not there. */
@@ -420,8 +395,6 @@
   /* 05: rows stack — key + marker, then created / ≈ used, then state and
      revoke on a third line. The reveal stays inline: the key wraps, Copy
      is full width. The tenant input is 16px like every other. */
-  .rootrow .hint { margin-top: 0; }
-  .rootrow .input { font-size: 16px; }
   .l-head { display: none; }
   .list .row { grid-template-columns: 1fr auto; row-gap: 10px; padding: 14px 16px; }
   .kmain { display: block; grid-column: 1 / -1; min-width: 0; }

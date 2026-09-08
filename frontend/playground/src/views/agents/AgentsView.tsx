@@ -105,7 +105,7 @@ function ConnectedAgents({ client }: { client: ApiClient }) {
         </p>
       </div>
 
-      <div className="rootrow">
+      <div className="action-row">
         <div className="f">
           <label htmlFor="agents-tenant">
             Client tenant id <span className="tag">· from your key</span>

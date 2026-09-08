@@ -289,6 +289,33 @@ textarea.input {
   margin-top: 8px; display: block; word-break: break-all;
 }
 
+/* ══════════ Action row ══════════
+   A screen's way in: one or two labelled fields, a primary, an optional
+   ghost, and a hint that spans the row. Used by Tenants, Agents, API keys
+   and Invocations — it earned the shared layer the day it crossed from
+   Workspace into Runtime. */
+.action-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+.action-row .f {
+  display: flex; flex-direction: column; gap: 6px;
+  flex: 1; min-width: 320px; max-width: 480px;
+}
+.action-row label {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 2.2px;
+  text-transform: uppercase; color: var(--color-muted);
+  display: flex; gap: 8px; align-items: baseline;
+}
+/* "· from your key" — where the value came from, said once, next to it. */
+.action-row label .tag { color: var(--color-teal-600); letter-spacing: 1px; text-transform: none; }
+.action-row .input { background: var(--color-surface); font-size: 12px; }
+.action-row .btn { height: 41px; padding: 0 22px; font-size: 13px; }
+.action-row .hint { flex-basis: 100%; font-size: 11px; color: var(--color-muted); margin-top: -4px; line-height: 1.6; }
+.action-row .note { flex-basis: 100%; font-family: var(--font-mono); font-size: 10.5px; color: var(--color-subtle); line-height: 1.6; }
+.action-row .note .d { color: var(--color-muted); }
+.action-row .error-note { flex-basis: 100%; margin-bottom: 0; }
+.action-row .error-note.quiet { border-color: var(--color-stone-700); background: rgba(255, 255, 255, 0.015); }
+.action-row .error-note.quiet .t { color: var(--color-subtle); font-weight: 400; font-size: 12px; }
+.action-row .error-note.quiet .d { color: var(--color-muted); font-size: 11px; }
+
 /* ══════════ Panel ══════════
    The right-hand column of a split screen: a detail, or a contextual
    create. Sticky so it stays beside a long list. */
@@ -392,6 +419,9 @@ textarea.input {
   /* Touch targets, not mouse targets. */
   .input, .ghost-btn, .btn-ghost { height: 44px; }
   .btn { padding: 13px 26px; }
+  .action-row { margin-bottom: 20px; }
+  .action-row .f { min-width: 260px; }
+  .action-row .btn { height: 44px; }
 }
 
 /* ══════════ MOBILE · ≤700px (contract: topbar + drawer regime) ══════════ */
@@ -445,6 +475,11 @@ textarea.input {
     font-size: 15px; padding: 15px 24px; min-height: 50px;
   }
   .probe { text-align: center; margin-left: 0; display: block; }
+  .action-row { margin-bottom: 18px; gap: 8px; }
+  .action-row .f { min-width: 0; max-width: none; flex-basis: 100%; }
+  .action-row .input { font-size: 16px; }
+  .action-row .btn { height: 48px; flex: 1; justify-content: center; }
+  .action-row .hint { margin-top: 0; }
   /* Fingers, not cursors: the copy button grows into a bordered target. */
   .copy { width: 36px; height: 36px; border: 1px solid var(--color-stone-700); border-radius: 8px; }
   .copy svg { width: 14px; height: 14px; }

@@ -173,7 +173,7 @@ function ConnectedApiKeys({ client }: { client: ApiClient }) {
         </p>
       </div>
 
-      <div className="rootrow">
+      <div className="action-row">
         <div className="f">
           <label htmlFor="keys-tenant">
             Issue a key for tenant <span className="tag">· from your key</span>

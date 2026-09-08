@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 import type { ApiClient } from '../../api/client'
+import { useLedger } from '../../session/LedgerContext'
 import { useSession } from '../../session/SessionContext'
 import { Composer } from './Composer'
 import { ConvoBar } from './ConvoBar'
@@ -33,7 +34,8 @@ function ConnectedConversation({ client }: { client: ApiClient }) {
   const { tenantId, setTenantId } = useSession()
   const location = useLocation()
   const agents = useAgents(client)
-  const { state, send, resume, loadEarlier } = useConversationMachine(client)
+  const ledger = useLedger()
+  const { state, send, resume, loadEarlier, open } = useConversationMachine(client, ledger.recorder)
 
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [identityRef, setIdentityRef] = useState(DEFAULT_IDENTITY_REF)
@@ -51,7 +53,8 @@ function ConnectedConversation({ client }: { client: ApiClient }) {
   // Preselect the agent handed over by "Open conversation →" (Agents area),
   // once its list has loaded and contains the id. Consumed once so a manual
   // reselect afterwards is not overridden.
-  const preselectId = (location.state as { agentId?: string } | null)?.agentId
+  const navState = location.state as { agentId?: string; conversationId?: string } | null
+  const preselectId = navState?.agentId
   const preselectDone = useRef(false)
   useEffect(() => {
     if (preselectDone.current || preselectId == null) return
@@ -60,6 +63,25 @@ function ConnectedConversation({ client }: { client: ApiClient }) {
       preselectDone.current = true
     }
   }, [preselectId, agents.agents])
+
+  // "Open in conversation" from the ledger: bind that conversation without
+  // sending, then take its identity ref so the next send lands in it. Once —
+  // a later manual edit of the ref is respected.
+  const openConversationId = navState?.conversationId
+  const openRef = useRef(open)
+  openRef.current = open
+  const openDone = useRef(false)
+  useEffect(() => {
+    if (openConversationId != null) void openRef.current(openConversationId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    if (openDone.current || openConversationId == null) return
+    if (state.conversation !== null && state.conversation.id === openConversationId) {
+      setIdentityRef(state.conversation.external_identity_ref)
+      openDone.current = true
+    }
+  }, [openConversationId, state.conversation])
 
   const busy = state.phase !== 'idle'
   const selectedAgent = agents.agents.find((agent) => agent.id === selectedAgentId) ?? null
@@ -109,7 +131,9 @@ function ConnectedConversation({ client }: { client: ApiClient }) {
         sendError={state.sendError}
         wireLeft={state.wireLeft}
         wireRight={state.wireRight}
-        onSend={(content) => send(selectedAgentId, identityRef.trim(), content)}
+        onSend={(content) =>
+          send(selectedAgentId, identityRef.trim(), content, selectedAgent?.name ?? null)
+        }
       />
     </div>
   )
