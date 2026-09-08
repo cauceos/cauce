@@ -1,274 +1,275 @@
-/* Cauce Playground — Workspace areas (Tenants + Agents).
-   Transplanted from referencias/03-tenants.html and 04-agents.html,
-   rewritten against tokens.css (same pattern as shell/session/conversation).
+/* Cauce Playground — Workspace areas: Tenants (03) and Agents (04).
 
-   Everything is scoped under `.workspace` so the mockups' generic class
-   names (.field, .input, .btn-primary, .panel) cannot collide with the
-   session screen's own .field/.input/.btn-primary.
+   Composes primitives.css: the page head, .btn, .btn-ghost, .input (and its
+   select/textarea variants), .field/.f-top, .helper, .chip, .error-note,
+   .panel, .copy, .skel, the bottom sheet and the FAB all come from there.
+   The scoped copies this file used to keep of those — and the two-property
+   guard that bridged the gap since the 02 unit — are gone. What lives here
+   is what only these two screens have: the root row, the split, the tenant
+   tree with its stratum guides, and the agent cards.
 
-   Layout coupling (deliberate, mirrors conversation.css): shell.css
-   defines `.main { flex: 1; overflow: hidden; }` and, on mobile,
-   `.main { padding-top: var(--topbar-h); }`. This screen therefore sizes
-   its own scroll region: `.workspace` is 100dvh on desktop/tablet and
+   Layout coupling (deliberate, mirrors conversation.css): shell.css defines
+   `.main { flex: 1; overflow: hidden; }` and, on mobile, `.main {
+   padding-top: var(--topbar-h); }`. This screen therefore sizes its own
+   scroll region: `.workspace` is 100dvh on desktop/tablet and
    `calc(100dvh - var(--topbar-h))` on mobile BECAUSE of that padding rule. */
 
 .workspace {
   height: 100dvh;
   overflow-y: auto;
-  padding: 28px 32px 48px;
+  padding: 30px 36px 64px;
 }
+/* Everything sits on one working width, centred. */
+.workspace .rootrow, .workspace .cols { max-width: 1120px; margin-left: auto; margin-right: auto; }
 
-.workspace .page-eyebrow {
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 4px;
-  text-transform: uppercase; color: var(--color-teal-500); margin-bottom: 8px;
+/* ══════════ Root row: the id you walk from ══════════ */
+.rootrow { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+.rootrow .f {
+  display: flex; flex-direction: column; gap: 6px;
+  flex: 1; min-width: 320px; max-width: 480px;
 }
-.workspace .page-title {
-  font-family: var(--font-display); font-weight: 600; font-size: 26px;
-  letter-spacing: -0.8px; margin-bottom: 6px;
+.rootrow label {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 2.2px;
+  text-transform: uppercase; color: var(--color-muted);
+  display: flex; gap: 8px; align-items: baseline;
 }
-.workspace .page-sub {
-  color: var(--color-subtle); font-size: 13px; max-width: 62ch; margin-bottom: 22px;
-}
+/* "· from your key" — where the value came from, said once, next to it. */
+.rootrow label .tag { color: var(--color-teal-600); letter-spacing: 1px; text-transform: none; }
+.rootrow .input { background: var(--color-surface); font-size: 12px; }
+.rootrow .btn { height: 41px; padding: 0 22px; font-size: 13px; }
+.rootrow .tenant-ctx { font-family: var(--font-mono); font-size: 10px; color: var(--color-muted); padding-bottom: 12px; }
+.rootrow .tenant-ctx .name { color: var(--color-moss-400); }
+.rootrow .note { flex-basis: 100%; font-family: var(--font-mono); font-size: 10.5px; color: var(--color-subtle); line-height: 1.6; }
+.rootrow .note .d { color: var(--color-muted); }
 
-/* ══════════ Root / tenant loader row ══════════ */
-.workspace .load-row {
-  display: flex; gap: 8px; align-items: center; margin-bottom: 24px; flex-wrap: wrap;
-}
-.workspace .load-row .lab {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 2px;
-  text-transform: uppercase; color: var(--color-muted); flex-basis: 100%;
-}
-.workspace .mono-input {
-  background: var(--color-surface); border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-sm); padding: 8px 12px;
-  font-family: var(--font-mono); font-size: 12px; color: var(--color-text); min-width: 320px;
-}
-.workspace .btn-ghost {
-  background: var(--color-surface); border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-full); color: var(--color-text-2);
-  font-family: var(--font-mono); font-size: 11px; padding: 8px 16px; cursor: pointer;
-}
-.workspace .btn-ghost:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-stone-600); }
-.workspace .btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
-.workspace .tenant-ctx { font-family: var(--font-mono); font-size: 10px; color: var(--color-muted); }
-.workspace .tenant-ctx .name { color: var(--color-moss-400); }
-
-.workspace .load-note {
-  font-family: var(--font-mono); font-size: 11px; color: var(--color-subtle);
-  flex-basis: 100%; margin-top: -12px;
-}
-
-/* ══════════ Two columns: list + panel ══════════ */
-.workspace .cols {
-  display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+/* ══════════ Split: list + panel ══════════ */
+.cols {
+  display: grid; grid-template-columns: minmax(0, 1.5fr) 384px;
   gap: 22px; align-items: start;
 }
 
-/* ══════════ Tenant tree ══════════ */
-.workspace .tree {
+/* ══════════ The tree — the hierarchy as strata ══════════ */
+.tree {
   background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg); padding: 10px;
+  border-radius: var(--radius-lg); padding: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
-.workspace .tree-empty {
-  padding: 28px 16px; text-align: center; color: var(--color-subtle); font-size: 13px;
+.tree-empty { padding: 28px 16px; text-align: center; color: var(--color-subtle); font-size: 13px; line-height: 1.65; }
+
+.trow {
+  display: flex; align-items: center; gap: 9px;
+  min-height: 40px; padding: 0 10px; border-radius: var(--radius-sm);
+  cursor: pointer; position: relative;
+  transition: background var(--t-fast) var(--ease);
 }
-.workspace .node { border-radius: var(--radius-sm); }
-.workspace .node-row {
-  display: flex; align-items: center; gap: 9px; padding: 9px 10px;
-  border-radius: var(--radius-sm); cursor: pointer;
+.trow:hover { background: rgba(255, 255, 255, 0.03); }
+.trow.sel { background: var(--color-surface-2); }
+.trow.sel::before {
+  content: ""; position: absolute; left: -12px; top: 7px; bottom: 7px;
+  width: 2px; border-radius: 0 2px 2px 0; background: var(--color-teal-500);
 }
-.workspace .node-row:hover { background: var(--color-surface-2); }
-.workspace .node-row.selected {
-  background: var(--color-surface-2); box-shadow: inset 2px 0 0 var(--color-teal-500);
+
+/* Depth guides in the stratum colour of the tier they hold: partners hang
+   off a slate line, clients off a moss one. The hierarchy reads as strata. */
+.lvl { position: relative; }
+.lvl-1 { margin-left: 26px; }
+.lvl-2 { margin-left: 52px; }
+.lvl::before { content: ""; position: absolute; left: -14px; top: 0; bottom: 0; width: 1px; opacity: 0.35; }
+.lvl.t-partner::before { background: var(--color-slate-500); }
+.lvl.t-client::before { background: var(--color-moss-500); }
+
+.caret {
+  width: 14px; height: 14px; flex-shrink: 0; color: var(--color-muted);
+  background: none; border: none; padding: 0; cursor: pointer; display: grid; place-items: center;
+  transition: transform var(--t-fast) var(--ease);
 }
-.workspace .caret {
-  width: 14px; text-align: center; font-size: 9px; color: var(--color-muted);
-  flex-shrink: 0; background: none; border: none; cursor: pointer; padding: 0;
-}
-.workspace .caret.leaf { cursor: default; color: transparent; }
-.workspace .node-name { font-size: 13px; font-weight: 500; color: var(--color-text); }
-.workspace .tier {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px;
-  border: 1px solid var(--color-stone-700); border-radius: var(--radius-full);
-  padding: 2px 8px; color: var(--color-subtle);
-}
-.workspace .tier.partner { color: var(--color-slate-400); border-color: rgba(138, 180, 204, 0.3); }
-.workspace .tier.client { color: var(--color-moss-400); border-color: rgba(111, 175, 130, 0.3); }
-.workspace .node-id {
+.caret svg { width: 14px; height: 14px; }
+.trow.open > .caret { transform: rotate(90deg); }
+/* Leaves keep the gutter aligned, not the arrow — a caret that expands
+   nothing is a lie. */
+.caret.ph { visibility: hidden; }
+
+/* One DOM, two shapes: inline on desktop (the wrappers are transparent),
+   two lines on mobile (see the mobile block). */
+.tcol, .trow-top, .trow-sub { display: contents; }
+.tname { font-size: 13.5px; font-weight: 500; color: var(--color-text); white-space: nowrap; }
+.tid {
   font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
-  margin-left: auto; display: flex; align-items: center; gap: 5px;
+  margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.workspace .copy {
-  border: none; background: none; color: var(--color-muted); cursor: pointer;
-  font-size: 11px; padding: 2px; line-height: 1;
-}
-.workspace .copy:hover { color: var(--color-teal-500); }
-.workspace .copy.copied { color: var(--color-teal-500); }
-.workspace .agents-link {
+.agents-link {
   font-family: var(--font-mono); font-size: 10px; color: var(--color-teal-500);
-  background: none; border: none; cursor: pointer; padding: 0;
-  margin-left: 8px; white-space: nowrap;
+  background: none; border: none; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  padding: 3px 8px; border-radius: 6px;
+  transition: background var(--t-fast) var(--ease);
 }
-.workspace .agents-link:hover { text-decoration: underline; }
-.workspace .children {
-  margin-left: 22px; border-left: 1px solid var(--color-border); padding-left: 6px;
-}
-.workspace .load-more-children {
+.agents-link:hover { background: rgba(45, 212, 192, 0.08); }
+.chevR { display: none; }
+
+.leafnote, .morerow {
   font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
-  background: none; border: none; cursor: pointer; padding: 6px 10px;
+  min-height: 32px; display: flex; align-items: center; padding: 0 10px;
 }
-.workspace .load-more-children:hover { color: var(--color-subtle); }
-.workspace .children-note {
-  font-family: var(--font-mono); font-size: 10px; color: var(--color-muted); padding: 6px 10px;
+.morerow {
+  width: 100%; background: none; border: none; cursor: pointer; text-align: left;
+  color: var(--color-subtle); border-radius: var(--radius-sm);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.morerow:hover:not(:disabled) { background: rgba(255, 255, 255, 0.03); color: var(--color-text); }
+.morerow:disabled { cursor: default; }
+/* Expanding a node fetches its first page; each node loads alone. */
+.tree-skel { display: grid; gap: 9px; padding: 10px 10px 12px; }
+
+/* The 201 body just landed: a brief teal wash, then normal. The class is
+   removed by the view once the animation has run its course. */
+.trow.fresh, .acard.fresh { animation: wash 1.6s var(--ease) forwards; }
+@keyframes wash {
+  from { background: rgba(45, 212, 192, 0.08); box-shadow: inset 0 0 0 1px rgba(45, 212, 192, 0.25); }
+  to { background: transparent; box-shadow: none; }
 }
 
-/* ══════════ Detail / create panel ══════════ */
-.workspace .panel {
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg); padding: 22px; position: sticky; top: 0;
+/* ══════════ Tenant detail (panel or sheet) ══════════ */
+.p-name {
+  font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  letter-spacing: -0.6px; margin-bottom: 8px;
+  font-variation-settings: "opsz" 72, "SOFT" 0, "WONK" 1;
 }
-.workspace .panel h3 {
-  font-family: var(--font-display); font-weight: 600; font-size: 18px;
-  letter-spacing: -0.5px; margin-bottom: 2px;
+.p-kv { margin-top: 16px; }
+.p-kv .k {
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--color-muted); display: block; margin-bottom: 4px;
 }
-.workspace .panel .sub { font-size: 12px; color: var(--color-subtle); margin-bottom: 16px; }
-.workspace .panel .tier-line { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-.workspace .panel-empty { color: var(--color-subtle); font-size: 13px; }
-.workspace .kv { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
-.workspace .kv .k {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 2px;
-  text-transform: uppercase; color: var(--color-muted);
+.p-kv .v {
+  font-family: var(--font-mono); font-size: 11px; color: var(--color-text-2);
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-variant-numeric: tabular-nums; word-break: break-all;
 }
-.workspace .kv .v {
-  font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-2);
-  display: flex; align-items: center; gap: 6px; word-break: break-all;
-}
-.workspace .panel hr { border: none; border-top: 1px solid var(--color-border); margin: 16px 0; }
-.workspace .create-title { font-size: 13px; font-weight: 500; color: var(--color-text); margin-bottom: 4px; }
-.workspace .create-sub { font-size: 12px; color: var(--color-subtle); margin-bottom: 12px; }
-.workspace .create-sub code, .workspace .server-note code {
-  font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-2);
-}
-
-.workspace .field { margin-bottom: 14px; }
-.workspace .field label {
-  display: block; font-size: 12.5px; font-weight: 500; color: var(--color-text); margin-bottom: 6px;
-}
-.workspace .input, .workspace textarea.input, .workspace .select-input {
-  width: 100%; background: var(--color-bg); border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-sm); padding: 9px 12px; font-size: 13px;
-  color: var(--color-text); font-family: var(--font-body);
-}
-/* primitives.css now owns a global `.input` (fixed height, flex child of an
-   .input-wrap row). This area predates it and sizes its fields from padding,
-   so it opts out of those two properties only — the shared hover, focus ring,
-   caret and autofill handling are inherited on purpose. Adopting the whole
-   primitive here belongs to the 03/04 redesign, not to this unit. */
-.workspace .input, .workspace textarea.input, .workspace .select-input {
-  height: auto; flex: none;
-}
-.workspace .input.mono { font-family: var(--font-mono); font-size: 12px; }
-.workspace .input::placeholder { color: var(--color-muted); }
-.workspace textarea.input { resize: vertical; min-height: 84px; line-height: 1.55; }
-
-/* De-chromed native <select> with a drawn chevron (mirrors conversation.css). */
-.workspace .select-wrap { position: relative; display: flex; }
-.workspace .select-wrap .select-input {
-  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px;
-}
-.workspace .select-wrap::after {
-  content: "▾"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-  color: var(--color-muted); font-size: 10px; pointer-events: none;
-}
-
-.workspace .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.workspace .field-pair .field { margin-bottom: 0; }
-.workspace .helper { font-size: 11.5px; color: var(--color-subtle); margin-top: 6px; line-height: 1.55; }
-
-.workspace .btn-primary {
-  background: var(--color-teal-500); color: var(--color-stone-950); border: none;
-  border-radius: var(--radius-full); font-weight: 600; font-size: 13px;
-  padding: 10px 24px; cursor: pointer;
-}
-.workspace .btn-primary:hover:not(:disabled) { background: var(--color-teal-600); }
-.workspace .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
-
-.workspace .form-error {
-  font-family: var(--font-mono); font-size: 11px; color: var(--color-subtle);
-  border: 1px dashed var(--color-stone-700); border-radius: var(--radius-sm);
-  padding: 8px 12px; margin-bottom: 12px; line-height: 1.6;
-}
-.workspace .form-error .err-field { color: var(--color-text-2); }
-.workspace .dup-warn {
-  font-family: var(--font-mono); font-size: 10.5px; color: var(--color-slate-400);
-  border: 1px dashed rgba(138, 180, 204, 0.35); border-radius: var(--radius-sm);
-  padding: 8px 12px; margin-bottom: 14px; line-height: 1.6;
-}
-.workspace .rule-note, .workspace .server-note {
-  font-size: 11.5px; color: var(--color-muted); margin-top: 14px; line-height: 1.6;
-}
+.p-sep { height: 1px; background: var(--color-border); margin: 20px 0 18px; }
+/* The contextual create: a body-weight heading, not a second display title. */
+.p-form h3 { font-family: var(--font-body); font-size: 13.5px; font-weight: 600; letter-spacing: 0; margin-bottom: 5px; }
+.p-form .why { margin-bottom: 14px; }
+.p-form .btn { width: 100%; justify-content: center; margin-top: 14px; }
 
 /* ══════════ Agent cards ══════════ */
-.workspace .agent-list { display: flex; flex-direction: column; gap: 12px; }
-.workspace .list-empty {
+.cards { display: grid; gap: 14px; }
+.list-empty {
   background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: var(--radius-lg); padding: 28px 20px; text-align: center;
   color: var(--color-subtle); font-size: 13px; line-height: 1.6;
 }
-.workspace .agent-card {
+.acard {
   background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg); padding: 16px 18px;
+  border-radius: var(--radius-lg); padding: 20px 22px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  transition: border-color var(--t-fast) var(--ease);
 }
-.workspace .agent-head {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;
+.acard:hover { border-color: var(--color-stone-700); }
+.a-top { display: flex; align-items: center; gap: 11px; margin-bottom: 6px; flex-wrap: wrap; }
+.a-name {
+  font-family: var(--font-display); font-size: 19px; font-weight: 600; letter-spacing: -0.5px;
+  font-variation-settings: "opsz" 72, "SOFT" 0, "WONK" 1;
 }
-.workspace .agent-name { font-size: 15px; font-weight: 600; color: var(--color-text); }
-.workspace .badge {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px;
-  border: 1px solid var(--color-stone-700); border-radius: var(--radius-full);
-  padding: 2px 8px; color: var(--color-subtle);
+/* The disambiguator. It wraps under the name when the row runs out; it
+   NEVER truncates — cutting it defeats it. */
+.a-chip { margin-left: auto; font-size: 10.5px; padding: 3px 11px; white-space: normal; }
+.a-ids {
+  font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  font-variant-numeric: tabular-nums; margin-bottom: 11px;
 }
-.workspace .model-chip {
-  font-family: var(--font-mono); font-size: 10px; color: var(--color-slate-400);
-  border: 1px solid rgba(138, 180, 204, 0.3); border-radius: var(--radius-full); padding: 2px 10px;
+.a-ids .copy { width: 24px; height: 24px; }
+.a-params {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--color-subtle);
+  display: flex; gap: 16px; margin-bottom: 11px; font-variant-numeric: tabular-nums;
 }
-.workspace .agent-meta {
-  font-family: var(--font-mono); font-size: 10.5px; color: var(--color-muted);
-  display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;
+.a-params .k { color: var(--color-muted); }
+.a-prompt {
+  font-size: 12.5px; color: var(--color-text-2); line-height: 1.65; margin-bottom: 14px;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.workspace .agent-prompt {
-  font-size: 12.5px; color: var(--color-text-2); border-left: 2px solid var(--color-stone-700);
-  padding-left: 10px; margin-bottom: 12px;
-  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
-  -webkit-box-orient: vertical; overflow: hidden;
+.a-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.a-open {
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 500; color: var(--color-teal-500);
+  background: none; border: 1px solid rgba(45, 212, 192, 0.3); border-radius: var(--radius-full);
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
 }
-.workspace .agent-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.workspace .btn-open {
-  background: none; border: 1px solid rgba(45, 212, 192, 0.35); color: var(--color-teal-500);
-  border-radius: var(--radius-full); font-size: 12px; font-weight: 500;
-  padding: 7px 16px; cursor: pointer;
-}
-.workspace .btn-open:hover { border-color: var(--color-teal-500); }
-.workspace .no-actions-note { font-family: var(--font-mono); font-size: 10px; color: var(--color-muted); }
-.workspace .load-more {
-  align-self: center; background: none; border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-full); color: var(--color-subtle);
-  font-family: var(--font-mono); font-size: 11px; padding: 6px 16px; cursor: pointer; margin-top: 4px;
-}
-.workspace .load-more:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-stone-600); }
-.workspace .load-more:disabled { opacity: 0.5; cursor: not-allowed; }
+.a-open:hover { background: rgba(45, 212, 192, 0.08); }
+.a-open:active { background: rgba(45, 212, 192, 0.12); }
+.a-open svg { width: 13px; height: 13px; }
+.a-gap { font-family: var(--font-mono); font-size: 9px; color: var(--color-muted); margin-left: auto; }
+.loadmore { display: flex; justify-content: center; margin-top: 4px; }
 
-/* ══════════ Tablet rail · 701–1024px ══════════ */
+/* ══════════ Agent create: six fields ══════════ */
+.fld2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fld2 .field { margin-bottom: 0; }
+.panel .field .input, .sheet .field .input { font-size: 11.5px; }
+.panel .btn, .sheet .btn { width: 100%; justify-content: center; }
+
+/* ══════════ TABLET · 701–1024px (contract: icon-rail regime) ══════════ */
 @media (max-width: 1024px) and (min-width: 701px) {
-  .workspace .cols { grid-template-columns: 1fr; }
-  .workspace .panel { position: static; }
+  .workspace { padding: 26px 24px 56px; }
+  .rootrow { margin-bottom: 20px; }
+  .rootrow .f { min-width: 260px; }
+  .rootrow .btn { height: 44px; }
+  /* Both columns stay — a tree without its panel loses the contextual
+     create — but tighten. */
+  .cols { grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; }
+  .panel { padding: 20px; }
+  .trow { min-height: 44px; }
+  /* The inline id goes; it lives in the panel and the row tooltip. Copy stays. */
+  .tid { display: none; }
+  .acard { padding: 17px 18px; }
+  .a-open { min-height: 40px; }
 }
 
-/* ══════════ Mobile · ≤700px ══════════ */
+/* ══════════ MOBILE · ≤700px (contract: topbar + drawer regime) ══════════ */
 @media (max-width: 700px) {
-  .workspace { height: calc(100dvh - var(--topbar-h)); padding: 24px 16px 40px; }
-  .workspace .cols { grid-template-columns: 1fr; }
-  .workspace .panel { position: static; }
-  .workspace .mono-input { min-width: 0; flex: 1; }
-  .workspace .node-id { display: none; } /* ids live in the detail panel on small screens */
+  /* shell.css already gives .main padding-top: var(--topbar-h). */
+  .workspace {
+    height: calc(100dvh - var(--topbar-h));
+    padding: 20px 16px calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+  .rootrow { margin-bottom: 18px; gap: 8px; }
+  .rootrow .f { min-width: 0; max-width: none; flex-basis: 100%; }
+  .rootrow .btn { height: 48px; flex: 1; justify-content: center; }
+  .rootrow .tenant-ctx { padding-bottom: 0; flex-basis: 100%; }
+
+  /* No second column: the panel becomes a bottom sheet (rendered by the
+     view), so the in-grid one is simply not there. */
+  .cols { grid-template-columns: 1fr; }
+  .cols > .panel { display: none; }
+
+  .tree { padding: 8px; }
+  .trow { min-height: 52px; padding: 7px 10px; gap: 10px; }
+  .trow:hover { background: none; }
+  .trow:active { background: rgba(255, 255, 255, 0.05); }
+  .trow.sel::before { left: -8px; top: 9px; bottom: 9px; }
+  .lvl-1 { margin-left: 18px; }
+  .lvl-2 { margin-left: 36px; }
+  .lvl::before { left: -10px; }
+
+  /* Two lines: name + tier on top, short id · agents → below. The per-row
+     copy button moves into the sheet — at 390px it was clutter. */
+  .tcol { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .trow-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .trow-sub { display: flex; align-items: center; gap: 10px; }
+  .tname { font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+  .tid { display: inline; margin-left: 0; order: -1; }
+  .agents-link { padding: 2px 0; }
+  .trow .copy { display: none; }
+  .chevR { display: block; width: 14px; height: 14px; color: var(--color-muted); flex-shrink: 0; }
+  .leafnote, .morerow { min-height: 40px; }
+
+  .cards { gap: 12px; }
+  .acard { padding: 16px; }
+  .a-chip { margin-left: 0; flex-basis: 100%; width: fit-content; }
+  .a-open { width: 100%; justify-content: center; min-height: 44px; font-size: 13.5px; }
+  .a-gap { margin-left: 0; flex-basis: 100%; }
+
+  /* Sheet forms: 16px inputs (iOS zooms below 16), 48px targets. */
+  .sheet .input { font-size: 16px; min-height: 48px; }
+  .sheet select.input { min-height: 48px; }
+  .sheet .btn { min-height: 50px; }
+  .fld2 { gap: 10px; }
 }

@@ -46,6 +46,13 @@
 }
 
 /* ══════════ The stage: statement + card, optically centred ══════════ */
+/* The hero title — this screen alone. primitives.css owns the page-scale
+   h1 that 03-07 share; the exception carries its own override. */
+.session-screen h1 {
+  font-size: clamp(34px, 3.4vw, 54px); letter-spacing: -2.2px; line-height: 1.02;
+  margin-bottom: 18px;
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
+}
 .stage {
   position: relative; z-index: 1;
   min-height: 100%;
@@ -119,6 +126,7 @@
   .topo { height: 430px; }
   .glow { top: -150px; width: 760px; height: 460px; }
   .stage { padding: 56px 40px; }
+  .session-screen h1 { font-size: 44px; letter-spacing: -1.8px; line-height: 1.03; margin-bottom: 16px; }
   /* ~766px of content cannot hold the two-column split: one centred column. */
   .split { grid-template-columns: 1fr; max-width: 576px; gap: 0; }
 
@@ -149,6 +157,7 @@
   .topo { height: 270px; }
   .glow { top: -90px; width: 130%; height: 340px; }
   .stage { padding: 52px 18px calc(48px + env(safe-area-inset-bottom, 0px)); }
+  .session-screen h1 { font-size: 34px; letter-spacing: -1.4px; line-height: 1.06; margin-bottom: 14px; }
   .split { grid-template-columns: 1fr; gap: 0; }
 
   .legend {

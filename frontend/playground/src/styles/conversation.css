@@ -53,9 +53,10 @@
 /* A real <select>, de-chromed: the mockup draws a div, but only the native
    control gives keyboard and screen-reader behaviour for free — and on a
    phone it already IS the bottom sheet the mobile mockup asks for. */
-/* Scoped to the strip on purpose: workspace.css draws its own chevron with
-   a glyph, and an unscoped rule here would stack a second one on top of it
-   (its ::after overrides `content`, not the box this one draws). */
+/* Scoped to the strip on purpose. It earned the scope when workspace.css
+   still drew its own ::after chevron and an unscoped rule stacked a second
+   one on top; 03/04 now use `select.input` from primitives, but a global
+   `.select-wrap` stays a trap for the next area, so the scope stays. */
 .ctx .select-wrap { position: relative; display: flex; min-width: 0; }
 .ctx-select {
   appearance: none; -webkit-appearance: none;

@@ -10,10 +10,15 @@ const PROVIDERS = ['ollama', 'openai', 'anthropic', 'mistral'] as const
 
 /**
  * Create an agent under the loaded CLIENT tenant. Six fields: the four the
- * DTO requires, plus optional temperature / max_response_tokens (verified
- * to be accepted by CreateAgentRequest — blank leaves the server default).
+ * DTO requires, plus optional temperature / max_response_tokens — blank
+ * means the server decides, and the card then shows what it decided.
+ *
+ * Rendered inside a `.panel` (desktop, tablet) or a bottom sheet (mobile)
+ * by the view — this component is the content only.
+ *
  * A soft warning fires when the typed name already exists in the loaded
- * list: names are not unique, the id disambiguates, but a nudge helps.
+ * list: duplicate names are legal, the chip and the id disambiguate, but a
+ * nudge helps. It informs; it never blocks.
  */
 export function AgentCreatePanel({
   tenantName,
@@ -22,7 +27,7 @@ export function AgentCreatePanel({
 }: {
   tenantName: string
   existingAgents: AgentResponse[]
-  onCreate(body: CreateAgentBody): Promise<void>
+  onCreate(body: CreateAgentBody): Promise<AgentResponse>
 }) {
   const [name, setName] = useState('')
   const [provider, setProvider] = useState<string>('ollama')
@@ -37,6 +42,9 @@ export function AgentCreatePanel({
   const duplicate = trimmedName !== '' && existingAgents.some((a) => a.name === trimmedName)
   const canSubmit =
     trimmedName !== '' && modelName.trim() !== '' && systemPrompt.trim() !== '' && !submitting
+  // Which fields the envelope pointed at, so the slate lands on them.
+  const rejected = new Set(error?.fields.map((f) => f.field) ?? [])
+  const cls = (field: string) => (rejected.has(field) ? 'input err' : 'input')
 
   async function submit() {
     if (!canSubmit) return
@@ -65,136 +73,158 @@ export function AgentCreatePanel({
   }
 
   return (
-    <div className="panel">
+    <>
       <h3>New agent</h3>
-      <p className="sub">
-        Created under <strong>{tenantName}</strong>. Optional fields left blank take the server's
-        defaults.
+      <p className="why">
+        Under <b>{tenantName}</b>. Two fields are optional — blank means the server decides, and
+        the card shows what it decided.
       </p>
 
+      {/* The envelope's errors[].field lands at the field, in slate. Wire
+          field names are rendered as-is. */}
       {error !== null && (error.fields.length > 0 || error.message !== null) && (
-        <div className="form-error">
+        <div className="error-note" role="alert">
           {error.fields.map((fieldError, index) => (
             <div key={`${fieldError.field}-${index}`}>
-              <span className="err-field">{fieldError.field}</span> · {fieldError.message}
+              <div className="f">{fieldError.field}</div>
+              <div className="d">{fieldError.message}</div>
             </div>
           ))}
-          {error.message !== null && <div>{error.message}</div>}
+          {error.message !== null && <div className="d">{error.message}</div>}
         </div>
       )}
 
       <div className="field">
-        <label htmlFor="agent-name">Name</label>
+        <div className="f-top">
+          <label htmlFor="agent-name">Name</label>
+        </div>
         <input
-          className="input"
+          className={cls('name')}
           id="agent-name"
           type="text"
-          placeholder="e.g. support-agent"
+          placeholder="support-agent"
           value={name}
           onChange={(event) => setName(event.target.value)}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
           disabled={submitting}
         />
       </div>
+
       {duplicate && (
-        <div className="dup-warn">
-          An agent named “{trimmedName}” already exists in this tenant. Names aren't unique — the id
-          disambiguates — but consider a distinct name.
+        <div className="error-note soft">
+          An agent named <b>{trimmedName}</b> already exists in this list. Duplicate names are
+          legal — this only informs.
         </div>
       )}
 
       <div className="field">
-        <label htmlFor="agent-provider">Model provider</label>
-        <div className="select-wrap">
-          <select
-            className="select-input"
-            id="agent-provider"
-            value={provider}
-            onChange={(event) => setProvider(event.target.value)}
-            disabled={submitting}
-          >
-            {PROVIDERS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+        <div className="f-top">
+          <label htmlFor="agent-provider">Model provider</label>
         </div>
-        <div className="helper">Validated server-side against the supported provider set.</div>
+        <select
+          className={cls('modelProvider')}
+          id="agent-provider"
+          value={provider}
+          onChange={(event) => setProvider(event.target.value)}
+          disabled={submitting}
+        >
+          {PROVIDERS.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+        <p className="helper">Mirrors the backend&apos;s supported set. The API validates it too.</p>
       </div>
 
       <div className="field">
-        <label htmlFor="agent-model">Model name</label>
+        <div className="f-top">
+          <label htmlFor="agent-model">Model name</label>
+        </div>
         <input
-          className="input mono"
+          className={cls('modelName')}
           id="agent-model"
           type="text"
           placeholder="qwen2.5:3b"
           value={modelName}
           onChange={(event) => setModelName(event.target.value)}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
           disabled={submitting}
         />
-        <div className="helper">
-          Not validated against the provider at create time — a typo surfaces as a provider error on
-          the first message.
-        </div>
+        <p className="helper">
+          Stored as written — the provider rejects a wrong one at invocation time, not here.
+        </p>
       </div>
 
       <div className="field">
-        <label htmlFor="agent-prompt">System prompt</label>
+        <div className="f-top">
+          <label htmlFor="agent-prompt">System prompt</label>
+        </div>
         <textarea
-          className="input"
+          className={cls('systemPrompt')}
           id="agent-prompt"
-          placeholder="You are a helpful assistant…"
+          placeholder="You are a helpful support assistant…"
           value={systemPrompt}
           onChange={(event) => setSystemPrompt(event.target.value)}
           disabled={submitting}
         />
       </div>
 
-      <div className="field-pair">
+      <div className="fld2">
         <div className="field">
-          <label htmlFor="agent-temp">Temperature (opt)</label>
+          <div className="f-top">
+            <label htmlFor="agent-temp">Temperature</label>
+            <span className="req">optional</span>
+          </div>
           <input
-            className="input mono"
+            className={cls('temperature')}
             id="agent-temp"
-            type="number"
-            step="0.1"
-            min="0"
-            max="1"
-            placeholder="0.0–1.0"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.0 – 1.0"
             value={temperature}
             onChange={(event) => setTemperature(event.target.value)}
+            autoCapitalize="off"
+            autoCorrect="off"
             disabled={submitting}
           />
         </div>
         <div className="field">
-          <label htmlFor="agent-max">Max tokens (opt)</label>
+          <div className="f-top">
+            <label htmlFor="agent-max">Max tokens</label>
+            <span className="req">optional</span>
+          </div>
           <input
-            className="input mono"
+            className={cls('maxResponseTokens')}
             id="agent-max"
-            type="number"
-            min="1"
+            type="text"
+            inputMode="numeric"
             placeholder="server default"
             value={maxTokens}
             onChange={(event) => setMaxTokens(event.target.value)}
+            autoCapitalize="off"
+            autoCorrect="off"
             disabled={submitting}
           />
         </div>
       </div>
+      <p className="helper" style={{ marginBottom: 16 }}>
+        Blank → server defaults apply. The created card shows the returned values.
+      </p>
 
-      <button
-        className="btn-primary"
-        type="button"
-        onClick={() => void submit()}
-        disabled={!canSubmit}
-      >
+      <button className="btn" type="button" onClick={() => void submit()} disabled={!canSubmit}>
         {submitting ? 'Creating…' : 'Create agent'}
       </button>
-
-      <p className="server-note">
-        The API returns server-managed values on creation — <code>status: DRAFT</code>,{' '}
-        <code>temperature</code>, <code>max_response_tokens</code>. They're shown on the card.
+      <p className="p-note">
+        Agents can only belong to a CLIENT tenant — a partner or operator id above answers 422.
       </p>
-    </div>
+      <div className="gap-note">
+        No update · no delete — recreate to change; the API doesn&apos;t expose them yet.
+      </div>
+    </>
   )
 }
