@@ -201,6 +201,100 @@ class InvocationApiIT extends AbstractApiIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void getInvocation_afterWorkerSucceeds_exposesTheRecordedTokenUsage() throws Exception {
+        JsonNode accepted = postMessage(clientAuth, "user-1", "Hola");
+        UUID invocationId = UUID.fromString(accepted.get("invocation_id").asText());
+
+        worker.pollAndProcess();
+        awaitTerminalStatus(invocationId, "COMPLETED");
+
+        mockMvc.perform(getAs(clientAuth, "/v1/invocations/" + invocationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usage.calls.length()").value(1))
+                .andExpect(jsonPath("$.usage.calls[0].round_index").value(0))
+                .andExpect(jsonPath("$.usage.calls[0].provider").value("anthropic"))
+                .andExpect(jsonPath("$.usage.calls[0].finish_reason").value("STOP"))
+                .andExpect(jsonPath("$.usage.input_tokens").value(FakeLlmProvider.REPLY_INPUT_TOKENS))
+                .andExpect(jsonPath("$.usage.output_tokens").value(FakeLlmProvider.REPLY_OUTPUT_TOKENS))
+                .andExpect(jsonPath("$.usage.total_tokens")
+                        .value(FakeLlmProvider.REPLY_INPUT_TOKENS + FakeLlmProvider.REPLY_OUTPUT_TOKENS))
+                .andExpect(jsonPath("$.usage.complete").value(true));
+    }
+
+    @Test
+    void getInvocation_afterToolLoop_sumsEveryProviderCall() throws Exception {
+        // Two real provider calls: the round that asked for the clock tool, and the round
+        // that answered once the tool result was fed back.
+        fakeLlmProvider.useToolOnFirstCall();
+        JsonNode accepted = postMessage(clientAuth, "user-1", "¿Qué hora es?");
+        UUID invocationId = UUID.fromString(accepted.get("invocation_id").asText());
+
+        worker.pollAndProcess();
+        awaitTerminalStatus(invocationId, "COMPLETED");
+
+        int expectedInput = FakeLlmProvider.TOOL_INPUT_TOKENS + FakeLlmProvider.REPLY_INPUT_TOKENS;
+        int expectedOutput = FakeLlmProvider.TOOL_OUTPUT_TOKENS + FakeLlmProvider.REPLY_OUTPUT_TOKENS;
+        mockMvc.perform(getAs(clientAuth, "/v1/invocations/" + invocationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usage.calls.length()").value(2))
+                .andExpect(jsonPath("$.usage.calls[0].round_index").value(0))
+                .andExpect(jsonPath("$.usage.calls[0].finish_reason").value("TOOL_USE"))
+                .andExpect(jsonPath("$.usage.calls[1].round_index").value(1))
+                .andExpect(jsonPath("$.usage.calls[1].finish_reason").value("STOP"))
+                .andExpect(jsonPath("$.usage.input_tokens").value(expectedInput))
+                .andExpect(jsonPath("$.usage.output_tokens").value(expectedOutput))
+                .andExpect(jsonPath("$.usage.total_tokens").value(expectedInput + expectedOutput));
+
+        // And the ledger holds exactly those two rows for this invocation.
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM llm_usage_records WHERE invocation_id = ?",
+                Integer.class, invocationId)).isEqualTo(2);
+    }
+
+    @Test
+    void getInvocation_afterProviderFailure_reportsNoUsageRatherThanZero() throws Exception {
+        fakeLlmProvider.failNextWith(new LlmInvalidRequestException(
+                "anthropic", "claude-sonnet-4-7", PROVIDER_DETAIL));
+        JsonNode accepted = postMessage(clientAuth, "user-1", "Hola");
+        UUID invocationId = UUID.fromString(accepted.get("invocation_id").asText());
+
+        worker.pollAndProcess();
+        awaitTerminalStatus(invocationId, "FAILED");
+
+        // Usage is written only after a provider responds, so this invocation recorded
+        // nothing. Absent, not zero — we do not know that it cost nothing.
+        mockMvc.perform(getAs(clientAuth, "/v1/invocations/" + invocationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.usage").value((Object) null));
+
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM llm_usage_records WHERE invocation_id = ?",
+                Integer.class, invocationId)).isZero();
+    }
+
+    @Test
+    void getInvocation_usageIsScopedByTheSameHierarchicalVisibility() throws Exception {
+        JsonNode accepted = postMessage(clientAuth, "user-1", "Hola");
+        UUID invocationId = UUID.fromString(accepted.get("invocation_id").asText());
+        worker.pollAndProcess();
+        awaitTerminalStatus(invocationId, "COMPLETED");
+
+        // A sibling partner's client cannot reach the invocation at all, so it never gets
+        // near its usage: the 404 is decided by the invocation row.
+        UUID partnerB = createPartner();
+        UUID clientB = createClient(bearerFor(partnerB), partnerB);
+        mockMvc.perform(getAs(bearerFor(clientB), "/v1/invocations/" + invocationId))
+                .andExpect(status().isNotFound());
+
+        // The operator above sees both the invocation and its usage.
+        mockMvc.perform(getAs(operatorAuth, "/v1/invocations/" + invocationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usage.total_tokens")
+                        .value(FakeLlmProvider.REPLY_INPUT_TOKENS + FakeLlmProvider.REPLY_OUTPUT_TOKENS));
+    }
+
     // --- helpers ---
 
     private void awaitTerminalStatus(UUID invocationId, String expected) {

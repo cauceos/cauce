@@ -12,7 +12,10 @@ import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.PendingInvocationStatus;
 import dev.cauce.orchestration.events.InvocationFailureType;
+import dev.cauce.orchestration.usage.LlmUsageQueryService;
+import dev.cauce.orchestration.usage.LlmUsageRecord;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
@@ -43,6 +46,12 @@ class InvocationControllerTest {
 
     @MockitoBean
     private PendingInvocationService pendingInvocationService;
+
+    // The controller composes the invocation row with its usage. Mockito answers an empty
+    // list by default, which is the "nothing recorded" path — the case each existing test
+    // above already represents.
+    @MockitoBean
+    private LlmUsageQueryService usageQueryService;
 
     @Test
     void getInvocation_pending_returns200WithStatusPending() throws Exception {
@@ -164,6 +173,84 @@ class InvocationControllerTest {
                 .andExpect(content().contentType("application/json"))
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.failure_reason").value("PROVIDER_UNAVAILABLE"));
+    }
+
+    @Test
+    void getInvocation_withNoUsageRecorded_omitsUsageAsNullNotZero() throws Exception {
+        PendingInvocation invocation = pendingInvocation().claim("worker-1")
+                .fail(PROVIDER_DETAIL, InvocationFailureType.LLM_ERROR);
+        given(pendingInvocationService.getPendingInvocation(invocation.id()))
+                .willReturn(Optional.of(invocation));
+        given(usageQueryService.findByInvocation(invocation.id())).willReturn(List.of());
+
+        // A round that failed on the way out recorded nothing. That is not "zero tokens":
+        // it is no record, and the response must let a client tell the two apart.
+        mockMvc.perform(get("/v1/invocations/" + invocation.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usage").value((Object) null));
+    }
+
+    @Test
+    void getInvocation_withUsage_exposesAggregateAndBreakdownInSnakeCase() throws Exception {
+        PendingInvocation invocation = pendingInvocation().claim("worker-1").complete();
+        given(pendingInvocationService.getPendingInvocation(invocation.id()))
+                .willReturn(Optional.of(invocation));
+        given(usageQueryService.findByInvocation(invocation.id()))
+                .willReturn(List.of(usageRecord(0, 10, 4), usageRecord(1, 20, 6)));
+
+        mockMvc.perform(get("/v1/invocations/" + invocation.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usage.input_tokens").value(30))
+                .andExpect(jsonPath("$.usage.output_tokens").value(10))
+                .andExpect(jsonPath("$.usage.total_tokens").value(40))
+                .andExpect(jsonPath("$.usage.complete").value(true))
+                .andExpect(jsonPath("$.usage.calls.length()").value(2))
+                .andExpect(jsonPath("$.usage.calls[0].round_index").value(0))
+                .andExpect(jsonPath("$.usage.calls[0].total_tokens").value(14))
+                .andExpect(jsonPath("$.usage.calls[1].round_index").value(1))
+                .andExpect(jsonPath("$.usage.calls[1].provider").value("anthropic"))
+                .andExpect(jsonPath("$.usage.calls[1].finish_reason").value("STOP"));
+    }
+
+    @Test
+    void getInvocation_failedAfterPartialUsage_marksTheTotalsIncomplete() throws Exception {
+        PendingInvocation invocation = pendingInvocation().claim("worker-1")
+                .fail(PROVIDER_DETAIL, InvocationFailureType.LLM_ERROR);
+        given(pendingInvocationService.getPendingInvocation(invocation.id()))
+                .willReturn(Optional.of(invocation));
+        given(usageQueryService.findByInvocation(invocation.id()))
+                .willReturn(List.of(usageRecord(0, 10, 4)));
+
+        mockMvc.perform(get("/v1/invocations/" + invocation.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usage.total_tokens").value(14))
+                .andExpect(jsonPath("$.usage.complete").value(false));
+    }
+
+    @Test
+    void getInvocation_usageNeverCarriesACostField() throws Exception {
+        PendingInvocation invocation = pendingInvocation().claim("worker-1").complete();
+        given(pendingInvocationService.getPendingInvocation(invocation.id()))
+                .willReturn(Optional.of(invocation));
+        given(usageQueryService.findByInvocation(invocation.id()))
+                .willReturn(List.of(usageRecord(0, 10, 4)));
+
+        // Tokens are facts the ledger holds; money is not, and must not appear here by
+        // any name — a monetary figure invented server-side is what someone later bills.
+        String body = mockMvc.perform(get("/v1/invocations/" + invocation.id()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        Assertions.assertThat(body.toLowerCase(java.util.Locale.ROOT))
+                .doesNotContain("cost").doesNotContain("price").doesNotContain("eur")
+                .doesNotContain("usd").doesNotContain("amount");
+    }
+
+    private static LlmUsageRecord usageRecord(int roundIndex, int inputTokens, int outputTokens) {
+        return new LlmUsageRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-4-7",
+                roundIndex, inputTokens, outputTokens, inputTokens + outputTokens, "STOP",
+                Instant.now());
     }
 
     private PendingInvocation pendingInvocation() {
