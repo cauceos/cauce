@@ -3,6 +3,7 @@ import type {
   AgentResponse,
   ApiKeyCreatedResponse,
   ApiKeyResponse,
+  ChainVerificationResponse,
   ConversationResponse,
   CreateApiKeyBody,
   CreateAgentBody,
@@ -171,6 +172,23 @@ export class ApiClient {
   /** DELETE /v1/api-keys/{keyId} → 204. Soft: the row stays, with revoked_at. */
   revokeApiKey(keyId: string): Promise<void> {
     return this.request<void>(`/v1/api-keys/${keyId}`, { method: 'DELETE' })
+  }
+
+  /**
+   * GET /v1/tenants/{tenantId}/audit/chain-verification — recomputes the
+   * tenant's whole audit chain and returns the verdict plus the scope of
+   * what that verdict covers.
+   *
+   * Full recomputation on demand: O(n) in time and memory server-side,
+   * with no cache. A long chain takes longer, and nothing here shortens
+   * it. A tenant outside the caller's hierarchy answers 404, exactly like
+   * one that does not exist.
+   */
+  verifyChain(tenantId: string, signal?: AbortSignal): Promise<ChainVerificationResponse> {
+    return this.request<ChainVerificationResponse>(
+      `/v1/tenants/${tenantId}/audit/chain-verification`,
+      { signal },
+    )
   }
 
   /** GET /v1/invocations/{id} — processing status, for polling after a 202. */

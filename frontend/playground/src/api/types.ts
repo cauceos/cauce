@@ -196,6 +196,55 @@ export interface CreateApiKeyBody {
   label?: string
 }
 
+/**
+ * Outcome of recomputing a tenant's audit chain. VALID states only that
+ * no break is detectable by re-hashing — what that does and does not
+ * cover is spelled out in `verification_scope` on every response.
+ */
+export type ChainStatus = 'VALID' | 'BROKEN'
+
+/**
+ * The five public break classifications. Typed as the union plus `string`
+ * so a value this build does not know still arrives intact and renders
+ * as-is instead of being narrowed away or mapped to a guess.
+ */
+export type BreakClassification =
+  | 'ENTRY_ALTERED'
+  | 'LINK_BROKEN'
+  | 'ENTRY_MISSING'
+  | 'UNCHAINED_ENTRY_OUT_OF_ORDER'
+  | 'ENTRY_MALFORMED'
+  | (string & {})
+
+/** Where and how the chain first breaks. Present only when status is BROKEN. */
+export interface FirstBreak {
+  sequence_number: number
+  classification: BreakClassification
+}
+
+/**
+ * What the verification covers, in the API's own words. Rendered verbatim
+ * by the client — never paraphrased, never hardcoded: if the backend's
+ * capability changes, its description changes with it.
+ */
+export interface VerificationScope {
+  method: string
+  detects: string[]
+  does_not_detect: string
+}
+
+/** Body of GET /v1/tenants/{tenantId}/audit/chain-verification. */
+export interface ChainVerificationResponse {
+  tenant_id: string
+  status: ChainStatus
+  verified_entries: number
+  /** Rows written before chaining began: not failures, and not verified. */
+  pre_chain_entries: number
+  first_break: FirstBreak | null
+  verification_scope: VerificationScope
+  verified_at: string
+}
+
 /** 202 body of POST /v1/agents/{agentId}/messages. */
 export interface SendMessageAccepted {
   conversation_id: string

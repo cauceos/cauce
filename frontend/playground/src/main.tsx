@@ -7,6 +7,7 @@ import './styles/session.css'
 import './styles/conversation.css'
 import './styles/workspace.css'
 import './styles/invocations.css'
+import './styles/audit.css'
 import { App } from './App'
 
 createRoot(document.getElementById('root')!).render(

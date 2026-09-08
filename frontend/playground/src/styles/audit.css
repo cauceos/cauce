@@ -1,0 +1,168 @@
+/* Cauce Playground — Audit chain (07): the verdict, and its limit.
+
+   Composes primitives.css: page head, .action-row, .btn, .input, .chip,
+   .card (the verdict is one, with its own top rule), .panel (the limit
+   panel is one), .skel, .error-note. Nothing went up from this screen —
+   the shared layer was already complete when it was built.
+
+   THE RULE OF THIS SCREEN, in layout form: the limit panel has the same
+   visual rank as the verdict. Two columns of comparable weight on desktop;
+   directly under it, at full length, on tablet and mobile. It is never an
+   accordion — a disclosure the reader must choose to open is one most
+   readers never see, which would make the honesty surface into exactly the
+   fine print this screen exists to avoid.
+
+   Layout coupling (deliberate, mirrors workspace.css): shell.css defines
+   `.main { flex: 1; overflow: hidden; }` and, on mobile, `.main {
+   padding-top: var(--topbar-h); }`. This screen therefore sizes its own
+   scroll region: `.audit` is 100dvh on desktop/tablet and
+   `calc(100dvh - var(--topbar-h))` on mobile BECAUSE of that padding rule. */
+
+.audit {
+  height: 100dvh;
+  overflow-y: auto;
+  padding: 30px 36px 64px;
+}
+.audit .page-head, .audit .action-row, .audit .chain-split {
+  max-width: 1140px; margin-left: auto; margin-right: auto;
+}
+.audit .page-sub { max-width: 76ch; }
+/* The cost of running it, next to the button that runs it. */
+.audit .action-row .note { font-size: 10px; line-height: 1.7; color: var(--color-muted); }
+
+/* Verdict and limit, side by side and comparable. */
+.chain-split {
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(360px, 1fr);
+  gap: 22px; align-items: start;
+}
+
+/* ══════════ The verdict ══════════ */
+.verdict { padding: 32px 34px; position: relative; overflow: hidden; }
+.verdict::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; opacity: 0.7;
+  background: linear-gradient(90deg, transparent, var(--color-moss-400) 30%, var(--color-moss-400) 70%, transparent);
+}
+/* A broken chain is stated, not alarmed: slate, never a danger colour. */
+.verdict.broken::before {
+  background: linear-gradient(90deg, transparent, var(--color-slate-500) 30%, var(--color-slate-500) 70%, transparent);
+}
+.v-eyebrow {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 3px;
+  text-transform: uppercase; color: var(--color-muted); margin-bottom: 12px;
+}
+.v-line { display: flex; align-items: baseline; gap: 15px; flex-wrap: wrap; margin-bottom: 8px; }
+/* The verdict is typography, not a traffic light. */
+.v-word {
+  font-family: var(--font-display); font-weight: 600; font-size: 42px;
+  letter-spacing: -1.6px; line-height: 1; color: var(--color-moss-400);
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
+}
+.v-word em { font-style: italic; }
+.v-word.broken { color: var(--color-text); font-size: 34px; }
+.v-sub { color: var(--color-text-2); font-size: 13.5px; line-height: 1.65; max-width: 52ch; margin-bottom: 26px; }
+
+.figs { display: flex; gap: 34px; flex-wrap: wrap; margin-bottom: 22px; }
+.fig .n {
+  display: block; font-family: var(--font-display); font-weight: 600; font-size: 30px;
+  letter-spacing: -1px; color: var(--color-text); line-height: 1.1;
+  font-variant-numeric: tabular-nums; font-variation-settings: "opsz" 96, "SOFT" 0, "WONK" 1;
+}
+.fig .l {
+  display: block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--color-muted); margin-top: 4px;
+}
+/* Neither good news nor bad: subtle, and never moss or slate. */
+.fig.pre .n { color: var(--color-subtle); }
+.fig .why { font-size: 11px; color: var(--color-muted); margin-top: 6px; max-width: 24ch; line-height: 1.5; }
+.fig .skel { width: 64px; height: 26px; border-radius: 8px; }
+
+.chain-meta {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--color-muted);
+  display: flex; gap: 18px; flex-wrap: wrap;
+  border-top: 1px solid var(--color-border); padding-top: 15px; font-variant-numeric: tabular-nums;
+}
+.chain-meta .v { color: var(--color-subtle); word-break: break-all; }
+.chain-gap { font-size: 11.5px; color: var(--color-muted); line-height: 1.65; margin-top: 15px; }
+
+/* ── Broken: where, and what kind ── */
+.brk-chip { font-size: 10.5px; letter-spacing: 0.5px; padding: 3px 11px; }
+.brk-d { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-2); margin: 10px 0 12px; line-height: 1.6; }
+.brk-d .seq { color: var(--color-teal-500); }
+/* A schematic of before / at / after — not a map of individual entries;
+   the response gives one sequence number, not a per-entry state. */
+.links { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+.ld { width: 9px; height: 9px; border-radius: 50%; background: var(--color-stone-700); flex-shrink: 0; }
+.ld.ok { background: var(--color-moss-500); }
+.ld.brk { width: 13px; height: 13px; background: transparent; border: 2px solid var(--color-slate-400); }
+.lg { font-family: var(--font-mono); font-size: 9px; color: var(--color-muted); }
+
+/* ══════════ The limit — same rank as the verdict ══════════ */
+.scope h3 {
+  font-family: var(--font-display); font-size: 19px; font-weight: 600; letter-spacing: -0.5px;
+  margin-bottom: 6px; font-variation-settings: "opsz" 72, "SOFT" 0, "WONK" 1;
+}
+/* Every string below comes from the response, verbatim. */
+.scope .method { font-size: 12.5px; color: var(--color-text-2); line-height: 1.65; margin-bottom: 20px; }
+.sb { margin-bottom: 18px; }
+.sb .k { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 2px; text-transform: uppercase; display: block; margin-bottom: 10px; }
+.sb.det .k { color: var(--color-moss-400); }
+.sb.lim .k { color: var(--color-slate-400); }
+.sb ul { list-style: none; }
+.sb li { font-size: 12px; color: var(--color-text-2); padding-left: 18px; position: relative; margin-bottom: 7px; line-height: 1.55; }
+.sb.det li::before { content: "✓"; position: absolute; left: 0; color: var(--color-moss-400); font-size: 11px; }
+.sb.lim {
+  border: 1px solid rgba(138, 180, 204, 0.28); border-radius: var(--radius-md);
+  padding: 16px 17px; background: var(--color-bg);
+}
+.sb.lim p { font-size: 12px; color: var(--color-text-2); line-height: 1.7; }
+.scope-foot { font-family: var(--font-mono); font-size: 9.5px; color: var(--color-muted); line-height: 1.7; display: block; }
+
+/* ══════════ Empty and idle ══════════ */
+.chain-empty { text-align: center; padding: 8px 4px 20px; }
+.chain-empty .t {
+  font-family: var(--font-display); font-size: 19px; font-weight: 600; letter-spacing: -0.5px;
+  margin-bottom: 5px; font-variation-settings: "opsz" 72, "SOFT" 0, "WONK" 1;
+}
+.chain-empty .d { font-size: 12.5px; color: var(--color-subtle); line-height: 1.65; }
+
+/* ══════════ TABLET · 701–1024px (contract: icon-rail regime) ══════════ */
+@media (max-width: 1024px) and (min-width: 701px) {
+  .audit { padding: 26px 24px 56px; }
+  .audit .page-head, .audit .action-row, .audit .chain-split { max-width: 720px; }
+  /* One column — and the limit keeps its rank by sitting directly under
+     the verdict, with the same card treatment. Never a footer. */
+  .chain-split { grid-template-columns: 1fr; gap: 16px; }
+  .scope { position: static; padding: 24px; }
+  .verdict { padding: 26px 24px; }
+  .v-word { font-size: 36px; letter-spacing: -1.4px; }
+  .v-word.broken { font-size: 30px; }
+  .figs { gap: 30px; }
+  .fig .n { font-size: 28px; }
+  /* The detects list reads as two columns at this width. */
+  .sb.det ul { columns: 2; column-gap: 20px; }
+  .sb li { break-inside: avoid; }
+}
+
+/* ══════════ MOBILE · ≤700px (contract: topbar + drawer regime) ══════════ */
+@media (max-width: 700px) {
+  /* shell.css already gives .main padding-top: var(--topbar-h). */
+  .audit { height: calc(100dvh - var(--topbar-h)); padding: 20px 16px calc(48px + env(safe-area-inset-bottom, 0px)); }
+  .chain-split { grid-template-columns: 1fr; gap: 16px; }
+  .scope { position: static; padding: 20px 18px; }
+  .verdict { padding: 22px 18px; }
+  .v-eyebrow { font-size: 9px; letter-spacing: 2.5px; margin-bottom: 10px; }
+  .v-line { gap: 12px; }
+  /* 30px so "Chain intact." holds one line at 390px. */
+  .v-word { font-size: 30px; letter-spacing: -1.2px; line-height: 1.05; }
+  .v-word.broken { font-size: 26px; }
+  .v-sub { font-size: 12.5px; margin-bottom: 20px; }
+  .figs { gap: 26px; margin-bottom: 18px; }
+  .fig .n { font-size: 26px; letter-spacing: -0.9px; }
+  .fig .l { font-size: 8.5px; letter-spacing: 1.8px; }
+  .fig .why { font-size: 10.5px; max-width: 20ch; }
+  .chain-meta { display: grid; gap: 4px; font-size: 9.5px; padding-top: 13px; }
+  .chain-gap { font-size: 11.5px; margin-top: 13px; }
+  .scope h3 { font-size: 18px; }
+  .sb li { font-size: 12.5px; margin-bottom: 8px; }
+  .sb.lim p { font-size: 12.5px; }
+}
