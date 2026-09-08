@@ -1,0 +1,278 @@
+/* Cauce Playground — interaction primitives.
+
+   The layer every area inherits: the main-column type scale, the card, the
+   form controls, the buttons, the quiet error box. Screens 02–07 restyle
+   nothing here; they compose it.
+
+   Contract kept on EVERY interactive surface: rest · hover · focus-visible ·
+   active · disabled. A control that only defines rest is not finished.
+
+   Naming: the names already in this repo win over the mockup's whenever one
+   exists (.helper, .probe, .error-note). Mockup names are adopted only for
+   things that did not exist (.f-top, .lead, .ghost-btn, .kbd).
+
+   Collision note: workspace.css scopes everything under `.workspace` and
+   conversation.css uses its own names (.btn-send, .select-like, .field-row),
+   so the generic names below are free. */
+
+/* ══════════ Main-column type scale ══════════ */
+/* `.main` is `overflow: hidden` (shell.css), so any screen that is just a
+   column owns its scroll region — otherwise a short window clips it with no
+   way to reach the rest. Same contract as .workspace and .convo-screen. */
+.view-wrap {
+  position: relative; z-index: 1;
+  height: 100dvh; overflow-y: auto;
+  max-width: 720px; margin: 0 auto;
+  padding: 96px 32px 72px;
+}
+
+.eyebrow {
+  display: flex; align-items: center; gap: 11px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 3.5px;
+  text-transform: uppercase; color: var(--color-teal-500);
+  margin-bottom: 20px;
+}
+.eyebrow .rule {
+  width: 24px; height: 1px; flex-shrink: 0;
+  background: var(--color-teal-500); opacity: 0.7;
+}
+
+h1 {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: clamp(34px, 3.4vw, 54px); letter-spacing: -2.2px; line-height: 1.02;
+  margin-bottom: 18px;
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
+}
+h1 em { font-style: italic; color: var(--color-teal-500); }
+
+.lede {
+  color: var(--color-text-2); font-weight: 300;
+  font-size: 15.5px; line-height: 1.72; max-width: 42ch; margin-bottom: 34px;
+}
+
+/* ══════════ Card ══════════ */
+.card {
+  background: linear-gradient(
+    180deg,
+    var(--color-surface),
+    color-mix(in srgb, var(--color-surface) 92%, #000)
+  );
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 30px 30px 28px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 24px 56px -30px rgba(0, 0, 0, 0.95);
+}
+
+/* ══════════ Fields ══════════ */
+.field { margin-bottom: 22px; }
+.f-top {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-bottom: 8px;
+}
+.f-top label { font-size: 12.5px; font-weight: 500; color: var(--color-text); }
+.f-top .req {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 1.4px;
+  text-transform: uppercase; color: var(--color-muted);
+}
+
+/* The wrap is the flex row AND the positioning context: the leading glyph is
+   absolute inside it, and below 700px the reveal button joins it there (see
+   the mobile block) instead of sitting alongside the field. */
+.input-wrap { position: relative; display: flex; align-items: center; gap: 8px; }
+.input-wrap .lead {
+  position: absolute; left: 12px; width: 14px; height: 14px;
+  color: var(--color-muted); pointer-events: none;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.input {
+  flex: 1; min-width: 0; width: 100%; height: 41px;
+  background: var(--color-bg); border: 1px solid var(--color-stone-700);
+  border-radius: var(--radius-sm); padding: 11px 12px 11px 34px;
+  color: var(--color-text); line-height: 1.5;
+  font-family: var(--font-mono); font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  caret-color: var(--color-teal-500);
+  transition:
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+.input::placeholder { color: var(--color-muted); }
+.input:hover:not(:disabled) { border-color: var(--color-stone-600); }
+/* Its own ring: `.input:focus` outranks the global `:focus-visible` outline
+   on specificity, so a focused field shows one affordance, not two. */
+.input:focus {
+  outline: none;
+  border-color: var(--color-teal-500);
+  box-shadow: 0 0 0 3px rgba(45, 212, 192, 0.13);
+  background: color-mix(in srgb, var(--color-bg) 70%, var(--color-surface));
+}
+.input-wrap:focus-within .lead { color: var(--color-teal-500); }
+.input:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Chrome paints autofilled fields in its own blue-white and ignores
+   `background` while doing it; an inset shadow is the only way back. */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--color-bg) inset;
+  caret-color: var(--color-teal-500);
+}
+/* Slate, never red: the palette has no danger colour and none is invented. */
+.input.err { border-color: var(--color-slate-500); }
+.input.err:focus { box-shadow: 0 0 0 3px rgba(90, 140, 171, 0.16); }
+
+.helper { font-size: 11.5px; color: var(--color-subtle); margin-top: 8px; line-height: 1.6; }
+.helper code {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-2);
+  background: rgba(255, 255, 255, 0.035); padding: 1px 5px; border-radius: 4px;
+}
+
+/* ══════════ Buttons ══════════ */
+.btn {
+  background: var(--color-teal-500); color: #08120F;
+  border: none; border-radius: var(--radius-full);
+  font-family: var(--font-body); font-weight: 600; font-size: 13.5px;
+  letter-spacing: 0.1px; padding: 12px 24px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 9px;
+  box-shadow: 0 6px 18px -8px rgba(45, 212, 192, 0.5);
+  transition:
+    background var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease),
+    box-shadow var(--t-mid) var(--ease);
+}
+.btn:hover:not(:disabled) {
+  background: var(--color-teal-400);
+  box-shadow: 0 8px 24px -8px rgba(45, 212, 192, 0.6);
+}
+/* The global focus halo (tokens.css) is a box-shadow, and this button owns
+   its own — so it must restate both, or focusing it would drop the lift. */
+.btn:focus-visible {
+  box-shadow:
+    0 6px 18px -8px rgba(45, 212, 192, 0.5),
+    0 0 0 5px rgba(45, 212, 192, 0.1);
+}
+.btn:hover:not(:disabled) .arw { transform: translateX(2px); }
+.btn:active:not(:disabled) { transform: translateY(1px); background: var(--color-teal-600); }
+.btn:disabled {
+  background: var(--color-stone-700); color: var(--color-stone-400);
+  box-shadow: none; cursor: not-allowed;
+}
+.btn .arw { width: 14px; height: 14px; transition: transform var(--t-fast) var(--ease); }
+.btn .spin { width: 13px; height: 13px; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ghost-btn {
+  background: var(--color-surface-2); border: 1px solid var(--color-stone-700);
+  border-radius: var(--radius-sm); color: var(--color-subtle);
+  font-family: var(--font-body); font-size: 12px; font-weight: 500;
+  padding: 0 13px; height: 41px; cursor: pointer; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition:
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+.ghost-btn:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-stone-600); }
+.ghost-btn:active:not(:disabled) { background: var(--color-stone-700); }
+.ghost-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.ghost-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+/* Pressed means the secret is on screen; the accent says so on its own. */
+.ghost-btn[aria-pressed="true"] { color: var(--color-teal-500); }
+
+.kbd {
+  font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
+  border: 1px solid var(--color-stone-700); border-radius: 5px;
+  padding: 2px 6px; line-height: 1.4;
+}
+
+/* ══════════ Outcome readouts ══════════ */
+.probe {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--color-muted);
+  text-align: right; line-height: 1.7; font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.probe .path { color: var(--color-subtle); }
+.probe .pending { color: var(--color-stone-600); }
+.probe .ok { color: var(--color-moss-400); }
+.probe .fail { color: var(--color-slate-400); }
+
+/* The failure box. Slate, never red — same doctrine as .input.err. It states
+   what happened and what to do; it never apologises. */
+.error-note {
+  border: 1px solid rgba(90, 140, 171, 0.32);
+  background: rgba(90, 140, 171, 0.05);
+  border-radius: var(--radius-sm);
+  padding: 13px 15px; margin-bottom: 20px;
+}
+.error-note .t { font-size: 12.5px; color: var(--color-text); font-weight: 500; margin-bottom: 4px; }
+.error-note .d { font-size: 12px; color: var(--color-text-2); line-height: 1.6; }
+.error-note .rid {
+  font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
+  margin-top: 8px; display: block; word-break: break-all;
+}
+
+/* ══════════ TABLET · 701–1024px (contract: icon-rail regime) ══════════ */
+@media (max-width: 1024px) and (min-width: 701px) {
+  .view-wrap { padding: 72px 40px 64px; }
+  h1 { font-size: 44px; letter-spacing: -1.8px; line-height: 1.03; margin-bottom: 16px; }
+  .lede { font-size: 15px; line-height: 1.7; max-width: 46ch; }
+  /* Touch targets, not mouse targets. */
+  .input, .ghost-btn { height: 44px; }
+  .btn { padding: 13px 26px; }
+}
+
+/* ══════════ MOBILE · ≤700px (contract: topbar + drawer regime) ══════════ */
+@media (max-width: 700px) {
+  .view-wrap {
+    height: calc(100dvh - var(--topbar-h));
+    padding: 52px 18px calc(48px + env(safe-area-inset-bottom, 0px));
+  }
+  .eyebrow { gap: 10px; font-size: 9px; letter-spacing: 3px; margin-bottom: 16px; }
+  .eyebrow .rule { width: 20px; }
+  h1 { font-size: 34px; letter-spacing: -1.4px; line-height: 1.06; margin-bottom: 14px; }
+  .lede { font-size: 14.5px; max-width: none; margin-bottom: 22px; }
+
+  .card { padding: 20px 18px; }
+  .field { margin-bottom: 20px; }
+  .f-top label { font-size: 13px; }
+  .f-top .req { font-size: 9px; }
+
+  .input-wrap .lead { left: 13px; width: 15px; height: 15px; }
+  .input {
+    height: auto; min-height: 48px; padding: 13px 14px 13px 36px; line-height: 1.4;
+    /* 16px is not a style choice: below it, iOS Safari zooms the whole page
+       when the field takes focus. Do not lower this. */
+    font-size: 16px;
+  }
+  /* Reserve the track the reveal button occupies inside the field. */
+  .input.has-eye { padding-right: 48px; }
+
+  /* The reveal control moves INSIDE the field: a separate 44px button beside
+     a ~350px field costs width the field needs more. */
+  .ghost-btn {
+    position: absolute; right: 5px;
+    width: 40px; height: 40px; padding: 0;
+    display: grid; place-items: center;
+    background: none; border: none; border-radius: 6px;
+    color: var(--color-muted);
+  }
+  .ghost-btn:active:not(:disabled) { background: var(--color-surface-2); }
+  .ghost-btn svg { width: 17px; height: 17px; }
+  .ghost-btn .ghost-label { display: none; }
+
+  .helper { font-size: 12px; }
+  .helper code { font-size: 11px; }
+
+  .btn {
+    width: 100%; justify-content: center;
+    font-size: 15px; padding: 15px 24px; min-height: 50px;
+  }
+  .probe { text-align: center; margin-left: 0; display: block; }
+  .error-note { padding: 13px 14px; margin-bottom: 18px; }
+  .error-note .t { font-size: 13px; }
+  .error-note .d { font-size: 12.5px; }
+}

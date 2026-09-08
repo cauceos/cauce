@@ -8,8 +8,20 @@ export type SessionStatus = 'disconnected' | 'connecting' | 'connected' | 'error
 
 export interface SessionError {
   kind: 'invalid-url' | 'unreachable' | 'unauthorized' | 'http' | 'unexpected'
-  /** Actionable, user-facing text. */
+  /** What happened, in one line. */
   message: string
+  /**
+   * What to do about it. Presentational split only — the same text the
+   * message used to carry alone, so the card can state the fact and the
+   * remedy at different weights.
+   */
+  detail?: string
+  /**
+   * HTTP status of the failed probe, when there was a response at all. A
+   * rejected key (401) and a dead address (502) are different facts and the
+   * probe line names which one; absent for failures that never reached HTTP.
+   */
+  status?: number
   /** Backend correlation id, when the failure produced an envelope that had one. */
   requestId?: string | null
 }
@@ -84,8 +96,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (parsed.kind === 'has-path') {
       return fail({
         kind: 'invalid-url',
-        message:
-          'Use the instance origin only (scheme://host:port) — a URL with a path prefix is not supported.',
+        message: 'Use the instance origin only.',
+        detail:
+          'A URL carrying a path, query, or fragment is not supported — scheme://host:port, ' +
+          'nothing after it.',
       })
     }
     const origin = parsed.origin
@@ -107,8 +121,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (healthStatus === null) {
         return fail({
           kind: 'unexpected',
-          message:
-            'The server answered 200 but not with a health document — is this really a Cauce instance?',
+          message: 'The server answered 200, but not with a health document.',
+          detail: 'Is this really a Cauce instance?',
+          status: 200,
         })
       }
       if (healthStatus !== 'UP') {
@@ -206,26 +221,30 @@ function toSessionError(cause: unknown, origin: string): SessionError {
     if (cause.status === 401) {
       return {
         kind: 'unauthorized',
-        message:
-          'The instance is up but rejected this API key. Check the key — the root operator ' +
-          'key is printed once (WARN) in the API log at first startup.',
+        message: 'The instance answered and rejected this key.',
+        detail:
+          'Check the key. The root operator key is printed once at first startup, as a ' +
+          'WARN line in the API log.',
+        status: cause.status,
         requestId: cause.requestId,
       }
     }
     if (cause.code === 'upstream_unreachable') {
       return {
         kind: 'unreachable',
-        message:
-          `Nothing answered at ${origin}. Is the instance running? ` +
-          'If it is, try 127.0.0.1 instead of localhost.',
+        message: `Nothing answered at ${origin}.`,
+        detail:
+          'Check the instance is running and the URL is right — the local quickstart serves ' +
+          'on port 8080. If it is running, try 127.0.0.1 instead of localhost.',
+        status: cause.status,
       }
     }
     if (cause.code === 'upstream_timeout') {
       return {
         kind: 'http',
-        message:
-          `The instance at ${origin} was reached but took too long to answer ` +
-          '(dev-proxy timeout). It may be busy — try again.',
+        message: `The instance at ${origin} was reached but took too long to answer.`,
+        detail: 'The dev-proxy timed out waiting. It may be busy — try again.',
+        status: cause.status,
       }
     }
     if (cause.status === 503) {
@@ -234,9 +253,9 @@ function toSessionError(cause: unknown, origin: string): SessionError {
       // real-but-unhealthy instance answers the probe.
       return {
         kind: 'http',
-        message:
-          'The instance answered but reports itself unhealthy (the health probe returned ' +
-          '503). Check its dependencies — database, Redis.',
+        message: 'The instance answered but reports itself unhealthy.',
+        detail: 'The health probe returned 503. Check its dependencies — database, Redis.',
+        status: cause.status,
         requestId: cause.requestId,
       }
     }
@@ -245,14 +264,15 @@ function toSessionError(cause: unknown, origin: string): SessionError {
     const text = cause.message.startsWith(String(cause.status))
       ? cause.message
       : `${cause.status}: ${cause.message}`
-    return { kind: 'http', message: text, requestId: cause.requestId }
+    return { kind: 'http', message: text, status: cause.status, requestId: cause.requestId }
   }
   if (cause instanceof NetworkError) {
     return {
       kind: 'unreachable',
-      message:
-        'The request never reached an instance. Is the playground dev server running ' +
-        '(its proxy does the forwarding), and the instance URL correct?',
+      message: 'The request never reached an instance.',
+      detail:
+        'Is the playground dev server running (its proxy does the forwarding), and the ' +
+        'instance URL correct?',
     }
   }
   return {

@@ -1,7 +1,7 @@
-/* Cauce Playground — design tokens (brand.md v1.0, mirrored from the
-   reference mockup). Tailwind v4 CSS-first configuration: this @theme block
-   IS the Tailwind config. Every token is emitted as a :root custom
-   property, so the structured CSS in shell.css / session.css and any
+/* Cauce Playground — design tokens and the global base layer.
+   Tailwind v4 CSS-first configuration: this @theme block IS the Tailwind
+   config. Every token is emitted as a :root custom property, so the
+   structured CSS in primitives.css / shell.css / session.css and any
    Tailwind utility read the exact same values — single-sourced. */
 
 @import "tailwindcss";
@@ -28,6 +28,8 @@
   --color-stone-200: #D4D5CC;
   --color-stone-100: #ECEEE8;
   --color-border: #2E2F28;
+  /* The quieter rule, for boxes nested inside an already-bordered surface. */
+  --color-border-soft: #232419;
   --color-text-2: #C8CAC2;
 
   --font-display: "Fraunces", Georgia, serif;
@@ -36,7 +38,7 @@
 
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-lg: 18px;
   --radius-full: 100px;
 }
 
@@ -50,19 +52,35 @@
   --color-subtle: var(--color-stone-400);
 }
 
-/* Layout constants — not utility material. The responsive breakpoints
-   (700px / 1024px) cannot be variables (CSS forbids var() inside media
-   conditions); they live as literals in shell.css / session.css with a
-   comment naming the contract. */
+/* Layout and motion constants — not utility material. The responsive
+   breakpoints (700px / 1024px) cannot be variables (CSS forbids var()
+   inside media conditions); they live as literals in shell.css /
+   session.css with a comment naming the contract. */
 :root {
   --sidebar-w: 248px;
   --rail-w: 68px;
   --topbar-h: 58px;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --t-fast: 0.14s;
+  --t-mid: 0.24s;
 }
 
-/* Base element styles (mockup body / focus ring). */
+/* The topbar only exists below 700px, and there it must clear the notch.
+   Folding the inset into --topbar-h itself keeps every consumer correct
+   without edits: .main's padding-top, .convo-screen's and .workspace's
+   `calc(100dvh - var(--topbar-h))`, and the topbar's own height all follow
+   from this one definition. */
+@media (max-width: 700px) {
+  :root {
+    --topbar-h: calc(58px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* ══════════ Base element layer ══════════ */
 html {
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 body {
   background: var(--color-bg);
@@ -71,27 +89,61 @@ body {
   font-size: 14px;
   line-height: 1.65;
   min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
 }
+@media (max-width: 700px) {
+  /* Only below the drawer breakpoint: on desktop this would create a scroll
+     container on <body> and break the sticky sidebar. */
+  body { overflow-x: hidden; }
+}
+
+::selection {
+  background: rgba(45, 212, 192, 0.22);
+  color: var(--color-text);
+}
+
+/* Focus ring: teal outline plus a soft halo, on every focusable surface.
+   Controls that draw their own ring (.input) override it via `:focus`,
+   which outranks this on specificity — see primitives.css. */
 :focus-visible {
   outline: 2px solid var(--color-teal-500);
   outline-offset: 2px;
   border-radius: 4px;
+  box-shadow: 0 0 0 5px rgba(45, 212, 192, 0.1);
 }
 
-/* ══════════ Motion (keyframes + .nadir policy) ══════════
-   The reduced-motion overrides for .sidebar and .status-dot.connecting live
-   at the END of shell.css: media queries add no specificity, so only source
-   order lets them beat the base declarations in that file. Only .nadir is
-   handled here, because its base rule is in this same file, above. */
-@keyframes nadirPulse {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 0.35; }
+/* Thin scrollbars everywhere — the browser default is a slab of chrome the
+   palette never asked for. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-stone-700) transparent;
 }
-.nadir {
-  animation: nadirPulse 3.2s ease-in-out infinite;
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: var(--color-stone-700); border-radius: 99px; }
+*::-webkit-scrollbar-track { background: transparent; }
+@media (max-width: 700px) {
+  *::-webkit-scrollbar { width: 6px; height: 6px; }
 }
+
+/* Film grain: present, never legible as texture. Above everything and
+   inert, so it can never intercept a click. */
+.grain {
+  position: fixed; inset: 0; z-index: 60;
+  pointer-events: none; opacity: 0.022;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ══════════ Motion policy ══════════
+   One global switch with !important, which beats every non-important rule
+   in every file regardless of source order — so no other stylesheet has to
+   repeat itself. Animations that encode STATE rather than decoration
+   (the topo draw-in, the nadir fade) are pinned to their finished frame
+   here, because "no animation" would otherwise leave them invisible. */
 @media (prefers-reduced-motion: reduce) {
-  .nadir {
-    animation: none;
+  *, *::before, *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
   }
+  .topo .draw { stroke-dashoffset: 0; }
+  .topo .nadir { opacity: 1; }
 }

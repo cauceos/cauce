@@ -1,11 +1,15 @@
 /**
  * Shared body for the not-yet-built areas. Each area keeps its own view
- * file (and directory) so later units grow in place.
+ * file (and directory) so later units grow in place. `.view-wrap` is the
+ * shared centred column from primitives.css.
  */
 export function PlaceholderView({ area }: { area: string }) {
   return (
-    <div className="session-wrap">
-      <div className="eyebrow">Playground · {area}</div>
+    <div className="view-wrap">
+      <div className="eyebrow">
+        <span className="rule" />
+        Playground · {area}
+      </div>
       <h1>
         Not built <em>yet</em>.
       </h1>

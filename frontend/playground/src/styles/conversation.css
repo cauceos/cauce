@@ -2,7 +2,7 @@
    Transplanted from referencias/02-conversation.html, rewritten against the
    tokens in tokens.css (same pattern as shell.css / session.css).
 
-   Layout coupling (deliberate): session.css defines `.main { flex: 1;
+   Layout coupling (deliberate): shell.css defines `.main { flex: 1;
    overflow: hidden; }` and, on mobile, `.main { padding-top:
    var(--topbar-h); }`. This screen therefore sizes its own root:
    `.convo-screen` is 100dvh on desktop/tablet and `calc(100dvh -
@@ -194,7 +194,8 @@
   padding: 12px 26px; cursor: pointer; flex-shrink: 0;
 }
 .btn-send:hover { background: var(--color-teal-600); }
-/* Disabled state the mockup does not define — .btn-primary:disabled precedent. */
+/* Disabled state the mockup does not define — follows the .btn:disabled
+   precedent in primitives.css. */
 .btn-send:disabled { opacity: 0.55; cursor: default; }
 .btn-send:disabled:hover { background: var(--color-teal-500); }
 .wire {
@@ -212,7 +213,7 @@
 
 /* ═════ MOBILE · ≤700px (contract: topbar + drawer regime) ═════ */
 @media (max-width: 700px) {
-  /* session.css already gives .main padding-top: var(--topbar-h). */
+  /* shell.css already gives .main padding-top: var(--topbar-h). */
   .convo-screen { height: calc(100dvh - var(--topbar-h)); }
 
   .convo-bar { padding: 10px 14px; gap: 10px; }

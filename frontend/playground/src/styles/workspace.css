@@ -6,7 +6,7 @@
    names (.field, .input, .btn-primary, .panel) cannot collide with the
    session screen's own .field/.input/.btn-primary.
 
-   Layout coupling (deliberate, mirrors conversation.css): session.css
+   Layout coupling (deliberate, mirrors conversation.css): shell.css
    defines `.main { flex: 1; overflow: hidden; }` and, on mobile,
    `.main { padding-top: var(--topbar-h); }`. This screen therefore sizes
    its own scroll region: `.workspace` is 100dvh on desktop/tablet and
@@ -158,6 +158,14 @@
   width: 100%; background: var(--color-bg); border: 1px solid var(--color-stone-700);
   border-radius: var(--radius-sm); padding: 9px 12px; font-size: 13px;
   color: var(--color-text); font-family: var(--font-body);
+}
+/* primitives.css now owns a global `.input` (fixed height, flex child of an
+   .input-wrap row). This area predates it and sizes its fields from padding,
+   so it opts out of those two properties only — the shared hover, focus ring,
+   caret and autofill handling are inherited on purpose. Adopting the whole
+   primitive here belongs to the 03/04 redesign, not to this unit. */
+.workspace .input, .workspace textarea.input, .workspace .select-input {
+  height: auto; flex: none;
 }
 .workspace .input.mono { font-family: var(--font-mono); font-size: 12px; }
 .workspace .input::placeholder { color: var(--color-muted); }

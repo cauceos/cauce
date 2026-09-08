@@ -8,10 +8,13 @@ const STATUS_TEXT = {
 } as const
 
 /**
- * Sidebar foot: session status dot + hint + version chip. When the session
- * knows who its key is (/v1/me), the identity line shows tenant name and
- * tier above the instance URL; on instances without the endpoint it simply
- * does not appear.
+ * Sidebar foot: session status dot + identity + instance + version chip.
+ * When the session knows who its key is (/v1/me), the identity line shows
+ * tenant name and tier above the instance URL; on instances without the
+ * endpoint it simply does not appear.
+ *
+ * At rail width everything but the dot is hidden, so the state it carries
+ * moves into `data-tip` — the foot is never mute (shell.css).
  */
 export function SessionStatusFoot() {
   const { status, instanceUrl, identity } = useSession()
@@ -19,7 +22,7 @@ export function SessionStatusFoot() {
 
   return (
     <div className="sidebar-foot">
-      <div className="session-status">
+      <div className="session-status" data-tip={connected ? instanceUrl : STATUS_TEXT[status]}>
         <span className={`status-dot ${status}`} />
         <span className="status-txt">{STATUS_TEXT[status]}</span>
       </div>
@@ -28,7 +31,9 @@ export function SessionStatusFoot() {
           <span className="name">{identity.tenant_name}</span> · {identity.tier}
         </div>
       )}
-      <div className="hint">{connected ? instanceUrl : 'Connect to unlock the areas above.'}</div>
+      <div className={connected ? 'hint mono' : 'hint'}>
+        {connected ? instanceUrl : 'Connect to unlock the areas above.'}
+      </div>
       <span className="version-chip">playground · dev</span>
     </div>
   )
