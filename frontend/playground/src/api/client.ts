@@ -1,7 +1,10 @@
 import { ApiError, NetworkError } from './errors'
 import type {
   AgentResponse,
+  ApiKeyCreatedResponse,
+  ApiKeyResponse,
   ConversationResponse,
+  CreateApiKeyBody,
   CreateAgentBody,
   CursorPage,
   ErrorEnvelope,
@@ -142,6 +145,32 @@ export class ApiClient {
       `/v1/conversations/${conversationId}/messages${pageQuery(opts)}`,
       { signal },
     )
+  }
+
+  /**
+   * GET /v1/tenants/{tenantId}/api-keys — metadata only, revoked keys
+   * included. The one list endpoint outside the keyset contract: a bare
+   * array, unpaginated (key sets per tenant stay tiny).
+   */
+  listApiKeys(tenantId: string, signal?: AbortSignal): Promise<ApiKeyResponse[]> {
+    return this.request<ApiKeyResponse[]>(`/v1/tenants/${tenantId}/api-keys`, { signal })
+  }
+
+  /**
+   * POST /v1/tenants/{tenantId}/api-keys → 201 with the plaintext, exactly
+   * once. Hierarchical authority: the caller may issue for its own tenant
+   * and any tenant it can see; anything else is a 404.
+   */
+  createApiKey(tenantId: string, body: CreateApiKeyBody): Promise<ApiKeyCreatedResponse> {
+    return this.request<ApiKeyCreatedResponse>(`/v1/tenants/${tenantId}/api-keys`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
+  /** DELETE /v1/api-keys/{keyId} → 204. Soft: the row stays, with revoked_at. */
+  revokeApiKey(keyId: string): Promise<void> {
+    return this.request<void>(`/v1/api-keys/${keyId}`, { method: 'DELETE' })
   }
 
   /** GET /v1/invocations/{id} — processing status, for polling after a 202. */

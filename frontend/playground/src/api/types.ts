@@ -157,6 +157,45 @@ export interface MeResponse {
   key_id: string
 }
 
+/** Derived server-side from revoked_at / expires_at (backend `ApiKeyResponse.status`). */
+export type ApiKeyStatus = 'ACTIVE' | 'REVOKED' | 'EXPIRED'
+
+/**
+ * Metadata of an API key (backend `ApiKeyResponse`). The plaintext and the
+ * hash are never here — the plaintext is returned exactly once, at
+ * creation, in `ApiKeyCreatedResponse`. `key_prefix` is the first eight
+ * characters of the plaintext (`ck_` + five), the part a holder can
+ * recognise the key by; `label` is the optional human name given at issue.
+ * `last_used_at` is approximate: updated on the auth cold path only.
+ */
+export interface ApiKeyResponse {
+  id: string
+  tenant_id: string
+  key_prefix: string
+  label: string | null
+  status: ApiKeyStatus
+  created_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+  expires_at: string | null
+}
+
+/** 201 body of POST /v1/tenants/{tenantId}/api-keys — `api_key` is shown once. */
+export interface ApiKeyCreatedResponse {
+  api_key: string
+  id: string
+  tenant_id: string
+  key_prefix: string
+  label: string | null
+  status: ApiKeyStatus
+  created_at: string
+}
+
+/** Request body for issuing a key; the label is optional. */
+export interface CreateApiKeyBody {
+  label?: string
+}
+
 /** 202 body of POST /v1/agents/{agentId}/messages. */
 export interface SendMessageAccepted {
   conversation_id: string
