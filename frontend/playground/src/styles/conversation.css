@@ -1,214 +1,334 @@
-/* Cauce Playground — Conversation screen.
-   Transplanted from referencias/02-conversation.html, rewritten against the
-   tokens in tokens.css (same pattern as shell.css / session.css).
+/* Cauce Playground — Conversation screen (02).
+
+   Composes primitives.css: .btn-ghost, .chip, .input, .kbd and the type
+   scale all come from there. What lives here is what only this screen has —
+   the context strip, the thread, the agent-loop trace and the composer.
 
    Layout coupling (deliberate): shell.css defines `.main { flex: 1;
    overflow: hidden; }` and, on mobile, `.main { padding-top:
    var(--topbar-h); }`. This screen therefore sizes its own root:
    `.convo-screen` is 100dvh on desktop/tablet and `calc(100dvh -
-   var(--topbar-h))` on mobile BECAUSE of that padding rule. */
+   var(--topbar-h))` on mobile BECAUSE of that padding rule.
+
+   Reduced motion is handled once, globally, in tokens.css. This file adds
+   no override of its own — the trailing block it used to carry became dead
+   weight when that switch landed. */
 
 .convo-screen {
   display: flex; flex-direction: column;
   height: 100dvh; min-height: 0;
 }
 
-/* ══════════ Context bar: tenant + agent + identity + conversation meta ══════════ */
-.convo-bar {
-  border-bottom: 1px solid var(--color-border); background: var(--color-surface);
-  padding: 14px 28px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+/* ══════════ Context strip ══════════
+   One DOM, three shapes. Desktop: a single row — `.ctx-main` and
+   `.ctx-extra` are `display: contents`, so their fields join the same flex
+   line and `order` puts them in reading order (agent · tenant · identity ·
+   conversation · new). Tablet: two rows. Mobile: a scrolling chip row, with
+   the rarely-touched fields behind a disclosure. */
+.ctx {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 18px 28px 16px;
+  display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap;
 }
-.convo-field { display: flex; flex-direction: column; gap: 3px; }
-.convo-field label {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 2px;
+.ctx-main, .ctx-extra { display: contents; }
+
+.ctx-f { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ctx-f label {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 2.2px;
   text-transform: uppercase; color: var(--color-muted);
+  display: flex; align-items: baseline; gap: 8px;
 }
-.field-row { display: flex; gap: 8px; align-items: stretch; }
-.select-like, .ident-input {
-  background: var(--color-bg); border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-sm);
-  padding: 7px 12px; font-size: 13px; color: var(--color-text); min-width: 180px;
-}
-/* The mockup's .select-like is a non-interactive div with a .chev span; a
-   real <select> is used instead (keyboard + a11y), de-chromed with
-   appearance:none inside a wrapper that draws the chevron. */
-.select-wrap { position: relative; display: flex; }
-.select-wrap .select-like {
+/* "· from your key" — where the value came from, said once, next to it. */
+.ctx-f label .tag { color: var(--color-teal-600); letter-spacing: 1px; text-transform: none; }
+
+.ctx-agent { order: 1; }
+.ctx-tenant { order: 2; }
+.ctx-ident { order: 3; }
+.ctx-conv { order: 4; }
+.ctx-new { order: 5; }
+.ctx-note { order: 6; flex-basis: 100%; }
+.ctx-toggle { display: none; }
+
+/* A real <select>, de-chromed: the mockup draws a div, but only the native
+   control gives keyboard and screen-reader behaviour for free — and on a
+   phone it already IS the bottom sheet the mobile mockup asks for. */
+/* Scoped to the strip on purpose: workspace.css draws its own chevron with
+   a glyph, and an unscoped rule here would stack a second one on top of it
+   (its ::after overrides `content`, not the box this one draws). */
+.ctx .select-wrap { position: relative; display: flex; min-width: 0; }
+.ctx-select {
   appearance: none; -webkit-appearance: none;
-  width: 100%; padding-right: 30px; cursor: pointer;
-  font-family: var(--font-body); line-height: 1.5;
+  width: 100%; min-width: 0; height: 40px;
+  background: var(--color-bg); border: 1px solid var(--color-stone-700);
+  border-radius: var(--radius-sm); padding: 0 32px 0 12px; cursor: pointer;
+  font-family: var(--font-body); font-size: 13px; font-weight: 500;
+  color: var(--color-text); line-height: 1.5;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-.select-wrap::after {
-  content: "▾"; position: absolute; right: 12px; top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-muted); font-size: 10px; pointer-events: none;
+.ctx-select:hover:not(:disabled) { border-color: var(--color-stone-600); }
+.ctx-select:focus {
+  outline: none; border-color: var(--color-teal-500);
+  box-shadow: 0 0 0 3px rgba(45, 212, 192, 0.13);
 }
-.ident-input { font-family: var(--font-mono); font-size: 12px; min-width: 150px; }
-.select-like:disabled, .ident-input:disabled { opacity: 0.55; cursor: default; }
-/* Small bar action (Load agents) — same recipe as .load-earlier. */
-.bar-btn {
-  background: none; border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-sm); color: var(--color-subtle);
-  font-family: var(--font-mono); font-size: 11px; padding: 0 12px; cursor: pointer;
+.ctx-select:disabled { opacity: 0.55; cursor: default; }
+.ctx .select-wrap::after {
+  content: ""; position: absolute; right: 12px; top: 50%;
+  width: 8px; height: 8px; margin-top: -6px;
+  border-right: 2px solid var(--color-muted); border-bottom: 2px solid var(--color-muted);
+  transform: rotate(45deg); pointer-events: none;
 }
-.bar-btn:hover { color: var(--color-text-2); border-color: var(--color-stone-600); }
-.bar-btn:disabled { opacity: 0.55; cursor: default; }
-.bar-note { font-family: var(--font-mono); font-size: 10px; color: var(--color-muted); }
-.convo-meta { margin-left: auto; display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
-.chip {
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.5px;
-  border: 1px solid var(--color-stone-700); border-radius: var(--radius-full);
-  padding: 3px 10px; color: var(--color-subtle); white-space: nowrap;
+
+.ctx-input { height: 40px; width: 330px; font-size: 11.5px; }
+.ctx-ident .ctx-input { width: 210px; }
+.ctx-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.ctx-chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-height: 40px; }
+.ctx-note {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--color-muted); line-height: 1.6;
 }
-.chip.open { color: var(--color-moss-400); border-color: rgba(111, 175, 130, 0.35); }
-.chip.mono-id { color: var(--color-muted); }
 
 /* ══════════ Thread ══════════ */
-.thread { flex: 1; overflow-y: auto; padding: 28px 28px 12px; }
-.thread-inner {
-  max-width: 720px; margin: 0 auto;
-  display: flex; flex-direction: column; gap: 18px;
-}
-.thread-empty {
-  align-self: center; margin-top: 48px;
-  font-family: var(--font-mono); font-size: 11px; color: var(--color-muted);
-  text-align: center; max-width: 40ch; line-height: 1.8;
-}
+.thread { flex: 1; overflow-y: auto; padding: 26px 28px 18px; }
+.thread-inner { max-width: 820px; margin: 0 auto; }
 
-.load-earlier {
-  align-self: center; background: none; border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-full); color: var(--color-subtle);
-  font-family: var(--font-mono); font-size: 11px; padding: 6px 16px; cursor: pointer;
+/* An empty screen is an invitation to act, not an apology. */
+.thread-empty { text-align: center; padding: 56px 10px; }
+.thread-empty .t {
+  font-family: var(--font-display); font-size: 18px; font-weight: 600;
+  letter-spacing: -0.4px; margin-bottom: 6px;
+  font-variation-settings: "opsz" 72, "SOFT" 0, "WONK" 1;
 }
-.load-earlier:hover { color: var(--color-text-2); border-color: var(--color-stone-600); }
+.thread-empty .d { font-size: 12px; color: var(--color-subtle); line-height: 1.65; }
 
-/* Messages */
-.msg { display: flex; flex-direction: column; gap: 5px; max-width: 82%; }
-.msg .who {
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px;
+.load-earlier-row { display: flex; justify-content: center; margin-bottom: 26px; }
+
+/* Day separator, and the once-per-thread marker saying where this session
+   own sends begin — invocation meta only exists below it (see Thread.tsx). */
+.day, .session-mark {
+  display: flex; align-items: center; gap: 14px; margin: 26px 0 22px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 2px;
   text-transform: uppercase; color: var(--color-muted);
 }
-.msg .bubble {
-  border: 1px solid var(--color-border); border-radius: var(--radius-md);
-  padding: 12px 16px; font-size: 14px; color: var(--color-text);
-  background: var(--color-surface);
+.day::before, .day::after,
+.session-mark::before, .session-mark::after {
+  content: ""; flex: 1; height: 1px; background: var(--color-border-soft);
+}
+/* Same weight and colour as a day separator on purpose — it is an aside of
+   the same rank, not a heading. Lowercase is the only thing setting it
+   apart, and it appears at most once in a thread. */
+.session-mark { text-transform: none; letter-spacing: 0.5px; }
+
+/* ══════════ Messages ══════════ */
+.msg { margin-bottom: 22px; }
+.msg .who {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 1.8px;
+  text-transform: uppercase; color: var(--color-muted); margin-bottom: 7px;
+  display: flex; align-items: baseline; gap: 10px;
+}
+.msg .when { letter-spacing: 0.3px; text-transform: none; font-variant-numeric: tabular-nums; }
+
+/* Only the user gets a bubble: the reply is the content of the page, not a
+   quoted aside, so it reads as body text. */
+.msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+.msg.user .bubble {
+  background: var(--color-surface-2); border: 1px solid var(--color-border);
+  border-radius: 14px 14px 4px 14px; padding: 12px 16px; max-width: 72%;
+  font-size: 14px; color: var(--color-text);
   white-space: pre-wrap; overflow-wrap: break-word;
 }
-.msg.user { align-self: flex-end; align-items: flex-end; }
-.msg.user .bubble { background: var(--color-surface-2); border-color: rgba(45, 212, 192, 0.25); }
-.msg.agent { align-self: flex-start; }
-.msg .meta {
-  font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
-  letter-spacing: 0.5px;
+.msg.agent .body {
+  max-width: 64ch; font-size: 14.5px; color: var(--color-text); line-height: 1.7;
+  white-space: pre-wrap; overflow-wrap: break-word;
 }
-.msg .meta .ok { color: var(--color-moss-400); }
-.msg .meta .bad { color: var(--color-subtle); }
-/* Standalone invocation meta (a FAILED invocation that left no bubble):
-   the mockup used an inline margin-top:-8px, promoted to a class here. */
+
+.meta-line {
+  font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
+  margin-top: 9px; display: flex; gap: 14px; flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.meta-line .ok { color: var(--color-moss-400); }
+.meta-line .bad { color: var(--color-slate-400); }
+/* A standalone meta row (the invocation left no reply at all) sits tighter
+   under whatever preceded it. */
 .msg.meta-only { margin-top: -8px; }
 
-/* The signature: the agentic loop trace */
-.loop-trace {
-  align-self: stretch; max-width: 82%;
-  border-left: 2px solid var(--color-slate-500);
-  padding-left: 14px; margin: 2px 0;
-  display: flex; flex-direction: column; gap: 8px;
+/* ══════════ The agent loop — the signature of this screen ══════════ */
+.loop {
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  margin: 0 0 22px; overflow: hidden; max-width: 680px;
 }
-.loop-summary {
-  display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
-  font-family: var(--font-mono); font-size: 11px; color: var(--color-slate-400);
-  letter-spacing: 0.5px;
-  background: none; border: none; padding: 0; text-align: left;
+.loop-h {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 14px; background: rgba(255, 255, 255, 0.015);
+  border: none; cursor: pointer; user-select: none; text-align: left;
+  transition: background var(--t-fast) var(--ease);
 }
-.loop-summary .tri { font-size: 9px; color: var(--color-muted); }
-.tool-card {
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm); padding: 10px 14px;
-  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.7;
+.loop-h:hover { background: rgba(255, 255, 255, 0.03); }
+.loop-h .chev {
+  width: 12px; height: 12px; flex-shrink: 0; color: var(--color-muted);
+  transition: transform var(--t-fast) var(--ease);
 }
-.tool-card .k { color: var(--color-slate-400); }
-.tool-card .r { color: var(--color-moss-400); }
-.tool-card .payload { color: var(--color-text-2); white-space: pre-wrap; word-break: break-word; }
-.tool-card .flag { color: var(--color-subtle); }
-/* The brand has no danger color and none is invented (errors are quiet
-   text): an errored result flags itself with full-brightness text. */
-.tool-card .flag.err { color: var(--color-text); }
+.loop.open .loop-h .chev { transform: rotate(90deg); }
+.loop-h .t {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 1px;
+  color: var(--color-subtle);
+}
+/* Three strata, in the mark own order — the loop is the brand shape. */
+.loop-h .strata { display: flex; gap: 3px; margin-left: auto; flex-shrink: 0; }
+.loop-h .strata i { width: 10px; height: 2px; border-radius: 2px; display: block; }
+.loop-h .strata i:nth-child(1) { background: var(--color-slate-500); }
+.loop-h .strata i:nth-child(2) { background: var(--color-moss-400); }
+.loop-h .strata i:nth-child(3) { background: var(--color-teal-500); }
+.loop-body { border-top: 1px solid var(--color-border-soft); }
 
-/* System / error card */
-.msg.system { align-self: stretch; max-width: 100%; }
-.msg.system .bubble {
-  background: var(--color-bg); border-style: dashed; color: var(--color-text-2);
-  font-family: var(--font-mono); font-size: 12px;
+.tool { padding: 13px 16px; }
+.tool + .tool { border-top: 1px solid var(--color-border-soft); }
+.tool .th { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; flex-wrap: wrap; }
+.tool .kind {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 1.6px;
+  color: var(--color-muted);
 }
+.tool .tname { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-teal-500); }
+.tool .th .chip { margin-left: auto; }
+/* JSON overflows sideways under a fade, never under a scrollbar: a
+   horizontal bar inside a thread is a trap you find by accident. */
+.tool pre {
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.7;
+  color: var(--color-text-2); background: var(--color-bg);
+  border: 1px solid var(--color-border-soft); border-radius: 6px;
+  padding: 10px 12px; overflow-x: auto; white-space: pre;
+  -webkit-overflow-scrolling: touch;
+  -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, #000 92%, transparent);
+}
+.tool pre::-webkit-scrollbar { height: 0; }
+.tool pre .k { color: var(--color-subtle); }
+.tool pre .s { color: var(--color-moss-400); }
+.tool.err pre { border-color: rgba(138, 180, 204, 0.3); }
 
-/* In-flight (pending invocation) */
-.pending-row {
-  align-self: flex-start; display: flex; flex-direction: column; gap: 5px; max-width: 82%;
+/* ══════════ Failure block ══════════
+   Slate, never red. Carries the SYSTEM [orchestration_error] messages the
+   backend writes into the thread, and the poll cap. */
+.fail {
+  border: 1px solid rgba(138, 180, 204, 0.32);
+  background: rgba(90, 140, 171, 0.05);
+  border-radius: var(--radius-md);
+  padding: 13px 16px; margin-bottom: 22px; max-width: 680px;
 }
-.pending-card {
-  display: flex; align-items: center; gap: 10px;
-  border: 1px dashed var(--color-stone-700); border-radius: var(--radius-md);
-  padding: 11px 16px; color: var(--color-text-2); font-size: 13px; background: transparent;
+.fail .t { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+.fail .t .when {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.3px;
+  color: var(--color-muted); font-variant-numeric: tabular-nums;
 }
-.pulse {
-  width: 8px; height: 8px; border-radius: 50%; background: var(--color-teal-500);
-  flex-shrink: 0;
-  animation: workPulse 1.6s ease-in-out infinite;
+/* The provider own words, verbatim and in mono — paraphrasing an error is
+   how you lose the one string that identifies it. */
+.fail .m {
+  font-family: var(--font-mono); font-size: 11px; color: var(--color-text-2);
+  line-height: 1.65; word-break: break-word;
 }
-@keyframes workPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
+.fail .n {
+  font-size: 11.5px; color: var(--color-muted); margin-top: 7px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
 }
-.pending-row .meta { font-family: var(--font-mono); font-size: 10px; color: var(--color-muted); }
-.resume-btn {
-  align-self: flex-start; background: none; border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-full); color: var(--color-subtle);
-  font-family: var(--font-mono); font-size: 11px; padding: 4px 14px; cursor: pointer;
+.fail.quiet { border-color: var(--color-stone-700); background: rgba(255, 255, 255, 0.015); }
+.fail.quiet .m { color: var(--color-subtle); }
+
+/* ══════════ In flight ══════════ */
+.pending { margin-bottom: 22px; }
+.pending .row {
+  display: flex; align-items: center; gap: 11px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--color-subtle);
+  font-variant-numeric: tabular-nums;
 }
-.resume-btn:hover { color: var(--color-text-2); border-color: var(--color-stone-600); }
+/* 2s, not a decorative 1.6s: one beat per poll, so the animation states the
+   cadence instead of merely suggesting activity. */
+.pending .pdot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--color-teal-500);
+  animation: pollPulse 2s var(--ease) infinite;
+}
+@keyframes pollPulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
 
 /* ══════════ Composer ══════════ */
-.composer-wrap {
+.composer {
   border-top: 1px solid var(--color-border); background: var(--color-surface);
-  padding: 14px 28px 12px;
+  padding: 16px 28px 18px;
 }
-.composer { max-width: 720px; margin: 0 auto; }
-.composer-error {
-  font-family: var(--font-mono); font-size: 11px; color: var(--color-subtle);
+.c-in { max-width: 820px; margin: 0 auto; }
+.c-row { display: flex; gap: 10px; align-items: flex-end; }
+.c-box {
+  flex: 1; min-width: 0;
+  background: var(--color-bg); border: 1px solid var(--color-stone-700);
+  border-radius: var(--radius-md); padding: 12px 14px; min-height: 48px;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.c-box:focus-within {
+  border-color: var(--color-teal-500);
+  box-shadow: 0 0 0 3px rgba(45, 212, 192, 0.13);
+}
+.c-box textarea {
+  width: 100%; background: none; border: none; outline: none; resize: none;
+  color: var(--color-text); font-family: var(--font-body); font-size: 14px;
+  line-height: 1.6; caret-color: var(--color-teal-500); display: block; max-height: 180px;
+}
+.c-box textarea::placeholder { color: var(--color-muted); }
+.c-box textarea:disabled { opacity: 0.55; }
+
+/* Round and icon-only: the one action of the screen, and the only control
+   here that needs no label to be understood. */
+.send {
+  width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
+  background: var(--color-teal-500); border: none; cursor: pointer;
+  display: grid; place-items: center; color: #08120F;
+  box-shadow: 0 6px 18px -8px rgba(45, 212, 192, 0.5);
+  transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.send:hover:not(:disabled) { background: var(--color-teal-400); }
+.send:active:not(:disabled) { transform: translateY(1px); background: var(--color-teal-600); }
+.send:disabled {
+  background: var(--color-stone-700); color: var(--color-stone-400);
+  box-shadow: none; cursor: not-allowed;
+}
+.send svg { width: 18px; height: 18px; }
+
+.c-hints {
+  display: flex; align-items: center; gap: 14px; margin-top: 9px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+.c-hints .kbd { font-size: 10px; padding: 1px 6px; }
+/* The live wire echo lands in the state slot the mockup reserves. */
+.c-hints .state { margin-left: auto; text-align: right; line-height: 1.7; }
+.c-hints .path { color: var(--color-subtle); }
+.c-hints .code-ok { color: var(--color-moss-400); }
+.c-error {
+  font-family: var(--font-mono); font-size: 11px; color: var(--color-slate-400);
   margin-bottom: 8px; line-height: 1.6; overflow-wrap: break-word;
 }
-.composer-box { display: flex; gap: 10px; align-items: flex-end; }
-.composer textarea {
-  flex: 1; resize: none; min-height: 46px; max-height: 140px;
-  background: var(--color-bg); border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-md);
-  padding: 12px 14px; font-family: var(--font-body); font-size: 14px;
-  color: var(--color-text); line-height: 1.5;
-}
-.composer textarea::placeholder { color: var(--color-muted); }
-.composer textarea:disabled { opacity: 0.55; }
-.btn-send {
-  background: var(--color-teal-500); color: var(--color-stone-950); border: none;
-  border-radius: var(--radius-full); font-weight: 600; font-size: 14px;
-  font-family: var(--font-body);
-  padding: 12px 26px; cursor: pointer; flex-shrink: 0;
-}
-.btn-send:hover { background: var(--color-teal-600); }
-/* Disabled state the mockup does not define — follows the .btn:disabled
-   precedent in primitives.css. */
-.btn-send:disabled { opacity: 0.55; cursor: default; }
-.btn-send:disabled:hover { background: var(--color-teal-500); }
-.wire {
-  max-width: 720px; margin: 8px auto 0;
-  font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
-  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-}
-.wire .path { color: var(--color-subtle); }
-.wire .code-ok { color: var(--color-moss-400); }
 
 /* ═════ TABLET · 701–1024px (contract: icon-rail regime) ═════ */
 @media (max-width: 1024px) and (min-width: 701px) {
-  .convo-bar, .thread, .composer-wrap { padding-left: 22px; padding-right: 22px; }
+  /* Two rows: the agent selector owns the first (it is the control you
+     touch most), the rest share the second. */
+  .ctx { display: grid; gap: 10px; padding: 14px 22px; }
+  .ctx-main, .ctx-extra { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+  .ctx-f, .ctx-new, .ctx-note { order: 0; }
+  .ctx-agent, .ctx-tenant { flex: 1; }
+  .ctx-input { width: 100%; }
+  .ctx-select, .ctx-chips { min-height: 44px; }
+  .ctx-select { height: 44px; }
+
+  .thread { padding: 22px 22px 16px; }
+  .thread-inner { max-width: 640px; }
+  .msg.user .bubble { max-width: 80%; }
+  .msg.agent .body { max-width: none; }
+  .loop, .fail { max-width: none; }
+  .composer { padding: 14px 22px 16px; }
+  .c-in { max-width: 640px; }
 }
 
 /* ═════ MOBILE · ≤700px (contract: topbar + drawer regime) ═════ */
@@ -216,26 +336,58 @@
   /* shell.css already gives .main padding-top: var(--topbar-h). */
   .convo-screen { height: calc(100dvh - var(--topbar-h)); }
 
-  .convo-bar { padding: 10px 14px; gap: 10px; }
-  .convo-field.agent-field, .convo-field.tenant-field { flex: 1 1 100%; }
-  .select-like { min-width: 0; width: 100%; }
-  .field-row { width: 100%; }
-  .field-row .ident-input { min-width: 0; flex: 1; }
-  .ident-input { min-width: 0; flex: 1; }
-  .convo-meta { margin-left: 0; }
-  .thread { padding: 18px 14px 10px; }
-  .msg, .loop-trace, .pending-row { max-width: 94%; }
-  .composer-wrap { padding: 10px 14px 10px; }
-  .btn-send { padding: 12px 20px; }
-  .wire { flex-direction: column; gap: 2px; }
-}
-
-/* ══════════ Motion — reduced-motion overrides ══════════
-   Must stay at the END of this file, AFTER the base .pulse rule: media
-   queries add no specificity, so only source order makes this win (same
-   contract as shell.css). */
-@media (prefers-reduced-motion: reduce) {
-  .pulse {
-    animation: none;
+  /* The strip compresses to one scrolling row of chips. The fields you
+     rarely retype on a phone — tenant, identity ref — move behind the
+     Context disclosure instead of eating the width. */
+  .ctx { display: block; padding: 0; }
+  .ctx-main {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; overflow-x: auto; white-space: nowrap;
+    -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent);
+    mask-image: linear-gradient(90deg, #000 92%, transparent);
   }
+  .ctx-main::-webkit-scrollbar { height: 0; }
+  .ctx-f { order: 0; flex-direction: row; align-items: center; flex-shrink: 0; }
+  .ctx-main .ctx-f label { display: none; }
+  .ctx-select {
+    height: 36px; border-radius: var(--radius-full); font-size: 12.5px;
+    padding: 0 30px 0 13px; max-width: 52vw;
+  }
+  .ctx .select-wrap::after { right: 13px; width: 7px; height: 7px; }
+  .ctx-chips { min-height: 0; flex-wrap: nowrap; }
+  .ctx-new, .ctx-toggle { height: 36px; padding: 0 13px; font-size: 12.5px; }
+  .ctx-toggle { display: inline-flex; }
+
+  .ctx-extra { display: none; }
+  .ctx-extra.open {
+    display: block; padding: 12px 14px 14px;
+    border-top: 1px solid var(--color-border-soft);
+  }
+  .ctx-extra.open .ctx-f { flex-direction: column; align-items: stretch; margin-bottom: 12px; }
+  .ctx-extra.open .ctx-f label { display: flex; }
+  .ctx-input { width: 100%; }
+
+  .thread { padding: 18px 14px 12px; }
+  .day, .session-mark { gap: 12px; margin: 22px 0 18px; font-size: 9px; }
+  .msg { margin-bottom: 18px; }
+  .msg .who { font-size: 9px; letter-spacing: 1.6px; gap: 9px; }
+  .msg.user .bubble { max-width: 88%; padding: 11px 14px; }
+  .msg.agent .body { max-width: none; }
+  .meta-line { font-size: 9.5px; gap: 12px; margin-top: 8px; }
+  .loop, .fail { max-width: none; }
+  .loop { margin-bottom: 18px; }
+  .loop-h { padding: 11px 13px; min-height: 44px; }
+  .tool { padding: 12px 13px; }
+  .tool pre { font-size: 10.5px; padding: 9px 11px; }
+
+  /* The composer is the last row of the column, so it is pinned to the
+     bottom without position:fixed — one less thing for the iOS keyboard to
+     fight with. The home-indicator inset rides on its padding. */
+  .composer { padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .c-box textarea {
+    /* 16px: below it iOS Safari zooms the page on focus. Keep. */
+    font-size: 16px; line-height: 1.55; max-height: 120px;
+  }
+  .c-hints { justify-content: center; gap: 12px; font-size: 9.5px; }
+  .c-hints .state { margin-left: 0; flex-basis: 100%; text-align: center; }
 }

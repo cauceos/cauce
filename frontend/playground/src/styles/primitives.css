@@ -90,7 +90,7 @@ h1 em { font-style: italic; color: var(--color-teal-500); }
 .input {
   flex: 1; min-width: 0; width: 100%; height: 41px;
   background: var(--color-bg); border: 1px solid var(--color-stone-700);
-  border-radius: var(--radius-sm); padding: 11px 12px 11px 34px;
+  border-radius: var(--radius-sm); padding: 11px 12px;
   color: var(--color-text); line-height: 1.5;
   font-family: var(--font-mono); font-size: 12.5px;
   font-variant-numeric: tabular-nums;
@@ -100,6 +100,10 @@ h1 em { font-style: italic; color: var(--color-teal-500); }
     box-shadow var(--t-fast) var(--ease),
     background var(--t-fast) var(--ease);
 }
+/* The left inset exists BECAUSE of the leading glyph, so it is opt-in — a
+   field without one (the tenant box on 02, most of 03/04) must not carry a
+   34px gutter for an icon that is not there. */
+.input.has-lead { padding-left: 34px; }
 .input::placeholder { color: var(--color-muted); }
 .input:hover:not(:disabled) { border-color: var(--color-stone-600); }
 /* Its own ring: `.input:focus` outranks the global `:focus-visible` outline
@@ -183,6 +187,44 @@ h1 em { font-style: italic; color: var(--color-teal-500); }
 /* Pressed means the secret is on screen; the accent says so on its own. */
 .ghost-btn[aria-pressed="true"] { color: var(--color-teal-500); }
 
+/* The pill ghost — a secondary action that must not compete with .btn.
+   Distinct from .ghost-btn, which is the squared control that sits flush
+   against a field. (workspace.css has a scoped copy of this shape predating
+   the primitive; it wins on specificity until 03/04 adopt this one.) */
+.btn-ghost {
+  background: none; border: 1px solid var(--color-stone-700);
+  border-radius: var(--radius-full); color: var(--color-text-2);
+  font-family: var(--font-body); font-size: 12px; font-weight: 500;
+  height: 40px; padding: 0 16px; cursor: pointer; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  transition:
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+.btn-ghost:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-stone-600); }
+.btn-ghost:active:not(:disabled) { background: var(--color-surface-2); }
+.btn-ghost:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Inside a dense block (a failure note, a thread rail) it steps down. */
+.btn-ghost.sm { height: 32px; padding: 0 14px; font-size: 11.5px; }
+.btn-ghost.mono {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px;
+  color: var(--color-subtle);
+}
+
+/* Chip family: a small labelled fact — a status, an id, a channel. Never
+   interactive; a chip that can be clicked is a .btn-ghost. */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 1px;
+  border: 1px solid var(--color-stone-700); border-radius: var(--radius-full);
+  padding: 2px 9px; color: var(--color-subtle); white-space: nowrap;
+}
+.chip.ok { color: var(--color-moss-400); border-color: rgba(111, 175, 130, 0.35); }
+/* Slate, never red — the doctrine from the session screen, unchanged. */
+.chip.bad { color: var(--color-slate-400); border-color: rgba(138, 180, 204, 0.35); }
+.chip.quiet { color: var(--color-muted); letter-spacing: 0.3px; }
+
 .kbd {
   font-family: var(--font-mono); font-size: 10px; color: var(--color-muted);
   border: 1px solid var(--color-stone-700); border-radius: 5px;
@@ -221,7 +263,7 @@ h1 em { font-style: italic; color: var(--color-teal-500); }
   h1 { font-size: 44px; letter-spacing: -1.8px; line-height: 1.03; margin-bottom: 16px; }
   .lede { font-size: 15px; line-height: 1.7; max-width: 46ch; }
   /* Touch targets, not mouse targets. */
-  .input, .ghost-btn { height: 44px; }
+  .input, .ghost-btn, .btn-ghost { height: 44px; }
   .btn { padding: 13px 26px; }
 }
 
@@ -243,11 +285,12 @@ h1 em { font-style: italic; color: var(--color-teal-500); }
 
   .input-wrap .lead { left: 13px; width: 15px; height: 15px; }
   .input {
-    height: auto; min-height: 48px; padding: 13px 14px 13px 36px; line-height: 1.4;
+    height: auto; min-height: 48px; padding: 13px 14px; line-height: 1.4;
     /* 16px is not a style choice: below it, iOS Safari zooms the whole page
        when the field takes focus. Do not lower this. */
     font-size: 16px;
   }
+  .input.has-lead { padding-left: 36px; }
   /* Reserve the track the reveal button occupies inside the field. */
   .input.has-eye { padding-right: 48px; }
 

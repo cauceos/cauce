@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { SendFailure } from './useConversationMachine'
 
-const MAX_TEXTAREA_HEIGHT_PX = 140
+const MAX_TEXTAREA_HEIGHT_PX = 180
 
 export function Composer({
   agentName,
@@ -44,10 +44,10 @@ export function Composer({
   }
 
   return (
-    <div className="composer-wrap">
-      <div className="composer">
+    <div className="composer">
+      <div className="c-in">
         {sendError !== null && (
-          <div className="composer-error" role="alert">
+          <div className="c-error" role="alert">
             {sendError.message}
             {sendError.fields.map((violation) => (
               <span key={violation.field}>
@@ -57,39 +57,63 @@ export function Composer({
             ))}
           </div>
         )}
-        <div className="composer-box">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            placeholder={agentName !== null ? `Message ${agentName}…` : 'Select an agent first…'}
-            value={text}
-            disabled={agentName === null}
-            onChange={(event) => {
-              setText(event.target.value)
-              const textarea = event.target
-              textarea.style.height = 'auto'
-              textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)}px`
-            }}
-            onKeyDown={onKeyDown}
-          />
+
+        <div className="c-row">
+          <div className="c-box">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              placeholder={agentName !== null ? `Message ${agentName}…` : 'Select an agent first…'}
+              value={text}
+              disabled={agentName === null}
+              onChange={(event) => {
+                setText(event.target.value)
+                const textarea = event.target
+                textarea.style.height = 'auto'
+                textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)}px`
+              }}
+              onKeyDown={onKeyDown}
+            />
+          </div>
           <button
-            className="btn-send"
+            className="send"
             type="button"
+            aria-label="Send"
             disabled={!canSend || text.trim() === ''}
             onClick={() => void submit()}
           >
-            Send
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12h13M13 6l6 6-6 6" />
+            </svg>
           </button>
         </div>
-        <div className="wire">
+
+        <div className="c-hints">
           <span>
-            {wireLeft !== null ? (
-              wireLine(wireLeft)
-            ) : (
-              <span className="path">POST /v1/agents/{'{id}'}/messages</span>
+            <span className="kbd">⏎</span> send
+          </span>
+          <span>
+            <span className="kbd">⇧⏎</span> newline
+          </span>
+          {/* The state slot carries the live wire echo instead of a label:
+              what the screen is actually doing beats a description of it. */}
+          <span className="state">
+            {wireLeft !== null ? wireLine(wireLeft) : 'idle · one Idempotency-Key per send'}
+            {wireRight !== null && (
+              <>
+                <br />
+                {wireLine(wireRight)}
+              </>
             )}
           </span>
-          {wireRight !== null && <span>{wireLine(wireRight)}</span>}
         </div>
       </div>
     </div>

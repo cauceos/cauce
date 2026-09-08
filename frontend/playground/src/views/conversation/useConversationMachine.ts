@@ -54,6 +54,14 @@ export interface ConversationMachineState {
   sendError: SendFailure | null
   wireLeft: string | null
   wireRight: string | null
+  /**
+   * Id of the earliest message THIS session sent into the bound
+   * conversation, or null when it has sent none. Purely derived (the
+   * smallest recorded trigger id); the thread uses it to mark where
+   * invocation meta starts existing, which is otherwise inferable only by
+   * noticing that older replies have no meta line.
+   */
+  sessionAnchorMessageId: string | null
 }
 
 interface ConvoCacheEntry {
@@ -101,6 +109,7 @@ const INITIAL_STATE: ConversationMachineState = {
   sendError: null,
   wireLeft: null,
   wireRight: null,
+  sessionAnchorMessageId: null,
 }
 
 export function useConversationMachine(client: ApiClient) {
@@ -135,7 +144,12 @@ export function useConversationMachine(client: ApiClient) {
     const machine = machineRef.current
     const entry = machine.currentConvId !== null ? machine.cache.get(machine.currentConvId) : undefined
     if (entry === undefined) {
-      patch({ conversation: null, visibleItems: [], hiddenMessageCount: 0 })
+      patch({
+        conversation: null,
+        visibleItems: [],
+        hiddenMessageCount: 0,
+        sessionAnchorMessageId: null,
+      })
       return
     }
     const items = buildThreadItems(sortMessages(entry.messages.values()), entry.invocations)
@@ -143,10 +157,15 @@ export function useConversationMachine(client: ApiClient) {
       items,
       RENDER_WINDOW * (1 + entry.revealSteps),
     )
+    let anchor: string | null = null
+    for (const record of entry.invocations) {
+      if (anchor === null || record.triggerMessageId < anchor) anchor = record.triggerMessageId
+    }
     patch({
       conversation: entry.conversation,
       visibleItems: visible,
       hiddenMessageCount,
+      sessionAnchorMessageId: anchor,
     })
   }, [patch])
 
@@ -241,6 +260,7 @@ export function useConversationMachine(client: ApiClient) {
         record.outcome = {
           status: invocation.status,
           failureReason: invocation.failure_reason,
+          durationMs: invocationDurationMs(invocation),
         }
       }
 
@@ -471,6 +491,19 @@ export function useConversationMachine(client: ApiClient) {
 
 export function shortId(id: string): string {
   return `${id.slice(0, 8)}…`
+}
+
+/**
+ * How long the invocation took, from the two timestamps the wire already
+ * carries. Null when `completed_at` is absent or either stamp is unparsable
+ * — a duration is never guessed.
+ */
+function invocationDurationMs(invocation: InvocationResponse): number | null {
+  if (invocation.completed_at === null) return null
+  const start = new Date(invocation.created_at).getTime()
+  const end = new Date(invocation.completed_at).getTime()
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null
+  return end - start
 }
 
 function isFatalPollError(cause: unknown): boolean {

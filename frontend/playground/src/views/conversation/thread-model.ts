@@ -26,14 +26,31 @@ export interface InvocationRecord {
   invocationId: string
   /** `message_id` of the 202 — the trigger USER message. */
   triggerMessageId: string
+  /* NOTE: the model is deliberately NOT recorded here. It is absent from
+     the invocation wire, and deducing it from the agent a send targeted
+     breaks in the case that matters most — switch agents mid-thread (two
+     homonyms on different models is real on this instance) and the meta of
+     the earlier messages would name the wrong one. A deduced field that
+     lies at the edge is worse than a field that does not exist. */
   /** Terminal outcome; null while live (renders no meta yet). */
-  outcome: { status: InvocationStatus; failureReason: FailureReason | null } | null
+  outcome: InvocationOutcome | null
+}
+
+export interface InvocationOutcome {
+  status: InvocationStatus
+  failureReason: FailureReason | null
+  /**
+   * `completed_at - created_at` of the invocation, both on the wire. Null
+   * when the row has no `completed_at` (it can be absent on a failure).
+   */
+  durationMs: number | null
 }
 
 export interface InvocationMetaInfo {
   invocationId: string
   status: InvocationStatus
   failureReason: FailureReason | null
+  durationMs: number | null
 }
 
 export type ThreadItem =
@@ -118,6 +135,7 @@ export function buildThreadItems(
       invocationId: record.invocationId,
       status: record.outcome.status,
       failureReason: record.outcome.failureReason,
+      durationMs: record.outcome.durationMs,
     }
     const anchor = lastAttributed.get(record.invocationId)
     if (anchor !== undefined && anchor.role === 'AGENT') {

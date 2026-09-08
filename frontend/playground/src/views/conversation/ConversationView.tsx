@@ -18,6 +18,17 @@ export function ConversationView() {
 
 const DEFAULT_IDENTITY_REF = 'playground-user-1'
 
+/**
+ * A conversation is keyed by (agent, channel, external_identity_ref) among
+ * the OPEN ones, and there is no create-conversation endpoint — so a fresh
+ * identity ref IS how you start a new conversation. It is written into the
+ * visible field rather than held privately: nothing about which thread the
+ * next send lands in should be hidden.
+ */
+function freshIdentityRef(): string {
+  return `playground-user-${crypto.randomUUID().slice(0, 8)}`
+}
+
 function ConnectedConversation({ client }: { client: ApiClient }) {
   const { tenantId, setTenantId } = useSession()
   const location = useLocation()
@@ -72,6 +83,7 @@ function ConnectedConversation({ client }: { client: ApiClient }) {
         onSelectAgent={setSelectedAgentId}
         identityRef={identityRef}
         onIdentityRefChange={setIdentityRef}
+        onNewConversation={() => setIdentityRef(freshIdentityRef())}
         conversation={state.conversation}
         disabled={busy}
       />
@@ -86,6 +98,7 @@ function ConnectedConversation({ client }: { client: ApiClient }) {
         stopReason={state.stopReason}
         fatalNote={state.fatalNote}
         hasConversation={state.conversation !== null}
+        sessionAnchorMessageId={state.sessionAnchorMessageId}
         onLoadEarlier={loadEarlier}
         onResume={resume}
       />

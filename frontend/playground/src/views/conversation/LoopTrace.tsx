@@ -8,33 +8,57 @@ type LoopItem = Extract<ThreadItem, { kind: 'loop' }>
  * The screen's signature: a maximal run of consecutive TOOL_CALL /
  * TOOL_RESULT messages, rendered as one collapsible trace block.
  *
- * `tool_content` (when the wire carries it) supplies the structured view
- * the mockup specifies: `args {…}` on the call, the result's tool name and
- * `is_error` flag. Messages without it (older instances) fall back to the
- * flattened `content`. Rounds are still not derivable from the wire (two
- * calls in one round and two one-call rounds look identical), so the
- * summary counts tool calls only.
+ * `tool_content` supplies the structured view — `input` on the call,
+ * `output` + `is_error` on the result. Messages without it (older
+ * instances) fall back to the flattened `content`; arguments are never
+ * invented to fill the gap.
+ *
+ * There is no "round N" label: two calls in one round and two one-call
+ * rounds are identical on the wire, so the summary counts tool calls only.
  */
 export function LoopTrace({ item }: { item: LoopItem }) {
-  // Expanded by default — the mockup only draws the open state.
   const [open, setOpen] = useState(true)
   return (
-    <div className="loop-trace">
+    <div className={open ? 'loop open' : 'loop'}>
       <button
-        className="loop-summary"
+        className="loop-h"
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((wasOpen) => !wasOpen)}
       >
-        <span className="tri">{open ? '▼' : '▶'}</span> agent loop · {item.toolCallCount} tool{' '}
-        {item.toolCallCount === 1 ? 'call' : 'calls'}
+        <svg
+          className="chev"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.4}
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+        <span className="t">
+          agent loop · {item.toolCallCount} tool {item.toolCallCount === 1 ? 'call' : 'calls'}
+        </span>
+        {/* The mark's three strata: the loop is the brand's own shape. */}
+        <span className="strata" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
       </button>
-      {open &&
-        item.messages.map((message) => (
-          <div className="tool-card" key={message.id}>
-            {message.role === 'TOOL_CALL' ? <CallCard message={message} /> : <ResultCard message={message} />}
-          </div>
-        ))}
+
+      {open && (
+        <div className="loop-body">
+          {item.messages.map((message) =>
+            message.role === 'TOOL_CALL' ? (
+              <CallCard key={message.id} message={message} />
+            ) : (
+              <ResultCard key={message.id} message={message} />
+            ),
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -42,42 +66,45 @@ export function LoopTrace({ item }: { item: LoopItem }) {
 function CallCard({ message }: { message: MessageResponse }) {
   const tool = message.tool_content
   return (
-    <>
-      <span className="k">TOOL_CALL</span> · {tool?.tool_name ?? message.content}
+    <div className="tool">
+      <div className="th">
+        <span className="kind">TOOL_CALL</span>
+        <span className="tname">{tool?.tool_name ?? message.content}</span>
+      </div>
       {tool !== undefined && (
-        <>
-          <br />
-          <span className="payload">args {formatArgs(tool.input)}</span>
-        </>
+        <pre>
+          <span className="k">input </span>
+          {formatJson(tool.input)}
+        </pre>
       )}
-    </>
+    </div>
   )
 }
 
 function ResultCard({ message }: { message: MessageResponse }) {
   const tool = message.tool_content
+  const errored = tool?.is_error === true
   return (
-    <>
-      <span className="r">TOOL_RESULT</span>
-      {tool !== undefined && (
-        <>
-          {' '}
-          · {tool.tool_name} ·{' '}
-          <span className={tool.is_error === true ? 'flag err' : 'flag'}>
-            is_error: {tool.is_error === true ? 'true' : 'false'}
-          </span>
-        </>
-      )}
-      <br />
-      {/* `content` already flattens the result output (with "[empty
-          result]" for blank), so it stays the payload either way. */}
-      <span className="payload">{message.content}</span>
-    </>
+    <div className={errored ? 'tool err' : 'tool'}>
+      <div className="th">
+        <span className="kind">TOOL_RESULT</span>
+        {tool !== undefined && <span className="tname">{tool.tool_name}</span>}
+        {/* Slate chip, never red, and only when it is actually true — an
+            "is_error: false" on every result is noise, not information. */}
+        {errored && <span className="chip bad">is_error</span>}
+      </div>
+      <pre>
+        <span className="k">output </span>
+        {/* `content` already flattens the result output (with "[empty
+            result]" for blank), so it is the payload either way. */}
+        <span className="s">{message.content}</span>
+      </pre>
+    </div>
   )
 }
 
-/** `args {}` when empty (the mockup's literal), pretty-printed otherwise. */
-function formatArgs(input: Record<string, unknown> | undefined): string {
+/** `{}` when empty (the mockup's literal), pretty-printed otherwise. */
+function formatJson(input: Record<string, unknown> | undefined): string {
   if (input === undefined || Object.keys(input).length === 0) return '{}'
   return JSON.stringify(input, null, 2)
 }

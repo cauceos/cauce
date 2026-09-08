@@ -116,7 +116,7 @@ export function SessionView() {
                   <path d="M7 7.5h.01M7 16.5h.01" />
                 </svg>
                 <input
-                  className={urlRejected ? 'input err' : 'input'}
+                  className={urlRejected ? 'input has-lead err' : 'input has-lead'}
                   id="url"
                   type="url"
                   inputMode="url"
@@ -152,7 +152,7 @@ export function SessionView() {
                   <path d="M11 11l8-8M17 4l3 3M14 7l2 2" />
                 </svg>
                 <input
-                  className={keyRejected ? 'input has-eye err' : 'input has-eye'}
+                  className={keyRejected ? 'input has-lead has-eye err' : 'input has-lead has-eye'}
                   id="key"
                   type={showKey ? 'text' : 'password'}
                   placeholder="ck_…"
