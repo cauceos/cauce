@@ -137,11 +137,23 @@ separates A0 from A1:
 |---|---|
 | `VALID` | Recomputation and signatures consistent from genesis to head. |
 | `BROKEN` | An inconsistency was found. Carries the break point and classification. |
-| `TRUNCATED` | The chain ends earlier than expected and what is present is consistent. The signature of a restored backup, not of an alteration. |
+| `TRUNCATED` | The chain is consistent but ends before a head recorded earlier **outside the database**. The signature of a restored backup, not of an alteration. Not issuable today — see below. |
 | `UNVERIFIABLE` | No verdict can be issued: a public key for a present `key_id` is missing, or entries carry an unknown signature scheme. Neither good nor bad — **no answer**. |
 
 `UNVERIFIABLE` exists to avoid the easiest available lie: calling a chain broken
 when it is merely unreadable by this verifier.
+
+`TRUNCATED` needs a reference the database cannot provide. A restore is a
+consistent snapshot: the head row, the outbox, the timestamps and the chain's
+own verification entries all move with it, so from inside the database a chain
+shortened to a consistent earlier state is indistinguishable from one that was
+never longer. The verdict is only issuable against a head kept elsewhere — which
+is exactly what external time anchoring publishes (deferred, below). Until that
+lands the verifier has three states, every response carries the current head so
+a reference can be kept, and truncation is never guessed. A caller-supplied
+anchor was implemented and withdrawn: optional or not, it puts a client's claim
+about the past into the verdict and fixes the comparison's wire shape before the
+anchoring medium is chosen, which is the decision this ADR defers.
 
 ### 5. Verification is recorded in the chain
 
@@ -185,8 +197,8 @@ of this unit, not something already in place.
 
 - A schema migration adding `key_id` and `signature_scheme` alongside the
   existing `signature` column. Only `signature` exists today.
-- Two verdict states to add, in the API response and in the playground screen
-  that renders it.
+- One verdict state to add now (`UNVERIFIABLE`), in the API response and in the
+  playground screen that renders it; `TRUNCATED` waits for external anchoring.
 - An operational procedure that did not exist: generating, holding, backing up
   and rotating a signing key. Losing the private key stops new signing; losing
   the public key makes past entries unverifiable. They must not be stored
@@ -208,7 +220,8 @@ of this unit, not something already in place.
   hash includes the previous one, publishing the head hash is enough to commit to
   the entire chain up to that point. The choice of medium — an open timestamping
   protocol, or a qualified timestamping authority — is made when a client asks,
-  and may well be both.
+  and may well be both. It is also what makes `TRUNCATED` issuable: the published
+  head is the reference the verifier compares against.
 - **Per-tenant keys.** Additive, thanks to `key_id`.
 
 ## Notes
