@@ -18,6 +18,7 @@ import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -101,7 +102,19 @@ class ChainVerificationApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.verified_entries").value(drained))
                 .andExpect(jsonPath("$.pre_chain_entries").value(0))
                 .andExpect(jsonPath("$.first_break").value((Object) null))
+                .andExpect(jsonPath("$.head.sequence_number").value(drained))
+                .andExpect(jsonPath("$.head.entry_hash").isString())
+                .andExpect(jsonPath("$.expected_head").value((Object) null))
+                .andExpect(jsonPath("$.unverifiable_from_sequence").value((Object) null))
+                // The test profile configures no signing key: every entry is unsigned, and
+                // the response says so as a count plus the standing note, never as a defect.
+                .andExpect(jsonPath("$.signatures.verified").value(0))
+                .andExpect(jsonPath("$.signatures.unsigned").value(drained))
+                .andExpect(jsonPath("$.signatures.unverifiable").value(0))
+                .andExpect(jsonPath("$.signatures.missing_key_ids").isEmpty())
+                .andExpect(jsonPath("$.signatures.note").value(SignatureSummary.NOTE))
                 .andExpect(jsonPath("$.verification_scope.method").exists())
+                .andExpect(jsonPath("$.verification_scope.detects").isArray())
                 .andExpect(jsonPath("$.verification_scope.does_not_detect").exists())
                 .andExpect(jsonPath("$.verified_at").exists());
     }
@@ -174,33 +187,202 @@ class ChainVerificationApiIT extends AbstractApiIntegrationTest {
                 .andExpect(status().isOk());
     }
 
-    // === VOCABULARY (golden-rule regression, over the SERIALIZED JSON, valid AND broken) ===
+    // === THE FOUR STATES, THE ANCHOR, AND THE RECORD ===
+
+    /** TRUNCATED needs an anchor: the head kept from an earlier response, passed back. */
+    @Test
+    void getChainVerification_chainShorterThanExpectedHead_returnsTruncated() throws Exception {
+        int drained = drainAll(clientAId);
+        ChainHeadSnapshot head = headOf(getAs(clientAAuth, chainUrl(clientAId), status().isOk()));
+        assertThat(head.sequence()).isEqualTo(drained);
+        // "Restore a backup": the owner connection drops the last entry. The chain that
+        // remains is perfectly consistent — nothing inside the database can tell.
+        jdbc.update("DELETE FROM audit_log_entries WHERE tenant_id = ? AND sequence_number = ?",
+                clientAId, head.sequence());
+
+        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId, head)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("TRUNCATED"))
+                .andExpect(jsonPath("$.first_break").value((Object) null))
+                .andExpect(jsonPath("$.verified_entries").value(drained - 1))
+                .andExpect(jsonPath("$.head.sequence_number").value(drained - 1))
+                .andExpect(jsonPath("$.expected_head.sequence_number").value(head.sequence()))
+                .andExpect(jsonPath("$.expected_head.entry_hash").value(head.hash()));
+
+        // Without the anchor, the same chain is VALID: truncation is never guessed.
+        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("VALID"));
+    }
+
+    @Test
+    void getChainVerification_expectedHeadStillReached_returnsValidAndEchoesIt() throws Exception {
+        drainAll(clientAId);
+        ChainHeadSnapshot head = headOf(getAs(clientAAuth, chainUrl(clientAId), status().isOk()));
+
+        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId, head)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("VALID"))
+                .andExpect(jsonPath("$.expected_head.sequence_number").value(head.sequence()))
+                .andExpect(jsonPath("$.expected_head.entry_hash").value(head.hash()));
+    }
+
+    @Test
+    void getChainVerification_expectedHeadWithDifferentHash_returnsBrokenAnchorMismatch()
+            throws Exception {
+        drainAll(clientAId);
+        ChainHeadSnapshot head = headOf(getAs(clientAAuth, chainUrl(clientAId), status().isOk()));
+        ChainHeadSnapshot foreign = new ChainHeadSnapshot(head.sequence(), "f".repeat(64));
+
+        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId, foreign)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("BROKEN"))
+                .andExpect(jsonPath("$.first_break.sequence_number").value(head.sequence()))
+                .andExpect(jsonPath("$.first_break.classification").value("ANCHOR_MISMATCH"));
+    }
+
+    @Test
+    void getChainVerification_halfAnAnchor_returns400() throws Exception {
+        mockMvc.perform(getAs(clientAAuth,
+                        chainUrl(clientAId) + "?expected_head_sequence=3"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("bad_request"));
+        mockMvc.perform(getAs(clientAAuth,
+                        chainUrl(clientAId) + "?expected_head_hash=abc"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(getAs(clientAAuth,
+                        chainUrl(clientAId) + "?expected_head_sequence=0&expected_head_hash=abc"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** UNVERIFIABLE: an entry under a scheme this build does not implement. No answer, no break. */
+    @Test
+    void getChainVerification_entryUnderUnknownHashScheme_returnsUnverifiable() throws Exception {
+        int drained = drainAll(clientAId);
+        jdbc.update("UPDATE audit_log_entries SET hash_scheme = 'v999' "
+                + "WHERE tenant_id = ? AND sequence_number = 2", clientAId);
+
+        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UNVERIFIABLE"))
+                .andExpect(jsonPath("$.first_break").value((Object) null))
+                .andExpect(jsonPath("$.unverifiable_from_sequence").value(2))
+                .andExpect(jsonPath("$.verified_entries").value(1))
+                .andExpect(jsonPath("$.head.sequence_number").value(1));
+        assertThat(drained).isGreaterThan(2);
+    }
+
+    /**
+     * ADR 0003 §5: every verification is recorded in the chain it verified, through the same
+     * outbox path as any other event, and the NEXT verification checks and counts it. Here
+     * the partner verifies its client: the record lands in the CLIENT's chain, with the
+     * partner as the actor.
+     */
+    @Test
+    void getChainVerification_isRecordedInTheVerifiedChain_andCountedNextTime()
+            throws Exception {
+        int drained = drainAll(clientAId);
+
+        mockMvc.perform(getAs(partnerAuth, chainUrl(clientAId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verified_entries").value(drained));
+
+        // The record sits in the outbox until the drainer's next tick; one tick, then look.
+        assertThat(drainAll(clientAId)).isEqualTo(1);
+        Map<String, Object> recorded = jdbc.queryForMap(
+                "SELECT event_type, payload::text AS payload FROM audit_log_entries "
+                        + "WHERE tenant_id = ? AND sequence_number = ?",
+                clientAId, drained + 1);
+        assertThat(recorded.get("event_type")).isEqualTo("ledger.chain.verified");
+        assertThat((String) recorded.get("payload"))
+                .contains("\"actor_tenant_id\": \"" + partnerId + "\"")
+                .contains("\"verdict\": \"VALID\"")
+                .contains("\"chained_count\": " + drained);
+
+        // Recursive by design: the verification entry is now part of what gets verified.
+        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("VALID"))
+                .andExpect(jsonPath("$.verified_entries").value(drained + 1));
+    }
+
+    // === VOCABULARY (golden-rule regression, over the SERIALIZED JSON, all FOUR states) ===
 
     @Test
     void chainVerificationResponses_neverContainComplianceVocabulary() throws Exception {
-        drainAll(clientAId);
+        int drained = drainAll(clientAId);
         String validBody = getAs(clientAAuth, chainUrl(clientAId), status().isOk());
+        ChainHeadSnapshot head = headOf(validBody);
 
+        jdbc.update("DELETE FROM audit_log_entries WHERE tenant_id = ? AND sequence_number = ?",
+                clientAId, drained);
+        String truncatedBody = getAs(clientAAuth, chainUrl(clientAId, head), status().isOk());
+
+        jdbc.update("UPDATE audit_log_entries SET hash_scheme = 'v999' "
+                + "WHERE tenant_id = ? AND sequence_number = 2", clientAId);
+        String unverifiableBody = getAs(clientAAuth, chainUrl(clientAId), status().isOk());
+
+        jdbc.update("UPDATE audit_log_entries SET hash_scheme = 'v2' "
+                + "WHERE tenant_id = ? AND sequence_number = 2", clientAId);
         tamperPayload(clientAId, 2);
         String brokenBody = getAs(clientAAuth, chainUrl(clientAId), status().isOk());
 
-        for (String body : List.of(validBody, brokenBody)) {
+        // The verification records themselves are surface too: drain them and read them back.
+        assertThat(drainAll(clientAId)).isEqualTo(4);
+        List<String> recordedPayloads = jdbc.queryForList(
+                "SELECT payload::text FROM audit_log_entries WHERE tenant_id = ? "
+                        + "AND event_type = 'ledger.chain.verified'", String.class, clientAId);
+        assertThat(recordedPayloads).hasSize(4);
+
+        List<String> surfaces = new java.util.ArrayList<>(
+                List.of(validBody, truncatedBody, unverifiableBody, brokenBody));
+        surfaces.addAll(recordedPayloads);
+        for (String body : surfaces) {
             String lower = body.toLowerCase(Locale.ROOT);
             for (String term : FORBIDDEN) {
                 assertThat(lower)
-                        .as("response JSON must not contain the term '%s'", term)
+                        .as("surface must not contain the term '%s'", term)
                         .doesNotContain(term);
             }
         }
-        // Sanity: we actually scanned the scope text and both statuses.
-        assertThat(validBody).contains("does_not_detect").contains("\"VALID\"");
+        // Sanity: we actually scanned the scope text, the note, and all four statuses.
+        assertThat(validBody).contains("does_not_detect").contains("\"note\"")
+                .contains("\"VALID\"");
+        assertThat(truncatedBody).contains("\"TRUNCATED\"");
+        assertThat(unverifiableBody).contains("\"UNVERIFIABLE\"");
         assertThat(brokenBody).contains("\"BROKEN\"");
+    }
+
+    /** The scope text no longer claims signatures are pending: they exist, and it says so. */
+    @Test
+    void verificationScope_describesTheCurrentCapability() throws Exception {
+        String body = getAs(clientAAuth, chainUrl(clientAId), status().isOk());
+
+        assertThat(body)
+                .doesNotContain("reserved and not yet enabled")
+                .contains("holds the signing key")
+                .contains("public key its key id names");
     }
 
     // --- helpers ---
 
     private static String chainUrl(UUID tenantId) {
         return "/v1/tenants/" + tenantId + "/audit/chain-verification";
+    }
+
+    private static String chainUrl(UUID tenantId, ChainHeadSnapshot anchor) {
+        return chainUrl(tenantId) + "?expected_head_sequence=" + anchor.sequence()
+                + "&expected_head_hash=" + anchor.hash();
+    }
+
+    /** What a client keeps from a response: the head, to pass back as the anchor next time. */
+    private record ChainHeadSnapshot(long sequence, String hash) {
+    }
+
+    private ChainHeadSnapshot headOf(String responseBody) throws Exception {
+        var head = objectMapper.readTree(responseBody).get("head");
+        return new ChainHeadSnapshot(head.get("sequence_number").asLong(),
+                head.get("entry_hash").asText());
     }
 
     /** Drains all of a tenant's PENDING outbox rows into the chain, under its context. */

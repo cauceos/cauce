@@ -200,19 +200,20 @@ class AuditChainVerifierTest {
     }
 
     /**
-     * The public key for a key_id in the chain is missing. The chain recomputes, so the
-     * verdict stays valid; the signatures are reported as unverifiable, naming the key_id.
-     * Neither "broken" nor "verified" — both would be lies.
+     * The public key for a key_id in the chain is missing. The chain recomputes, but part
+     * of it could not be checked: the verdict is UNVERIFIABLE — no answer — and the report
+     * names the key_id. Neither "broken" nor "valid": both would be lies.
      */
     @Test
-    void verifyChain_signedButNoPublicKeyAvailable_isValidAndReportedUnverifiable() {
+    void verifyChain_signedButNoPublicKeyAvailable_isUnverifiableNotBroken() {
         KeyPair pair = newKeyPair();
         stubLedger(chainOf(2, 1, hasher.genesisHash(tenantId), AuditChainHasher.SCHEME_V2,
                 signerFor(pair)));
 
         ChainVerificationResult result = verifier.verifyChain(tenantId);
 
-        assertThat(result.valid()).isTrue();
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.UNVERIFIABLE);
+        assertThat(result.brokenAtSequence()).isNull();
         assertThat(result.signatures().verified()).isZero();
         assertThat(result.signatures().unverifiable()).isEqualTo(2);
         assertThat(result.signatures().missingKeyIds())
@@ -295,7 +296,7 @@ class AuditChainVerifierTest {
                 verifierKnowing(AuditKeyRegistry.of(publicKeyOf(newPair, null)))
                         .verifyChain(tenantId);
 
-        assertThat(result.valid()).isTrue();
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.UNVERIFIABLE);
         assertThat(result.signatures().verified()).isEqualTo(3);
         assertThat(result.signatures().unverifiable()).isEqualTo(2);
         assertThat(result.signatures().missingKeyIds())
@@ -538,9 +539,13 @@ class AuditChainVerifierTest {
         assertThat(result.breakKind()).isEqualTo(ChainBreakKind.PRE_CHAIN_AFTER_CHAINED);
     }
 
+    /**
+     * A hash scheme this build does not implement: "written by a newer version than me" is
+     * not a defect. The walk stops there and says so; the prefix before it stays verified.
+     */
     @Test
-    void verifyChain_chainedRowWithUnknownScheme_breaksAsMalformed() {
-        List<AuditLogEntryEntity> entities = new ArrayList<>(chainOf(2));
+    void verifyChain_chainedRowWithUnknownHashScheme_isUnverifiableFromThatSequence() {
+        List<AuditLogEntryEntity> entities = new ArrayList<>(chainOf(3));
         AuditLogEntryEntity target = entities.get(1);
         entities.set(1, new AuditLogEntryEntity(target.getId(), target.getTenantId(),
                 target.getSequenceNumber(), target.getOutboxId(), target.getEventType(),
@@ -551,9 +556,173 @@ class AuditChainVerifierTest {
 
         ChainVerificationResult result = verifier.verifyChain(tenantId);
 
-        assertThat(result.valid()).isFalse();
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.UNVERIFIABLE);
+        assertThat(result.unverifiableFromSequence()).isEqualTo(2);
+        assertThat(result.brokenAtSequence()).isNull();
+        assertThat(result.chainedCount()).isEqualTo(1);
+        assertThat(result.head()).isEqualTo(new ChainHead(1, entities.get(0).getEntryHash()));
+    }
+
+    /** But a KNOWN scheme with a missing hash field is still malformed: that is a defect. */
+    @Test
+    void verifyChain_chainedRowMissingPayloadHash_breaksAsMalformed() {
+        List<AuditLogEntryEntity> entities = new ArrayList<>(chainOf(2));
+        AuditLogEntryEntity target = entities.get(1);
+        entities.set(1, new AuditLogEntryEntity(target.getId(), target.getTenantId(),
+                target.getSequenceNumber(), target.getOutboxId(), target.getEventType(),
+                target.getPayload(), target.getDrainedAt(), null,
+                target.getPrevHash(), target.getEntryHash(), target.getHashScheme(),
+                target.getSignature(), target.getKeyId(), target.getSignatureScheme()));
+        stubLedger(entities);
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId);
+
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.BROKEN);
         assertThat(result.brokenAtSequence()).isEqualTo(2);
         assertThat(result.breakKind()).isEqualTo(ChainBreakKind.MALFORMED_ENTRY);
+    }
+
+    // === THE FOUR VERDICTS, AND THE ANCHOR ===
+
+    @Test
+    void verifyChain_intactChain_reportsItsHead() {
+        List<AuditLogEntryEntity> entities = chainOf(3);
+        stubLedger(entities);
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId);
+
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.VALID);
+        assertThat(result.head()).isEqualTo(new ChainHead(3, headHashOf(entities)));
+        assertThat(result.expectedHead()).isNull();
+    }
+
+    @Test
+    void verifyChain_emptyChain_hasNoHead() {
+        stubLedger(List.of());
+
+        assertThat(verifier.verifyChain(tenantId).head()).isNull();
+    }
+
+    /** The anchor the caller kept from last time still holds: VALID, anchor echoed. */
+    @Test
+    void verifyChain_anchorThatMatches_isValidAndEchoesTheAnchor() {
+        List<AuditLogEntryEntity> entities = chainOf(4);
+        ChainHead anchor = new ChainHead(2, entities.get(1).getEntryHash());
+        stubLedger(entities);
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId, anchor);
+
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.VALID);
+        assertThat(result.expectedHead()).isEqualTo(anchor);
+        assertThat(result.head()).isEqualTo(new ChainHead(4, headHashOf(entities)));
+    }
+
+    /**
+     * TRUNCATED: the restored-backup signature. The chain is consistent but no longer reaches
+     * the head the caller observed. Only ever issued against that anchor.
+     */
+    @Test
+    void verifyChain_consistentChainShorterThanAnchor_isTruncated() {
+        List<AuditLogEntryEntity> full = chainOf(5);
+        ChainHead anchorAtFive = new ChainHead(5, headHashOf(full));
+        stubLedger(full.subList(0, 3)); // "restored" to three entries
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId, anchorAtFive);
+
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.TRUNCATED);
+        assertThat(result.valid()).isFalse();
+        assertThat(result.brokenAtSequence()).isNull();
+        assertThat(result.chainedCount()).isEqualTo(3);
+        assertThat(result.head()).isEqualTo(new ChainHead(3, full.get(2).getEntryHash()));
+        assertThat(result.expectedHead()).isEqualTo(anchorAtFive);
+    }
+
+    /** Without an anchor the same shortened chain is simply VALID: truncation is never guessed. */
+    @Test
+    void verifyChain_shortenedChainWithoutAnchor_isValid() {
+        List<AuditLogEntryEntity> full = chainOf(5);
+        stubLedger(full.subList(0, 3));
+
+        assertThat(verifier.verifyChain(tenantId).verdict()).isEqualTo(ChainVerdict.VALID);
+    }
+
+    /** The chain reaches the anchor's sequence, but with a different hash: something changed. */
+    @Test
+    void verifyChain_anchorHashDiffersAtThatSequence_breaksAsAnchorMismatch() {
+        List<AuditLogEntryEntity> entities = chainOf(4);
+        ChainHead foreign = new ChainHead(2, "f".repeat(64));
+        stubLedger(entities);
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId, foreign);
+
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.BROKEN);
+        assertThat(result.brokenAtSequence()).isEqualTo(2);
+        assertThat(result.breakKind()).isEqualTo(ChainBreakKind.ANCHOR_MISMATCH);
+    }
+
+    /** An anchor pointing at a pre-chain row cannot be from this chain's hashed part. */
+    @Test
+    void verifyChain_anchorAtPreChainRow_breaksAsAnchorMismatch() {
+        List<AuditLogEntryEntity> entities = new ArrayList<>();
+        entities.add(preChainEntity(1));
+        entities.addAll(chainOf(2, 2, hasher.genesisHash(tenantId)));
+        stubLedger(entities);
+
+        ChainVerificationResult result =
+                verifier.verifyChain(tenantId, new ChainHead(1, "x".repeat(64)));
+
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.BROKEN);
+        assertThat(result.breakKind()).isEqualTo(ChainBreakKind.ANCHOR_MISMATCH);
+        assertThat(result.brokenAtSequence()).isEqualTo(1);
+    }
+
+    /** Precedence: a found inconsistency is never softened into a truncation. */
+    @Test
+    void verifyChain_brokenAndShorterThanAnchor_isBrokenNotTruncated() {
+        List<AuditLogEntryEntity> full = chainOf(5);
+        List<AuditLogEntryEntity> restored = new ArrayList<>(full.subList(0, 3));
+        restored.set(1, withPayload(restored.get(1), Map.of("tampered", true)));
+        stubLedger(restored);
+
+        ChainVerificationResult result =
+                verifier.verifyChain(tenantId, new ChainHead(5, headHashOf(full)));
+
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.BROKEN);
+        assertThat(result.breakKind()).isEqualTo(ChainBreakKind.PAYLOAD_HASH_MISMATCH);
+    }
+
+    /** Precedence: TRUNCATED over UNVERIFIABLE — the shortfall is the more specific finding. */
+    @Test
+    void verifyChain_shorterThanAnchorWithUncheckableSignatures_isTruncated() {
+        KeyPair pair = newKeyPair();
+        List<AuditLogEntryEntity> full = chainOf(5, 1, hasher.genesisHash(tenantId),
+                AuditChainHasher.SCHEME_V2, signerFor(pair));
+        stubLedger(full.subList(0, 3)); // signed, but no registry: unverifiable signatures
+
+        ChainVerificationResult result =
+                verifier.verifyChain(tenantId, new ChainHead(5, headHashOf(full)));
+
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.TRUNCATED);
+        assertThat(result.signatures().unverifiable()).isEqualTo(3);
+    }
+
+    /** An anchor inside the part an unknown scheme made uncheckable gets no answer either. */
+    @Test
+    void verifyChain_anchorBeyondUnverifiablePoint_isUnverifiable() {
+        List<AuditLogEntryEntity> entities = new ArrayList<>(chainOf(4));
+        AuditLogEntryEntity target = entities.get(2);
+        entities.set(2, new AuditLogEntryEntity(target.getId(), target.getTenantId(),
+                target.getSequenceNumber(), target.getOutboxId(), target.getEventType(),
+                target.getPayload(), target.getDrainedAt(), target.getPayloadHash(),
+                target.getPrevHash(), target.getEntryHash(), "v999", target.getSignature(),
+                target.getKeyId(), target.getSignatureScheme()));
+        stubLedger(entities);
+
+        ChainVerificationResult result =
+                verifier.verifyChain(tenantId, new ChainHead(4, entities.get(3).getEntryHash()));
+
+        assertThat(result.verdict()).isEqualTo(ChainVerdict.UNVERIFIABLE);
+        assertThat(result.unverifiableFromSequence()).isEqualTo(3);
     }
 
     private AuditLogEntryEntity preChainEntity(long sequence) {

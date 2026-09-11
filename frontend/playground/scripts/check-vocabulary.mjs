@@ -7,7 +7,8 @@
  * that response inherits the rule: it describes a verifiable technical
  * capability, and nothing beyond it.
  *
- * Scope is that screen alone. The terms are ordinary English elsewhere —
+ * Scope is that screen and the wire types it renders. The terms are ordinary English
+ * elsewhere —
  * "duplicate names are legal" on the Agents screen means "the API permits
  * them", which is true and is not a claim of the kind this guards against.
  * A repo-wide scan would drown the rule in false positives and be turned
@@ -21,7 +22,9 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, relative } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const TARGETS = ['src/views/audit', 'src/styles/audit.css']
+// src/api/types.ts carries the wire contract's doc comments for the same screen: the
+// words a developer reads next to the type are as much surface as the rendered copy.
+const TARGETS = ['src/views/audit', 'src/styles/audit.css', 'src/api/types.ts']
 
 const FORBIDDEN = [
   'compliant',

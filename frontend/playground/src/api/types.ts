@@ -197,29 +197,62 @@ export interface CreateApiKeyBody {
 }
 
 /**
- * Outcome of recomputing a tenant's audit chain. VALID states only that
- * no break is detectable by re-hashing — what that does and does not
- * cover is spelled out in `verification_scope` on every response.
+ * Outcome of verifying a tenant's audit chain — four states. VALID states
+ * that recomputation and every checkable signature are consistent; BROKEN
+ * that an inconsistency was found; TRUNCATED that the consistent chain ends
+ * before the `expected_head` the caller supplied (only ever issued against
+ * one — never guessed); UNVERIFIABLE that part of the chain could not be
+ * checked at all: neither good nor bad, no answer. What each does and does
+ * not cover is spelled out in `verification_scope` on every response.
  */
-export type ChainStatus = 'VALID' | 'BROKEN'
+export type ChainStatus = 'VALID' | 'BROKEN' | 'TRUNCATED' | 'UNVERIFIABLE'
 
 /**
- * The five public break classifications. Typed as the union plus `string`
+ * The seven public break classifications. Typed as the union plus `string`
  * so a value this build does not know still arrives intact and renders
  * as-is instead of being narrowed away or mapped to a guess.
  */
 export type BreakClassification =
   | 'ENTRY_ALTERED'
+  | 'SIGNATURE_INVALID'
   | 'LINK_BROKEN'
   | 'ENTRY_MISSING'
   | 'UNCHAINED_ENTRY_OUT_OF_ORDER'
   | 'ENTRY_MALFORMED'
+  | 'ANCHOR_MISMATCH'
   | (string & {})
 
 /** Where and how the chain first breaks. Present only when status is BROKEN. */
 export interface FirstBreak {
   sequence_number: number
   classification: BreakClassification
+}
+
+/**
+ * A point on the chain: a sequence number and the entry hash recorded there.
+ * The `head` of a response is what to keep; passed back on a later call as
+ * `expected_head_sequence` / `expected_head_hash`, it is the only thing that
+ * lets the verifier tell a truncated chain from one that was never longer.
+ */
+export interface ChainHead {
+  sequence_number: number
+  entry_hash: string
+}
+
+/**
+ * Signature coverage over the entries walked, reported alongside the status
+ * rather than folded into it. Entries without a signature are not a defect —
+ * `note` says so in the API's own words and is rendered verbatim.
+ */
+export interface SignatureSummary {
+  verified: number
+  unsigned: number
+  unverifiable: number
+  /** Key ids named by entries whose public key is not published to this instance. */
+  missing_key_ids: string[]
+  /** Key ids marked compromised in the registry, with how many entries each signed. */
+  compromised_key_ids: Record<string, number>
+  note: string
 }
 
 /**
@@ -233,7 +266,13 @@ export interface VerificationScope {
   does_not_detect: string
 }
 
-/** Body of GET /v1/tenants/{tenantId}/audit/chain-verification. */
+/**
+ * Body of GET /v1/tenants/{tenantId}/audit/chain-verification.
+ *
+ * Every call through this endpoint is itself recorded in the chain it
+ * verified, one drainer tick later, so `verified_entries` on the next call
+ * includes this one's record. Verify on demand; never poll.
+ */
 export interface ChainVerificationResponse {
   tenant_id: string
   status: ChainStatus
@@ -241,6 +280,13 @@ export interface ChainVerificationResponse {
   /** Rows written before chaining began: not failures, and not verified. */
   pre_chain_entries: number
   first_break: FirstBreak | null
+  /** The last chained entry, or null when the chain has none. Keep it. */
+  head: ChainHead | null
+  /** The anchor the caller supplied, echoed; null when none was. */
+  expected_head: ChainHead | null
+  /** Where the walk stopped on a scheme this build does not implement; null otherwise. */
+  unverifiable_from_sequence: number | null
+  signatures: SignatureSummary
   verification_scope: VerificationScope
   verified_at: string
 }

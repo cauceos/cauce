@@ -8,37 +8,46 @@ import dev.cauce.governance.audit.ChainBreakKind;
  * decoupled from the wire contract — the same principle as
  * {@link dev.cauce.api.invocation.FailureReason}.
  *
- * <p>The internal taxonomy has seven kinds; the two hash mismatches (payload and entry) both
- * mean "a stored entry no longer matches the hash recorded when it was chained" and carry no
- * actionable distinction for an external reader, so they collapse into {@link #ENTRY_ALTERED}.
- * A signature mismatch collapses there too: it likewise means the stored entry is not what was
- * recorded. Giving it a public name of its own belongs with the revision of this vocabulary
- * that introduces the remaining verdict states, not here.
+ * <p>The two hash mismatches (payload and entry) both mean "a stored entry no longer matches
+ * the hash recorded when it was chained" and carry no actionable distinction for an external
+ * reader, so they collapse into {@link #ENTRY_ALTERED}. A signature that does not verify is
+ * a different, more specific finding and keeps its own name: it is the one alteration a
+ * database-owner rewrite cannot hide.
  */
 public enum BreakClassification {
 
-    /**
-     * A stored entry's content or metadata no longer matches what was recorded when it was
-     * chained — either the hash does not recompute, or its signature does not verify.
-     */
+    /** A stored entry's content or metadata no longer matches the hash recorded when chained. */
     ENTRY_ALTERED,
+    /**
+     * An entry's signature does not verify against the public key its key id names. The
+     * entry is not what was signed — including the case where its hashes were recomputed
+     * correctly by someone without the private key.
+     */
+    SIGNATURE_INVALID,
     /** An entry does not link to the previous entry's hash: the chain was cut or reordered. */
     LINK_BROKEN,
     /** The per-tenant sequence skips a number: a chained entry is no longer present. */
     ENTRY_MISSING,
     /** An entry without chain hashes appears after chained entries (valid only as a prefix). */
     UNCHAINED_ENTRY_OUT_OF_ORDER,
-    /** A chained entry is missing a required hash field or names an unrecognized hash scheme. */
-    ENTRY_MALFORMED;
+    /** A chained entry is missing a required hash field. */
+    ENTRY_MALFORMED,
+    /**
+     * The chain reaches the sequence of the {@code expected_head} the caller supplied, but with
+     * a different hash than the caller observed earlier.
+     */
+    ANCHOR_MISMATCH;
 
     /** Maps the internal break taxonomy to the public vocabulary (exhaustive, directional). */
     public static BreakClassification from(ChainBreakKind kind) {
         return switch (kind) {
-            case PAYLOAD_HASH_MISMATCH, ENTRY_HASH_MISMATCH, SIGNATURE_MISMATCH -> ENTRY_ALTERED;
+            case PAYLOAD_HASH_MISMATCH, ENTRY_HASH_MISMATCH -> ENTRY_ALTERED;
+            case SIGNATURE_MISMATCH -> SIGNATURE_INVALID;
             case PREV_HASH_MISMATCH -> LINK_BROKEN;
             case SEQUENCE_GAP -> ENTRY_MISSING;
             case PRE_CHAIN_AFTER_CHAINED -> UNCHAINED_ENTRY_OUT_OF_ORDER;
             case MALFORMED_ENTRY -> ENTRY_MALFORMED;
+            case ANCHOR_MISMATCH -> ANCHOR_MISMATCH;
         };
     }
 }
