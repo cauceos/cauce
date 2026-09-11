@@ -183,6 +183,10 @@ export class ApiClient {
    * with no cache. A long chain takes longer, and nothing here shortens
    * it. A tenant outside the caller's hierarchy answers 404, exactly like
    * one that does not exist.
+   *
+   * NEVER POLL THIS. Each call is itself recorded as an entry in the chain
+   * it verified (ADR 0003 §5), so a poller would grow the chain by one
+   * entry per tick. Call it when a person asks, and only then.
    */
   verifyChain(tenantId: string, signal?: AbortSignal): Promise<ChainVerificationResponse> {
     return this.request<ChainVerificationResponse>(

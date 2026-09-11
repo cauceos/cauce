@@ -46,6 +46,12 @@
 .verdict.broken::before {
   background: linear-gradient(90deg, transparent, var(--color-slate-500) 30%, var(--color-slate-500) 70%, transparent);
 }
+/* No verdict: the card keeps its rule, but the rule says nothing. Stone,
+   never moss or slate — the same "neither good news nor bad" the pre-chain
+   figure already uses, raised to the verdict. */
+.verdict.unverifiable::before {
+  background: linear-gradient(90deg, transparent, var(--color-stone-600) 30%, var(--color-stone-600) 70%, transparent);
+}
 .v-eyebrow {
   font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 3px;
   text-transform: uppercase; color: var(--color-muted); margin-bottom: 12px;
@@ -59,6 +65,7 @@
 }
 .v-word em { font-style: italic; }
 .v-word.broken { color: var(--color-text); font-size: 34px; }
+.v-word.unverifiable { color: var(--color-subtle); font-size: 34px; }
 .v-sub { color: var(--color-text-2); font-size: 13.5px; line-height: 1.65; max-width: 52ch; margin-bottom: 26px; }
 
 .figs { display: flex; gap: 34px; flex-wrap: wrap; margin-bottom: 22px; }
@@ -73,6 +80,25 @@
 }
 /* Neither good news nor bad: subtle, and never moss or slate. */
 .fig.pre .n { color: var(--color-subtle); }
+/* Same rule, same reason: an unsigned entry is not a defect. */
+.fig.unsigned .n { color: var(--color-subtle); }
+
+/* ── Signatures: a second row of figures INSIDE the verdict. Coverage is
+   part of the fact, not part of the scope — so it never becomes a third
+   panel competing with the limit for rank. ── */
+.sigs { margin: -4px 0 22px; }
+.sigs > .k {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--color-muted); display: block; margin-bottom: 12px;
+}
+.sigs .figs { margin-bottom: 0; }
+/* The API's own words on what "unsigned" means, verbatim, always visible. */
+.sig-note { font-size: 11px; color: var(--color-muted); line-height: 1.6; max-width: 56ch; margin-top: 10px; }
+.sig-keys { margin-top: 12px; font-family: var(--font-mono); font-size: 10.5px; }
+.sig-keys .k { display: block; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--color-muted); margin-bottom: 6px; }
+.sig-keys ul { list-style: none; }
+.sig-keys li { color: var(--color-text-2); line-height: 1.7; word-break: break-all; }
+.sig-why { display: block; font-family: var(--font-body); font-size: 11px; color: var(--color-muted); line-height: 1.6; margin-top: 6px; max-width: 52ch; }
 .fig .why { font-size: 11px; color: var(--color-muted); margin-top: 6px; max-width: 24ch; line-height: 1.5; }
 .fig .skel { width: 64px; height: 26px; border-radius: 8px; }
 
@@ -94,6 +120,8 @@
 .ld { width: 9px; height: 9px; border-radius: 50%; background: var(--color-stone-700); flex-shrink: 0; }
 .ld.ok { background: var(--color-moss-500); }
 .ld.brk { width: 13px; height: 13px; background: transparent; border: 2px solid var(--color-slate-400); }
+/* Where the walk stopped, as opposed to where it broke: dotted, stone. */
+.ld.stop { width: 13px; height: 13px; background: transparent; border: 2px dotted var(--color-stone-400); }
 .lg { font-family: var(--font-mono); font-size: 9px; color: var(--color-muted); }
 
 /* ══════════ The limit — same rank as the verdict ══════════ */
@@ -135,7 +163,7 @@
   .scope { position: static; padding: 24px; }
   .verdict { padding: 26px 24px; }
   .v-word { font-size: 36px; letter-spacing: -1.4px; }
-  .v-word.broken { font-size: 30px; }
+  .v-word.broken, .v-word.unverifiable { font-size: 30px; }
   .figs { gap: 30px; }
   .fig .n { font-size: 28px; }
   /* The detects list reads as two columns at this width. */
@@ -154,7 +182,9 @@
   .v-line { gap: 12px; }
   /* 30px so "Chain intact." holds one line at 390px. */
   .v-word { font-size: 30px; letter-spacing: -1.2px; line-height: 1.05; }
-  .v-word.broken { font-size: 26px; }
+  .v-word.broken, .v-word.unverifiable { font-size: 26px; }
+  .sigs .figs { gap: 22px; }
+  .sig-note { font-size: 10.5px; }
   .v-sub { font-size: 12.5px; margin-bottom: 20px; }
   .figs { gap: 26px; margin-bottom: 18px; }
   .fig .n { font-size: 26px; letter-spacing: -0.9px; }

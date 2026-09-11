@@ -37,6 +37,11 @@ function ConnectedAuditChain({ client }: { client: ApiClient }) {
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Verifying is an explicit action, and stays one. There is no auto-refresh,
+  // no retry and no polling here, and there must never be: every call to the
+  // endpoint appends a `ledger.chain.verified` entry to the chain it verified
+  // (ADR 0003 §5). A timer on this screen would make the chain grow by itself,
+  // one entry per tick, recording verifications nobody asked for.
   async function run() {
     const id = tenantInput.trim()
     if (id === '' || running) return
