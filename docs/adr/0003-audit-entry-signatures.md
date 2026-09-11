@@ -173,8 +173,13 @@ Two constraints follow and are part of this decision:
 ### What cannot be claimed, or implied
 
 Nothing about regulatory conformity, admissibility, certification, or absolute
-resistance to manipulation. The vocabulary guard already running in the build is
-the mechanical defence of this; it applies to any surface added here.
+resistance to manipulation. Two mechanical defences of this already exist: a
+vocabulary guard in the playground build, scoped to the screen that renders the
+verdict, and an integration test asserting the same word list over the serialised
+chain-verification response. Neither reaches the surfaces this work adds — the two
+new verdict states, the key registry and its compromise marking, and whatever the
+export artefact eventually says about itself. Extending both to cover them is part
+of this unit, not something already in place.
 
 ### Costs
 
