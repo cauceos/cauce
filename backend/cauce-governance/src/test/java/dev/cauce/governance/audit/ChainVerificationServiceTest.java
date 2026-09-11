@@ -31,11 +31,10 @@ class ChainVerificationServiceTest {
 
     @Test
     void verifyAndRecord_recordsExactlyWhatWasVerified_andReturnsIt() {
-        ChainHead anchor = new ChainHead(3, "a".repeat(64));
         ChainVerificationResult result = ChainVerificationResult.valid(3, 0);
-        when(verifier.verifyChain(tenantId, anchor)).thenReturn(result);
+        when(verifier.verifyChain(tenantId)).thenReturn(result);
 
-        ChainVerificationResult returned = service.verifyAndRecord(tenantId, anchor, actorId);
+        ChainVerificationResult returned = service.verifyAndRecord(tenantId, actorId);
 
         assertThat(returned).isSameAs(result);
         verify(recorder).record(tenantId, actorId, result);
@@ -44,10 +43,10 @@ class ChainVerificationServiceTest {
     /** Half one fails: half two never starts. Nothing was written. */
     @Test
     void verifyAndRecord_verificationFails_recordsNothing() {
-        when(verifier.verifyChain(eq(tenantId), any()))
+        when(verifier.verifyChain(tenantId))
                 .thenThrow(new IllegalStateException("database away"));
 
-        assertThatThrownBy(() -> service.verifyAndRecord(tenantId, null, actorId))
+        assertThatThrownBy(() -> service.verifyAndRecord(tenantId, actorId))
                 .isInstanceOf(IllegalStateException.class);
 
         verify(recorder, never()).record(any(), any(), any());
@@ -56,20 +55,20 @@ class ChainVerificationServiceTest {
     /** Half two fails: the call fails. A verdict this design could not record is not returned. */
     @Test
     void verifyAndRecord_recordingFails_propagatesInsteadOfReturningTheVerdict() {
-        when(verifier.verifyChain(tenantId, null)).thenReturn(ChainVerificationResult.valid(3, 0));
+        when(verifier.verifyChain(tenantId)).thenReturn(ChainVerificationResult.valid(3, 0));
         doThrow(new IllegalStateException("outbox insert failed"))
                 .when(recorder).record(eq(tenantId), eq(actorId), any());
 
-        assertThatThrownBy(() -> service.verifyAndRecord(tenantId, null, actorId))
+        assertThatThrownBy(() -> service.verifyAndRecord(tenantId, actorId))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("outbox insert failed");
     }
 
     @Test
     void verifyAndRecord_requiresTenantAndActor() {
-        assertThatThrownBy(() -> service.verifyAndRecord(null, null, actorId))
+        assertThatThrownBy(() -> service.verifyAndRecord(null, actorId))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> service.verifyAndRecord(tenantId, null, null))
+        assertThatThrownBy(() -> service.verifyAndRecord(tenantId, null))
                 .isInstanceOf(NullPointerException.class);
     }
 

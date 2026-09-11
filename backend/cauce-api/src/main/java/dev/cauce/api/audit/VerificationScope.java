@@ -9,7 +9,7 @@ import java.util.List;
  * <p>Rendered verbatim by clients, so this IS public surface. It states the current
  * capability — recomputation plus per-entry signatures where they exist — and names the
  * residuals as capability limits, not fine print: an actor holding the signing key, entries
- * that carry no signature, and truncation when no earlier head is supplied to compare against.
+ * that carry no signature, and a chain shortened to a consistent earlier state.
  * The compliance-vocabulary guard in {@code ChainVerificationApiIT} runs over every field.
  */
 public record VerificationScope(String method, List<String> detects, String doesNotDetect) {
@@ -28,15 +28,14 @@ public record VerificationScope(String method, List<String> detects, String does
                     "An entry inserted into the chain without valid chain hashes.",
                     "Among signed entries, a rewrite that recomputes every hash from the point of "
                             + "change onward: producing a matching signature requires the private "
-                            + "key, which the database does not contain.",
-                    "When the caller supplies the chain head it observed earlier, a chain that no "
-                            + "longer reaches it."),
+                            + "key, which the database does not contain."),
             "A rewrite by an actor who holds the signing key: anyone with access to the "
                     + "deployment's configuration, not only to the database. Entries without a "
                     + "signature, written before signing existed or by an instance with no key "
                     + "configured, are covered by recomputation alone, which cannot tell such a "
                     + "rewrite from an honest chain; the signature summary on this response says "
-                    + "how many entries are in that position. When no earlier head is supplied, a "
-                    + "chain shortened to a consistent earlier state cannot be told from one that "
-                    + "was never longer.");
+                    + "how many entries are in that position. A chain shortened to a consistent "
+                    + "earlier state cannot be told from one that was never longer: nothing inside "
+                    + "the database can serve as the reference, so the head reported here is the "
+                    + "value such a reference would have to be kept from, elsewhere.");
 }

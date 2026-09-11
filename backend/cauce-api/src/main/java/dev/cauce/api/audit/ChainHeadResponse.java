@@ -7,9 +7,9 @@ import dev.cauce.governance.audit.ChainHead;
  * hash commits to the whole prefix before it, so this is a compact commitment to the chain up
  * to that sequence.
  *
- * <p>As {@code head} on a response it is what a caller should keep. Passed back on a later
- * verification as {@code expected_head_sequence} / {@code expected_head_hash}, it is the only
- * thing that lets the verifier tell a truncated chain from one that was never longer.
+ * <p>It is the value a reference held outside the database would be built from — what
+ * external anchoring publishes. The endpoint reports it and does not take one back: comparing
+ * the chain against an earlier head is deliberately not part of this contract.
  */
 public record ChainHeadResponse(long sequenceNumber, String entryHash) {
 

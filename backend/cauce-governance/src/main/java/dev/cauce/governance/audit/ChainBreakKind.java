@@ -22,13 +22,6 @@ public enum ChainBreakKind {
      * is not a break and is counted in the {@link SignatureReport} instead.
      */
     SIGNATURE_MISMATCH,
-
-    /**
-     * The chain reaches the sequence of the caller-supplied anchor, but the entry hash recorded
-     * there is not the one the caller observed earlier. Something between then and now
-     * rewrote that point of the chain — or the caller's anchor is not from this chain.
-     */
-    ANCHOR_MISMATCH,
     /** A chained row misses one of its chain fields or names an unknown hash scheme. */
     MALFORMED_ENTRY
 }

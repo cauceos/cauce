@@ -25,7 +25,7 @@ class LedgerAuditEventsTest {
     void chainVerified_validResult_recordsVerdictCountsHeadAndActorInTheSubjectChain() {
         ChainHead head = new ChainHead(31, "h".repeat(64));
         ChainVerificationResult result = new ChainVerificationResult(ChainVerdict.VALID, 31, 0,
-                null, null, head, null, null,
+                null, null, head, null,
                 new SignatureReport(20, 11, 0, List.of(), Map.of()));
 
         AuditEvent event = LedgerAuditEvents.chainVerified(tenantId, actorId, result);
@@ -43,14 +43,13 @@ class LedgerAuditEventsTest {
                 entry("signatures_unsigned", 11L),
                 entry("signatures_unverifiable", 0L));
         assertThat(event.payload()).doesNotContainKeys("broken_at_sequence", "break_kind",
-                "expected_head_sequence", "unverifiable_from_sequence");
+                "unverifiable_from_sequence");
     }
 
     @Test
-    void chainVerified_brokenResultWithAnchor_recordsTheBreakAndTheAnchor() {
-        ChainHead anchor = new ChainHead(9, "a".repeat(64));
+    void chainVerified_brokenResult_recordsTheBreakAndTheSignatureGaps() {
         ChainVerificationResult result = new ChainVerificationResult(ChainVerdict.BROKEN, 4, 1,
-                5L, ChainBreakKind.SIGNATURE_MISMATCH, new ChainHead(4, "h".repeat(64)), anchor,
+                5L, ChainBreakKind.SIGNATURE_MISMATCH, new ChainHead(4, "h".repeat(64)),
                 null, new SignatureReport(2, 0, 2, List.of("9f2a1c4e8b7d0355"),
                         Map.of("0123456789abcdef", 1L)));
 
@@ -61,8 +60,6 @@ class LedgerAuditEventsTest {
                 entry("verdict", "BROKEN"),
                 entry("broken_at_sequence", 5L),
                 entry("break_kind", "SIGNATURE_MISMATCH"),
-                entry("expected_head_sequence", 9L),
-                entry("expected_head_entry_hash", "a".repeat(64)),
                 entry("missing_key_ids", List.of("9f2a1c4e8b7d0355")),
                 entry("compromised_key_ids", List.of("0123456789abcdef")));
     }

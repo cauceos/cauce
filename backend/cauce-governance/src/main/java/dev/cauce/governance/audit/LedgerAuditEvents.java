@@ -51,10 +51,6 @@ public final class LedgerAuditEvents {
             payload.put("head_sequence", result.head().sequenceNumber());
             payload.put("head_entry_hash", result.head().entryHash());
         }
-        if (result.expectedHead() != null) {
-            payload.put("expected_head_sequence", result.expectedHead().sequenceNumber());
-            payload.put("expected_head_entry_hash", result.expectedHead().entryHash());
-        }
         if (result.brokenAtSequence() != null) {
             payload.put("broken_at_sequence", result.brokenAtSequence());
             payload.put("break_kind", result.breakKind().name());

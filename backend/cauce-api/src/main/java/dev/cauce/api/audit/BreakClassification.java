@@ -31,12 +31,7 @@ public enum BreakClassification {
     /** An entry without chain hashes appears after chained entries (valid only as a prefix). */
     UNCHAINED_ENTRY_OUT_OF_ORDER,
     /** A chained entry is missing a required hash field. */
-    ENTRY_MALFORMED,
-    /**
-     * The chain reaches the sequence of the {@code expected_head} the caller supplied, but with
-     * a different hash than the caller observed earlier.
-     */
-    ANCHOR_MISMATCH;
+    ENTRY_MALFORMED;
 
     /** Maps the internal break taxonomy to the public vocabulary (exhaustive, directional). */
     public static BreakClassification from(ChainBreakKind kind) {
@@ -47,7 +42,6 @@ public enum BreakClassification {
             case SEQUENCE_GAP -> ENTRY_MISSING;
             case PRE_CHAIN_AFTER_CHAINED -> UNCHAINED_ENTRY_OUT_OF_ORDER;
             case MALFORMED_ENTRY -> ENTRY_MALFORMED;
-            case ANCHOR_MISMATCH -> ANCHOR_MISMATCH;
         };
     }
 }

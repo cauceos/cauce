@@ -197,18 +197,18 @@ export interface CreateApiKeyBody {
 }
 
 /**
- * Outcome of verifying a tenant's audit chain — four states. VALID states
+ * Outcome of verifying a tenant's audit chain — three states. VALID states
  * that recomputation and every checkable signature are consistent; BROKEN
- * that an inconsistency was found; TRUNCATED that the consistent chain ends
- * before the `expected_head` the caller supplied (only ever issued against
- * one — never guessed); UNVERIFIABLE that part of the chain could not be
- * checked at all: neither good nor bad, no answer. What each does and does
- * not cover is spelled out in `verification_scope` on every response.
+ * that an inconsistency was found; UNVERIFIABLE that part of the chain could
+ * not be checked at all: neither good nor bad, no answer. There is no
+ * "truncated" state: a chain shortened to a consistent earlier state cannot
+ * be told, from inside the database, from one that was never longer. What
+ * each does and does not cover is spelled out in `verification_scope`.
  */
-export type ChainStatus = 'VALID' | 'BROKEN' | 'TRUNCATED' | 'UNVERIFIABLE'
+export type ChainStatus = 'VALID' | 'BROKEN' | 'UNVERIFIABLE'
 
 /**
- * The seven public break classifications. Typed as the union plus `string`
+ * The six public break classifications. Typed as the union plus `string`
  * so a value this build does not know still arrives intact and renders
  * as-is instead of being narrowed away or mapped to a guess.
  */
@@ -219,7 +219,6 @@ export type BreakClassification =
   | 'ENTRY_MISSING'
   | 'UNCHAINED_ENTRY_OUT_OF_ORDER'
   | 'ENTRY_MALFORMED'
-  | 'ANCHOR_MISMATCH'
   | (string & {})
 
 /** Where and how the chain first breaks. Present only when status is BROKEN. */
@@ -230,9 +229,10 @@ export interface FirstBreak {
 
 /**
  * A point on the chain: a sequence number and the entry hash recorded there.
- * The `head` of a response is what to keep; passed back on a later call as
- * `expected_head_sequence` / `expected_head_hash`, it is the only thing that
- * lets the verifier tell a truncated chain from one that was never longer.
+ * Every entry hash commits to the whole prefix before it, so the `head` of a
+ * response is a compact commitment to the chain up to that point — the value
+ * a reference kept outside the database would be built from. The endpoint
+ * reports it and does not take one back.
  */
 export interface ChainHead {
   sequence_number: number
@@ -280,10 +280,8 @@ export interface ChainVerificationResponse {
   /** Rows written before chaining began: not failures, and not verified. */
   pre_chain_entries: number
   first_break: FirstBreak | null
-  /** The last chained entry, or null when the chain has none. Keep it. */
+  /** The last chained entry, or null when the chain has none. */
   head: ChainHead | null
-  /** The anchor the caller supplied, echoed; null when none was. */
-  expected_head: ChainHead | null
   /** Where the walk stopped on a scheme this build does not implement; null otherwise. */
   unverifiable_from_sequence: number | null
   signatures: SignatureSummary

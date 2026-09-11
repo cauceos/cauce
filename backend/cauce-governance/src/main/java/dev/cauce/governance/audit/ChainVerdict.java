@@ -1,37 +1,26 @@
 package dev.cauce.governance.audit;
 
 /**
- * The four outcomes of verifying a tenant's audit chain (ADR 0003 §4). Distinguishing them is
- * what separates an operational accident from an alteration, and both of those from an answer
- * this instance simply cannot give.
+ * The outcomes of verifying a tenant's audit chain (ADR 0003 §4): an alteration was found, or
+ * nothing was found, or this instance could not look at all of it. Distinguishing the last
+ * from the first is what keeps a chain merely unreadable here from being called broken.
  *
- * <p>Precedence when more than one applies: {@link #BROKEN} over {@link #TRUNCATED} over
- * {@link #UNVERIFIABLE} over {@link #VALID}. A found inconsistency is never softened by a
- * missing key, and a chain that fails to reach the caller's anchor is reported as such even
- * when some of its signatures could not be checked.
+ * <p>Precedence when more than one applies: {@link #BROKEN} over {@link #UNVERIFIABLE} over
+ * {@link #VALID}. A found inconsistency is never softened by a missing key.
+ *
+ * <p>Deliberately absent: a "truncated" verdict. From inside the database a chain shortened
+ * to a consistent earlier state — a restored backup — is indistinguishable from one that was
+ * never longer, because a restore is a consistent snapshot and every internal reference moves
+ * with it. Issuing that verdict needs a reference held outside the database, which is what
+ * external anchoring (deferred in ADR 0003) will supply. Until then it is not guessed.
  */
 public enum ChainVerdict {
 
-    /**
-     * Recomputation and every checkable signature consistent from genesis to head, and — when
-     * the caller supplied an anchor — the chain reaches it with the expected hash.
-     */
+    /** Recomputation and every checkable signature consistent from genesis to head. */
     VALID,
 
     /** An inconsistency was found. The result carries the exact first break and its kind. */
     BROKEN,
-
-    /**
-     * The chain is consistent but ends BEFORE the head the caller says it observed earlier.
-     * The signature of a restored backup, not of an alteration.
-     *
-     * <p>Only ever produced against a caller-supplied anchor. From inside the database a
-     * truncation is undetectable by construction: a restore is a consistent snapshot, so the
-     * head row, the outbox, the timestamps and the chain's own verification entries all move
-     * with it. Without an external reference there is nothing to compare against, and this
-     * verdict is deliberately never guessed.
-     */
-    TRUNCATED,
 
     /**
      * No verdict can be issued for part of the chain: a signed entry names a key id whose

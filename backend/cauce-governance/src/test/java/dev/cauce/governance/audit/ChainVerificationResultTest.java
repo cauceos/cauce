@@ -37,7 +37,7 @@ class ChainVerificationResultTest {
         for (ChainVerdict verdict : new ChainVerdict[] {ChainVerdict.VALID,
                 ChainVerdict.UNVERIFIABLE}) {
             assertThatThrownBy(() -> new ChainVerificationResult(verdict, 1, 0, 1L,
-                    ChainBreakKind.SEQUENCE_GAP, HEAD, null, null, SignatureReport.empty()))
+                    ChainBreakKind.SEQUENCE_GAP, HEAD, null, SignatureReport.empty()))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("only a broken result can carry a break");
         }
@@ -46,28 +46,7 @@ class ChainVerificationResultTest {
     @Test
     void constructor_brokenWithoutBreak_throwsNpe() {
         assertThatThrownBy(() -> new ChainVerificationResult(ChainVerdict.BROKEN, 1, 0, null,
-                null, HEAD, null, null, SignatureReport.empty()))
+                null, HEAD, null, SignatureReport.empty()))
                 .isInstanceOf(NullPointerException.class);
-    }
-
-    /** TRUNCATED is only ever issued against an anchor; the type refuses to guess it. */
-    @Test
-    void constructor_truncatedWithoutAnchor_throwsIllegalArgument() {
-        assertThatThrownBy(() -> new ChainVerificationResult(ChainVerdict.TRUNCATED, 1, 0, null,
-                null, HEAD, null, null, SignatureReport.empty()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("caller-supplied anchor");
-    }
-
-    @Test
-    void constructor_truncatedWithAnchor_isAccepted() {
-        ChainHead anchor = new ChainHead(9, "a".repeat(64));
-
-        ChainVerificationResult result = new ChainVerificationResult(ChainVerdict.TRUNCATED, 4,
-                0, null, null, HEAD, anchor, null, SignatureReport.empty());
-
-        assertThat(result.valid()).isFalse();
-        assertThat(result.expectedHead()).isEqualTo(anchor);
-        assertThat(result.head()).isEqualTo(HEAD);
     }
 }

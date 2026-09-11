@@ -104,7 +104,6 @@ class ChainVerificationApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.first_break").value((Object) null))
                 .andExpect(jsonPath("$.head.sequence_number").value(drained))
                 .andExpect(jsonPath("$.head.entry_hash").isString())
-                .andExpect(jsonPath("$.expected_head").value((Object) null))
                 .andExpect(jsonPath("$.unverifiable_from_sequence").value((Object) null))
                 // The test profile configures no signing key: every entry is unsigned, and
                 // the response says so as a count plus the standing note, never as a defect.
@@ -187,72 +186,28 @@ class ChainVerificationApiIT extends AbstractApiIntegrationTest {
                 .andExpect(status().isOk());
     }
 
-    // === THE FOUR STATES, THE ANCHOR, AND THE RECORD ===
+    // === THE THREE STATES, THE HEAD, AND THE RECORD ===
 
-    /** TRUNCATED needs an anchor: the head kept from an earlier response, passed back. */
+    /**
+     * A chain shortened to a consistent earlier state — a restored backup, simulated with the
+     * owner connection — reads as VALID with its new head. Nothing inside the database can
+     * tell it from a chain that was never longer, and the endpoint does not guess; the head is
+     * what a reference kept elsewhere would compare against.
+     */
     @Test
-    void getChainVerification_chainShorterThanExpectedHead_returnsTruncated() throws Exception {
-        int drained = drainAll(clientAId);
-        ChainHeadSnapshot head = headOf(getAs(clientAAuth, chainUrl(clientAId), status().isOk()));
-        assertThat(head.sequence()).isEqualTo(drained);
-        // "Restore a backup": the owner connection drops the last entry. The chain that
-        // remains is perfectly consistent — nothing inside the database can tell.
-        jdbc.update("DELETE FROM audit_log_entries WHERE tenant_id = ? AND sequence_number = ?",
-                clientAId, head.sequence());
-
-        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId, head)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("TRUNCATED"))
-                .andExpect(jsonPath("$.first_break").value((Object) null))
-                .andExpect(jsonPath("$.verified_entries").value(drained - 1))
-                .andExpect(jsonPath("$.head.sequence_number").value(drained - 1))
-                .andExpect(jsonPath("$.expected_head.sequence_number").value(head.sequence()))
-                .andExpect(jsonPath("$.expected_head.entry_hash").value(head.hash()));
-
-        // Without the anchor, the same chain is VALID: truncation is never guessed.
-        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("VALID"));
-    }
-
-    @Test
-    void getChainVerification_expectedHeadStillReached_returnsValidAndEchoesIt() throws Exception {
-        drainAll(clientAId);
-        ChainHeadSnapshot head = headOf(getAs(clientAAuth, chainUrl(clientAId), status().isOk()));
-
-        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId, head)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("VALID"))
-                .andExpect(jsonPath("$.expected_head.sequence_number").value(head.sequence()))
-                .andExpect(jsonPath("$.expected_head.entry_hash").value(head.hash()));
-    }
-
-    @Test
-    void getChainVerification_expectedHeadWithDifferentHash_returnsBrokenAnchorMismatch()
+    void getChainVerification_consistentlyShortenedChain_returnsValidWithItsCurrentHead()
             throws Exception {
-        drainAll(clientAId);
-        ChainHeadSnapshot head = headOf(getAs(clientAAuth, chainUrl(clientAId), status().isOk()));
-        ChainHeadSnapshot foreign = new ChainHeadSnapshot(head.sequence(), "f".repeat(64));
+        int drained = drainAll(clientAId);
+        ChainHeadSnapshot before = headOf(getAs(clientAAuth, chainUrl(clientAId), status().isOk()));
+        assertThat(before.sequence()).isEqualTo(drained);
+        jdbc.update("DELETE FROM audit_log_entries WHERE tenant_id = ? AND sequence_number = ?",
+                clientAId, before.sequence());
 
-        mockMvc.perform(getAs(clientAAuth, chainUrl(clientAId, foreign)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("BROKEN"))
-                .andExpect(jsonPath("$.first_break.sequence_number").value(head.sequence()))
-                .andExpect(jsonPath("$.first_break.classification").value("ANCHOR_MISMATCH"));
-    }
+        String body = getAs(clientAAuth, chainUrl(clientAId), status().isOk());
 
-    @Test
-    void getChainVerification_halfAnAnchor_returns400() throws Exception {
-        mockMvc.perform(getAs(clientAAuth,
-                        chainUrl(clientAId) + "?expected_head_sequence=3"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("bad_request"));
-        mockMvc.perform(getAs(clientAAuth,
-                        chainUrl(clientAId) + "?expected_head_hash=abc"))
-                .andExpect(status().isBadRequest());
-        mockMvc.perform(getAs(clientAAuth,
-                        chainUrl(clientAId) + "?expected_head_sequence=0&expected_head_hash=abc"))
-                .andExpect(status().isBadRequest());
+        assertThat(body).contains("\"VALID\"");
+        assertThat(headOf(body).sequence()).isEqualTo(drained - 1);
+        assertThat(headOf(body).hash()).isNotEqualTo(before.hash());
     }
 
     /** UNVERIFIABLE: an entry under a scheme this build does not implement. No answer, no break. */
@@ -306,17 +261,12 @@ class ChainVerificationApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.verified_entries").value(drained + 1));
     }
 
-    // === VOCABULARY (golden-rule regression, over the SERIALIZED JSON, all FOUR states) ===
+    // === VOCABULARY (golden-rule regression, over the SERIALIZED JSON, all THREE states) ===
 
     @Test
     void chainVerificationResponses_neverContainComplianceVocabulary() throws Exception {
-        int drained = drainAll(clientAId);
+        drainAll(clientAId);
         String validBody = getAs(clientAAuth, chainUrl(clientAId), status().isOk());
-        ChainHeadSnapshot head = headOf(validBody);
-
-        jdbc.update("DELETE FROM audit_log_entries WHERE tenant_id = ? AND sequence_number = ?",
-                clientAId, drained);
-        String truncatedBody = getAs(clientAAuth, chainUrl(clientAId, head), status().isOk());
 
         jdbc.update("UPDATE audit_log_entries SET hash_scheme = 'v999' "
                 + "WHERE tenant_id = ? AND sequence_number = 2", clientAId);
@@ -328,14 +278,14 @@ class ChainVerificationApiIT extends AbstractApiIntegrationTest {
         String brokenBody = getAs(clientAAuth, chainUrl(clientAId), status().isOk());
 
         // The verification records themselves are surface too: drain them and read them back.
-        assertThat(drainAll(clientAId)).isEqualTo(4);
+        assertThat(drainAll(clientAId)).isEqualTo(3);
         List<String> recordedPayloads = jdbc.queryForList(
                 "SELECT payload::text FROM audit_log_entries WHERE tenant_id = ? "
                         + "AND event_type = 'ledger.chain.verified'", String.class, clientAId);
-        assertThat(recordedPayloads).hasSize(4);
+        assertThat(recordedPayloads).hasSize(3);
 
         List<String> surfaces = new java.util.ArrayList<>(
-                List.of(validBody, truncatedBody, unverifiableBody, brokenBody));
+                List.of(validBody, unverifiableBody, brokenBody));
         surfaces.addAll(recordedPayloads);
         for (String body : surfaces) {
             String lower = body.toLowerCase(Locale.ROOT);
@@ -345,10 +295,9 @@ class ChainVerificationApiIT extends AbstractApiIntegrationTest {
                         .doesNotContain(term);
             }
         }
-        // Sanity: we actually scanned the scope text, the note, and all four statuses.
+        // Sanity: we actually scanned the scope text, the note, and all three statuses.
         assertThat(validBody).contains("does_not_detect").contains("\"note\"")
                 .contains("\"VALID\"");
-        assertThat(truncatedBody).contains("\"TRUNCATED\"");
         assertThat(unverifiableBody).contains("\"UNVERIFIABLE\"");
         assertThat(brokenBody).contains("\"BROKEN\"");
     }
@@ -370,12 +319,7 @@ class ChainVerificationApiIT extends AbstractApiIntegrationTest {
         return "/v1/tenants/" + tenantId + "/audit/chain-verification";
     }
 
-    private static String chainUrl(UUID tenantId, ChainHeadSnapshot anchor) {
-        return chainUrl(tenantId) + "?expected_head_sequence=" + anchor.sequence()
-                + "&expected_head_hash=" + anchor.hash();
-    }
-
-    /** What a client keeps from a response: the head, to pass back as the anchor next time. */
+    /** The head a response reported. */
     private record ChainHeadSnapshot(long sequence, String hash) {
     }
 

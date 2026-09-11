@@ -45,14 +45,13 @@ public class ChainVerificationService {
     }
 
     /**
-     * Verifies {@code tenantId}'s chain against {@code anchor} (nullable) on behalf of
-     * {@code actorTenantId}, then records the outcome in {@code tenantId}'s chain.
+     * Verifies {@code tenantId}'s chain on behalf of {@code actorTenantId}, then records the
+     * outcome in {@code tenantId}'s chain.
      */
-    public ChainVerificationResult verifyAndRecord(UUID tenantId, ChainHead anchor,
-                                                   UUID actorTenantId) {
+    public ChainVerificationResult verifyAndRecord(UUID tenantId, UUID actorTenantId) {
         Objects.requireNonNull(tenantId, "tenantId must not be null");
         Objects.requireNonNull(actorTenantId, "actorTenantId must not be null");
-        ChainVerificationResult result = verifier.verifyChain(tenantId, anchor);
+        ChainVerificationResult result = verifier.verifyChain(tenantId);
         recorder.record(tenantId, actorTenantId, result);
         return result;
     }

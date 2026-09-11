@@ -15,8 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Recomputes one tenant's audit chain from the stored rows and issues one of the four
- * {@link ChainVerdict}s. Pure: it reads and reports, and never writes. Recording a
+ * Recomputes one tenant's audit chain from the stored rows and issues a
+ * {@link ChainVerdict}. Pure: it reads and reports, and never writes. Recording a
  * verification in the chain is {@link ChainVerificationService}'s job, and only on demand.
  *
  * <p>Per chained row, three independent checks: (a) when the payload is still present, it
@@ -41,11 +41,13 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link ChainVerdict#UNVERIFIABLE}; only a signature that is present, checkable and wrong
  * breaks the chain.
  *
- * <p>The optional <b>anchor</b> is the one comparison a database cannot make against itself.
- * A caller that kept the head from an earlier verification passes it back; the verifier then
- * reports {@link ChainVerdict#TRUNCATED} when the consistent chain no longer reaches that
- * sequence, and {@link ChainBreakKind#ANCHOR_MISMATCH} when it reaches it with a different
- * hash. Without an anchor, truncation is never guessed.
+ * <p>What this cannot do, by construction: tell a chain shortened to a consistent earlier
+ * state (a restored backup) from one that was never longer. A restore is a consistent
+ * snapshot — the head row, the outbox, the timestamps and the chain's own verification
+ * entries all move with it — so nothing inside the database can serve as the reference.
+ * The result carries the current {@code head} so that a reference can be kept OUTSIDE the
+ * database; comparing against it belongs to external anchoring (ADR 0003, deferred), and is
+ * deliberately not guessed here.
  *
  * <p>Runs under the caller's {@code TenantContext}, so RLS scopes every read: verifying one
  * tenant cannot even see another tenant's rows. Known residual, stated on every response: an
@@ -70,21 +72,12 @@ public class AuditChainVerifier {
         this.signatureVerifier = signatureVerifier;
     }
 
-    /** Verifies {@code tenantId}'s full chain in sequence order, with no anchor. */
+    /** Verifies {@code tenantId}'s full chain in sequence order. */
     @Transactional(readOnly = true)
     public ChainVerificationResult verifyChain(UUID tenantId) {
-        return verifyChain(tenantId, null);
-    }
-
-    /**
-     * Verifies {@code tenantId}'s full chain in sequence order, against {@code anchor} when one
-     * is given (the head the caller observed on an earlier verification).
-     */
-    @Transactional(readOnly = true)
-    public ChainVerificationResult verifyChain(UUID tenantId, ChainHead anchor) {
         List<AuditLogEntryEntity> entities =
                 logRepository.findByTenantIdOrderBySequenceNumberAsc(tenantId);
-        Walk walk = new Walk(tenantId, anchor);
+        Walk walk = new Walk(tenantId);
         for (AuditLogEntryEntity entity : entities) {
             if (!walk.step(logMapper.toDomain(entity))) {
                 break;
@@ -96,7 +89,6 @@ public class AuditChainVerifier {
     /** The state of one walk down a chain, and the verdict it arrives at. */
     private final class Walk {
 
-        private final ChainHead anchor;
         private final SignatureAccumulator signatures = new SignatureAccumulator();
 
         private long chainedCount;
@@ -105,14 +97,12 @@ public class AuditChainVerifier {
         private String expectedPrev;
         private boolean chainStarted;
         private ChainHead head;
-        private String hashAtAnchor;
 
         private Long brokenAt;
         private ChainBreakKind breakKind;
         private Long unverifiableFrom;
 
-        Walk(UUID tenantId, ChainHead anchor) {
-            this.anchor = anchor;
+        Walk(UUID tenantId) {
             this.expectedPrev = hasher.genesisHash(tenantId);
         }
 
@@ -161,9 +151,6 @@ public class AuditChainVerifier {
                 return fail(sequence, ChainBreakKind.SIGNATURE_MISMATCH);
             }
             signatures.record(check);
-            if (anchor != null && sequence == anchor.sequenceNumber()) {
-                hashAtAnchor = entry.entryHash();
-            }
             expectedPrev = entry.entryHash();
             head = new ChainHead(sequence, entry.entryHash());
             chainedCount++;
@@ -181,35 +168,13 @@ public class AuditChainVerifier {
             return new ChainVerificationResult(verdict, chainedCount, preChainCount,
                     verdict == ChainVerdict.BROKEN ? brokenAt : null,
                     verdict == ChainVerdict.BROKEN ? breakKind : null,
-                    head, anchor, unverifiableFrom, signatures.toReport());
+                    head, unverifiableFrom, signatures.toReport());
         }
 
-        /** Precedence: BROKEN over TRUNCATED over UNVERIFIABLE over VALID — see ChainVerdict. */
+        /** Precedence: BROKEN over UNVERIFIABLE over VALID — see ChainVerdict. */
         private ChainVerdict verdict() {
             if (brokenAt != null) {
                 return ChainVerdict.BROKEN;
-            }
-            if (anchor != null) {
-                if (unverifiableFrom != null && anchor.sequenceNumber() >= unverifiableFrom) {
-                    // The anchor lies in the part this build could not check. No answer.
-                    return ChainVerdict.UNVERIFIABLE;
-                }
-                if (hashAtAnchor == null) {
-                    // Either the consistent chain never reaches that sequence — the signature
-                    // of a restored backup — or a pre-chain row sits there, in which case the
-                    // anchor cannot be from this chain's hashed part.
-                    boolean reached =
-                            head != null && head.sequenceNumber() >= anchor.sequenceNumber();
-                    if (reached) {
-                        fail(anchor.sequenceNumber(), ChainBreakKind.ANCHOR_MISMATCH);
-                        return ChainVerdict.BROKEN;
-                    }
-                    return ChainVerdict.TRUNCATED;
-                }
-                if (!hashAtAnchor.equals(anchor.entryHash())) {
-                    fail(anchor.sequenceNumber(), ChainBreakKind.ANCHOR_MISMATCH);
-                    return ChainVerdict.BROKEN;
-                }
             }
             if (unverifiableFrom != null || signatures.hasUnverifiable()) {
                 return ChainVerdict.UNVERIFIABLE;

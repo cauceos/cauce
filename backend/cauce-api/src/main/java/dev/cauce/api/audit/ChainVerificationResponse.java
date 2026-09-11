@@ -7,10 +7,9 @@ import java.util.UUID;
 /**
  * Public view of a tenant's audit chain verification. Wraps the internal
  * {@link ChainVerificationResult} into the stable wire contract: the four-state
- * {@link ChainStatus}, the counts, the exact first break when there is one, the chain head
- * (to keep and pass back next time), the caller's {@code expected_head} echoed, where the walk
- * had to stop if it did, the {@link SignatureSummary}, the {@link VerificationScope} on every
- * response, and when the check ran.
+ * {@link ChainStatus}, the counts, the exact first break when there is one, the chain head,
+ * where the walk had to stop if it did, the {@link SignatureSummary}, the
+ * {@link VerificationScope} on every response, and when the check ran.
  *
  * <p>Every verification through the public endpoint is itself recorded in the chain it
  * verified, one drainer tick later. {@code verified_entries} on the NEXT call therefore
@@ -22,7 +21,6 @@ public record ChainVerificationResponse(UUID tenantId,
                                         long preChainEntries,
                                         FirstBreak firstBreak,
                                         ChainHeadResponse head,
-                                        ChainHeadResponse expectedHead,
                                         Long unverifiableFromSequence,
                                         SignatureSummary signatures,
                                         VerificationScope verificationScope,
@@ -40,7 +38,6 @@ public record ChainVerificationResponse(UUID tenantId,
                 result.preChainCount(),
                 firstBreak,
                 ChainHeadResponse.from(result.head()),
-                ChainHeadResponse.from(result.expectedHead()),
                 result.unverifiableFromSequence(),
                 SignatureSummary.from(result.signatures()),
                 VerificationScope.CONSTANT,
