@@ -135,11 +135,15 @@ class AuditOutboxDrainServiceTest {
 
         AuditLogEntryEntity entry = drainAndCaptureEntries(1, 10).get(0);
 
-        assertThat(entry.getHashScheme()).isEqualTo(AuditChainHasher.SCHEME);
-        assertThat(entry.getPayloadHash()).isEqualTo(hasher.payloadHash(entry.getPayload()));
-        assertThat(entry.getEntryHash()).isEqualTo(hasher.entryHash(tenantId,
-                entry.getSequenceNumber(), entry.getOutboxId(), entry.getEventType(),
-                entry.getDrainedAt(), entry.getPayloadHash(), entry.getPrevHash()));
+        assertThat(entry.getHashScheme()).isEqualTo(AuditChainHasher.CURRENT_SCHEME);
+        assertThat(entry.getPayloadHash()).isEqualTo(
+                hasher.payloadHash(AuditChainHasher.CURRENT_SCHEME, entry.getPayload()));
+        assertThat(entry.getEntryHash()).isEqualTo(
+                hasher.entryHash(AuditChainHasher.CURRENT_SCHEME, entry.getId(), tenantId,
+                        entry.getSequenceNumber(), entry.getOutboxId(), entry.getEventType(),
+                        entry.getDrainedAt(), entry.getPayloadHash(), entry.getPrevHash()));
+        // The id is minted before hashing, so the row's OWN id is what the hash commits to.
+        assertThat(entry.getId()).isNotNull();
         assertThat(entry.getSignature()).isNull(); // the signing slot stays untouched
         // What was hashed is exactly what will be stored: microsecond precision.
         assertThat(entry.getDrainedAt())

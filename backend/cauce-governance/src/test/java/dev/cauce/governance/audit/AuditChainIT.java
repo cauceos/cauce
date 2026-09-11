@@ -259,7 +259,88 @@ class AuditChainIT extends AbstractGovernanceIntegrationTest {
                 String.class, clientA.id())).isNull();
     }
 
+    /**
+     * The upgrade case, against a real database: a chain whose prefix was written by an
+     * instance running the v1 scheme and whose suffix is written by this one. The v1 rows are
+     * NOT migrated, recomputed or re-hashed — they are verified under v1 rules — and the v2
+     * rows link to them through the ordinary {@code prev_hash}. This is what protects the
+     * entries already sitting in every deployed instance.
+     */
+    @Test
+    void verify_chainWithV1PrefixAndV2Suffix_isValid() {
+        seedEvents(clientA.id(), "e.one", "e.two");
+        drainBatchAs(clientA.id(), properties.getBatchSize());
+        rewritePrefixAsV1(clientA.id(), 2);
+
+        seedEvents(clientA.id(), "e.three", "e.four");
+        drainBatchAs(clientA.id(), properties.getBatchSize());
+
+        // The ledger really does hold both schemes, in that order.
+        assertThat(jdbc.queryForList(
+                "SELECT hash_scheme FROM audit_log_entries WHERE tenant_id = ? "
+                        + "ORDER BY sequence_number", String.class, clientA.id()))
+                .containsExactly(AuditChainHasher.SCHEME_V1, AuditChainHasher.SCHEME_V1,
+                        AuditChainHasher.SCHEME_V2, AuditChainHasher.SCHEME_V2);
+
+        ChainVerificationResult result = verifyAs(clientA.id());
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.chainedCount()).isEqualTo(4);
+        assertThat(result.preChainCount()).isZero();
+    }
+
+    /** And tampering is still caught inside the v1 prefix of a mixed chain. */
+    @Test
+    void verify_mixedChainWithTamperedV1Row_breaksAtThatExactSequence() {
+        seedEvents(clientA.id(), "e.one", "e.two");
+        drainBatchAs(clientA.id(), properties.getBatchSize());
+        rewritePrefixAsV1(clientA.id(), 2);
+        seedEvents(clientA.id(), "e.three");
+        drainBatchAs(clientA.id(), properties.getBatchSize());
+
+        // The privileged rewrite the append-only revoke cannot stop.
+        jdbc.update("UPDATE audit_log_entries SET payload = ?::jsonb "
+                        + "WHERE tenant_id = ? AND sequence_number = 2",
+                "{\"tampered\": true}", clientA.id());
+
+        ChainVerificationResult result = verifyAs(clientA.id());
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.brokenAtSequence()).isEqualTo(2);
+        assertThat(result.breakKind()).isEqualTo(ChainBreakKind.PAYLOAD_HASH_MISMATCH);
+    }
+
     // --- helpers ---
+
+    /**
+     * Rewrites sequences {@code 1..count} as the v1 instance would have written them:
+     * the entry hash recomputed under v1 rules, the head advanced to match. Uses the OWNER
+     * connection because the runtime role cannot UPDATE the ledger (V21).
+     *
+     * <p>{@code payload_hash} is left alone on purpose — for the ASCII payloads these events
+     * carry, the v1 and v2 payload hashes are identical by construction (NFC normalization
+     * only moves non-ASCII text), so rewriting it would change nothing and hide that fact.
+     */
+    private void rewritePrefixAsV1(UUID tenantId, int count) {
+        String prev = hasher.genesisHash(tenantId);
+        for (long sequence = 1; sequence <= count; sequence++) {
+            Map<String, Object> row = jdbc.queryForMap(
+                    "SELECT id, outbox_id, event_type, drained_at, payload_hash "
+                            + "FROM audit_log_entries WHERE tenant_id = ? AND sequence_number = ?",
+                    tenantId, sequence);
+            String entryHash = hasher.entryHash(AuditChainHasher.SCHEME_V1,
+                    (UUID) row.get("id"), tenantId, sequence, (UUID) row.get("outbox_id"),
+                    (String) row.get("event_type"),
+                    ((java.sql.Timestamp) row.get("drained_at")).toInstant(),
+                    (String) row.get("payload_hash"), prev);
+            jdbc.update("UPDATE audit_log_entries SET entry_hash = ?, prev_hash = ?, "
+                            + "hash_scheme = ? WHERE tenant_id = ? AND sequence_number = ?",
+                    entryHash, prev, AuditChainHasher.SCHEME_V1, tenantId, sequence);
+            prev = entryHash;
+        }
+        jdbc.update("UPDATE audit_chain_heads SET last_entry_hash = ? WHERE tenant_id = ?",
+                prev, tenantId);
+    }
 
     /** Captures one event per type for {@code tenantId}, each in its own committed tx. */
     private void seedEvents(UUID tenantId, String... eventTypes) {

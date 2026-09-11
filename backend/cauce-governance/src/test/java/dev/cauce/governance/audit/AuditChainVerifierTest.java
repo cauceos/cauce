@@ -27,26 +27,40 @@ class AuditChainVerifierTest {
 
     private final UUID tenantId = UUID.randomUUID();
 
-    /** A correctly chained ledger of {@code n} entries, sequences {@code from..from+n-1}. */
-    private List<AuditLogEntryEntity> chainOf(int n, long from, String initialPrev) {
+    /**
+     * A correctly chained ledger of {@code n} entries, sequences {@code from..from+n-1}, each
+     * written under {@code scheme} — which is how a mixed chain is built from two calls.
+     */
+    private List<AuditLogEntryEntity> chainOf(int n, long from, String initialPrev,
+                                              String scheme) {
         List<AuditLogEntryEntity> entities = new ArrayList<>();
         String prev = initialPrev;
         for (long seq = from; seq < from + n; seq++) {
             AuditOutboxEntry outbox = AuditOutboxEntry.create(
                     new AuditEvent(tenantId, "e." + seq, Map.of("n", seq)));
+            UUID id = AuditLogEntry.mintId();
             Instant drainedAt = AuditLogEntry.mintDrainedAt();
-            String payloadHash = hasher.payloadHash(outbox.payload());
-            String entryHash = hasher.entryHash(tenantId, seq, outbox.id(), outbox.eventType(),
-                    drainedAt, payloadHash, prev);
-            entities.add(logMapper.toEntity(AuditLogEntry.chained(outbox, seq, drainedAt,
-                    payloadHash, prev, entryHash, AuditChainHasher.SCHEME)));
+            String payloadHash = hasher.payloadHash(scheme, outbox.payload());
+            String entryHash = hasher.entryHash(scheme, id, tenantId, seq, outbox.id(),
+                    outbox.eventType(), drainedAt, payloadHash, prev);
+            entities.add(logMapper.toEntity(AuditLogEntry.chained(id, outbox, seq, drainedAt,
+                    payloadHash, prev, entryHash, scheme)));
             prev = entryHash;
         }
         return entities;
     }
 
+    private List<AuditLogEntryEntity> chainOf(int n, long from, String initialPrev) {
+        return chainOf(n, from, initialPrev, AuditChainHasher.CURRENT_SCHEME);
+    }
+
     private List<AuditLogEntryEntity> chainOf(int n) {
         return chainOf(n, 1, hasher.genesisHash(tenantId));
+    }
+
+    /** The last entry hash of a chain, i.e. what the next segment must link to. */
+    private static String headHashOf(List<AuditLogEntryEntity> chain) {
+        return chain.get(chain.size() - 1).getEntryHash();
     }
 
     /** {@code entity} with its payload replaced (hashes untouched) — the tamper case. */
@@ -72,6 +86,111 @@ class AuditChainVerifierTest {
         assertThat(result.valid()).isTrue();
         assertThat(result.chainedCount()).isEqualTo(4);
         assertThat(result.preChainCount()).isZero();
+    }
+
+    // === SCHEME COEXISTENCE: v1 is history, v2 is current, and a chain may hold both ===
+
+    /** The existing instances: every entry written before this unit. Must still be VALID. */
+    @Test
+    void verifyChain_allV1Chain_isValid() {
+        stubLedger(chainOf(4, 1, hasher.genesisHash(tenantId), AuditChainHasher.SCHEME_V1));
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.chainedCount()).isEqualTo(4);
+    }
+
+    /** A ledger that started after this unit. */
+    @Test
+    void verifyChain_allV2Chain_isValid() {
+        stubLedger(chainOf(4, 1, hasher.genesisHash(tenantId), AuditChainHasher.SCHEME_V2));
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.chainedCount()).isEqualTo(4);
+    }
+
+    /**
+     * The case this unit exists for: an instance upgraded mid-chain. The v1 prefix keeps
+     * verifying under v1 rules, the v2 suffix links to it through the ordinary prev_hash, and
+     * the whole chain verifies end to end without a single entry being re-hashed.
+     */
+    @Test
+    void verifyChain_mixedV1ThenV2Chain_isValid() {
+        List<AuditLogEntryEntity> v1Part =
+                chainOf(3, 1, hasher.genesisHash(tenantId), AuditChainHasher.SCHEME_V1);
+        List<AuditLogEntryEntity> v2Part =
+                chainOf(2, 4, headHashOf(v1Part), AuditChainHasher.SCHEME_V2);
+        List<AuditLogEntryEntity> mixed = new ArrayList<>(v1Part);
+        mixed.addAll(v2Part);
+        stubLedger(mixed);
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.chainedCount()).isEqualTo(5);
+    }
+
+    /** Tampering is still caught on both sides of the scheme boundary, at the exact sequence. */
+    @Test
+    void verifyChain_mixedChainWithTamperedV2Entry_breaksAtThatExactSequence() {
+        List<AuditLogEntryEntity> v1Part =
+                chainOf(3, 1, hasher.genesisHash(tenantId), AuditChainHasher.SCHEME_V1);
+        List<AuditLogEntryEntity> v2Part =
+                chainOf(2, 4, headHashOf(v1Part), AuditChainHasher.SCHEME_V2);
+        List<AuditLogEntryEntity> mixed = new ArrayList<>(v1Part);
+        mixed.addAll(v2Part);
+        mixed.set(3, withPayload(mixed.get(3), Map.of("tampered", true)));
+        stubLedger(mixed);
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.brokenAtSequence()).isEqualTo(4);
+        assertThat(result.breakKind()).isEqualTo(ChainBreakKind.PAYLOAD_HASH_MISMATCH);
+    }
+
+    @Test
+    void verifyChain_mixedChainWithTamperedV1Entry_breaksAtThatExactSequence() {
+        List<AuditLogEntryEntity> v1Part =
+                chainOf(3, 1, hasher.genesisHash(tenantId), AuditChainHasher.SCHEME_V1);
+        List<AuditLogEntryEntity> v2Part =
+                chainOf(2, 4, headHashOf(v1Part), AuditChainHasher.SCHEME_V2);
+        List<AuditLogEntryEntity> mixed = new ArrayList<>(v1Part);
+        mixed.addAll(v2Part);
+        mixed.set(1, withPayload(mixed.get(1), Map.of("tampered", true)));
+        stubLedger(mixed);
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.brokenAtSequence()).isEqualTo(2);
+        assertThat(result.breakKind()).isEqualTo(ChainBreakKind.PAYLOAD_HASH_MISMATCH);
+    }
+
+    /**
+     * A v2 entry whose id was altered. Under v1 this was undetectable — the id was the one
+     * column outside the preimage — which is the defect v2 closes.
+     */
+    @Test
+    void verifyChain_v2EntryWithAlteredId_breaksAsEntryHashMismatch() {
+        List<AuditLogEntryEntity> entities = new ArrayList<>(
+                chainOf(2, 1, hasher.genesisHash(tenantId), AuditChainHasher.SCHEME_V2));
+        AuditLogEntryEntity target = entities.get(1);
+        entities.set(1, new AuditLogEntryEntity(UUID.randomUUID(), target.getTenantId(),
+                target.getSequenceNumber(), target.getOutboxId(), target.getEventType(),
+                target.getPayload(), target.getDrainedAt(), target.getPayloadHash(),
+                target.getPrevHash(), target.getEntryHash(), target.getHashScheme(),
+                target.getSignature()));
+        stubLedger(entities);
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.brokenAtSequence()).isEqualTo(2);
+        assertThat(result.breakKind()).isEqualTo(ChainBreakKind.ENTRY_HASH_MISMATCH);
     }
 
     @Test

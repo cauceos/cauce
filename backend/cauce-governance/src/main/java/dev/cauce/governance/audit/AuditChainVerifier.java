@@ -13,6 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
  * the exact sequence number of the first break. Internal service — the public verification
  * surface (endpoint, compliance report) is a follow-up unit.
  *
+ * <p>Every check is performed under the scheme the row itself records ({@code hash_scheme}),
+ * so entries written under v1 keep verifying under v1 rules and a chain that mixes schemes —
+ * legal, and expected while instances of different versions write it — verifies end to end.
+ * An unrecognized scheme is reported as a malformed entry; distinguishing "written by a newer
+ * version I cannot check" from "broken" needs the UNVERIFIABLE verdict, which is a later unit.
+ *
  * <p>Per chained row, three independent checks: (a) when the payload is still present, it
  * must hash back to the persisted {@code payload_hash} (a redacted row — payload NULL —
  * skips this and verifies through the stored hash: erasure compatibility by construction);
@@ -68,13 +74,16 @@ public class AuditChainVerifier {
                 continue;
             }
             chainStarted = true;
+            // The scheme comes from the ROW, never from a constant: a v1 entry is verified
+            // under v1 rules forever, and a chain may legitimately mix the two.
+            String scheme = entry.hashScheme();
             if (entry.payloadHash() == null || entry.prevHash() == null
-                    || !AuditChainHasher.SCHEME.equals(entry.hashScheme())) {
+                    || !hasher.supports(scheme)) {
                 return ChainVerificationResult.broken(sequence, ChainBreakKind.MALFORMED_ENTRY,
                         chainedCount, preChainCount);
             }
             if (entry.payload() != null
-                    && !hasher.payloadHash(entry.payload()).equals(entry.payloadHash())) {
+                    && !hasher.payloadHash(scheme, entry.payload()).equals(entry.payloadHash())) {
                 return ChainVerificationResult.broken(sequence,
                         ChainBreakKind.PAYLOAD_HASH_MISMATCH, chainedCount, preChainCount);
             }
@@ -82,8 +91,9 @@ public class AuditChainVerifier {
                 return ChainVerificationResult.broken(sequence,
                         ChainBreakKind.PREV_HASH_MISMATCH, chainedCount, preChainCount);
             }
-            String recomputed = hasher.entryHash(entry.tenantId(), sequence, entry.outboxId(),
-                    entry.eventType(), entry.drainedAt(), entry.payloadHash(), entry.prevHash());
+            String recomputed = hasher.entryHash(scheme, entry.id(), entry.tenantId(), sequence,
+                    entry.outboxId(), entry.eventType(), entry.drainedAt(), entry.payloadHash(),
+                    entry.prevHash());
             if (!recomputed.equals(entry.entryHash())) {
                 return ChainVerificationResult.broken(sequence,
                         ChainBreakKind.ENTRY_HASH_MISMATCH, chainedCount, preChainCount);

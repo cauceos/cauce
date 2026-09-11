@@ -27,8 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
  * hash-chains what it moves: the tenant's head row (V23, locked {@code FOR UPDATE}) yields
  * the next sequence number AND the previous entry hash in one consistent read; each drained
  * row gets {@code payload_hash}, {@code prev_hash}, and {@code entry_hash} computed by
- * {@link AuditChainHasher} and written ON THE INSERT (the ledger stays append-only — no
- * UPDATE ever touches it); the head advances in the same transaction as the INSERTs and the
+ * {@link AuditChainHasher} under {@link AuditChainHasher#CURRENT_SCHEME} and written ON THE
+ * INSERT (the ledger stays append-only — no UPDATE ever touches it); the head advances in the same transaction as the INSERTs and the
  * outbox PENDING → DRAINED flips. A drainer restart mid-run therefore re-reads the
  * still-PENDING remainder and continues both the sequence and the chain — no duplicates, no
  * gaps, no re-chaining. A tenant with no head row yet is initialized once: the sequence
@@ -99,12 +99,16 @@ public class AuditOutboxDrainService {
         }
         for (AuditOutboxEntryEntity entity : pending) {
             AuditOutboxEntry entry = outboxMapper.toDomain(entity);
+            // Both minted BEFORE hashing: the v2 preimage commits to the entry id, and the
+            // timestamp must be the one that will be stored (see AuditLogEntry).
+            UUID entryId = AuditLogEntry.mintId();
             Instant drainedAt = AuditLogEntry.mintDrainedAt();
-            String payloadHash = hasher.payloadHash(entry.payload());
-            String entryHash = hasher.entryHash(tenantId, nextSequence, entry.id(),
-                    entry.eventType(), drainedAt, payloadHash, prevHash);
-            logRepository.save(logMapper.toEntity(AuditLogEntry.chained(entry, nextSequence,
-                    drainedAt, payloadHash, prevHash, entryHash, AuditChainHasher.SCHEME)));
+            String scheme = AuditChainHasher.CURRENT_SCHEME;
+            String payloadHash = hasher.payloadHash(scheme, entry.payload());
+            String entryHash = hasher.entryHash(scheme, entryId, tenantId, nextSequence,
+                    entry.id(), entry.eventType(), drainedAt, payloadHash, prevHash);
+            logRepository.save(logMapper.toEntity(AuditLogEntry.chained(entryId, entry,
+                    nextSequence, drainedAt, payloadHash, prevHash, entryHash, scheme)));
             outboxRepository.save(outboxMapper.toEntity(entry.drained()));
             prevHash = entryHash;
             nextSequence++;

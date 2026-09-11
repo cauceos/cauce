@@ -16,10 +16,10 @@ class AuditLogEntryMapperTest {
 
     @Test
     void roundTrip_preservesAllFieldsIncludingChainColumns() {
-        AuditLogEntry original = AuditLogEntry.chained(AuditOutboxEntry.create(
-                        new AuditEvent(UUID.randomUUID(), "placeholder.event", Map.of("k", "v"))),
-                3, AuditLogEntry.mintDrainedAt(), "payload-hash-hex", "prev-hash-hex",
-                "entry-hash-hex", "v1");
+        AuditLogEntry original = AuditLogEntry.chained(AuditLogEntry.mintId(),
+                AuditOutboxEntry.create(new AuditEvent(UUID.randomUUID(), "placeholder.event",
+                        Map.of("k", "v"))), 3, AuditLogEntry.mintDrainedAt(), "payload-hash-hex",
+                "prev-hash-hex", "entry-hash-hex", "v1");
 
         AuditLogEntry roundTripped = mapper.toDomain(mapper.toEntity(original));
 
