@@ -23,7 +23,9 @@ public final class AuditLogEntryMapper {
                 entry.prevHash(),
                 entry.entryHash(),
                 entry.hashScheme(),
-                entry.signature());
+                entry.signature(),
+                entry.keyId(),
+                entry.signatureScheme());
     }
 
     public AuditLogEntry toDomain(AuditLogEntryEntity entity) {
@@ -39,6 +41,8 @@ public final class AuditLogEntryMapper {
                 entity.getPrevHash(),
                 entity.getEntryHash(),
                 entity.getHashScheme(),
-                entity.getSignature());
+                entity.getSignature(),
+                entity.getKeyId(),
+                entity.getSignatureScheme());
     }
 }

@@ -31,14 +31,14 @@ class ChainVerificationResultTest {
     @Test
     void constructor_validWithBreak_throwsIllegalArgument() {
         assertThatThrownBy(() -> new ChainVerificationResult(true, 1, 0, 1L,
-                ChainBreakKind.SEQUENCE_GAP))
+                ChainBreakKind.SEQUENCE_GAP, SignatureReport.empty()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("valid result cannot carry a break");
     }
 
     @Test
     void constructor_invalidWithoutBreak_throwsNpe() {
-        assertThatThrownBy(() -> new ChainVerificationResult(false, 1, 0, null, null))
+        assertThatThrownBy(() -> new ChainVerificationResult(false, 1, 0, null, null, SignatureReport.empty()))
                 .isInstanceOf(NullPointerException.class);
     }
 }

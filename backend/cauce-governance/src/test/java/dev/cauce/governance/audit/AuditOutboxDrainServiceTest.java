@@ -26,7 +26,9 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import dev.cauce.governance.audit.signing.AuditEntrySigner;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Limit;
 
 class AuditOutboxDrainServiceTest {
@@ -43,9 +45,17 @@ class AuditOutboxDrainServiceTest {
     private final AuditChainHasher hasher = new AuditChainHasher();
     private final AuditOutboxDrainService service = new AuditOutboxDrainService(
             outboxRepository, outboxMapper, logRepository, logMapper, headRepository,
-            headMapper, hasher);
+            headMapper, hasher, noSigner());
 
     private final UUID tenantId = UUID.randomUUID();
+
+    /** The default configuration: no signing key, so entries are written unsigned. */
+    @SuppressWarnings("unchecked")
+    private static ObjectProvider<AuditEntrySigner> noSigner() {
+        ObjectProvider<AuditEntrySigner> provider = Mockito.mock(ObjectProvider.class);
+        Mockito.when(provider.getIfAvailable()).thenReturn(null);
+        return provider;
+    }
 
     private AuditOutboxEntryEntity pendingEntity(String eventType) {
         return outboxMapper.toEntity(AuditOutboxEntry.create(
@@ -144,7 +154,11 @@ class AuditOutboxDrainServiceTest {
                         entry.getDrainedAt(), entry.getPayloadHash(), entry.getPrevHash()));
         // The id is minted before hashing, so the row's OWN id is what the hash commits to.
         assertThat(entry.getId()).isNotNull();
-        assertThat(entry.getSignature()).isNull(); // the signing slot stays untouched
+        // No signing key configured: the three signature columns stay null, which is a
+        // supported configuration and not a failure.
+        assertThat(entry.getSignature()).isNull();
+        assertThat(entry.getKeyId()).isNull();
+        assertThat(entry.getSignatureScheme()).isNull();
         // What was hashed is exactly what will be stored: microsecond precision.
         assertThat(entry.getDrainedAt())
                 .isEqualTo(entry.getDrainedAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS));

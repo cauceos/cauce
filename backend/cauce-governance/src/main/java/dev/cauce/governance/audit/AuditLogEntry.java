@@ -24,7 +24,12 @@ import java.util.UUID;
  * — the verifier treats them as an unverifiable prefix, never backfilled).
  *
  * <p>{@code payload} is null when the owner redacted it post hoc (an operation the runtime
- * role cannot perform); {@code signature} is RESERVED for the signing unit (always null).
+ * role cannot perform).
+ *
+ * <p>Signature fields ({@code signature}, {@code keyId}, {@code signatureScheme}) are all
+ * null together or all set together. Null is legitimate and common: v1 entries are NEVER
+ * signed, and an instance with no signing key configured writes unsigned entries. The
+ * verifier reports an unsigned entry as unsigned, never as a failure.
  *
  * <p>Pure domain type: no persistence or framework dependencies.
  */
@@ -39,7 +44,9 @@ public record AuditLogEntry(UUID id,
                             String prevHash,
                             String entryHash,
                             String hashScheme,
-                            String signature) {
+                            String signature,
+                            String keyId,
+                            String signatureScheme) {
 
     public AuditLogEntry {
         Objects.requireNonNull(id, "id must not be null");
@@ -67,11 +74,15 @@ public record AuditLogEntry(UUID id,
      * in the v2 preimage, so it can no longer be generated after the hash; {@code drainedAt}
      * is truncated because PostgreSQL keeps microseconds and an untruncated instant would read
      * back different from what was hashed.)
+     *
+     * <p>The three signature arguments are null together when this instance does not sign.
      */
     public static AuditLogEntry chained(UUID id, AuditOutboxEntry outboxEntry,
                                         long sequenceNumber, Instant drainedAt,
                                         String payloadHash, String prevHash,
-                                        String entryHash, String hashScheme) {
+                                        String entryHash, String hashScheme,
+                                        String signature, String keyId,
+                                        String signatureScheme) {
         Objects.requireNonNull(outboxEntry, "outboxEntry must not be null");
         Objects.requireNonNull(payloadHash, "payloadHash must not be null");
         Objects.requireNonNull(prevHash, "prevHash must not be null");
@@ -79,7 +90,8 @@ public record AuditLogEntry(UUID id,
         Objects.requireNonNull(hashScheme, "hashScheme must not be null");
         return new AuditLogEntry(id, outboxEntry.tenantId(), sequenceNumber,
                 outboxEntry.id(), outboxEntry.eventType(), outboxEntry.payload(), drainedAt,
-                payloadHash, prevHash, entryHash, hashScheme, null);
+                payloadHash, prevHash, entryHash, hashScheme, signature, keyId,
+                signatureScheme);
     }
 
     /** An entry id, minted before hashing because the v2 preimage commits to it. */

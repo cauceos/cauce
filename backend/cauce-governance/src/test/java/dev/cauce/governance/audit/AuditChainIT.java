@@ -310,6 +310,27 @@ class AuditChainIT extends AbstractGovernanceIntegrationTest {
         assertThat(result.breakKind()).isEqualTo(ChainBreakKind.PAYLOAD_HASH_MISMATCH);
     }
 
+    /**
+     * The default deployment: no signing key configured. Entries are written unsigned, the
+     * chain still verifies, and the report says plainly that nothing was signature-checked.
+     */
+    @Test
+    void drain_withoutSigningKey_writesUnsignedEntriesThatStillVerify() {
+        seedEvents(clientA.id(), "e.one", "e.two");
+        drainBatchAs(clientA.id(), properties.getBatchSize());
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_log_entries "
+                        + "WHERE tenant_id = ? AND signature IS NULL AND key_id IS NULL",
+                Long.class, clientA.id())).isEqualTo(2);
+
+        ChainVerificationResult result = verifyAs(clientA.id());
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.signatures().unsigned()).isEqualTo(2);
+        assertThat(result.signatures().verified()).isZero();
+        assertThat(result.signatures().fullyVerified()).isFalse();
+    }
+
     // --- helpers ---
 
     /**

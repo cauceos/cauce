@@ -62,6 +62,12 @@ public class AuditLogEntryEntity {
     @Column(name = "signature", updatable = false)
     private String signature;
 
+    @Column(name = "key_id", updatable = false, length = 64)
+    private String keyId;
+
+    @Column(name = "signature_scheme", updatable = false, length = 20)
+    private String signatureScheme;
+
     protected AuditLogEntryEntity() {
         // for JPA
     }
@@ -69,7 +75,8 @@ public class AuditLogEntryEntity {
     public AuditLogEntryEntity(UUID id, UUID tenantId, long sequenceNumber, UUID outboxId,
                                String eventType, Map<String, Object> payload, Instant drainedAt,
                                String payloadHash, String prevHash, String entryHash,
-                               String hashScheme, String signature) {
+                               String hashScheme, String signature, String keyId,
+                               String signatureScheme) {
         this.id = id;
         this.tenantId = tenantId;
         this.sequenceNumber = sequenceNumber;
@@ -82,6 +89,8 @@ public class AuditLogEntryEntity {
         this.entryHash = entryHash;
         this.hashScheme = hashScheme;
         this.signature = signature;
+        this.keyId = keyId;
+        this.signatureScheme = signatureScheme;
     }
 
     public UUID getId() {
@@ -130,5 +139,13 @@ public class AuditLogEntryEntity {
 
     public String getSignature() {
         return signature;
+    }
+
+    public String getKeyId() {
+        return keyId;
+    }
+
+    public String getSignatureScheme() {
+        return signatureScheme;
     }
 }

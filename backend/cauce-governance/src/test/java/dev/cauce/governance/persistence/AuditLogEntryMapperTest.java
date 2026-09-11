@@ -19,7 +19,7 @@ class AuditLogEntryMapperTest {
         AuditLogEntry original = AuditLogEntry.chained(AuditLogEntry.mintId(),
                 AuditOutboxEntry.create(new AuditEvent(UUID.randomUUID(), "placeholder.event",
                         Map.of("k", "v"))), 3, AuditLogEntry.mintDrainedAt(), "payload-hash-hex",
-                "prev-hash-hex", "entry-hash-hex", "v1");
+                "prev-hash-hex", "entry-hash-hex", "v1", null, null, null);
 
         AuditLogEntry roundTripped = mapper.toDomain(mapper.toEntity(original));
 
@@ -37,7 +37,7 @@ class AuditLogEntryMapperTest {
         // faithfully so the verifier can judge them instead of the mapper rejecting them.
         AuditLogEntry preChain = new AuditLogEntry(UUID.randomUUID(), UUID.randomUUID(), 9,
                 UUID.randomUUID(), "placeholder.event", null, Instant.now(), null, null, null,
-                null, null);
+                null, null, null, null);
 
         AuditLogEntry roundTripped = mapper.toDomain(mapper.toEntity(preChain));
 

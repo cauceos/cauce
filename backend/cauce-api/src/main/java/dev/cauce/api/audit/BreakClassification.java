@@ -8,13 +8,19 @@ import dev.cauce.governance.audit.ChainBreakKind;
  * decoupled from the wire contract — the same principle as
  * {@link dev.cauce.api.invocation.FailureReason}.
  *
- * <p>The internal taxonomy has six kinds; the two hash mismatches (payload and entry) both
+ * <p>The internal taxonomy has seven kinds; the two hash mismatches (payload and entry) both
  * mean "a stored entry no longer matches the hash recorded when it was chained" and carry no
  * actionable distinction for an external reader, so they collapse into {@link #ENTRY_ALTERED}.
+ * A signature mismatch collapses there too: it likewise means the stored entry is not what was
+ * recorded. Giving it a public name of its own belongs with the revision of this vocabulary
+ * that introduces the remaining verdict states, not here.
  */
 public enum BreakClassification {
 
-    /** A stored entry's content or metadata no longer matches the hash recorded when chained. */
+    /**
+     * A stored entry's content or metadata no longer matches what was recorded when it was
+     * chained — either the hash does not recompute, or its signature does not verify.
+     */
     ENTRY_ALTERED,
     /** An entry does not link to the previous entry's hash: the chain was cut or reordered. */
     LINK_BROKEN,
@@ -28,7 +34,7 @@ public enum BreakClassification {
     /** Maps the internal break taxonomy to the public vocabulary (exhaustive, directional). */
     public static BreakClassification from(ChainBreakKind kind) {
         return switch (kind) {
-            case PAYLOAD_HASH_MISMATCH, ENTRY_HASH_MISMATCH -> ENTRY_ALTERED;
+            case PAYLOAD_HASH_MISMATCH, ENTRY_HASH_MISMATCH, SIGNATURE_MISMATCH -> ENTRY_ALTERED;
             case PREV_HASH_MISMATCH -> LINK_BROKEN;
             case SEQUENCE_GAP -> ENTRY_MISSING;
             case PRE_CHAIN_AFTER_CHAINED -> UNCHAINED_ENTRY_OUT_OF_ORDER;

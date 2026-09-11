@@ -29,7 +29,7 @@ class AuditLogEntryTest {
 
         UUID id = AuditLogEntry.mintId();
         AuditLogEntry entry = AuditLogEntry.chained(id, outbox, 7, drainedAt, HEX_64,
-                "b".repeat(64), "c".repeat(64), AuditChainHasher.CURRENT_SCHEME);
+                "b".repeat(64), "c".repeat(64), AuditChainHasher.CURRENT_SCHEME, null, null, null);
 
         // The id is the one the CALLER minted: the v2 preimage commits to it, so the factory
         // can no longer generate it after the hash has been computed.
@@ -60,7 +60,7 @@ class AuditLogEntryTest {
     @Test
     void chained_whenNullOutboxEntry_throwsNpe() {
         assertThatThrownBy(() -> AuditLogEntry.chained(AuditLogEntry.mintId(), null, 1,
-                Instant.now(), HEX_64, HEX_64, HEX_64, AuditChainHasher.CURRENT_SCHEME))
+                Instant.now(), HEX_64, HEX_64, HEX_64, AuditChainHasher.CURRENT_SCHEME, null, null, null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("outboxEntry");
     }
@@ -68,7 +68,7 @@ class AuditLogEntryTest {
     @Test
     void chained_whenNullHash_throwsNpe() {
         assertThatThrownBy(() -> AuditLogEntry.chained(AuditLogEntry.mintId(), outboxEntry(), 1,
-                Instant.now(), HEX_64, null, HEX_64, AuditChainHasher.CURRENT_SCHEME))
+                Instant.now(), HEX_64, null, HEX_64, AuditChainHasher.CURRENT_SCHEME, null, null, null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("prevHash");
     }
@@ -76,7 +76,7 @@ class AuditLogEntryTest {
     @Test
     void constructor_whenSequenceBelowOne_throwsIllegalArgument() {
         assertThatThrownBy(() -> AuditLogEntry.chained(AuditLogEntry.mintId(), outboxEntry(), 0,
-                Instant.now(), HEX_64, HEX_64, HEX_64, AuditChainHasher.CURRENT_SCHEME))
+                Instant.now(), HEX_64, HEX_64, HEX_64, AuditChainHasher.CURRENT_SCHEME, null, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("sequenceNumber");
     }
@@ -85,7 +85,7 @@ class AuditLogEntryTest {
     void constructor_allowsNullPayload_representingAnOwnerRedactedRow() {
         AuditLogEntry redacted = new AuditLogEntry(UUID.randomUUID(), tenantId, 3,
                 UUID.randomUUID(), "placeholder.event", null, Instant.now(), HEX_64, HEX_64,
-                HEX_64, AuditChainHasher.CURRENT_SCHEME, null);
+                HEX_64, AuditChainHasher.CURRENT_SCHEME, null, null, null);
 
         assertThat(redacted.payload()).isNull();
         assertThat(redacted.payloadHash()).isEqualTo(HEX_64); // verifiability survives

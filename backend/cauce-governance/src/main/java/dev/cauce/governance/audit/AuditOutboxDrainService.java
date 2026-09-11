@@ -1,6 +1,7 @@
 package dev.cauce.governance.audit;
 
 import dev.cauce.core.tenant.NoTenantContext;
+import dev.cauce.governance.audit.signing.AuditEntrySigner;
 import dev.cauce.governance.persistence.AuditChainHeadEntity;
 import dev.cauce.governance.persistence.AuditChainHeadMapper;
 import dev.cauce.governance.persistence.AuditChainHeadRepository;
@@ -13,6 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,11 @@ import org.springframework.transaction.annotation.Transactional;
  * chain starts at the tenant-derived genesis hash. The per-tenant row lock serializes drains
  * within a tenant without blocking other tenants; {@code UNIQUE (tenant_id,
  * sequence_number)} and {@code UNIQUE (outbox_id)} remain the schema-level backstops.
+ *
+ * <p>Since the signing unit it also signs what it writes, when a signing key is configured:
+ * the Ed25519 signature over the entry hash, plus the {@code key_id} and signature scheme, go
+ * in on the same INSERT. Without a key the same INSERT happens with those three columns null,
+ * and verification reports those entries as unsigned rather than as broken.
  */
 @Service
 public class AuditOutboxDrainService {
@@ -47,6 +54,7 @@ public class AuditOutboxDrainService {
     private final AuditChainHeadRepository headRepository;
     private final AuditChainHeadMapper headMapper;
     private final AuditChainHasher hasher;
+    private final ObjectProvider<AuditEntrySigner> signerProvider;
 
     public AuditOutboxDrainService(AuditOutboxEntryRepository outboxRepository,
                                    AuditOutboxEntryMapper outboxMapper,
@@ -54,7 +62,8 @@ public class AuditOutboxDrainService {
                                    AuditLogEntryMapper logMapper,
                                    AuditChainHeadRepository headRepository,
                                    AuditChainHeadMapper headMapper,
-                                   AuditChainHasher hasher) {
+                                   AuditChainHasher hasher,
+                                   ObjectProvider<AuditEntrySigner> signerProvider) {
         this.outboxRepository = outboxRepository;
         this.outboxMapper = outboxMapper;
         this.logRepository = logRepository;
@@ -62,6 +71,7 @@ public class AuditOutboxDrainService {
         this.headRepository = headRepository;
         this.headMapper = headMapper;
         this.hasher = hasher;
+        this.signerProvider = signerProvider;
     }
 
     /** Tenants with PENDING outbox rows, via the cross-tenant escape hatch (ADR 0001). */
@@ -97,6 +107,9 @@ public class AuditOutboxDrainService {
             nextSequence = logRepository.findMaxSequenceNumber(tenantId).orElse(0L) + 1;
             prevHash = hasher.genesisHash(tenantId);
         }
+        // Resolved once per batch: absent when no signing key is configured, which is a
+        // supported configuration — the entries are simply written unsigned.
+        AuditEntrySigner signer = signerProvider.getIfAvailable();
         for (AuditOutboxEntryEntity entity : pending) {
             AuditOutboxEntry entry = outboxMapper.toDomain(entity);
             // Both minted BEFORE hashing: the v2 preimage commits to the entry id, and the
@@ -107,8 +120,16 @@ public class AuditOutboxDrainService {
             String payloadHash = hasher.payloadHash(scheme, entry.payload());
             String entryHash = hasher.entryHash(scheme, entryId, tenantId, nextSequence,
                     entry.id(), entry.eventType(), drainedAt, payloadHash, prevHash);
+            // Signed AFTER the entry hash, over that hash: the signature commits to the whole
+            // chain prefix without the signing layer knowing how entries are hashed. A signing
+            // failure propagates and fails the batch — storing the entry unsigned instead
+            // would be a silent downgrade of a configured guarantee.
+            String signature = signer == null ? null : signer.sign(entryHash);
+            String keyId = signer == null ? null : signer.keyId();
+            String signatureScheme = signer == null ? null : signer.signatureScheme();
             logRepository.save(logMapper.toEntity(AuditLogEntry.chained(entryId, entry,
-                    nextSequence, drainedAt, payloadHash, prevHash, entryHash, scheme)));
+                    nextSequence, drainedAt, payloadHash, prevHash, entryHash, scheme,
+                    signature, keyId, signatureScheme)));
             outboxRepository.save(outboxMapper.toEntity(entry.drained()));
             prevHash = entryHash;
             nextSequence++;

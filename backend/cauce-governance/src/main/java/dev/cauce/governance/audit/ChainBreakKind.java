@@ -15,6 +15,13 @@ public enum ChainBreakKind {
     SEQUENCE_GAP,
     /** An unhashed (pre-chain) row appears after chained rows — only legal as a prefix. */
     PRE_CHAIN_AFTER_CHAINED,
+
+    /**
+     * An entry carries a signature that does NOT verify against the public key its
+     * {@code key_id} names. Distinct from a signature that could not be checked at all, which
+     * is not a break and is counted in the {@link SignatureReport} instead.
+     */
+    SIGNATURE_MISMATCH,
     /** A chained row misses one of its chain fields or names an unknown hash scheme. */
     MALFORMED_ENTRY
 }
