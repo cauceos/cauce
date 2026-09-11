@@ -38,6 +38,9 @@ build/
 .env
 docker-compose.override.yml
 
+# --- Local scratch (signing keys, key registries, throwaway config — never commit) ---
+.local/
+
 # --- Quickstart state (bootstrap API key and demo ids — never commit) ---
 .quickstart.env
 
