@@ -255,7 +255,7 @@ function SignatureFigures({ signatures }: { signatures: SignatureSummary }) {
  *
  * One classification gets its own sentence: SIGNATURE_INVALID means the
  * entry recomputed fine and its signature did not verify, so "can no
- * longer be trusted by recomputation" would be the wrong claim.
+ * longer be checked by recomputation" would be the wrong claim.
  */
 function BreakDetail({
   sequenceNumber,
@@ -273,7 +273,7 @@ function BreakDetail({
         <span className="seq">{sequenceNumber}</span>.{' '}
         {classification === 'SIGNATURE_INVALID'
           ? 'This entry recomputes, but its signature does not verify against the key it names: it is not what was signed.'
-          : 'Entries from there onward can no longer be vouched for by recomputation.'}
+          : 'Entries from there onward can no longer be checked by recomputation alone.'}
       </p>
       <ChainSchematic sequenceNumber={sequenceNumber} verifiedEntries={verifiedEntries} />
     </>
@@ -310,7 +310,7 @@ function ChainSchematic({
       </div>
       <span className="lg">
         Schematic, not a per-entry map: recomputed up to the break, the break itself, then
-        entries recomputation can no longer vouch for.
+        entries recomputation alone can no longer check.
       </span>
     </>
   )
