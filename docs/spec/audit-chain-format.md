@@ -365,7 +365,8 @@ base64-encoded with padding, in the `signature` column.
 
 1. If `signature`, `key_id` and `signature_scheme` are all `NULL`, the entry is unsigned.
    That is not a defect (§2.1).
-2. If some but not all three are present, the row is malformed.
+2. If some but not all three are present, report it as an **invalid signature** (§9,
+   `SIGNATURE_INVALID`): something wrote an inconsistent row, and it is not what was signed.
 3. If `signature_scheme` is not one your implementation knows, you cannot check that entry.
    Report it as unchecked, not as wrong.
 4. Look up `key_id` in the registry (§8.4). If it is absent, you cannot check that entry.
@@ -446,19 +447,53 @@ key, so publishing it on every row discloses nothing.
 
 ## 9. Verification
 
-A full verification of one tenant's chain performs, in ascending sequence order: the
-structural checks of §7.2, the payload check of §6.1 where a payload is present, the entry
-hash recomputation of §5, and the signature check of §8.3.
+Walk one tenant's entries in ascending `sequence_number`, keeping the expected next sequence
+(starting at 1), the expected `prev_hash` (starting at the genesis hash of §7.1), and a tally
+of signature outcomes. For each entry apply the checks below **in this order**, and stop at
+the first one that fails. The order is normative: when an entry is wrong in more than one
+way, the kind reported is the first in this list.
 
-Three outcomes are meaningful, and keeping them apart is the point:
+| # | Check | On failure |
+|---|---|---|
+| 1 | `sequence_number` equals the expected next sequence | `ENTRY_MISSING` at the sequence found |
+| 2 | If `entry_hash` is `NULL` (a pre-chain row, §2.1): permitted only while no chained entry has been seen; count it and continue with the next entry | `UNCHAINED_ENTRY_OUT_OF_ORDER` |
+| 3 | `hash_scheme` is one this implementation knows (`v1`, `v2`) | **Stop** — not a defect. Everything from this sequence on is unchecked (see below) |
+| 4 | `payload_hash` and `prev_hash` are both present | `ENTRY_MALFORMED` |
+| 5 | If `payload` is present, its hash under the entry's scheme (§6) equals the stored `payload_hash` | `ENTRY_ALTERED` |
+| 6 | `prev_hash` equals the expected previous hash | `LINK_BROKEN` |
+| 7 | The recomputed `entry_hash` (§5) equals the stored one | `ENTRY_ALTERED` |
+| 8 | The signature, per §8.3: unsigned is counted; a scheme or key this implementation cannot check is counted as unverifiable and the walk continues; a partial triple, or a signature that does not verify, fails | `SIGNATURE_INVALID` |
 
-- **Consistent.** Every chained entry recomputed and linked, and every signature that could
-  be checked verified.
-- **A defect was found.** Report the **first** sequence number at which it occurred and what
-  kind it was. Everything after it is not evaluated.
-- **Part of it could not be checked.** An entry uses a hash scheme or signature scheme your
-  implementation does not know, or names a `key_id` you do not have a public key for. This is
-  neither of the above: report what was checked, what was not, and why.
+After check 8 passes, the expected previous hash becomes this entry's `entry_hash` and the
+expected sequence advances.
+
+### 9.1 Break kinds
+
+The vocabulary an implementation reports, and what each means:
+
+| Kind | Meaning |
+|---|---|
+| `ENTRY_ALTERED` | A stored entry's content or metadata no longer matches a hash recorded when it was chained (its payload hash, or its entry hash) |
+| `SIGNATURE_INVALID` | The entry's signature does not verify against the key its `key_id` names, or the signature columns are partially populated. The entry is not what was signed |
+| `LINK_BROKEN` | `prev_hash` is not the previous entry's `entry_hash`: the chain was cut or reordered |
+| `ENTRY_MISSING` | The per-tenant sequence skips a number: a chained entry is no longer present |
+| `UNCHAINED_ENTRY_OUT_OF_ORDER` | A pre-chain row appears after a chained entry |
+| `ENTRY_MALFORMED` | A chained entry is missing `payload_hash` or `prev_hash` |
+
+### 9.2 Outcomes
+
+Three outcomes are meaningful, and keeping them apart is the point. Precedence, when more
+than one applies: **BROKEN** over **UNVERIFIABLE** over **VALID**.
+
+- **BROKEN.** A check failed. Report the **first** sequence number at which it happened and
+  the kind from §9.1. Nothing after it is evaluated.
+- **UNVERIFIABLE.** No check failed, but part of the chain could not be looked at: the walk
+  stopped at check 3 on a hash scheme you do not implement (report that sequence), or one or
+  more signatures could not be checked at check 8 (report which `key_id`s were missing).
+  Neither good nor bad — no answer for that part. Report what was checked, what was not, and
+  why.
+- **VALID.** Every chained entry recomputed and linked, and every signature that could be
+  checked verified.
 
 An entry whose hash scheme you do not implement stops the walk: entries after it have not
 been examined, and reporting them as consistent would be a claim you cannot support.
@@ -476,9 +511,11 @@ recorded earlier from outside the database.
 ## 10. Test vectors
 
 Every value below was produced by the shipped implementation and reproduced independently
-from this document's prose. The repository pins them in
-`AuditFormatSpecVectorsTest`, so a change to the format that this document does not describe
-fails the build.
+from this document's prose. The repository pins them twice: `AuditFormatSpecVectorsTest`
+asserts them against the Java implementation, and the reference verifier under
+[`tools/audit-chain-verifier/`](../../tools/audit-chain-verifier/README.md) — written
+against this document and importing no Cauce code — recomputes them in its `--self-test`.
+A change to the format that this document does not describe fails both.
 
 ### 10.1 Genesis hash
 

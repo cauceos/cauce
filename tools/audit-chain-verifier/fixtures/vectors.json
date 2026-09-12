@@ -1,0 +1,73 @@
+{
+  "_source": "docs/spec/audit-chain-format.md section 10. Every value here is published in the specification; this file only makes it machine-readable for --self-test. If a value differs from the document, the document wins.",
+
+  "genesis": {
+    "tenant_id": "00000000-0000-7000-8000-000000000001",
+    "preimage": "cauce-audit-genesis:v1:00000000-0000-7000-8000-000000000001",
+    "hash": "0aaeefb6e95ffe2c9f1991f9964cbe1b7b4c200826d6d5c4149284a9be767fe5"
+  },
+
+  "entry": {
+    "fields": {
+      "id": "00000000-0000-7000-8000-0000000000e3",
+      "tenant_id": "00000000-0000-7000-8000-000000000001",
+      "sequence_number": 5,
+      "outbox_id": "00000000-0000-7000-8000-0000000000a2",
+      "event_type": "conduct.message.received",
+      "drained_at": "2026-09-11T10:00:00.000000Z",
+      "payload_hash": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+      "prev_hash": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+    },
+    "v1": {
+      "preimage": "{\"drained_at\":\"2026-09-11T10:00:00Z\",\"event_type\":\"conduct.message.received\",\"outbox_id\":\"00000000-0000-7000-8000-0000000000a2\",\"payload_hash\":\"pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\",\"prev_hash\":\"qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\",\"scheme\":\"v1\",\"sequence_number\":5,\"tenant_id\":\"00000000-0000-7000-8000-000000000001\"}",
+      "entry_hash": "417b2ecfa75612c53dca948f544f7309da10bf1031646485473d6e00a6054875"
+    },
+    "v2": {
+      "preimage": "{\"drained_at\":\"2026-09-11T10:00:00.000000Z\",\"event_type\":\"conduct.message.received\",\"id\":\"00000000-0000-7000-8000-0000000000e3\",\"outbox_id\":\"00000000-0000-7000-8000-0000000000a2\",\"payload_hash\":\"pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\",\"prev_hash\":\"qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq\",\"scheme\":\"v2\",\"sequence_number\":5,\"tenant_id\":\"00000000-0000-7000-8000-000000000001\"}",
+      "entry_hash": "c532e13eccdd3d9c2f727840b0340c253e91939329e64319aad9443546743a89"
+    }
+  },
+
+  "timestamps_v1": [
+    { "stored": "2026-09-11T10:00:00.000000Z", "v1": "2026-09-11T10:00:00Z" },
+    { "stored": "2026-09-11T10:00:00.100000Z", "v1": "2026-09-11T10:00:00.100Z" },
+    { "stored": "2026-09-11T10:00:00.500000Z", "v1": "2026-09-11T10:00:00.500Z" },
+    { "stored": "2026-09-11T10:00:00.123456Z", "v1": "2026-09-11T10:00:00.123456Z" },
+    { "stored": "2026-09-11T10:00:00.000001Z", "v1": "2026-09-11T10:00:00.000001Z" }
+  ],
+
+  "payload": {
+    "ascii": {
+      "document": { "content_hash": "3f2b1c", "rounds": 2, "finish_reason": "STOP" },
+      "v1": "6b9695c971ed3d84721505400296857d0ca8cbb7eee671f38039fc459a73a57b",
+      "v2": "6b9695c971ed3d84721505400296857d0ca8cbb7eee671f38039fc459a73a57b"
+    },
+    "nfd": {
+      "document": { "actor": "josé" },
+      "v1": "68e3c767fabfd41456e91b48f91429369453d510ebfa7a153adaa6fe5063c566",
+      "v2": "d02fa0fb31ba5fa261947ee7c604b9487ef3aa85778d4fd823c32f5894892a8a"
+    },
+    "nfc": {
+      "document": { "actor": "josé" },
+      "v1": "d02fa0fb31ba5fa261947ee7c604b9487ef3aa85778d4fd823c32f5894892a8a",
+      "v2": "d02fa0fb31ba5fa261947ee7c604b9487ef3aa85778d4fd823c32f5894892a8a"
+    }
+  },
+
+  "canonical": [
+    { "text": "{\"n\":1}",    "hash": "2bfd14f43d17fc7cea24e0917a8879b4b2f880b8baeec1b9d90fbaad655e71bd" },
+    { "text": "{\"n\":1.0}",  "hash": "2bfd14f43d17fc7cea24e0917a8879b4b2f880b8baeec1b9d90fbaad655e71bd" },
+    { "text": "{\"n\":null}", "hash": "5b4da02351c1c20974b216a5e3a4edb59ac51cbda6be3e9d82952b4f5beea463" },
+    { "text": "{\"n\":\"\"}",   "hash": "6b760ea9d4ac65941818f2a3a9afc102217be814b3a4684c685f38be1054a3d2" },
+    { "text": "{}",           "hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" }
+  ],
+
+  "signature": {
+    "key_id": "526b1a687e2f4293",
+    "public_key": "MCowBQYDK2VwAyEAvW00gfFNBbKDKfKbAky7KUqJZg2PjbnHru+jG0xBwWE=",
+    "signature_scheme": "ed25519-v1",
+    "entry_hash": "c532e13eccdd3d9c2f727840b0340c253e91939329e64319aad9443546743a89",
+    "signed_bytes": "cauce-audit-signature:v1:526b1a687e2f4293:ed25519-v1:c532e13eccdd3d9c2f727840b0340c253e91939329e64319aad9443546743a89",
+    "signature": "rU8G/ugMySdy/2PaiWtZMSmK2Dzzf7fgG5UbM1Ph2YySyCTO4DNdq5wSgC5xhQebxFLGGnSiTHdr/1V93r3vAA=="
+  }
+}

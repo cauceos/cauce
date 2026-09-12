@@ -45,6 +45,25 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # The reference audit-chain verifier (tools/audit-chain-verifier) is written against
+  # docs/spec/audit-chain-format.md and imports no Cauce code. Its self-test replays every
+  # vector the spec publishes plus a sample chain under mutation, so a change to the format
+  # that the spec does not describe fails here as well as in the Java test suite.
+  verifier-self-test:
+    name: Audit chain verifier self-test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Self-test against the specification's vectors
+        run: node tools/audit-chain-verifier/verify.mjs --self-test
+
   # Smoke-builds the quickstart image (backend/Dockerfile) so it cannot rot
   # unnoticed. Compile-and-package only — tests run in backend-build.
   docker-build:

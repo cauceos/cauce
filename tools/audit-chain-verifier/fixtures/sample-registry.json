@@ -1,0 +1,13 @@
+{
+  "registry_version": 1,
+  "keys": [
+    {
+      "key_id": "abda54d4e4e8bd2b",
+      "algorithm": "ed25519",
+      "public_key": "MCowBQYDK2VwAyEAHdpkoD+tPvU6MsLFKS4uruQ01eWRrz1ySNHNHNcGVCM=",
+      "activated_at": "2026-09-01T00:00:00Z",
+      "retired_at": null,
+      "compromised_at": null
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "format": "cauce-audit-chain-dump/1",
+  "tenant_id": "00000000-0000-7000-8000-00000000f1e1",
+  "entries": [
+    {
+      "id": "00000000-0000-7000-8000-0000000000c1",
+      "sequence_number": 1,
+      "outbox_id": "00000000-0000-7000-8000-0000000000b1",
+      "event_type": "admin.tenant.created",
+      "payload": {"tenant_id":"00000000-0000-7000-8000-00000000f1e1","tier":"CLIENT","actor_tenant_id":"00000000-0000-7000-8000-00000000a0a0"},
+      "drained_at": "2026-09-01T09:00:00.000000Z",
+      "payload_hash": "aa76b96fe149339cf3750393e78ca5db707d062e47c2948b0015364b173bb108",
+      "prev_hash": "ddd591df1483945dbaa1ae942823c99d7c9514e468ccda6b89f05fcf23cf0351",
+      "entry_hash": "864aab7db634232cc005e48aa69c06b0651b0c9eade9b55338295872afc48895",
+      "hash_scheme": "v1",
+      "signature": null,
+      "key_id": null,
+      "signature_scheme": null
+    },
+    {
+      "id": "00000000-0000-7000-8000-0000000000c2",
+      "sequence_number": 2,
+      "outbox_id": "00000000-0000-7000-8000-0000000000b2",
+      "event_type": "conduct.agent.responded",
+      "payload": {"content_hash":"9c3d7a1e5b2f8046c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f0a2b4","channel_type":"api","rounds":1,"finish_reason":"STOP"},
+      "drained_at": "2026-09-01T09:00:00.100000Z",
+      "payload_hash": "b59c691ed71a76842d65d0ae7229563b7a0e4d9456c2b502c1fd7147db3a190b",
+      "prev_hash": "864aab7db634232cc005e48aa69c06b0651b0c9eade9b55338295872afc48895",
+      "entry_hash": "f27786dde642b23eded6167c25f65d46af2949c48990c74b74e28add39a623e7",
+      "hash_scheme": "v1",
+      "signature": null,
+      "key_id": null,
+      "signature_scheme": null
+    },
+    {
+      "id": "00000000-0000-7000-8000-0000000000c3",
+      "sequence_number": 3,
+      "outbox_id": "00000000-0000-7000-8000-0000000000b3",
+      "event_type": "ledger.chain.verified",
+      "payload": {"actor":"jose\u0301","verdict":"VALID","chained_count":2,"missing_key_ids":[]},
+      "drained_at": "2026-09-01T09:00:01.234567Z",
+      "payload_hash": "34b11804ede641dc16470af98ce36c39f3bf0068c0ab54c8330d9d7e29cf6142",
+      "prev_hash": "f27786dde642b23eded6167c25f65d46af2949c48990c74b74e28add39a623e7",
+      "entry_hash": "13f8f42dcacd6ae97417956dc1b286ad6189cadf59fb4f6db27bcf28efa321c8",
+      "hash_scheme": "v2",
+      "signature": "io7zqkJ8vAjCcD3zdNxbw7kNqo6FTxlL0ixuqKk2GKMKHptj4Lp/q86loUgI3zAoRIsdtawrGWeMlGHUrHgOBQ==",
+      "key_id": "abda54d4e4e8bd2b",
+      "signature_scheme": "ed25519-v1"
+    }
+  ]
+}

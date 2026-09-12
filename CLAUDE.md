@@ -88,6 +88,11 @@ See [README.md](README.md) for the user-facing project description.
   specifies the audit entry hash preimages, chaining, signature and key registry in enough
   detail to write an independent verifier; its test vectors are pinned by
   `AuditFormatSpecVectorsTest`)
+- `tools/` — standalone published artefacts, outside every build: `audit-chain-verifier/`
+  is the reference verifier for the audit chain (single-file Node, zero dependencies,
+  imports no Cauce code; `node verify.mjs --self-test` replays the spec's vectors and a
+  sample chain; the CI job `verifier-self-test` runs it). Its input is its own dump format,
+  produced by SQL — there is no export endpoint yet
 
 ## Architectural invariants
 
@@ -642,6 +647,8 @@ The `cauce-enterprise` module is under a separate commercial license. Code in `c
 
 - [Audit chain format](docs/spec/audit-chain-format.md) — normative spec of the audit entry
   hash preimages (v1 and v2), chaining, signature and key registry, with test vectors
+- [Audit chain verifier](tools/audit-chain-verifier/README.md) — reference verifier written
+  against the spec, no Cauce code, zero dependencies
 - [README](README.md) — public project overview
 - [LICENSE](LICENSE) — Business Source License 1.1
 - [GitHub Discussions](https://github.com/cauceos/cauce/discussions) — questions, ideas, partnerships
