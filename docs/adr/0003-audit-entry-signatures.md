@@ -44,7 +44,7 @@ serialisation. That hash already includes the previous entry's hash, so signing
 it commits to the entire prefix of the chain.
 
 The preimage moves from an implementation detail to a **published format**. It is
-currently canonical JSON with code-point-ordered keys, no whitespace, over eight
+currently canonical JSON with keys ordered by UTF-16 code unit, no whitespace, over eight
 explicit fields including `prev_hash`, `payload_hash` and a literal
 `scheme` discriminator. That shape is kept. Three changes make it reproducible by
 an independent implementation, and they define **preimage v2**:
@@ -70,7 +70,10 @@ a signature made in this context from being valid in another one added later,
 such as the export artefact.
 
 The preimage specification moves out of Javadoc and into `docs/`. An independent
-verifier needs a document, not a comment in a Java class.
+verifier needs a document, not a comment in a Java class. It now exists:
+[`docs/spec/audit-chain-format.md`](../spec/audit-chain-format.md) specifies both hash
+schemes, the chaining rule, the signature preimage and the key registry, with test vectors
+pinned by `AuditFormatSpecVectorsTest`.
 
 ### 2. Ed25519
 

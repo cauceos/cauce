@@ -83,7 +83,11 @@ See [README.md](README.md) for the user-facing project description.
 **Other top-level directories**:
 
 - `.github/` — GitHub workflows (CI), Dependabot config, repo assets (no issue templates yet)
-- `docs/` — public documentation; currently the ADRs under `docs/adr/`
+- `docs/` — public documentation: the ADRs under `docs/adr/` (decisions) and the normative
+  format specifications under `docs/spec/` (currently `audit-chain-format.md`, which
+  specifies the audit entry hash preimages, chaining, signature and key registry in enough
+  detail to write an independent verifier; its test vectors are pinned by
+  `AuditFormatSpecVectorsTest`)
 
 ## Architectural invariants
 
@@ -636,6 +640,8 @@ The `cauce-enterprise` module is under a separate commercial license. Code in `c
 
 ## References
 
+- [Audit chain format](docs/spec/audit-chain-format.md) — normative spec of the audit entry
+  hash preimages (v1 and v2), chaining, signature and key registry, with test vectors
 - [README](README.md) — public project overview
 - [LICENSE](LICENSE) — Business Source License 1.1
 - [GitHub Discussions](https://github.com/cauceos/cauce/discussions) — questions, ideas, partnerships

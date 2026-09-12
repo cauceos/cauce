@@ -21,26 +21,21 @@ import org.springframework.stereotype.Component;
  * gets it from the row being verified ({@code hash_scheme}) or from {@link #CURRENT_SCHEME}
  * when chaining a new one. Nothing is ever re-hashed: a v1 entry stays v1 forever.
  *
- * <p><b>v1 preimage</b> — eight fields: {@code drained_at} (bare {@link Instant#toString()}),
- * {@code event_type}, {@code outbox_id}, {@code payload_hash}, {@code prev_hash},
- * {@code scheme}, {@code sequence_number}, {@code tenant_id}.
+ * <p><b>The normative specification of both preimages is
+ * {@code docs/spec/audit-chain-format.md}</b> — field by field, with the exact encodings and
+ * test vectors that {@code AuditFormatSpecVectorsTest} pins. It is written so a third party
+ * can verify a chain without reading this class, which is the whole point of publishing it;
+ * this javadoc gives the intent, not the bytes, so the two cannot drift apart.
  *
- * <p><b>v2 preimage</b> — the same eight plus {@code id}, with three corrections that make it
- * reproducible by an independent implementation (ADR 0003 §1):
- * <ul>
- *   <li>{@code id} enters the preimage. Under v1 it was the only column outside the hash, so
- *       it could be altered without detection.</li>
- *   <li>Timestamps are formatted at FIXED microsecond precision, trailing zeros included
- *       ({@code 2026-09-11T10:00:00.000000Z}). {@link Instant#toString()} omits the fraction
- *       when it is zero and varies its length otherwise, so the same instant could serialise
- *       two different ways; an external verifier can now reproduce the string from the stored
- *       {@code timestamptz} without guessing. (The stored value already round-trips: it is
- *       minted truncated to micros by {@link AuditLogEntry#mintDrainedAt()}.)</li>
- *   <li>Strings are normalised to Unicode NFC before hashing, so two byte sequences with
- *       identical meaning cannot produce different hashes. This applies to the payload
- *       document too — see {@link #payloadHash} — which is why the scheme is threaded there
- *       as well.</li>
- * </ul>
+ * <p>In short: <b>v1</b> commits to eight fields; <b>v2</b> adds {@code id} and makes two
+ * corrections that v1 needed to be reproducible elsewhere. {@code id} enters the preimage
+ * because under v1 it was the only column outside the hash, so it could be altered without
+ * detection. Timestamps move to FIXED microsecond precision, because
+ * {@link Instant#toString()} omits the fraction when it is zero and varies its length
+ * otherwise — the same instant could serialise two ways. Strings are normalised to Unicode
+ * NFC, so two byte sequences with identical meaning cannot produce different hashes; that
+ * applies to the payload document too, which is why the scheme is threaded through
+ * {@link #payloadHash}.
  *
  * <p>Neither preimage contains the raw payload (only its persisted {@code payload_hash}, so
  * the chain still verifies after a payload redaction) nor the signature (signing is

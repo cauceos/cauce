@@ -12,12 +12,17 @@ import java.util.TreeMap;
  * over — NEVER the database's own jsonb text representation, whose key order, spacing, and
  * number formatting are not contractual and would break verification.
  *
- * <p>Canonical form: object keys sorted by code point, no whitespace, strings with the
+ * <p>Canonical form: object keys sorted by UTF-16 CODE UNIT (what {@link TreeMap} over
+ * {@link String} gives, and what RFC 8785 specifies — NOT code point order, which differs
+ * for characters outside the Basic Multilingual Plane), no whitespace, strings with the
  * minimal JSON escapes, and numbers normalized through
  * {@code new BigDecimal(n.toString()).stripTrailingZeros().toPlainString()} so equal values
  * of different Java number types ({@code 1}, {@code 1L}, {@code 1.0}) serialize identically.
  * NaN and infinities are rejected — they are not representable in JSON and could never round
  * trip through jsonb.
+ *
+ * <p>The normative description of this format, with test vectors, is
+ * {@code docs/spec/audit-chain-format.md}. This class implements it.
  *
  * <p>{@code normalizeUnicode} selects the audit scheme's string handling and is passed down
  * to every key and string value: v2 normalizes to Unicode NFC before escaping, v1 does not.
