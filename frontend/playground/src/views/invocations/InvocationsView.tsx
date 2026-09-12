@@ -191,8 +191,14 @@ function ConnectedInvocations({ client }: { client: ApiClient }) {
           <div className="gapbox">
             <div className="t">Absent on purpose</div>
             <div className="d">
-              <b>No tokens, no cost.</b> Per-call usage is persisted server-side but not exposed by
-              any endpoint, so there is no number here this screen could stand behind.
+              <b>No cost.</b> Tokens are shown per invocation in the detail, as counts. There is no
+              price table, and none belongs in a screen: a monetary figure computed here is the
+              kind someone later bills from.
+            </div>
+            <div className="d">
+              <b>No totals across invocations.</b> The API has no usage aggregation, and this
+              ledger does not add its rows up: a sum of what one browser happened to send is not
+              a tenant&apos;s usage, and would read like one.
             </div>
             <div className="d">
               <b>No per-phase server timings.</b> Queue, model and tool time are not separable

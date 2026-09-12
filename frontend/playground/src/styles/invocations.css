@@ -138,6 +138,30 @@
 .detail { display: none; border-top: 1px solid var(--color-border-soft); background: var(--color-bg); padding: 16px 18px; }
 .detail .kv { display: inline-block; margin: 0 20px 10px 0; }
 
+/* ── Tokens — the usage ledger's facts for this invocation ──
+   Three renderings that must stay distinguishable at a glance: figures
+   (recorded), "not recorded" in words with no digit at all (null is not
+   zero), and figures behind a ≥ with a floor chip (the invocation did not
+   complete, so the totals are a floor). Counts only; there is no cost. */
+.usage .k { display: flex; align-items: center; gap: 8px; }
+.u-chip { font-size: 8.5px; letter-spacing: 1.5px; padding: 1px 7px; text-transform: uppercase; }
+.u-nums { font-family: var(--font-mono); font-size: 11px; color: var(--color-muted); display: flex; gap: 12px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.u-nums .n { color: var(--color-text); }
+/* The ≥ is the floor, said in the number itself, not only in the note. */
+.u-nums .ge { color: var(--color-slate-400); }
+.u-absent { font-family: var(--font-mono); font-size: 11px; color: var(--color-muted); }
+.u-note { display: block; font-size: 11px; color: var(--color-muted); line-height: 1.6; margin-top: 5px; max-width: 44ch; }
+/* Per-call breakdown: only when there is more than one call. A repeated
+   round_index is a retry that paid for the same round again — slate, not
+   alarm: it is a fact about money, not a defect. */
+.u-calls { display: grid; gap: 4px; margin-top: 8px; font-family: var(--font-mono); font-size: 9.5px; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.u-call { display: grid; grid-template-columns: 72px 1fr auto; gap: 8px; align-items: baseline; }
+.u-call .r { color: var(--color-subtle); }
+.u-call.again .r { color: var(--color-slate-400); }
+.u-call .m { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.u-call .v { color: var(--color-subtle); white-space: nowrap; }
+.u-legend { margin-top: 2px; line-height: 1.6; }
+
 /* ══════════ Absent on purpose ══════════ */
 .gapbox { border: 1px dotted var(--color-stone-700); border-radius: var(--radius-md); padding: 14px 16px; margin-top: 22px; }
 .gapbox .t { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--color-muted); margin-bottom: 8px; }
@@ -161,6 +185,7 @@
   .r2 { display: flex; align-items: center; gap: 14px; }
   .obs { flex: 1; }
   .detail { display: block; }
+  .detail .kv.usage { display: block; }
 }
 
 /* ══════════ MOBILE · ≤700px (contract: topbar + drawer regime) ══════════ */

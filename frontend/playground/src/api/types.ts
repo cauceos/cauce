@@ -134,6 +134,39 @@ export interface MessageResponse {
   created_at: string
 }
 
+/**
+ * One provider call inside an invocation, as the usage ledger recorded it.
+ * `round_index` is an attribute, not an identity: a worker retry re-runs
+ * the agentic loop from round zero, so the same index can appear more than
+ * once in one invocation. List order — oldest first — tells them apart.
+ */
+export interface InvocationUsageCallResponse {
+  round_index: number
+  provider: string
+  model: string
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  finish_reason: string
+  recorded_at: string
+}
+
+/**
+ * Token usage for one invocation: the aggregate and the calls it sums.
+ * Tokens only, never cost — prices are not a column. `complete` is false
+ * when the invocation did not end successfully: usage is written only
+ * after a provider answers, so a round that failed on the way out is not
+ * counted and the totals are a floor, not the full amount.
+ */
+export interface InvocationUsageResponse {
+  /** Never empty — the whole object is null when nothing was recorded. */
+  calls: InvocationUsageCallResponse[]
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  complete: boolean
+}
+
 export interface InvocationResponse {
   id: string
   conversation_id: string
@@ -143,6 +176,12 @@ export interface InvocationResponse {
   failure_reason: FailureReason | null
   created_at: string
   completed_at: string | null
+  /**
+   * Additive since the usage unit. `null` means no provider call was
+   * recorded — which is NOT zero tokens, only no record. Absent altogether
+   * on an instance that predates the field.
+   */
+  usage?: InvocationUsageResponse | null
 }
 
 /**

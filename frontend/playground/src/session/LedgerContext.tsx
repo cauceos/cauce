@@ -1,6 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { FailureReason, InvocationResponse, InvocationStatus } from '../api/types'
+import type {
+  FailureReason,
+  InvocationResponse,
+  InvocationStatus,
+  InvocationUsageResponse,
+} from '../api/types'
 import { useSession } from './SessionContext'
 
 /**
@@ -50,6 +55,13 @@ export interface LedgerEntry {
   serverCompletedAt: string | null
   /** The terminal status came from a lookup, not from watching. */
   resolvedByLookup: boolean
+  /**
+   * Token usage as the wire delivered it. Three states, kept apart on
+   * purpose: `undefined` — no response carrying the field has landed yet
+   * (in flight, or an instance without it); `null` — the server said
+   * nothing was recorded, which is not zero; an object — the facts.
+   */
+  usage: InvocationUsageResponse | null | undefined
 }
 
 /** What a row IS, derived: PENDING while watched, UNKNOWN once the watch ended without a terminal. */
@@ -135,6 +147,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
             serverCreatedAt: null,
             serverCompletedAt: null,
             resolvedByLookup: false,
+            usage: undefined,
           }
           // Newest first; a re-sent id (idempotent replay) replaces its row.
           const rest = prev.filter((e) => e.invocationId !== event.invocationId)
@@ -160,6 +173,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
           failureReason: invocation.failure_reason,
           serverCreatedAt: invocation.created_at,
           serverCompletedAt: invocation.completed_at,
+          usage: invocation.usage,
           firstActiveAt: e.firstActiveAt ?? at,
           terminalAt: e.terminalAt ?? at,
           watchEnd: null,
@@ -191,6 +205,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
                   failureReason: invocation.failure_reason,
                   serverCreatedAt: invocation.created_at,
                   serverCompletedAt: invocation.completed_at,
+                  usage: invocation.usage,
                   resolvedByLookup: e.resolvedByLookup || gainedTerminal,
                 },
           )
@@ -215,6 +230,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
           serverCreatedAt: invocation.created_at,
           serverCompletedAt: invocation.completed_at,
           resolvedByLookup: isTerminal(invocation.status),
+          usage: invocation.usage,
         }
         return [entry, ...prev].slice(0, MAX_ENTRIES)
       })

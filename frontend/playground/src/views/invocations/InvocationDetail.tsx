@@ -2,6 +2,7 @@ import { formatUtc, shortId } from '../../lib/format'
 import type { LedgerEntry } from '../../session/LedgerContext'
 import { ledgerStatus } from '../../session/LedgerContext'
 import { StatusChip, approxSpan, clockOf, serverSpan, watchEndText } from './LedgerRow'
+import { UsageBlock } from './UsageBlock'
 
 /**
  * One invocation, as this browser saw it: the phases the client actually
@@ -62,6 +63,8 @@ export function InvocationDetail({
           <span className="v">{entry.failureReason}</span>
         </div>
       )}
+      {/* A server fact like the ones above, from the same GET. */}
+      <UsageBlock usage={entry.usage} status={status} />
 
       <div className="p-sep" />
 
