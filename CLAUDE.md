@@ -2,11 +2,11 @@
 
 This file provides project context for Claude Code and any human contributor working on Cauce. Read this before making changes.
 
+It holds what does not change with the next unit of work: invariants, conventions, working rules, where things live. **It does not describe what is implemented.** The state of the code is in the code — each module's `build.gradle.kts` and source tree, the migrations, the controllers, `git log` — and consciously deferred work is tracked in [`docs/deferred.md`](docs/deferred.md). A sentence here that could become false when a unit lands does not belong here.
+
 ## Project overview
 
 Cauce is the open-source Agent OS for European businesses. It is a Java-native platform for building, operating, and governing AI agents in production. Multi-tenant from the first commit, sovereign by design, with first-class support for voice and chat channels.
-
-The project is in early development and built in the open. Foundational architecture is being established. Public-facing technical documentation will be published as the codebase stabilizes.
 
 See [README.md](README.md) for the user-facing project description.
 
@@ -15,23 +15,21 @@ See [README.md](README.md) for the user-facing project description.
 **Backend**
 - Java 21 LTS
 - Spring Boot 3.x
-- Gradle with Kotlin DSL (multi-module project)
+- Gradle with Kotlin DSL (multi-module project; the build lives under `backend/`)
 - PostgreSQL 16+ with pgvector extension
-- Redis for cache and ephemeral state (provisioned in dev; no production code uses it yet — the only cache today is the in-process Caffeine API-key cache)
-- Spring Application Events for internal eventing (in use: `cauce-orchestration` publishes the
-  invocation lifecycle events synchronously; `cauce-observability` consumes them)
-- OpenTelemetry for observability (planned; no OTel dependency yet)
+- Redis for cache and ephemeral state
+- Spring Application Events for internal eventing
+- OpenTelemetry is the observability target; adoption state is in the build files
 - JUnit 5, Mockito, AssertJ, Testcontainers for testing
 
-**Frontend — playground** (`frontend/playground` — developer testing tool, exists)
+**Frontend — playground** (`frontend/playground`, a developer testing tool)
 - React 19 + Vite 7 + TypeScript 5 (strict)
 - Tailwind CSS 4, CSS-first: the design tokens live in the `@theme` block of
   `src/styles/tokens.css` (that block IS the Tailwind config in v4)
 - react-router 7; native `fetch`; React Context for session state (no state library)
-- Dev-only tool: runs via `npm run dev`; its Vite dev proxy bridges the missing backend
-  CORS configuration (see Deferred)
+- Dev-only: runs via `npm run dev`; its Vite dev proxy targets the instance (see `vite.config.ts`)
 
-**Frontend — dashboard** (planned — `frontend/cauce-dashboard` does not exist yet)
+**Frontend — dashboard** (`frontend/cauce-dashboard`, the product interface; Angular)
 - Angular 17+ with standalone components and Signals
 - TypeScript 5+ (strict mode)
 - Tailwind CSS
@@ -40,67 +38,41 @@ See [README.md](README.md) for the user-facing project description.
 
 **Infrastructure**
 - Docker + Docker Compose for development
-- Helm chart for Kubernetes production deployments (planned, not in the repo yet)
+- Helm is the target for Kubernetes production deployments; presence is in the repo tree
 - GitHub Actions for CI/CD
 
 ## Repository structure
 
-> **Current state**: backend/ contains 15 Gradle subprojects. Implemented so far: the domain and persistence layers with hierarchical RLS (Flyway migrations V1–V24), tenancy application services, API-key authentication (HMAC-SHA256), an async LLM invocation engine (queue, context assembly, worker/reaper, inbound message ingest with optional idempotency-key deduplication), two LLM adapter modules (native Anthropic; OpenAI-compatible covering OpenAI, Mistral, and Ollama), an authenticated REST API including a public messaging endpoint (202 with `invocation_id`, an invocation-status endpoint with a public failure vocabulary backed by the V17 persisted failure taxonomy, and uniform keyset pagination on the three list endpoints), the end-to-end agentic tool loop (the neutral tool model in `cauce-core`, the executable tool SPI + built-in clock in `cauce-tools`, tool-message persistence in `cauce-memory`, the `cauce-llm` contract and both adapters mapping tools to each provider's wire format, and the orchestrator's bounded dispatch-and-feed-back loop), the invocation lifecycle event contract (`cauce-orchestration-events`, emitted synchronously from the loop) with its first consumer (Micrometer metrics in `cauce-observability`, exposed via the authenticated `/actuator/metrics`; no exporter yet), the per-tenant LLM usage ledger (V19 `llm_usage_records`: one immutable row per LLM call, written synchronously by the orchestrator before `LlmResponded` — capture only, no query endpoint or pricing yet), and the channel layer in `cauce-channels`: the complete channel SPI (inbound + outbound halves), the `ChannelConfig` agent/tenant binding (V16, RLS + SECURITY DEFINER webhook resolution), and the full Telegram round-trip (webhook → normalization → idempotent ingest, and best-effort outbound delivery of the agent reply via the `AgentReplyDispatcher` port in cauce-core — explicit port, not an event consumer). `cauce-governance` now holds the guaranteed-capture audit skeleton with a per-tenant hash chain: the transactional `audit_outbox` (V20, written in the caller's business tx via the `AuditEventRecorder` port), the append-only `audit_log_entries` ledger (V21 — UPDATE/DELETE revoked from `cauce_app` at the grant layer) hash-chained per tenant on the drain INSERT (V22 `payload_hash`/`hash_scheme`; V24 `key_id`/`signature_scheme` beside `signature`, all three
-written on the drain INSERT when a signing key is configured), the V23 `audit_chain_heads` head row (single source of next sequence + `prev_hash`), the per-tenant scheduled drainer, and the internal `AuditChainVerifier` (reports the exact first-break sequence; verification survives an owner payload redaction via the persisted `payload_hash`); now fed by its first REAL callers: the loop's Family-A conduct events (`conduct.message.received` in the ingest tx, `conduct.agent.responded` in the final AGENT append tx with `finish_reason`+`rounds`, `conduct.invocation.failed` in the terminal FAILED/ABANDONED transition tx), each recorded through the `AuditEventRecorder` port — now in `cauce-core` (`dev.cauce.core.audit`, with `AuditContentHash`: payloads carry non-sensitive metadata plus a tenant-bound content hash, never raw text; governance is the adapter) — and by Family B (administration): tenancy and channels audit tenant/agent/API-key/channel-config operations inside the operation's own tx, into the SUBJECT tenant's chain with the acting tenant as `actor_tenant_id` (ADR 0002), never carrying key plaintext/HMAC, channel credentials, webhook secrets, raw prompts (hash only), or business names; signatures landed too: preimage v2 (`94de4c0`), Ed25519 signing with a key held outside the database
-(`856b355`), three verdict states + signature report + the verification recorded in the chain
-(`18e2401`, anchor withdrawn in `be5c178`), the normative format in `docs/spec/audit-chain-format.md`
-(`d767a7f`) and the zero-dependency reference verifier in `tools/audit-chain-verifier/` (`55cab4d`). `cauce-evals` and `cauce-enterprise` are empty skeletons. docker-compose.yml provides local PostgreSQL + pgvector + Redis + Adminer for development. The frontend playground (React developer testing tool, `frontend/playground`) started with two units: the app shell (responsive sidebar/rail/drawer), the session screen with a working health-probe Connect, and the central `ApiClient`; plus the Conversation area — send to a real agent, honest 2s polling of the invocation status (no fake streaming), the tool loop rendered as a collapsible trace from the TOOL_CALL/TOOL_RESULT messages, forward-only history walk with a local-buffer "Load earlier", and per-view invocation meta (the wire carries no message↔invocation link). All seven playground areas are built; the product dashboard has not been started. Last build at reconciliation (2026-09-12): 950 tests, 0 failures.
+What each module is *for* and which dependency rules it must respect. What each module *contains* is its source tree; which migrations exist is `cauce-memory/src/main/resources/db/migration/`; which endpoints exist is the controllers under `cauce-api/src/main/java/dev/cauce/api/`.
 
-**Backend modules** (Gradle subprojects under `backend/`; the Gradle build — `settings.gradle.kts`, wrapper, `gradle/` — lives under `backend/`, not the repo root):
+**Backend modules** (Gradle subprojects under `backend/`; `settings.gradle.kts`, the wrapper and `gradle/` live under `backend/`, not the repo root):
 
-- `cauce-core` — domain model: `Tenant`, `Agent`, `Conversation`, `Message`, `ApiKey` aggregates, the neutral tool model (`ToolDefinition`, and the sealed `ToolContent` = `ToolCall` | `ToolResult`), `MessageRole` (incl. `TOOL_CALL`/`TOOL_RESULT`), `TenantContext`, UUIDv7 generation, API-key hashing ports, and the audit write port (`dev.cauce.core.audit`: `AuditEvent`, `AuditEventRecorder` — REQUIRED injection, adapter in cauce-governance, same shape as `AgentReplyDispatcher`/`ApiKeyHasher` — plus `AuditContentHash`, the tenant-bound SHA-256 that binds audit records to message content without storing it); no framework dependencies (its only third-party library is uuid-creator)
-- `cauce-memory` — persistence: JPA entities, hand-written mappers, Spring Data repositories, `RlsContextAspect`, Flyway migrations (V1–V24 — all modules' migrations live here, incl. the messages `tool_content` jsonb column, the `ingest_idempotency_records` table, the `llm_usage_records` ledger, and the governance audit tables `audit_outbox`, `audit_log_entries`, `audit_chain_heads`). Vector retrieval is planned (pgvector enabled, no code yet)
-- `cauce-channels` — channel adapter SPI (invariant 3) and reference adapters. The SPI is complete: `InboundChannelAdapter` (`verify` webhook authenticity against the config — header token or body HMAC — then `parse` the provider payload into the neutral `ChannelInboundMessage`) and `OutboundChannelAdapter` (`deliver(ChannelOutboundMessage, config)`), with `ChannelAdapterRegistry` mirroring the LLM/tool registries (both halves; a channel may implement only one). `ChannelConfig` binds a channel instance (e.g. one Telegram bot) to an agent: vertical slice (domain + JPA persistence + services) mirroring `PendingInvocation`; rows carry the agent's owning `tenant_id` for RLS, the provider `credential` (plaintext at rest, encryption TODO) and the hash of the server-generated webhook secret (plaintext returned once, mirroring API keys). The unauthenticated webhook path resolves a config — and discovers the tenant — via the V16 `SECURITY DEFINER` function (ADR 0001), then ingests under RLS through `InboundMessageService`. First adapter: **Telegram, both halves** — inbound (`update.message.text`; idempotency key `configId + ":" + update_id`, so provider redelivery replays instead of duplicating) and outbound (`sendMessage` via the JDK HttpClient, bot token from the config credential). Outbound delivery: `OutboundDeliveryService` implements the `AgentReplyDispatcher` port (cauce-core) — the orchestrator invokes the abstraction after the final AGENT append commits (explicit port, deliberately NOT an event consumer; the event stream stays observational); delivery is best-effort on the dedicated `channelOutboundExecutor` (tenant context captured and re-established; failures logged and swallowed; a channel without an outbound half, like `api`, is a clean no-op; ≠1 ACTIVE configs for the conversation's (agent, channel) skips with a WARN — the originating config is not stamped on conversations yet). Also a Family-B audit emitter (`dev.cauce.channels.audit.ChannelAuditEvents`): `createChannelConfig` records `admin.channel.configured` in the binding's tx via the cauce-core port — owning tenant's chain, acting tenant as actor; the provider credential, the webhook secret, and its hash never reach the sink. Depends on core, memory, orchestration; only cauce-api depends on it
-- `cauce-llm` — provider-neutral LLM SPI: `LlmProvider`, `LlmProviderRegistry`, credentials, and the neutral invocation/response model, which carries the `cauce-core` tool model (`LlmInvocation.tools`, `LlmMessage` tool content, `LlmResponse.toolCalls`, `FinishReason.TOOL_USE`). Depends on `cauce-core`. Adapters live in separate modules
-- `cauce-llm-anthropic` — native Anthropic adapter (`POST /v1/messages`); maps the neutral tool model to/from Anthropic's `tool_use`/`tool_result` content blocks. Its bean is registered only when an Anthropic API key is configured
-- `cauce-llm-openai` — single OpenAI-compatible adapter (`POST /chat/completions`) mapping tools to/from the `tools`/`tool_calls`/`role:"tool"` format (`arguments` as a JSON string), registered as three conditional providers: `ollama` (keyless, dev default), `openai`, `mistral`
-- `cauce-tools` — executable tool SPI: the `Tool` contract (`definition()` + `execute(ToolCall)`), a Spring-managed `ToolRegistry` mirroring `LlmProviderRegistry`, and the built-in `get_current_time` clock tool (injectable `java.time.Clock`). Depends only on `cauce-core` (plus spring-context); the neutral tool model lives in core. Global registry; per-agent tool scoping is deferred
-- `cauce-evals` — evaluation framework, conversation testing, regression detection — empty skeleton, not started
-- `cauce-observability` — observability layer; first content: `OrchestrationMetrics`, the first consumer of the orchestration event stream — a guarded `@EventListener` translating the 8 `OrchestrationEvent`s into Micrometer meters (`cauce.orchestration.*`: invocation counters incl. `failure_type`, LLM calls/responses and token usage by `provider`/`model`, tool-call counters and an execution timer; low-cardinality tags only, ids never become tags). Pure consumer: the whole dispatch is try/caught so a metrics failure can never break the synchronous publication path. Depends only on `cauce-orchestration-events`, spring-context, and micrometer-core; the `MeterRegistry` is wired by cauce-api's Actuator. Traces (OTel) and exporters (OTLP/Prometheus) are planned, separate units
-- `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance. First content: the guaranteed-capture skeleton of the audit trail (`dev.cauce.governance.audit` + `persistence`). `OutboxAuditEventRecorder` — the adapter of the cauce-core `AuditEventRecorder` port (`@Transactional(MANDATORY)` — one INSERT that joins the caller's business tx, so capture commits or rolls back with the fact it audits; throws outside a tx); `audit_outbox` (V20: RLS, `(tenant_id, drain_status, created_at)` index, `audit_outbox_pending_tenants()` SECURITY DEFINER discovery — ADR 0001); the **append-only** `audit_log_entries` ledger (V21: `REVOKE UPDATE, DELETE ... FROM cauce_app` — enforced by role at the DB, not by code; `UNIQUE (tenant_id, sequence_number)` + `UNIQUE (outbox_id)`; `signature` created nullable, RESERVED for the signing unit); the **per-tenant hash chain** (V22/V23): `AuditChainHasher` (scheme `v1` — SHA-256 over a canonical-JSON preimage of explicit fields incl. the persisted `payload_hash` and `prev_hash`, NEVER the raw payload, so verification survives an owner redaction of `payload`, now nullable; genesis hash derived from the tenant id; hashes written on the drain INSERT, so the V21 REVOKE stays untouched), the `audit_chain_heads` head row (single source of next sequence + `prev_hash`, read `FOR UPDATE` and advanced in the drain tx — the per-tenant row lock serializes within a tenant, MAX+1 survives only as one-time lazy init), and `AuditChainVerifier` (internal service: valid, or the exact first-break sequence + `ChainBreakKind`; pre-chain rows legal only as an honestly-reported prefix, never backfilled); and `AuditOutboxDrainer`/`AuditOutboxDrainService` (worker-pattern `@Scheduled` cousin, `cauce.governance.audit.drainer.*`, default 5s/batch 100: per tenant under its `TenantContext`, one tx per batch — chained ledger INSERTs, PENDING→DRAINED flips, and the head advance commit together, restart-safe). `event_type` now carries its first real vocabulary: the Family-A conduct events emitted by cauce-orchestration (`conduct.message.received`, `conduct.agent.responded`, `conduct.invocation.failed` — payloads are non-sensitive metadata + `content_hash`, never raw text; four hook types reserved without emission). Family B landed (tenancy + channels emit `admin.*`); the signing layer landed (see `dev.cauce.governance.audit.signing`:
-`AuditEntrySigner`, `AuditKeyRegistry`, `AuditSignatureVerifier`; `ChainVerificationService` records each on-demand
-verification as `ledger.chain.verified`); outbox retention is still a follow-up unit. Depends on `cauce-core` + `cauce-memory` only (cauce-tenancy and cauce-orchestration never appear in its graph); cauce-api already depended on it and wires the adapter to the emitters
-- `cauce-tenancy` — application services for tenants, agents, conversations, messages, and API keys; operator bootstrap; HMAC-SHA256 API-key hashing with a Caffeine cache. Second real audit emitter (`dev.cauce.tenancy.audit.AdminAuditEvents`, Family B — administration): createPartner/createClient/createAgent/createApiKey/revokeApiKey record `admin.*` events in the operation's tx through the cauce-core `AuditEventRecorder` port — subject-tenant chain, `actor_tenant_id` = the acting tenant (ADR 0002's authority identity; per-key actor attribution deferred with fine-grained auth). Payload doctrine: ids + non-sensitive metadata only — the agent prompt enters as `AuditContentHash`, never raw; key plaintext/HMAC and business names never. The operator bootstrap is the documented genesis exception (no tx, no context, no actor — unaudited). Hooks reserved unemitted: `admin.agent.updated` (no update operation exists yet), `admin.credential.changed` (no per-tenant credential path). cauce-governance is test-scope here (the admin IT drains/verifies the real chain)
-- `cauce-orchestration` — async invocation engine and the bounded agentic tool loop: pending-invocation queue, context assembly with a per-model context-window registry (`ModelContextWindow`; conservative 16,384-token fallback with a `WARN` for unknown models) that renders tool messages, the orchestrator loop (offers all registered tools, dispatches tool calls via the `cauce-tools` `ToolRegistry`, feeds results back, capped at 10 iterations — tool failures feed back as errored results, the cap fails the invocation), background worker/reaper (12-minute orphan timeout sized for the multi-step loop), and `InboundMessageService` (the inbound message ingest unit, with optional idempotency-key deduplication: an insert-first lock on the V15 `(agent_id, idempotency_key)` unique constraint inside the single ingest transaction; a replay returns the stored result with no second message, invocation, or `InvocationRequested` event). Also owns the per-tenant LLM usage ledger (`usage` package: `LlmUsageRecord` + `LlmUsageRecorder`; V19 `llm_usage_records`, tenant_id + RLS like `PendingInvocation`): one immutable row per LLM call (provider, model, round_index, tokens, finish_reason), written synchronously in its own short transaction between the provider response and the `LlmResponded` publication — a failed usage INSERT fails the invocation, so billing facts are never lost silently; cost is deliberately not materialized (pricing will be a versioned table + view, a future unit). Depends on `cauce-tenancy`, `cauce-tools`, and `cauce-orchestration-events`. Publishes the invocation lifecycle events synchronously via `ApplicationEventPublisher` at each step of the loop (ingest, context assembly, each LLM call/response with token usage, each tool dispatch, completion, permanent failure). Also the first real audit emitter (`dev.cauce.orchestration.audit.ConductAuditEvents`, Family A — runtime conduct): `conduct.message.received` rides the ingest tx, `conduct.agent.responded` rides the final AGENT append tx (`ConversationGateway.appendAudited` — message + audit capture in one tx; it doubles as the terminal success record via `finish_reason`+`rounds`, deliberately no separate COMPLETED audit), and `conduct.invocation.failed` rides the `markFailed`/`markAbandoned` transition tx (worker and reaper paths); all through the cauce-core `AuditEventRecorder` port — the module never depends on governance (the adapter is wired by cauce-api; governance is test-scope here for the conduct ITs). Payloads: non-sensitive metadata + `AuditContentHash` (never raw text, `external_identity_ref`, or raw provider errors). Four hook types reserved unemitted: `conduct.external.action`, `conduct.data.access`, `conduct.human.escalation`, `conduct.reply.delivered`
-- `cauce-orchestration-events` — the invocation lifecycle event contract: sealed `OrchestrationEvent` with 8 immutable records (`InvocationRequested`, `ContextAssembled`, `LlmInvoked`, `LlmResponded`, `ToolCallRequested`, `ToolExecuted`, `InvocationCompleted`, `InvocationFailed` + `InvocationFailureType`). Leaf module with zero dependencies (plain JDK payloads; no Spring) so future consumers (observability, governance, usage accounting) can listen without depending on orchestration internals. First consumer: `OrchestrationMetrics` in cauce-observability (in-memory only); the stream is at-least-once, and `InvocationRequested` is published inside the ingest transaction (persisting consumers must use `AFTER_COMMIT` or an outbox — TODO in `InboundMessageService`)
-- `cauce-api` — REST API surface; the Spring Boot application module. Compiles against the `cauce-llm` SPI only and wires both LLM adapters plus `cauce-tools` as `runtimeOnly` (the built-in tools register via the `dev.cauce` component scan)
-- `cauce-enterprise` — commercial modules under separate license — empty skeleton
+- `cauce-core` — the domain model and the ports the rest of the system implements (`TenantContext`, UUIDv7 generation, hashing and audit-write ports, the neutral tool model). **No framework dependencies**; its only third-party library is uuid-creator.
+- `cauce-memory` — persistence: JPA entities, hand-written mappers, Spring Data repositories, `RlsContextAspect`, and **every module's Flyway migrations**.
+- `cauce-channels` — the channel adapter SPI (invariant 3) and its reference adapters, plus `ChannelConfig`, the binding of a channel instance to an agent. Depends on core, memory, orchestration; **only `cauce-api` depends on it**.
+- `cauce-llm` — the provider-neutral LLM SPI and its invocation/response model, which carries the core tool model. Depends on `cauce-core`. **Adapters live in separate modules**: `cauce-llm-anthropic` (native Messages API) and `cauce-llm-openai` (one OpenAI-compatible adapter registered as several conditional providers).
+- `cauce-tools` — the executable tool SPI and the built-in tools. Depends only on `cauce-core` (plus spring-context); the neutral tool model itself lives in core.
+- `cauce-evals` — evaluation framework, conversation testing, regression detection.
+- `cauce-observability` — consumers of the orchestration event stream that turn it into metrics and traces. Pure consumer: a failure here must never break the synchronous publication path. Depends only on `cauce-orchestration-events`, spring-context and micrometer-core; the `MeterRegistry` is wired by cauce-api's Actuator.
+- `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance. The audit sink (`dev.cauce.governance.audit` + `persistence` + `audit.signing`) is the adapter of the core `AuditEventRecorder` port. **Depends on `cauce-core` + `cauce-memory` only**; `cauce-tenancy` and `cauce-orchestration` never appear in its graph, and emitters never depend on governance — the adapter is wired by cauce-api, and governance is test-scope in the emitting modules.
+- `cauce-tenancy` — application services for tenants, agents, conversations, messages and API keys; operator bootstrap; API-key hashing. Emits the administration (`admin.*`) audit events.
+- `cauce-orchestration` — the async invocation engine and the bounded agentic tool loop, inbound message ingest, and the per-tenant LLM usage ledger. Depends on `cauce-tenancy`, `cauce-tools` and `cauce-orchestration-events`. Publishes the invocation lifecycle events; emits the runtime conduct (`conduct.*`) audit events.
+- `cauce-orchestration-events` — the invocation lifecycle event contract: a sealed `OrchestrationEvent`. **Leaf module with zero dependencies** (plain JDK payloads, no Spring) so consumers can listen without depending on orchestration internals.
+- `cauce-api` — the REST surface and the Spring Boot application module. **Compiles against the `cauce-llm` SPI only** and wires the LLM adapters and `cauce-tools` as `runtimeOnly` (built-in tools register through the `dev.cauce` component scan).
+- `cauce-enterprise` — commercial modules under separate license (see License notes).
 
 **Frontend** (under `frontend/`):
 
-- `playground` — developer testing tool against a running Cauce instance (React 19 + Vite 7 +
-  TypeScript strict + Tailwind 4 + react-router 7). Exists: shell + session screen + central
-  API client, and the Conversation area (send → 202 → poll `GET /v1/invocations/{id}` every
-  2s + incremental message fetch by keyset cursor; the loop trace groups consecutive
-  TOOL_CALL/TOOL_RESULT messages; the workspace tenant id is auto-filled from `GET /v1/me`
-  since `11c6dd3` and lives in the session context, memory-only). All seven areas are built:
-  session, conversation, tenants, agents, API keys, invocations (with per-invocation token
-  usage since `8292c10`) and audit chain (three verdicts + signature report since `fe8739d`).
-  Sessions are memory-only (the API key is never persisted in the browser); requests reach
-  the instance through the Vite dev proxy (`/proxy/*` + `X-Cauce-Target` header) because the
-  backend has no CORS config. The static HTML mockups under `frontend/playground/referencias/`
-  are the visual specification, not code
-- `cauce-dashboard` — operator interface for managing workspaces, agents, conversations, costs
-  (planned — Angular; does not exist yet)
+- `playground` — a developer testing tool against a running Cauce instance, not the product. Sessions are memory-only; requests reach the instance through the Vite dev proxy (`/proxy/*` + `X-Cauce-Target` header). The static HTML mockups under `frontend/playground/referencias/` are the visual specification, not code.
+- `cauce-dashboard` — the operator interface for managing workspaces, agents, conversations, costs (Angular).
 
 **Other top-level directories**:
 
-- `.github/` — GitHub workflows (CI), Dependabot config, repo assets (no issue templates yet)
-- `docs/` — public documentation: the ADRs under `docs/adr/` (decisions) and the normative
-  format specifications under `docs/spec/` (currently `audit-chain-format.md`, which
-  specifies the audit entry hash preimages, chaining, signature and key registry in enough
-  detail to write an independent verifier; its test vectors are pinned by
-  `AuditFormatSpecVectorsTest`)
-- `tools/` — standalone published artefacts, outside every build: `audit-chain-verifier/`
-  is the reference verifier for the audit chain (single-file Node, zero dependencies,
-  imports no Cauce code; `node verify.mjs --self-test` replays the spec's vectors and a
-  sample chain; the CI job `verifier-self-test` runs it). Its input is its own dump format,
-  produced by SQL — there is no export endpoint yet
+- `.github/` — GitHub workflows (CI), Dependabot config, repo assets
+- `docs/` — public documentation: decisions as ADRs under `docs/adr/`, normative format specifications under `docs/spec/`, and the deferred-work register `docs/deferred.md`
+- `tools/` — standalone published artefacts, outside every build; each has its own README (`audit-chain-verifier/`)
+- `scripts/` — operational scripts (the quickstart)
+- `docker/` — the local stack's init scripts
 
 ## Architectural invariants
 
@@ -142,22 +114,33 @@ Modules under BUSL license (everything except `cauce-enterprise`) must be functi
 
 Core functionality must never depend on enterprise modules. Core-required features must never be moved behind the enterprise license.
 
+### Design rules already decided
+
+Decisions recorded in earlier units that constrain later ones. Each is enforced somewhere in the code; none is a plan.
+
+- **The audit sink never stores raw erasable content.** Erasable data lives in the mutable business tables, where deletion operates; the append-only ledger keeps only non-sensitive metadata plus a tenant-bound content hash (`AuditContentHash`). Audit payloads carry ids and non-sensitive metadata only — a prompt enters as its hash, never raw; key plaintext or HMAC, channel credentials, webhook secrets and business names never enter. The hash has no secret salt: a secret would break third-party verifiability and needs key management. Whether a hash satisfies an erasure obligation is the customer's judgment, not the system's.
+- **Audit records go into the subject tenant's chain, with the acting tenant as `actor_tenant_id`** (ADR 0002). The operator bootstrap is the one documented genesis exception: no transaction, no context, no actor — unaudited.
+- **The outbound reply trigger is an explicit port, not an event consumer.** The orchestrator invokes `AgentReplyDispatcher` after the final AGENT append commits. The `OrchestrationEvent` stream stays purely observational; a consumer that persists must use `AFTER_COMMIT` or an outbox, because `InvocationRequested` is published inside the ingest transaction.
+- **Cost is never a stored column.** Token usage is captured as facts; price will be a versioned table plus a view, so cost is always derivable and never a stale number.
+- **Micrometer now, OTLP later, is a bridge, not a migration.**
+- **Verification of the audit chain is on demand only.** Each call records itself in the chain it verified; nothing may attach it to a scheduler or to a write path.
+
 ## Adding a new domain entity with hierarchical RLS
 
-When introducing a new domain entity that participates in the tenant hierarchy, follow this pattern (proven across Tenant, Agent, Conversation, Message, and ApiKey; PendingInvocation applies the same RLS approach but keeps its domain and persistence inside `cauce-orchestration`). It keeps the hexagonal boundaries clean and makes tenant isolation enforceable at the database layer.
+When introducing a new domain entity that participates in the tenant hierarchy, follow this pattern (the existing aggregates in `cauce-core` are its worked examples; `PendingInvocation` applies the same RLS approach but keeps its domain and persistence inside `cauce-orchestration`). It keeps the hexagonal boundaries clean and makes tenant isolation enforceable at the database layer.
 
 ### 1. Domain layer (`cauce-core/<entity>/`)
 
 - Pure POJO with private final fields and no JPA or framework annotations.
 - Static factory methods that mint a UUIDv7 via `UuidGenerator.newV7()` (never call the UUID library directly).
 - The factory validates only domain invariants: non-null/non-blank for required fields and basic shape. Everything that needs other rows or external config is validated in the service.
-- Configuration-like fields whose valid values will eventually be owned by an SPI (e.g. provider identifiers for `cauce-llm`, channel types for `cauce-channels`) are `String`, not `enum`, so the core stays free of provider-specific knowledge.
+- Configuration-like fields whose valid values are owned by an SPI (e.g. provider identifiers for `cauce-llm`, channel types for `cauce-channels`) are `String`, not `enum`, so the core stays free of provider-specific knowledge.
 - Status fields are `enum` when they are part of the immutable domain model (lifecycle states).
 - Domain exceptions (extending `RuntimeException`) live in `cauce-core/<entity>/` next to the aggregate.
 
 ### 2. Persistence layer (`cauce-memory/<entity>/`)
 
-- A JPA `@Entity` mirroring the domain shape, plus a hand-written `@Component` mapper (no MapStruct yet).
+- A JPA `@Entity` mirroring the domain shape, plus a hand-written `@Component` mapper (no MapStruct).
 - A Spring Data `JpaRepository` with derived finders, added only when a query is actually needed.
 - A Flyway migration `V<N>__create_<entity>_table.sql`:
   - Table with appropriate columns and constraints.
@@ -172,7 +155,7 @@ When introducing a new domain entity that participates in the tenant hierarchy, 
 
 - A `@Service` with `@Transactional` methods; `RlsContextAspect` sets the DB tenant context from `TenantContext` before each one runs.
 - Validate that referenced parent entities exist via `repository.findById`, relying on RLS for visibility. A not-found result for an entity outside the current `TenantContext` is the correct outcome: do not distinguish "does not exist" from "not visible to you" in the public API, to avoid leaking the existence of out-of-scope entities.
-- Validate SPI-bound fields against a temporary hardcoded `Set` with a TODO referencing the future SPI module.
+- Validate SPI-bound fields against a temporary hardcoded `Set` with a TODO referencing the SPI module. (This is the one rule in this pattern with an expiry: it stands until SPI-driven validation lands — see `docs/deferred.md`.)
 - Operations that create or read on behalf of subordinate tenants (e.g. a partner acting for its client) rely on hierarchical RLS, not strict-owner checks.
 
 ### 4. Test layer (three levels)
@@ -214,7 +197,7 @@ When introducing a new domain entity that participates in the tenant hierarchy, 
   keep snake_case verbatim (no mapping layer).
 - The API key is memory-only — never localStorage, sessionStorage, or cookies.
 
-### Angular (dashboard — future)
+### Angular (dashboard)
 
 - Standalone components only. No NgModules.
 - Signals for reactive state. RxJS only when truly streaming (HTTP, WebSockets, server-sent events).
@@ -227,9 +210,8 @@ When introducing a new domain entity that participates in the tenant hierarchy, 
 - Integration tests use Testcontainers for PostgreSQL and Redis. Filename suffix `IT.java`.
 - Every new public method requires at least one test. Every bug fix requires a regression test.
 - Aim for behavior coverage, not line coverage.
-- These rules cover the backend. The frontend playground ships without a test harness for
-  now (a conscious deferral of its first unit): its gate is `npm run build` (strict
-  type-check + build) plus manual browser verification.
+- These rules cover the backend. The playground's gate is `npm run build` (its guard scripts,
+  strict type-check and build) plus manual browser verification.
 
 ## Working with this codebase
 
@@ -239,7 +221,7 @@ When introducing a new domain entity that participates in the tenant hierarchy, 
 2. Check if the change requires modifying an SPI (channel or LLM). Update interface and reference implementations together.
 3. Multi-tenancy must always be considered. Ask: where does the tenant context come from for this operation?
 4. Write tests alongside or before the implementation.
-5. Update relevant documentation (Javadoc, module README, public docs).
+5. Update relevant documentation (Javadoc, module README, public docs). If the change lands something listed in `docs/deferred.md`, remove the entry in the same commit.
 
 ### When fixing a bug
 
@@ -300,7 +282,6 @@ summary — that information stays in the full response for local review.
 
 > The backend Gradle build lives under `backend/` — run Gradle from there.
 > The frontend playground lives under `frontend/playground` (npm; outside the Gradle build).
-> The Angular dashboard under `frontend/cauce-dashboard` does not exist yet.
 
 ### Local development environment
 
@@ -353,93 +334,54 @@ must bypass RLS. Locally both point at the same database, with `cauce_app` creat
 init script above and granted by migration `V10`. In production, set `DATABASE_*` to the
 `cauce_app` credentials and `ADMIN_DATABASE_*` to the owner; the `cauce_app` role must be
 provisioned out of band before first start (ops runbook), after which `V10` grants it.
-The async worker/reaper run under `cauce_app`: their cross-tenant claim/reap go through the
-`V12` SECURITY DEFINER functions, and all processing stays under RLS in the claimed tenant's
-context (see `docs/adr/0001-rls-escape-hatches.md`).
+Anything that must see across tenants (the async worker/reaper, the audit drainer, webhook
+resolution) goes through a narrow `SECURITY DEFINER` function and then re-establishes a
+tenant context under RLS — never a bypass role (see `docs/adr/0001-rls-escape-hatches.md`).
 
 **Authentication.** `/v1/**` requires a valid API key (`Authorization: Bearer <key>`); the tenant
 context is derived from the validated key, never from a client header. API keys are issued, listed,
-and revoked over REST under hierarchical authority (see the inventory below and
-`docs/adr/0002-authority-model.md`) — but issuing a key requires authenticating with one, so on the
-**first** start against an empty database `OperatorKeyBootstrapRunner` creates the root operator and
-logs its API key **once** (`WARN`) — copy it from the log; it cannot be recovered. Subsequent starts
-are no-ops. In production this is the documented first-run step; the runner is disabled under the
-`test` profile (tests mint their own keys).
+and revoked over REST under hierarchical authority (`docs/adr/0002-authority-model.md`) — but
+issuing a key requires authenticating with one, so on the **first** start against an empty database
+`OperatorKeyBootstrapRunner` creates the root operator and logs its API key **once** (`WARN`) — copy
+it from the log; it cannot be recovered. Subsequent starts are no-ops. In production this is the
+documented first-run step; the runner is disabled under the `test` profile (tests mint their own
+keys).
 
 ### REST surface (v1)
 
-All `/v1/**` endpoints require Bearer API-key auth; JSON is globally snake_case. Out-of-scope
-entities surface as 404: "does not exist" and "not visible to you" are deliberately
-indistinguishable.
+The endpoints are the controllers under `cauce-api/src/main/java/dev/cauce/api/`; the contract is
+what the cauce-api integration tests assert. The rules every endpoint follows:
 
-**Pagination (uniform keyset contract).** The three list endpoints below (tenant children,
-tenant agents, conversation messages) return the envelope `{"data": [...], "next_cursor":
-"<opaque>"|null}` — a **breaking change** from the pre-pagination bare arrays, made while there
-are no external consumers. Query params: `limit` (default 50, max 200 — larger values are
-clamped, `limit < 1` is a 400 `bad_request`) and `cursor` (opaque, from the previous page's
-`next_cursor`; malformed → 400 `invalid_cursor`; `next_cursor: null` is the explicit
-last-page terminator). Ordering is keyset on the UUIDv7 `id` (strict total order — uuid-creator's
-default factory is monotonic within the same millisecond per JVM, and Postgres compares `uuid`
-bytewise), so a full walk never skips or duplicates rows and messages appended mid-walk (a live
-conversation) show up at the end. The `id > cursor` comparison always runs in Postgres (Java's
-`UUID.compareTo` is signed and disagrees). `GET /v1/tenants/{id}/api-keys` remains an
-unpaginated bare array (deferred). The message-list ordering changed from `created_at` to `id`
-(equivalent in practice; context assembly still reads `created_at` via `ConversationGateway`).
-
-- **Tenants**: `POST /v1/tenants/partner`, `POST /v1/tenants/client`, `GET /v1/tenants/{id}`,
-  `GET /v1/tenants/{id}/children` (paginated)
-- **Agents**: `POST /v1/tenants/{tenantId}/agents`, `GET /v1/agents/{id}`,
-  `GET /v1/tenants/{tenantId}/agents` (paginated)
-- **API keys** (hierarchical authority, ADR 0002): `POST /v1/tenants/{tenantId}/api-keys` (201;
-  plaintext key returned exactly once), `GET /v1/tenants/{tenantId}/api-keys` (metadata only),
-  `DELETE /v1/api-keys/{keyId}` (204, soft revoke)
-- **Messaging**: `POST /v1/agents/{agentId}/messages` (202 Accepted with
-  `{conversation_id, message_id, invocation_id}`), `GET /v1/conversations/{id}`,
-  `GET /v1/conversations/{id}/messages` (paginated; the visibility probe 404s on every page)
-- **Identity**: `GET /v1/me` — the caller's tenant id, name, tier and key id, as the validated key
-  already established them. Nothing here widens visibility.
-- **Invocations**: `GET /v1/invocations/{id}` — processing status of a queued invocation, for
-  polling after the 202. Public vocabulary decoupled from the internal lifecycle: `status` is
-  `PENDING | PROCESSING | COMPLETED | FAILED` (internal ABANDONED collapses into FAILED) and
-  `failure_reason` (only on permanent failure; null for pre-V17 rows) maps the internal
-  `InvocationFailureType` to `PROVIDER_ERROR | PROVIDER_UNAVAILABLE | AGENT_LOOP_LIMIT |
-  INTERNAL_ERROR | TIMEOUT`. The row's `last_error` (raw provider detail) is never exposed.
-  Rows survive terminal states, so the status stays readable after completion. 404 code:
-  `invocation_not_found`.
-- **Audit**: `GET /v1/tenants/{tenantId}/audit/chain-verification` — recomputes the tenant's whole
-  chain and checks signatures; see the governance entry in Deferred for the response shape.
-  Every call appends a verification entry to that chain: on demand only, never polled.
-- **Channels**: `POST /v1/agents/{agentId}/channels` (201; binds a channel instance to the agent,
-  `{channel_type, credential}` in, `webhook_secret` returned exactly once — pass it to the
-  provider, e.g. Telegram `setWebhook(url, secret_token)`). List/disable deferred.
-
-The messaging endpoint stamps the reserved channel type `api` server-side — the request body
-carries only `external_identity_ref` and `content`, so the client cannot choose the channel.
-Ingest is atomic (`InboundMessageService`, one transaction): resolve-or-start the OPEN
-conversation — race-safe via `INSERT ... ON CONFLICT DO NOTHING` + re-`SELECT`, backed by the V13
-partial unique index on `conversations (agent_id, channel_type, external_identity_ref) WHERE
-status = 'OPEN'` — then append the USER message and enqueue the async invocation. The agent reply
-arrives asynchronously; clients poll the conversation messages, and can poll the invocation
-status via `GET /v1/invocations/{invocation_id}`.
-
-The endpoint accepts an optional `Idempotency-Key` header (opaque, ≤255 chars): a repeated POST
-with the same key for the same agent replays the original 202 ids and ingests nothing new — no
-second USER message, invocation, or `InvocationRequested` event. Deduplication is insert-first
-inside the same ingest transaction, on the V15 `ingest_idempotency_records`
-`(agent_id, idempotency_key)` unique constraint (RLS-scoped via the agent); matching is by key
-only, the body is not fingerprinted. Future `cauce-channels` adapters populate the key with the
-provider's message id (the Telegram adapter uses `configId + ":" + update_id`).
-
-**Provider webhooks** live outside `/v1` and outside API-key auth:
-`POST /webhooks/channels/{configId}` (SecurityConfig permits `/webhooks/**`). Authentication is
-the per-config channel secret verified by the adapter before anything is processed (Telegram:
-`X-Telegram-Bot-Api-Secret-Token` vs the stored hash). The endpoint dispatches through the
-channel SPI: resolve the ACTIVE config via the V16 SECURITY DEFINER function (the webhook has no
-tenant context; the config row carries the owning tenant — ADR 0001), verify, normalize, ingest.
-Responses: 200 empty on ingest or on an authentic-but-unsupported update (Telegram redelivers
-non-2xx), 401 on a bad secret, 404 on an unknown/disabled config, 400 on a malformed payload.
-Local development against real Telegram needs a public URL (tunnel, e.g. cloudflared/ngrok) +
-`setWebhook`; the ITs drive the endpoint directly.
+- All `/v1/**` endpoints require Bearer API-key auth; JSON is globally snake_case. Out-of-scope
+  entities surface as 404: "does not exist" and "not visible to you" are deliberately
+  indistinguishable.
+- **Pagination is a uniform keyset contract.** List endpoints return the envelope
+  `{"data": [...], "next_cursor": "<opaque>"|null}`. Query params: `limit` (default 50, max 200 —
+  larger values are clamped, `limit < 1` is a 400 `bad_request`) and `cursor` (opaque, from the
+  previous page's `next_cursor`; malformed → 400 `invalid_cursor`; `next_cursor: null` is the
+  explicit last-page terminator). Ordering is keyset on the UUIDv7 `id` (strict total order —
+  uuid-creator's default factory is monotonic within the same millisecond per JVM, and Postgres
+  compares `uuid` bytewise), so a full walk never skips or duplicates rows and rows appended
+  mid-walk show up at the end. The `id > cursor` comparison always runs in Postgres (Java's
+  `UUID.compareTo` is signed and disagrees).
+- **The messaging endpoint stamps the reserved channel type `api` server-side**; the request body
+  carries only `external_identity_ref` and `content`, so the client cannot choose the channel.
+  Ingest is one transaction (`InboundMessageService`): resolve-or-start the OPEN conversation —
+  race-safe via `INSERT ... ON CONFLICT DO NOTHING` + re-`SELECT` on the partial unique index over
+  `(agent_id, channel_type, external_identity_ref) WHERE status = 'OPEN'` — then append the USER
+  message and enqueue the async invocation. The agent reply arrives asynchronously; clients poll.
+- **`Idempotency-Key`** (optional header, opaque, ≤255 chars): a repeated POST with the same key for
+  the same agent replays the original 202 ids and ingests nothing new. Deduplication is insert-first
+  inside the same ingest transaction on the `(agent_id, idempotency_key)` unique constraint;
+  matching is by key only, the body is not fingerprinted. Channel adapters populate the key from
+  the provider's message id so redelivery replays instead of duplicating.
+- **Provider webhooks** live outside `/v1` and outside API-key auth (`POST
+  /webhooks/channels/{configId}`). Authentication is the per-config channel secret, verified by the
+  adapter before anything is processed. The tenant is discovered from the config row — resolved
+  through a `SECURITY DEFINER` function, since the webhook carries no tenant context (ADR 0001) —
+  and ingest then runs under RLS. 2xx is returned for an authentic-but-unsupported update so the
+  provider does not redeliver. Local development against a real provider needs a public URL (a
+  tunnel) plus the provider's webhook registration; the ITs drive the endpoint directly.
 
 ### Frontend (playground)
 
@@ -451,159 +393,12 @@ npm run dev        # http://localhost:5173 (Vite picks the next port if busy)
 
 Needs a running Cauce instance to connect to (see Backend above or QUICKSTART.md). The
 session screen takes the instance URL + an API key; the key lives in memory only and a page
-refresh forgets it. `npm run build` (tsc + vite build) is the type-check/build gate. See
+refresh forgets it. `npm run build` is the type-check/build gate. See
 [frontend/playground/README.md](frontend/playground/README.md).
 
-The product dashboard (`frontend/cauce-dashboard`, Angular) is not present yet.
+## Deferred work
 
-## Deferred / Known gaps
-
-A durable register of work that is consciously deferred. Each item is verified against the code as
-of the reconciliation date; this is a backlog record, not a commitment to build these next.
-(Last reconciled: 2026-09-12 — a sweep after the channel-strategy reconciliation found the
-thirteen stale claims listed in that commit; the playground/Dashboard/CORS entries were added
-2026-08-12 with the playground unit.)
-
-### Large / strategic deferrals
-
-- **Tool-calling / agentic loop — landed.** The "agent vs chatbot" trait is complete across
-  sub-units A (neutral tool model in `cauce-core`, executable tool SPI + built-in clock in
-  `cauce-tools`, tool-message persistence), B (the `cauce-llm` contract carries the tool model and
-  both adapters map it to each provider's wire format), and C (the orchestrator runs the bounded
-  dispatch-and-feed-back loop: offer tools → invoke → execute requested tools → feed results back →
-  re-invoke, capped at 10 iterations). Remaining deferrals: **per-agent tool scoping** (today all
-  registered tools are offered to every agent); a heartbeat to replace the flat 12-minute reaper
-  timeout if the loop grows; and counting the tool-definition schema (not just tool-message
-  content) against the context window. The only built-in tool today is the `get_current_time` clock.
-- **Idempotency of message ingestion — landed** (`Idempotency-Key` header, V15 table, insert-first
-  lock in `InboundMessageService`). Remaining deferrals: **no body fingerprint** (replay matches
-  by key only; the threat model is byte-identical webhook redelivery, not a client reusing a key
-  with a different body) and **no retention purge** for `ingest_idempotency_records` (the table
-  has `created_at` + an index so a scheduled `DELETE WHERE created_at < …` is a pure add).
-- **Per-tenant LLM credentials.** Only the system-default credential exists
-  (`SystemDefaultLlmCredential`, env-var based); there is no per-tenant/BYO-key path. Gates the
-  commercial model.
-- **LLM usage accounting — capture landed** (V19 `llm_usage_records`: one immutable row per LLM
-  call, written synchronously by the orchestrator in its own short tx before `LlmResponded`; a
-  failed INSERT fails the invocation, so billing facts are never lost silently). Remaining
-  deferrals: per-invocation usage is exposed on `GET /v1/invocations/{id}` (`usage`, nullable,
-  with `complete`; `9587141`), but there is no aggregation by tenant, and **no cost
-  materialization** — deliberate:
-  pricing will be a versioned table + view so cost is always derivable, never a stale stored
-  number.
-- **Audit trail (governance) — capture skeleton + hash chain landed.** V20 `audit_outbox`
-  (same-tx capture via the `AuditEventRecorder` port), V21 append-only `audit_log_entries`
-  (UPDATE/DELETE revoked from `cauce_app` by role), V22 chain columns (`payload_hash` persisted,
-  `payload` nullable for owner redaction), V23 `audit_chain_heads` (single source of next
-  sequence + `prev_hash`, locked in the drain tx), the drainer computing the `v1` chain on the
-  drain INSERT, and the internal `AuditChainVerifier` (exact first-break sequence; pre-chain
-  rows honestly reported, never backfilled). **The signing layer landed** (ADR 0003; preimage v2, Ed25519 over `entry_hash` with a key
-  held outside the database, `key_id` registry as a published file, three verdict states with a
-  signature report, each on-demand verification recorded in the chain, the normative format in
-  `docs/spec/audit-chain-format.md` and the reference verifier in `tools/audit-chain-verifier/`);
-  the documented residual is now the actor who holds the signing key, stated in every
-  `verification_scope`. Still deferred from ADR 0003: the export artefact, external time
-  anchoring (the only thing that would make a `TRUNCATED` verdict issuable — withdrawn in
-  `be5c178`), and per-tenant keys. **Wiring real auditable events — Family A
-  (runtime conduct) landed**: the loop emits `conduct.message.received` /
-  `conduct.agent.responded` / `conduct.invocation.failed`, each inside the tx of its business
-  fact, honoring the INHERITED RESTRICTION: the append-only sink NEVER stores raw erasable
-  sensitive content — erasable data lives in the mutable business tables (where deletion
-  operates), the sink keeps only non-sensitive metadata + the tenant-bound `content_hash`
-  (`AuditContentHash`, no secret salt: a secret would break third-party verifiability and needs
-  key management — the signing unit's territory; low-entropy content stays brute-force
-  re-identifiable from its hash, and whether the hash satisfies an erasure obligation is the
-  CUSTOMER's legal judgment). **Family B (administration) landed too**: tenancy and channels
-  emit `admin.tenant.created` / `admin.agent.created` / `admin.apikey.issued` /
-  `admin.apikey.revoked` / `admin.channel.configured` in each operation's tx — subject-tenant
-  chain, `actor_tenant_id` per ADR 0002; secrets (key plaintext/HMAC, channel credential,
-  webhook secret/hash) and raw prompts never enter the sink. Still pending: activating the six
-  reserved hooks (`conduct.external.action` when a side-effect tool exists, `conduct.data.access`
-  when a tool reaches external data, `conduct.human.escalation` when `escalateConversation` gets
-  a caller, `conduct.reply.delivered` when delivery becomes transactional, `admin.agent.updated`
-  when an agent-update operation exists, `admin.credential.changed` when per-tenant credentials
-  land); **actor attribution by API-key id** (needs the principal plumbed from the auth filter —
-  goes with fine-grained authorization); **retention purge of DRAINED outbox rows** (raw
-  payloads also live there until purged); and the **public compliance report** (the
-  verification ENDPOINT landed: `GET /v1/tenants/{tenantId}/audit/chain-verification`,
-  Bearer-authenticated, hierarchical — 404 outside visibility; it returns one of `VALID | BROKEN | UNVERIFIABLE`, the
-  first-break sequence + public classification, the pre-chain count, the chain `head`, a
-  `signatures` summary (verified / unsigned / unverifiable / missing key ids; unsigned is not a
-  defect) and a `verification_scope` naming what is and is not detected — and each call
-  appends a `ledger.chain.verified` entry to the verified chain, so it must never be polled).
-- **OSS quickstart — landed** (`docker compose --profile quickstart up -d --build`: app image
-  from `backend/Dockerfile` + containerized Ollama with automatic model pull;
-  `scripts/quickstart.sh|.ps1` bootstraps a demo agent and sends the first tool-calling
-  message — see QUICKSTART.md). The profile is additive; default compose stays infra-only.
-- **Channel delivery guarantee (the "module-after").** Outbound delivery is live but explicitly
-  **best-effort**: fire-and-forget on the `channelOutboundExecutor`, no outbox, no retries, no
-  delivery dedup. Failures are logged and the reply stays readable by polling. The hook is in
-  place — the `AgentReplyDispatcher` port (cauce-core) carries the TODO: persist the delivery
-  intent behind the same port and drain it from a scheduled dispatcher, additively.
-  **Design decision (recorded)**: the trigger is an explicit port invoked by the orchestrator
-  after the final AGENT append commits — NOT an `InvocationCompleted` consumer — so the
-  `OrchestrationEvent` stream remains purely observational and the parked AFTER_COMMIT/outbox
-  question stays parked. Part of the same module: stamping `channel_config_id` on conversations
-  (V17) — today a conversation whose (agent, channel) has ≠1 ACTIVE configs skips delivery with
-  a WARN because the originating bot is ambiguous.
-- **Channel follow-ups.** Credential (bot token) encryption-at-rest (TODO, consistent with the
-  deferred per-tenant LLM credentials); channel-config list/disable endpoints; replacing the
-  hardcoded `SUPPORTED_CHANNELS` set in `ConversationService` with SPI-driven validation (needs a
-  port — direct dependency is a cycle); WhatsApp adapter (the SPI was designed against it);
-  outbound delivery metrics (log-only today; an outbound event would let observability count it).
-- **Dashboard.** The product frontend (`frontend/cauce-dashboard`, Angular) does not exist.
-  The React playground under `frontend/playground` is a developer testing tool, not the
-  dashboard; its first two units (shell + session + API client, and the Conversation area)
-  landed, and screens 03-07 followed (tenants, agents, api keys, invocations, audit chain).
-  The playground also ships without a
-  frontend test harness for now (deliberate — `npm run build` + manual browser verification
-  are its gate).
-- **Backend CORS configuration.** The API has no CORS config, so browsers block cross-origin
-  calls to it. The playground bridges this with a dev-server proxy (`/proxy/*` +
-  `X-Cauce-Target` header, `frontend/playground/vite.config.ts`) — dev-only by construction.
-  When a browser client must target instances without the proxy, add property-driven CORS to
-  cauce-api (`cauce.api.cors.allowed-origins`, default empty = disabled) as its own unit; the
-  playground unit deliberately made zero backend changes.
-- **Observability instrumentation.** Invariant 4 ("observable by default") is partially
-  covered: the orchestrator emits invocation lifecycle events (`cauce-orchestration-events`,
-  incl. per-call token usage on `LlmResponded`) and `cauce-observability` now consumes them
-  into Micrometer metrics (`OrchestrationMetrics`, exposed via the authenticated
-  `/actuator/metrics`). Still missing: events outside the invocation path (tenancy/API
-  operations emit nothing), distributed traces (no OpenTelemetry dependency), and any metric
-  exporter (OTLP/Prometheus) — Micrometer-now/OTLP-later is a bridge, not a migration. When a
-  persisting consumer lands, revisit the `AFTER_COMMIT`/outbox TODO in
-  `InboundMessageService` (the metrics listener is in-memory only, so it is exempt).
-
-### Minor technical follow-ups
-
-- **Key introspection landed** (`GET /v1/me` → tenant id, name, tier, key id; `bae1b09`). What
-  it does not yet feed: per-key actor attribution in governance still records the acting
-  tenant, not the key (needs the principal plumbed from the auth filter).
-- **`tool_content` is exposed** as a nullable structured field on `MessageResponse` (`bae1b09`);
-  the playground's loop trace renders it (`11c6dd3`). `content` still flattens tool messages
-  for consumers that ignore it.
-
-- **No conversation-visible trace for some failures.** The invocation-status gap is closed: the
-  202 carries `invocation_id`, `GET /v1/invocations/{id}` reports every terminal state, and the
-  V17 `failure_type` column persists the taxonomy (mapped to the public `failure_reason`). What
-  remains deferred: reaper-abandoned invocations and non-LLM setup failures still append no
-  SYSTEM `[orchestration_error]` message to the conversation (only LLM provider failures and the
-  tool-iteration cap do), so their only client-visible signal is the invocation status.
-- **Per-model limits beyond the context window.** Only the context window has a registry plus
-  conservative fallback (`ModelContextWindow`); max response tokens is a flat 4096 default, never
-  per-model.
-- **`RESERVED_FOR_RESPONSE`** is a hardcoded 10,000-token constant in `ContextBuilder`; revisit
-  when tuning context assembly.
-- **`GET /v1/tenants/{id}/api-keys` is still an unpaginated bare array** — the only list
-  endpoint outside the uniform keyset contract (key sets per tenant stay tiny; align it when it
-  is next touched).
-- **`api_keys.last_used_at`** is updated synchronously, but only on the auth cold path (cache hits
-  skip the UPDATE; staleness is bounded by the cache TTL). Moving to an async batched update is
-  deferred (TODO in `ApiKeyAuthenticationFilter`).
-- **Streaming** is not part of the LLM SPI yet — explicitly deferred past v1.0, to be added as a
-  separate method. The orchestrator does one blocking `invoke`.
-- **Fine-grained authorization.** API keys carry no scopes or roles (empty authorities); deferred
-  until a concrete need exists. Authorization today is tenant scoping via RLS only.
+Work that is consciously deferred is registered in [`docs/deferred.md`](docs/deferred.md), not here. That file is state and expires: an entry is removed in the same commit that lands it. Its intended destination is issues labelled `deferred`, where closing the issue is the reconciliation.
 
 ## Commit conventions
 
@@ -652,6 +447,7 @@ Major versions often carry breaking changes that need manual migration; they are
 - Do not commit code that fails the build or tests.
 - Do not bypass code style or linting.
 - Do not commit Unix shell scripts (e.g. `gradlew`, `bin/*.sh`) without the executable bit set in the Git index. This repo is bootstrapped on Windows, which does not preserve Unix exec bits. Set it with `git update-index --chmod=+x <path>` and confirm `git ls-files --stage <path>` reports mode `100755` (not `100644`). `.gitattributes` does not control exec bits — only the index mode does. A missing bit causes "Permission denied" on Linux CI runners.
+- Do not write implementation status into this file. It belongs in the code, in `git log`, or in `docs/deferred.md`.
 
 ## License notes
 
@@ -662,9 +458,10 @@ The `cauce-enterprise` module is under a separate commercial license. Code in `c
 ## References
 
 - [Audit chain format](docs/spec/audit-chain-format.md) — normative spec of the audit entry
-  hash preimages (v1 and v2), chaining, signature and key registry, with test vectors
+  hash preimages, chaining, signature and key registry, with test vectors
 - [Audit chain verifier](tools/audit-chain-verifier/README.md) — reference verifier written
   against the spec, no Cauce code, zero dependencies
+- [Deferred work](docs/deferred.md) — the register of consciously deferred work
 - [README](README.md) — public project overview
 - [LICENSE](LICENSE) — Business Source License 1.1
 - [GitHub Discussions](https://github.com/cauceos/cauce/discussions) — questions, ideas, partnerships
