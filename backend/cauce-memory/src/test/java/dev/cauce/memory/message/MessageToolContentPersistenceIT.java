@@ -82,7 +82,7 @@ class MessageToolContentPersistenceIT {
     void setUp() {
         new JdbcTemplate(dataSource).execute("TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox, llm_usage_records, channel_configs, api_keys, ingest_idempotency_records, "
                 + "pending_invocations, "
-                + "messages, conversations, agents, tenants CASCADE");
+                + "messages, conversations, identities, agents, tenants CASCADE");
 
         Tenant operator = Tenant.operator("Operator");
         Tenant partner = Tenant.partner("Partner", operator.id());

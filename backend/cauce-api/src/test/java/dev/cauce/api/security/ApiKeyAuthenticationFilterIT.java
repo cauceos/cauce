@@ -53,7 +53,7 @@ class ApiKeyAuthenticationFilterIT extends AbstractApiIntegrationTest {
         jdbc = new JdbcTemplate(adminDataSource);
         jdbc.execute("TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox, llm_usage_records, channel_configs, api_keys, ingest_idempotency_records, pending_invocations, "
                 + "messages, "
-                + "conversations, agents, tenants CASCADE");
+                + "conversations, identities, agents, tenants CASCADE");
         TenantContext.clear();
         apiKeyCache.invalidateAll();
 

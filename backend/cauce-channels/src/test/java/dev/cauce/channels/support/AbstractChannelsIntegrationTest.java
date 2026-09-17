@@ -68,7 +68,7 @@ public abstract class AbstractChannelsIntegrationTest {
     protected void truncateAll() {
         new JdbcTemplate(adminDataSource).execute(
                 "TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox, llm_usage_records, channel_configs, api_keys, ingest_idempotency_records, "
-                        + "pending_invocations, messages, conversations, agents, tenants CASCADE");
+                        + "pending_invocations, messages, conversations, identities, agents, tenants CASCADE");
     }
 
     /**

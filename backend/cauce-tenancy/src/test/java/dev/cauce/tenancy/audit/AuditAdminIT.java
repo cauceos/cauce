@@ -92,7 +92,7 @@ class AuditAdminIT {
         jdbc = new JdbcTemplate(dataSource);
         jdbc.execute("TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox, "
                 + "llm_usage_records, channel_configs, api_keys, ingest_idempotency_records, "
-                + "pending_invocations, messages, conversations, agents, tenants CASCADE");
+                + "pending_invocations, messages, conversations, identities, agents, tenants CASCADE");
         TenantContext.clear();
         operator = tenantService.bootstrapOperator("Operator"); // genesis: no tx, no audit
         TenantContext.setCurrentTenantId(operator.id());
