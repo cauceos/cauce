@@ -83,10 +83,19 @@ The uniqueness key is `(tenant_id, channel_type, kind, value)`. The same person
 talking to two agents of the same tenant is one identity; the same person on two
 channels is two, until the memory subject below exists.
 
-**Why an entity and not a value embedded in the conversation.** Two reasons. A
-provider can deliver the same person under more than one identifier, and a value
-embedded in each conversation has no way to say so. And the memory subject needs
-something to point at.
+**Discarded alternative: a typed value embedded in the conversation.** The
+smallest change would have kept the identity on the `conversations` row, adding a
+`kind` column beside `external_identity_ref` and extending the V13 arbiter to the
+four-column tuple. No new table, no second resolve step, no join. It was
+discarded for two reasons. A provider can deliver the same person under more
+than one identifier, and a value copied into each conversation has no place to
+say that two of them are the same interlocutor: the fact would have to be
+reconstructed by scanning conversations. And the memory subject, when it arrives,
+needs something stable to point at; a conversation column is a copy, not a
+referent. The variant of this alternative in which the core also normalises the
+value (strips a `+`, lowercases an address) was discarded separately: it puts
+channel knowledge in the core, and it would silently merge two identities an
+adapter meant to keep apart.
 
 **The memory subject: deferred, with its place made.** A subject groups several
 identities as one person. The distinction that governs the design: **threads are
@@ -110,10 +119,18 @@ message is a list of one part. The starting types:
 The tool roles keep their meaning; what changes is that their payload is a part
 like any other, and the CHECK that ties a role to a sibling column goes away.
 
-**Why a list.** A photo with a caption is two parts. With a single content there
-are two options, both bad: choose one and lose the other, or invent an
-"image-with-text" type, then another for the next combination. A list has no
-next combination.
+**Discarded alternative: one content plus a typed sibling per need.** The path
+the code was already on: keep the text `content`, add a discriminator
+(`message_type`) and one structured column per non-text case, of which
+`tool_content` is the first. It was discarded because it does not scale in the
+one direction that matters. A photo with a caption is two things; with a single
+content there are two options, both bad: choose one and lose the other, or
+invent an "image-with-text" type, then another for the next combination, each
+with its own CHECK tying a type to a column. A list has no next combination. The
+sub-alternative of storing binaries in the row (`bytea`) was discarded on the
+audit sink's rule: the row would then hold erasable content that the chain's
+hash indirectly commits to, and an erasure would have to touch a business row
+that an audit payload was computed over.
 
 **Binaries by reference and hash.** The message stores metadata and the hash of
 the content; the binary lives outside. This is the same pattern as
@@ -159,6 +176,20 @@ dressed up as a verdict. Degradation policies, if any, will be decided with real
 cases in front of them, per channel, and will be visible as policies rather than
 as silent behaviour. Today delivery is best-effort and the reason lands in the
 log; when delivery becomes transactional, the reason persists with it.
+
+**Discarded alternative: no declaration, degrade in the core.** The engine hands
+every message to the adapter and, when the provider rejects it, falls back to a
+rendering the channel is assumed to accept: a binary becomes a link, a long text
+is split, an unsupported part is dropped with a note. It was discarded on three
+grounds. The fallback is channel knowledge (what a link looks like on Telegram,
+what a template is on WhatsApp) executed on the wrong side of the boundary. The
+failure would be learned from the provider, in its vocabulary, and after side
+effects: a multi-part message can be half delivered before the part that fails.
+And the degradation would be silent from the operator's point of view: the
+interlocutor receives something other than what the agent produced, and nothing
+records the substitution. The milder variant, "assume the least common
+denominator and only ever send text", was discarded because it makes every
+channel as poor as the poorest and never uses what a channel offers.
 
 ## Consequences
 
