@@ -13,6 +13,7 @@ import dev.cauce.channels.spi.InboundChannelAdapter;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
+import dev.cauce.core.identity.IdentityKind;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -98,7 +99,10 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
             // media without text, ...): acknowledge without ingesting.
             return Optional.empty();
         }
+        // chat.id is the thread: the user's id in a private chat, the group's in a group. Named
+        // PROVIDER_USER_ID because it is minted by Telegram and meaningful only within it.
         return Optional.of(new ChannelInboundMessage(
+                IdentityKind.PROVIDER_USER_ID,
                 String.valueOf(chatId.asLong()),
                 text.asText(),
                 config.id() + ":" + updateId.asLong()));

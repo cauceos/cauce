@@ -79,7 +79,7 @@ public class ChannelWebhookService {
         TenantContext.setCurrentTenantId(config.tenantId());
         try {
             inboundMessageService.ingest(config.agentId(), config.channelType(),
-                    message.get().externalIdentityRef(), message.get().content(),
+                    message.get().identityValue(), message.get().content(),
                     message.get().idempotencyKey());
         } finally {
             TenantContext.clear();

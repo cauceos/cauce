@@ -15,6 +15,7 @@ import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelAdapterRegistry;
 import dev.cauce.channels.spi.ChannelInboundMessage;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.channels.spi.InboundChannelAdapter;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.tenant.TenantContext;
@@ -95,7 +96,7 @@ class ChannelWebhookServiceTest {
     @Test
     void handle_ingestableMessage_ingestsUnderTheConfigTenantAndClearsContext() {
         ChannelInboundMessage message =
-                new ChannelInboundMessage("987654321", "Hola", config.id() + ":1");
+                new ChannelInboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321", "Hola", config.id() + ":1");
         when(channelConfigService.resolveActiveChannelConfig(config.id()))
                 .thenReturn(Optional.of(config));
         when(adapter.verify(REQUEST, config)).thenReturn(true);

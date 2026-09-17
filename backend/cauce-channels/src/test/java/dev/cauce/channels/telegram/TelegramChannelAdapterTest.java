@@ -21,6 +21,7 @@ import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
+import dev.cauce.core.identity.IdentityKind;
 import java.net.http.HttpClient;
 import java.util.Map;
 import java.util.Optional;
@@ -103,7 +104,8 @@ class TelegramChannelAdapterTest {
         Optional<ChannelInboundMessage> parsed = adapter.parse(update, config);
 
         assertThat(parsed).hasValueSatisfying(message -> {
-            assertThat(message.externalIdentityRef()).isEqualTo("987654321");
+            assertThat(message.identityKind()).isEqualTo(IdentityKind.PROVIDER_USER_ID);
+            assertThat(message.identityValue()).isEqualTo("987654321");
             assertThat(message.content()).isEqualTo("Hola, quiero una cita");
             assertThat(message.idempotencyKey()).isEqualTo(config.id() + ":736294857");
         });
@@ -116,7 +118,7 @@ class TelegramChannelAdapterTest {
                 """;
 
         assertThat(adapter.parse(update, config)).hasValueSatisfying(message ->
-                assertThat(message.externalIdentityRef()).isEqualTo("-100123456"));
+                assertThat(message.identityValue()).isEqualTo("-100123456"));
     }
 
     @Test
