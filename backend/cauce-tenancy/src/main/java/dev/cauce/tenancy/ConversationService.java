@@ -4,7 +4,6 @@ import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.conversation.ConversationStatus;
-import dev.cauce.core.conversation.InvalidChannelTypeException;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
@@ -12,7 +11,6 @@ import dev.cauce.memory.conversation.ConversationMapper;
 import dev.cauce.memory.conversation.ConversationRepository;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
@@ -36,15 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConversationService {
 
     private static final Logger log = LoggerFactory.getLogger(ConversationService.class);
-
-    // "api" is the reserved built-in channel for the REST messaging endpoint: a first-class
-    // origin handled in-process, not a pluggable adapter. "telegram" has a real adapter in
-    // cauce-channels; the rest are placeholders.
-    // TODO: replace hardcoded validation with the cauce-channels ChannelAdapterRegistry.
-    // Not doable by direct dependency (cycle: tenancy <- orchestration <- channels); needs
-    // a port in core or an app-level validation seam.
-    private static final Set<String> SUPPORTED_CHANNELS =
-            Set.of("api", "telegram", "whatsapp", "voice", "email", "web_chat");
 
     private final ConversationRepository conversationRepository;
     private final AgentRepository agentRepository;
@@ -101,7 +90,7 @@ public class ConversationService {
      * the same tuple could each open a conversation. Accepted for now (no schema change).
      *
      * @throws dev.cauce.core.agent.AgentNotFoundException if the agent is not visible
-     * @throws InvalidChannelTypeException if the channel type is not supported
+     * @throws dev.cauce.core.conversation.InvalidChannelTypeException if the channel type is not supported
      */
     @Transactional
     public Conversation resolveOrStartConversation(UUID agentId, String channelType,
@@ -183,9 +172,7 @@ public class ConversationService {
     private AgentEntity requireVisibleAgentForSupportedChannel(UUID agentId, String channelType) {
         AgentEntity agent = agentRepository.findById(agentId).orElseThrow(() ->
                 new AgentNotFoundException("No agent found for id " + agentId));
-        if (!SUPPORTED_CHANNELS.contains(channelType)) {
-            throw new InvalidChannelTypeException("Unsupported channel type: " + channelType);
-        }
+        SupportedChannels.requireSupported(channelType);
         return agent;
     }
 
