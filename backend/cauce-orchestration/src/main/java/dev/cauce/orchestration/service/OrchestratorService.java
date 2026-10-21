@@ -36,6 +36,7 @@ import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
 import dev.cauce.orchestration.usage.LlmUsageRecord;
 import dev.cauce.orchestration.usage.LlmUsageRecorder;
 import dev.cauce.tools.spi.Tool;
+import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
 import dev.cauce.tools.spi.ToolRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -312,6 +313,9 @@ public class OrchestratorService {
         }
         try {
             return tool.get().execute(call, context);
+        } catch (InvalidToolArgumentException e) {
+            // The tool's own account of a malformed argument: written for the model to correct.
+            return ToolResult.error(call.toolCallId(), call.toolName(), "Invalid arguments: " + e.getMessage());
         } catch (RuntimeException e) {
             log.warn("Tool '{}' execution failed: {}", call.toolName(), e.toString(), e);
             return ToolResult.error(call.toolCallId(), call.toolName(), TOOL_FAILURE_OUTPUT);

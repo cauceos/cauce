@@ -29,7 +29,9 @@ public interface Tool {
      * {@link ToolCall#toolCallId()}. The subject of the action — tenant, agent, conversation,
      * interlocutor — comes from {@code context}, never from the call's arguments (ADR 0007, B3).
      * Implementations should not throw for ordinary tool failures: return
-     * {@link ToolResult#error} so the failure can be fed back to the model.
+     * {@link ToolResult#error} so the failure can be fed back to the model. A malformed argument
+     * may be thrown as {@link ToolArguments.InvalidToolArgumentException}, whose message reaches
+     * the model; any other exception reaches it only as a sanitized failure (ADR 0005, C6).
      */
     ToolResult execute(ToolCall call, ToolExecutionContext context);
 }

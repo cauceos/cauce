@@ -2,6 +2,8 @@ package dev.cauce.tools.clock;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.cauce.core.business.profile.BusinessProfile;
+import dev.cauce.core.business.profile.BusinessProfileSource;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolDefinition;
 import dev.cauce.core.tool.ToolExecutionContext;
@@ -9,7 +11,9 @@ import dev.cauce.core.tool.ToolResult;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -50,5 +54,18 @@ class ClockToolTest {
     void execute_rejectsNullCall() {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> tool.execute(null, CONTEXT))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void execute_whenTheBusinessHasAProfile_addsItsLocalDateTimeAndWeekday() {
+        BusinessProfileSource profiles = tenant -> tenant.equals(CONTEXT.tenantId())
+                ? Optional.of(BusinessProfile.create(tenant, "Bar", "Europe/Madrid", "es", List.of()))
+                : Optional.empty();
+        ClockTool local = new ClockTool(Clock.fixed(FIXED, ZoneOffset.UTC), () -> profiles);
+
+        ToolResult result = local.execute(new ToolCall("call-1", ClockTool.NAME, Map.of()), CONTEXT);
+
+        assertThat(result.output()).isEqualTo("{\"local_date\":\"2026-06-13\",\"local_time\":\"12:15:30\","
+                + "\"time_zone\":\"Europe/Madrid\",\"utc\":\"2026-06-13T10:15:30Z\",\"weekday\":\"saturday\"}");
     }
 }

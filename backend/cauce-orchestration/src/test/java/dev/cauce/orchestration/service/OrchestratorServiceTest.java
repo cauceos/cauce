@@ -50,6 +50,7 @@ import dev.cauce.orchestration.usage.LlmUsageRecord;
 import dev.cauce.orchestration.usage.LlmUsageRecorder;
 import dev.cauce.tools.clock.ClockTool;
 import dev.cauce.tools.spi.Tool;
+import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
 import dev.cauce.tools.spi.ToolRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -189,6 +190,30 @@ class OrchestratorServiceTest {
         // ADR 0007, B3: the subject of the action comes from the orchestrator, never the model.
         assertThat(seen).containsExactly(new ToolExecutionContext(tenantId, agent.id(), conversationId,
                 conversation.identityId(), triggerId, invocationId));
+    }
+
+    @Test
+    void respondToMessage_whenAToolRejectsItsArguments_feedsTheToolsOwnMessageBack() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("boom_tool"), reply("Fixed."));
+        Tool strict = new Tool() {
+            @Override
+            public ToolDefinition definition() {
+                return new ToolDefinition("boom_tool", "rejects its arguments", Map.of("type", "object"));
+            }
+
+            @Override
+            public ToolResult execute(ToolCall call, ToolExecutionContext context) {
+                throw new InvalidToolArgumentException("'date' is required");
+            }
+        };
+
+        serviceWith(new ToolRegistry(List.of(strict))).respondToMessage(invocationId, conversationId, triggerId);
+
+        ToolResult toolResult = (ToolResult) capturedAppends(2).get(1).toolContent().orElseThrow();
+        assertThat(toolResult.isError()).isTrue();
+        assertThat(toolResult.output()).isEqualTo("Invalid arguments: 'date' is required");
     }
 
     @Test
