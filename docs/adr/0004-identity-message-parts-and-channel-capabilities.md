@@ -276,6 +276,49 @@ reads content.
 The first producer of a non-text part (Telegram photo with caption) is a channel
 unit after these three, not part of this decision.
 
+## Implementation decisions (identity unit)
+
+The contract of the first unit, settled before its re-key began. Where it refines
+the decision above, this section governs.
+
+**PC-1 — `channel_config_id` on conversations, now.** The channel config
+identifies the *door* the interlocutor came in through, not the person; the
+identity identifies the person. A conversation carries both. The partial unique
+index of the open thread is `(agent_id, identity_id, channel_config_id) WHERE
+status = 'OPEN'`, declared `NULLS NOT DISTINCT`: the `api` channel has no config
+and must still deduplicate its open thread. The column is nullable. "NOT NULL when
+an adapter ingested, NULL for `api`" is an invariant of the service, not a CHECK.
+Outbound delivery resolves the config by this id, which removes the ambiguity of
+an agent with more than one active config on the same channel.
+
+**PC-2 — `conversations.channel_type` goes.** The channel is a property of the
+identity (and of the config); the conversation does not repeat it. Its readers are
+rewritten to read it from there.
+
+**PC-3 — audit payloads carry opaque ids only.** `conduct.message.received` gains
+`identity_id`; the identity's value never enters a payload. The rule: an audited
+payload holds only opaque ids, so that an erasure (RGPD) of the identity row never
+touches the chain. Creating an identity publishes `conduct.identity.created`, a
+case of a sealed event type, with no consumers and outside the hash chain.
+
+**PC-4 — three migrations.** V25 creates `identities` (landed), V26 re-keys
+conversations (new columns, backfill, new arbiter), V27 drops what the re-key
+replaced (`channel_type`, `external_identity_ref`, the V3 identity index).
+
+**Conscious limitation — Telegram groups.** A group `chat.id` is not a person. No
+`GROUP` kind is added; the Telegram adapter fails loudly on a group update instead
+of minting a person-kind identity for it.
+
+**Resolution order.** Agent → identity → conversation, in one transaction. The
+identity's tenant is the agent's tenant, never the `TenantContext` of the request.
+Identity and conversation are each resolved with `INSERT ... ON CONFLICT DO
+NOTHING` plus a re-`SELECT`, and each has an integration test that races
+concurrent first messages in parallel.
+
+**`ConversationResponse`.** No `channel_type`. It nests the identity (`id`,
+`channel_type`, `kind`, `value`) and carries `channel_config_id`. The value may
+appear in the API, where RLS protects it; PC-3 constrains the audit chain only.
+
 ## Notes
 
 The private architecture record of the channel SPI as built (ADR-006) lists the
