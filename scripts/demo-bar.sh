@@ -7,8 +7,9 @@
 #   1. Creates a partner and the business "Bar La Esquina" (a client tenant).
 #   2. Loads its sheet, menu and agenda from examples/hosteleria/bar-ejemplo.
 #   3. Creates the customer agent (prompt + tool grant of the pack) and the owner agent.
-#   4. With TELEGRAM_CUSTOMER_BOT_TOKEN / TELEGRAM_OWNER_BOT_TOKEN: binds each bot to its agent
-#      and, with PUBLIC_URL, registers both webhooks with Telegram.
+#   4. With TELEGRAM_CUSTOMER_BOT_TOKEN / TELEGRAM_OWNER_BOT_TOKEN (and PUBLIC_URL): binds each
+#      bot to its agent once and, on every run, renews its webhook secret, registers the webhook
+#      with Telegram and checks with getWebhookInfo that it took. Any failure stops the script.
 #   5. Issues the owner's link code and prints the link that binds the owner's chat.
 #
 # Settings (environment or .env):
@@ -18,7 +19,8 @@
 #   MODEL_PROVIDER      default anthropic   (needs ANTHROPIC_API_KEY on the instance)
 #   MODEL_NAME          default claude-sonnet-5-5
 #   TELEGRAM_CUSTOMER_BOT_TOKEN, TELEGRAM_OWNER_BOT_TOKEN   from @BotFather (optional)
-#   PUBLIC_URL          public https URL that reaches the instance, e.g. a tunnel (optional)
+#   PUBLIC_URL          public https URL that reaches the instance, e.g. a tunnel (required with a token)
+#   TELEGRAM_API_URL    default https://api.telegram.org (a stub, for testing this script)
 #
 # Requirements: curl, and python3 or jq. Re-running reuses the ids saved in .demo-bar.env
 # (gitignored) and reloads the sheet, menu and agenda; delete that file to start over.
@@ -44,6 +46,7 @@ CUSTOMER_TOKEN="$(read_knob TELEGRAM_CUSTOMER_BOT_TOKEN '')"
 OWNER_TOKEN="$(read_knob TELEGRAM_OWNER_BOT_TOKEN '')"
 PUBLIC_URL="$(read_knob PUBLIC_URL '')"
 PUBLIC_URL="${PUBLIC_URL%/}"
+TELEGRAM_API_URL="$(read_knob TELEGRAM_API_URL https://api.telegram.org)"
 
 say()  { printf '\n== %s\n' "$1"; }
 fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
@@ -51,13 +54,14 @@ fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 # Python on Windows would read the prompt files from stdin in the ANSI code page.
 export PYTHONIOENCODING=utf-8
 if command -v python3 >/dev/null 2>&1 && python3 -c '' >/dev/null 2>&1; then
-    json_get()    { python3 -c 'import json,sys; v=json.load(sys.stdin);
-for k in sys.argv[1].split("."): v=v[k]
-print(v)' "$1"; }
+    # json_get PATH: the value at a dotted PATH; json_opt PATH: the same, or empty when absent.
+    json_get()    { python3 -c 'import functools,json,sys; print(functools.reduce(lambda v, k: v[k], sys.argv[1].split("."), json.load(sys.stdin)))' "$1"; }
+    json_opt()    { python3 -c 'import functools,json,sys; v=functools.reduce(lambda v, k: v.get(k) if isinstance(v, dict) else None, sys.argv[1].split("."), json.load(sys.stdin)); print("" if v is None else v)' "$1"; }
     json_string() { python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'; }
     json_list()   { python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8"))[sys.argv[2]]))' "$1" "$2"; }
 elif command -v jq >/dev/null 2>&1; then
     json_get()    { jq -r ".$1"; }
+    json_opt()    { jq -r ".$1 // \"\""; }
     json_string() { jq -Rs .; }
     json_list()   { jq -c ".$2" "$1"; }
 else
@@ -89,7 +93,7 @@ api() {
 
 telegram() { # telegram TOKEN METHOD [curl args...]
     local token="$1" method="$2"; shift 2
-    curl -sS "https://api.telegram.org/bot$token/$method" "$@"
+    curl -sS "$TELEGRAM_API_URL/bot$token/$method" "$@"
 }
 
 # --- 0. credentials and state ------------------------------------------------
@@ -153,36 +157,53 @@ echo "   Owner agent:    $OWNER_AGENT_ID"
 
 # --- 4. Telegram bots --------------------------------------------------------
 
-bind_bot() { # bind_bot AGENT_ID TOKEN STATE_KEY -> sets BOUND_CONFIG_ID, BOUND_SECRET
-    local created
-    created=$(api POST "/v1/agents/$1/channels" "{\"channel_type\":\"telegram\",\"credential\":\"$2\"}")
-    BOUND_CONFIG_ID=$(printf '%s' "$created" | json_get id)
-    BOUND_SECRET=$(printf '%s' "$created" | json_get webhook_secret)
-    save "$3" "$BOUND_CONFIG_ID"
-}
-register_webhook() { # register_webhook TOKEN CONFIG_ID SECRET
-    if [ -z "$PUBLIC_URL" ]; then
-        echo "   PUBLIC_URL not set: register the webhook yourself (see the README)."
-        echo "     url=<public url>/webhooks/channels/$2  secret_token=$3"
-        return
+# connect_bot LABEL AGENT_ID TOKEN STATE_KEY: binds the bot once, then on EVERY run registers its
+# webhook again and checks it took. Cauce keeps only the hash of a webhook secret, so an existing
+# binding gets a fresh secret (POST /v1/channel-configs/{id}/webhook-secret) and Telegram is
+# pointed at it; a run that failed half-way is repaired by the next one.
+connect_bot() {
+    local label="$1" agent_id="$2" token="$3" state_key="$4" config_id secret result url info actual last_error
+    say "Connecting the $label bot..."
+    case "$PUBLIC_URL" in
+        https://*) ;;
+        "") fail "PUBLIC_URL is required to connect the $label bot: Telegram must reach the instance (e.g. a cloudflared tunnel URL)." ;;
+        *)  fail "PUBLIC_URL must be an https:// URL (Telegram only calls https webhooks), not '$PUBLIC_URL'." ;;
+    esac
+    result=$(telegram "$token" getMe)
+    [ "$(printf '%s' "$result" | json_opt ok)" = "True" ] || [ "$(printf '%s' "$result" | json_opt ok)" = "true" ] \
+        || fail "Telegram rejects the $label bot token: $(printf '%s' "$result" | json_opt description)"
+
+    eval "config_id=\${$state_key:-}"
+    if [ -z "$config_id" ]; then
+        result=$(api POST "/v1/agents/$agent_id/channels" "{\"channel_type\":\"telegram\",\"credential\":\"$token\"}")
+        config_id=$(printf '%s' "$result" | json_get id)
+        save "$state_key" "$config_id"
+        echo "   Bound: channel config $config_id"
+    else
+        result=$(api POST "/v1/channel-configs/$config_id/webhook-secret") \
+            || fail "Could not renew the secret of channel config $config_id (from $STATE_FILE). If that binding is gone, delete the $state_key line and run again."
+        echo "   Existing binding: channel config $config_id (new webhook secret issued)"
     fi
-    telegram "$1" setWebhook -d "url=$PUBLIC_URL/webhooks/channels/$2" -d "secret_token=$3" \
-        -d 'allowed_updates=["message"]' | grep -q '"ok":true' || fail "Telegram setWebhook failed for config $2"
-    echo "   Webhook registered: $PUBLIC_URL/webhooks/channels/$2"
+    secret=$(printf '%s' "$result" | json_get webhook_secret)
+    eval "$state_key=\$config_id"
+
+    url="$PUBLIC_URL/webhooks/channels/$config_id"
+    result=$(telegram "$token" setWebhook -d "url=$url" -d "secret_token=$secret" -d 'allowed_updates=["message"]')
+    case "$(printf '%s' "$result" | json_opt ok)" in
+        True|true) ;;
+        *) fail "Telegram setWebhook failed for the $label bot: $(printf '%s' "$result" | json_opt description)" ;;
+    esac
+    info=$(telegram "$token" getWebhookInfo)
+    actual=$(printf '%s' "$info" | json_opt result.url)
+    [ "$actual" = "$url" ] || fail "The $label bot's webhook is '$actual' after setWebhook, expected '$url'."
+    last_error=$(printf '%s' "$info" | json_opt result.last_error_message)
+    echo "   Webhook verified: $url"
+    [ -n "$last_error" ] && echo "   (Telegram's last delivery error, from before this run: $last_error)"
+    return 0
 }
 
-if [ -n "$CUSTOMER_TOKEN" ] && [ -z "${CUSTOMER_BOT_CONFIG_ID:-}" ]; then
-    say "Binding the customer bot..."
-    bind_bot "$CUSTOMER_AGENT_ID" "$CUSTOMER_TOKEN" CUSTOMER_BOT_CONFIG_ID
-    CUSTOMER_BOT_CONFIG_ID=$BOUND_CONFIG_ID
-    register_webhook "$CUSTOMER_TOKEN" "$BOUND_CONFIG_ID" "$BOUND_SECRET"
-fi
-if [ -n "$OWNER_TOKEN" ] && [ -z "${OWNER_BOT_CONFIG_ID:-}" ]; then
-    say "Binding the owner bot..."
-    bind_bot "$OWNER_AGENT_ID" "$OWNER_TOKEN" OWNER_BOT_CONFIG_ID
-    OWNER_BOT_CONFIG_ID=$BOUND_CONFIG_ID
-    register_webhook "$OWNER_TOKEN" "$BOUND_CONFIG_ID" "$BOUND_SECRET"
-fi
+[ -n "$CUSTOMER_TOKEN" ] && connect_bot customer "$CUSTOMER_AGENT_ID" "$CUSTOMER_TOKEN" CUSTOMER_BOT_CONFIG_ID
+[ -n "$OWNER_TOKEN" ] && connect_bot owner "$OWNER_AGENT_ID" "$OWNER_TOKEN" OWNER_BOT_CONFIG_ID
 
 # --- 5. owner link -----------------------------------------------------------
 

@@ -5,14 +5,16 @@
 #   1. Creates a partner and the business "Bar La Esquina" (a client tenant).
 #   2. Loads its sheet, menu and agenda from examples/hosteleria/bar-ejemplo.
 #   3. Creates the customer agent (prompt + tool grant of the pack) and the owner agent.
-#   4. With TELEGRAM_CUSTOMER_BOT_TOKEN / TELEGRAM_OWNER_BOT_TOKEN: binds each bot to its agent
-#      and, with PUBLIC_URL, registers both webhooks with Telegram.
+#   4. With TELEGRAM_CUSTOMER_BOT_TOKEN / TELEGRAM_OWNER_BOT_TOKEN (and PUBLIC_URL): binds each
+#      bot to its agent once and, on every run, renews its webhook secret, registers the webhook
+#      with Telegram and checks with getWebhookInfo that it took. Any failure stops the script.
 #   5. Issues the owner's link code and prints the link that binds the owner's chat.
 #
 # Settings (environment or .env): CAUCE_API_URL (default http://localhost:8080), CAUCE_API_KEY
 # (default: the quickstart's, from .quickstart.env), CAUCE_OPERATOR_ID, MODEL_PROVIDER (default
 # anthropic), MODEL_NAME (default claude-sonnet-5-5), TELEGRAM_CUSTOMER_BOT_TOKEN,
-# TELEGRAM_OWNER_BOT_TOKEN, PUBLIC_URL. Re-running reuses the ids saved in .demo-bar.env
+# TELEGRAM_OWNER_BOT_TOKEN, PUBLIC_URL (required with a token), TELEGRAM_API_URL (a stub, for
+# testing this script). Re-running reuses the ids saved in .demo-bar.env
 # (gitignored) and reloads the sheet, menu and agenda; delete that file to start over.
 
 # ASCII only: Windows PowerShell reads a script without a BOM in the ANSI code page, so the
@@ -44,9 +46,10 @@ $ModelName     = Get-Setting 'MODEL_NAME' 'claude-sonnet-5-5'
 $CustomerToken = Get-Setting 'TELEGRAM_CUSTOMER_BOT_TOKEN' ''
 $OwnerToken    = Get-Setting 'TELEGRAM_OWNER_BOT_TOKEN' ''
 $PublicUrl     = (Get-Setting 'PUBLIC_URL' '').TrimEnd('/')
+$TelegramApi   = Get-Setting 'TELEGRAM_API_URL' 'https://api.telegram.org'
 
 function Say($msg)  { Write-Host "`n== $msg" }
-function Fail($msg) { Write-Error $msg; exit 1 }
+function Fail($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
 function Save($key, $value) { Add-Content -Path $StateFile -Value "$key=$value" -Encoding ascii }
 function Read-Utf8($path) { [IO.File]::ReadAllText((Resolve-Path $path), [Text.Encoding]::UTF8) }
 
@@ -67,10 +70,19 @@ function Invoke-Api($method, $path, $json) {
         Fail "$method $path failed: $($_.Exception.Message) $detail"
     }
 }
+# Telegram answers a refusal with a 4xx and {"ok": false, "description": ...}: return that body
+# instead of throwing, so the caller can say what Telegram said.
 function Invoke-Telegram($token, $method, $form) {
-    $uri = "https://api.telegram.org/bot$token/$method"
-    if ($form) { return Invoke-RestMethod -Method Post -Uri $uri -Body $form }
-    return Invoke-RestMethod -Method Get -Uri $uri
+    $uri = "$TelegramApi/bot$token/$method"
+    try {
+        if ($form) { return Invoke-RestMethod -Method Post -Uri $uri -Body $form }
+        return Invoke-RestMethod -Method Get -Uri $uri
+    } catch {
+        if ($_.ErrorDetails.Message) {
+            try { return $_.ErrorDetails.Message | ConvertFrom-Json } catch {}
+        }
+        return [pscustomobject]@{ ok = $false; description = $_.Exception.Message }
+    }
 }
 
 # --- 0. credentials and state ------------------------------------------------
@@ -134,28 +146,54 @@ Write-Host "   Owner agent:    $OwnerAgentId"
 
 # --- 4. Telegram bots --------------------------------------------------------
 
-function Connect-Bot($agentId, $token, $stateKey) {
-    $created = Invoke-Api POST "/v1/agents/$agentId/channels" (@{ channel_type = 'telegram'; credential = $token } | ConvertTo-Json)
-    Save $stateKey $created.id
+# Binds the bot once, then on EVERY run registers its webhook again and checks it took. Cauce keeps
+# only the hash of a webhook secret, so an existing binding gets a fresh secret
+# (POST /v1/channel-configs/{id}/webhook-secret) and Telegram is pointed at it; a run that failed
+# half-way is repaired by the next one.
+function Connect-Bot($label, $agentId, $token, $stateKey, $configId) {
+    Say "Connecting the $label bot..."
     if (-not $PublicUrl) {
-        Write-Host '   PUBLIC_URL not set: register the webhook yourself (see the README).'
-        Write-Host "     url=<public url>/webhooks/channels/$($created.id)  secret_token=$($created.webhook_secret)"
-    } else {
-        $result = Invoke-Telegram $token 'setWebhook' @{
-            url = "$PublicUrl/webhooks/channels/$($created.id)"; secret_token = $created.webhook_secret
-            allowed_updates = '["message"]' }
-        if (-not $result.ok) { Fail "Telegram setWebhook failed for config $($created.id)" }
-        Write-Host "   Webhook registered: $PublicUrl/webhooks/channels/$($created.id)"
+        Fail "PUBLIC_URL is required to connect the $label bot: Telegram must reach the instance (e.g. a cloudflared tunnel URL)."
     }
-    return $created.id
+    if (-not $PublicUrl.StartsWith('https://')) {
+        Fail "PUBLIC_URL must be an https:// URL (Telegram only calls https webhooks), not '$PublicUrl'."
+    }
+    $me = Invoke-Telegram $token 'getMe' $null
+    if (-not $me.ok) { Fail "Telegram rejects the $label bot token: $($me.description)" }
+
+    if (-not $configId) {
+        $binding = Invoke-Api POST "/v1/agents/$agentId/channels" (@{ channel_type = 'telegram'; credential = $token } | ConvertTo-Json)
+        $configId = $binding.id
+        Save $stateKey $configId
+        Write-Host "   Bound: channel config $configId"
+    } else {
+        try {
+            $binding = Invoke-RestMethod -Method Post -Uri "$ApiUrl/v1/channel-configs/$configId/webhook-secret" `
+                -Headers @{ Authorization = "Bearer $ApiKey" }
+        } catch {
+            Fail "Could not renew the secret of channel config $configId (from $StateFile): $($_.ErrorDetails.Message) If that binding is gone, delete the $stateKey line and run again."
+        }
+        Write-Host "   Existing binding: channel config $configId (new webhook secret issued)"
+    }
+
+    $url = "$PublicUrl/webhooks/channels/$configId"
+    $set = Invoke-Telegram $token 'setWebhook' @{ url = $url; secret_token = $binding.webhook_secret; allowed_updates = '["message"]' }
+    if (-not $set.ok) { Fail "Telegram setWebhook failed for the $label bot: $($set.description)" }
+    $info = Invoke-Telegram $token 'getWebhookInfo' $null
+    if ($info.result.url -ne $url) {
+        Fail "The $label bot's webhook is '$($info.result.url)' after setWebhook, expected '$url'."
+    }
+    Write-Host "   Webhook verified: $url"
+    if ($info.result.last_error_message) {
+        Write-Host "   (Telegram's last delivery error, from before this run: $($info.result.last_error_message))"
+    }
+    return $configId
 }
-if ($CustomerToken -and -not $CustomerConfigId) {
-    Say 'Binding the customer bot...'
-    $CustomerConfigId = Connect-Bot $CustomerAgentId $CustomerToken 'CUSTOMER_BOT_CONFIG_ID'
+if ($CustomerToken) {
+    $CustomerConfigId = Connect-Bot 'customer' $CustomerAgentId $CustomerToken 'CUSTOMER_BOT_CONFIG_ID' $CustomerConfigId
 }
-if ($OwnerToken -and -not $OwnerConfigId) {
-    Say 'Binding the owner bot...'
-    $OwnerConfigId = Connect-Bot $OwnerAgentId $OwnerToken 'OWNER_BOT_CONFIG_ID'
+if ($OwnerToken) {
+    $OwnerConfigId = Connect-Bot 'owner' $OwnerAgentId $OwnerToken 'OWNER_BOT_CONFIG_ID' $OwnerConfigId
 }
 
 # --- 5. owner link -----------------------------------------------------------

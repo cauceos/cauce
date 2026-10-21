@@ -20,7 +20,10 @@ carta (servicios), otra agenda (sillas en vez de comensales) y otro prompt.
 
 `scripts/demo-bar.sh` (o `scripts/demo-bar.ps1` en Windows) crea el negocio, carga ficha, carta y
 agenda, crea los dos agentes y, si le das los tokens, conecta los dos bots de Telegram. Se puede
-relanzar: reutiliza los ids de `.demo-bar.env` y vuelve a cargar los datos y los prompts.
+relanzar: reutiliza los ids de `.demo-bar.env`, vuelve a cargar los datos y los prompts y, en cada
+ejecución, renueva el secreto del webhook de cada bot ya vinculado, lo registra en Telegram y
+comprueba con `getWebhookInfo` que quedó puesto. Si algo falla (token, `PUBLIC_URL`, Telegram),
+para con el error; la siguiente ejecución lo repara sin crear vinculaciones nuevas.
 
 Los ficheros también se cargan a mano con `curl` (cada uno es el cuerpo exacto del `PUT`), o desde
 el playground, pantalla **Business**, que los edita como JSON y muestra cómo los lee el agente.
