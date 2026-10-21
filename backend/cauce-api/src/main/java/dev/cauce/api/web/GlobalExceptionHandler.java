@@ -16,6 +16,8 @@ import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.agent.UnknownToolException;
 import dev.cauce.core.apikey.ApiKeyAlreadyRevokedException;
 import dev.cauce.core.apikey.ApiKeyNotFoundException;
+import dev.cauce.core.business.catalog.CatalogNotFoundException;
+import dev.cauce.core.business.profile.BusinessProfileNotFoundException;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.conversation.InvalidChannelTypeException;
 import dev.cauce.core.conversation.InvalidConversationTransitionException;
@@ -94,6 +96,8 @@ public class GlobalExceptionHandler {
             Map.entry(PendingInvocationNotFoundException.class, "invocation_not_found"),
             Map.entry(ChannelConfigNotFoundException.class, "channel_config_not_found"),
             Map.entry(WhatsAppAppNotFoundException.class, "whatsapp_app_not_found"),
+            Map.entry(BusinessProfileNotFoundException.class, "business_profile_not_found"),
+            Map.entry(CatalogNotFoundException.class, "catalog_not_found"),
             Map.entry(InvalidChannelConfigRequestException.class, "invalid_channel_config_request"),
             Map.entry(AppOutsideHierarchyException.class, "whatsapp_app_outside_hierarchy"),
             Map.entry(PhoneNumberAlreadyBoundException.class, "phone_number_already_bound"),
@@ -146,7 +150,9 @@ public class GlobalExceptionHandler {
             ApiKeyNotFoundException.class,
             PendingInvocationNotFoundException.class,
             ChannelConfigNotFoundException.class,
-            WhatsAppAppNotFoundException.class})
+            WhatsAppAppNotFoundException.class,
+            BusinessProfileNotFoundException.class,
+            CatalogNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex) {
         return clientError(HttpStatus.NOT_FOUND, ex);
     }

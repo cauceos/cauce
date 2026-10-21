@@ -7,8 +7,11 @@ import dev.cauce.llm.model.LlmResponse;
 import dev.cauce.llm.model.LlmUsage;
 import dev.cauce.llm.spi.LlmProvider;
 import java.util.List;
+import java.util.Queue;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -38,6 +41,8 @@ public class FakeLlmProvider implements LlmProvider {
     private volatile RuntimeException nextFailure;
     private volatile boolean useTool;
     private final AtomicInteger calls = new AtomicInteger();
+    private final Queue<LlmResponse> scripted = new ConcurrentLinkedQueue<>();
+    private final List<LlmInvocation> invocations = new CopyOnWriteArrayList<>();
 
     @Override
     public String id() {
@@ -51,6 +56,11 @@ public class FakeLlmProvider implements LlmProvider {
 
     @Override
     public LlmResponse invoke(LlmInvocation invocation) {
+        invocations.add(invocation);
+        LlmResponse next = scripted.poll();
+        if (next != null) {
+            return next;
+        }
         RuntimeException failure = nextFailure;
         if (failure != null) {
             throw failure;
@@ -82,8 +92,34 @@ public class FakeLlmProvider implements LlmProvider {
         this.calls.set(0);
     }
 
+    /**
+     * Scripts the next responses, returned one per invoke in order before any other behaviour: how
+     * a test plays a model that calls given tools with given arguments, then replies.
+     */
+    public void script(LlmResponse... responses) {
+        scripted.addAll(List.of(responses));
+    }
+
+    /** A scripted round asking for one tool call. */
+    public static LlmResponse toolCall(String toolName, Map<String, Object> input) {
+        return new LlmResponse("", List.of(new ToolCall(UUID.randomUUID().toString(), toolName, input)),
+                FinishReason.TOOL_USE, LlmUsage.of(TOOL_INPUT_TOKENS, TOOL_OUTPUT_TOKENS));
+    }
+
+    /** A scripted final reply. */
+    public static LlmResponse finalReply(String text) {
+        return new LlmResponse(text, List.of(), FinishReason.STOP, LlmUsage.of(REPLY_INPUT_TOKENS, REPLY_OUTPUT_TOKENS));
+    }
+
+    /** Every invocation received since the last {@link #reset()}, in order. */
+    public List<LlmInvocation> invocations() {
+        return List.copyOf(invocations);
+    }
+
     /** Restores the canned-reply behaviour. */
     public void reset() {
+        this.scripted.clear();
+        this.invocations.clear();
         this.nextFailure = null;
         this.useTool = false;
         this.calls.set(0);
