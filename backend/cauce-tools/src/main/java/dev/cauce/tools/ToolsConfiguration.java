@@ -1,12 +1,15 @@
 package dev.cauce.tools;
 
+import dev.cauce.core.business.booking.BookingProvider;
 import dev.cauce.core.business.catalog.CatalogSource;
 import dev.cauce.core.business.gap.KnowledgeGapSink;
 import dev.cauce.core.business.profile.BusinessProfileSource;
+import dev.cauce.tools.business.BookingTools;
 import dev.cauce.tools.business.GetBusinessInfoTool;
 import dev.cauce.tools.business.RecordUnansweredQuestionTool;
 import dev.cauce.tools.business.SearchCatalogTool;
 import dev.cauce.tools.clock.ClockTool;
+import dev.cauce.tools.spi.Tool;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -43,5 +46,35 @@ public class ToolsConfiguration {
     @Bean
     public RecordUnansweredQuestionTool recordUnansweredQuestionTool(ObjectProvider<KnowledgeGapSink> sinks) {
         return new RecordUnansweredQuestionTool(sinks::getIfAvailable);
+    }
+
+    @Bean
+    public Tool checkAvailabilityTool(ObjectProvider<BookingProvider> bookings) {
+        return BookingTools.checkAvailability(bookings::getIfAvailable);
+    }
+
+    @Bean
+    public Tool proposeBookingTool(ObjectProvider<BookingProvider> bookings) {
+        return BookingTools.proposeBooking(bookings::getIfAvailable);
+    }
+
+    @Bean
+    public Tool proposeBookingChangeTool(ObjectProvider<BookingProvider> bookings) {
+        return BookingTools.proposeBookingChange(bookings::getIfAvailable);
+    }
+
+    @Bean
+    public Tool proposeCancellationTool(ObjectProvider<BookingProvider> bookings) {
+        return BookingTools.proposeCancellation(bookings::getIfAvailable);
+    }
+
+    @Bean
+    public Tool confirmBookingTool(ObjectProvider<BookingProvider> bookings) {
+        return BookingTools.confirmBooking(bookings::getIfAvailable);
+    }
+
+    @Bean
+    public Tool listMyBookingsTool(ObjectProvider<BookingProvider> bookings) {
+        return BookingTools.listMyBookings(bookings::getIfAvailable);
     }
 }
