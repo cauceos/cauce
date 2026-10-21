@@ -146,6 +146,17 @@ class IdentityServiceTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void getIdentity_returnsTheVisibleRow_orEmpty() {
+        IdentityEntity stored = stored("api", IdentityKind.CLIENT_REFERENCE, "user-1");
+        when(identityRepository.findById(stored.getId())).thenReturn(Optional.of(stored));
+        UUID invisible = UUID.randomUUID();
+        when(identityRepository.findById(invisible)).thenReturn(Optional.empty());
+
+        assertThat(service.getIdentity(stored.getId())).map(Identity::value).contains("user-1");
+        assertThat(service.getIdentity(invisible)).isEmpty();
+    }
+
     private static IdentityEntity stored(String channelType, IdentityKind kind, String value) {
         return new IdentityEntity(UUID.randomUUID(), TENANT, channelType, kind, value, Instant.now());
     }

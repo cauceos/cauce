@@ -44,7 +44,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 ## Channels
 
 - **Delivery guarantee.** Outbound delivery is best-effort: fire-and-forget on the `channelOutboundExecutor`, no outbox, no retries, no delivery dedup; failures are logged and the reply stays readable by polling. The `AgentReplyDispatcher` port carries the TODO: persist the delivery intent behind the same port and drain it from a scheduled dispatcher, additively.
-- **`channel_config_id` on conversations.** The column does not exist, so a conversation whose (agent, channel) has more than one ACTIVE config skips outbound delivery with a WARN: the originating bot is ambiguous.
 - **Channel-config list and disable endpoints.** Only creation exists.
 - **`SUPPORTED_CHANNELS` by SPI.** `ConversationService` validates `channel_type` against a hardcoded set; replacing it with the adapter registry needs a port, since a direct dependency would be a cycle.
 - **WhatsApp adapter.** The SPI was designed against it (HMAC over the raw body in `verify`); no adapter exists.

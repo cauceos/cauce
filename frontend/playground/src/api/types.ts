@@ -93,11 +93,28 @@ export interface CreateAgentBody {
   max_response_tokens?: number
 }
 
+/** Closed vocabulary of interlocutor kinds (backend `IdentityKind`). */
+export type IdentityKind =
+  | 'PHONE_NUMBER'
+  | 'EMAIL_ADDRESS'
+  | 'PROVIDER_USER_ID'
+  | 'CLIENT_REFERENCE'
+  | 'SESSION_ID'
+
+/** Who a conversation is with: the identity is the person, on one channel. */
+export interface ConversationIdentity {
+  id: string
+  channel_type: string
+  kind: IdentityKind
+  value: string
+}
+
 export interface ConversationResponse {
   id: string
   agent_id: string
-  channel_type: string
-  external_identity_ref: string
+  identity: ConversationIdentity
+  /** The channel instance the thread came in through; null for the api channel. */
+  channel_config_id: string | null
   status: ConversationStatus
   started_at: string
   last_message_at: string | null

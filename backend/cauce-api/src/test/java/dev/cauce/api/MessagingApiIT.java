@@ -2,6 +2,7 @@ package dev.cauce.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -173,7 +174,13 @@ class MessagingApiIT extends AbstractApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(conversationId.toString()))
                 .andExpect(jsonPath("$.agent_id").value(agentId.toString()))
-                .andExpect(jsonPath("$.channel_type").value("api"))
+                .andExpect(jsonPath("$.channel_type").doesNotExist())
+                .andExpect(jsonPath("$.external_identity_ref").doesNotExist())
+                .andExpect(jsonPath("$.identity.id").isNotEmpty())
+                .andExpect(jsonPath("$.identity.channel_type").value("api"))
+                .andExpect(jsonPath("$.identity.kind").value("CLIENT_REFERENCE"))
+                .andExpect(jsonPath("$.identity.value").value("user-1"))
+                .andExpect(jsonPath("$.channel_config_id").value(nullValue()))
                 .andExpect(jsonPath("$.status").value("OPEN"));
 
         UUID partnerB = createPartner();

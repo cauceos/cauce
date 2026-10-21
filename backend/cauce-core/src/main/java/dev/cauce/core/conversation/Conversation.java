@@ -224,8 +224,8 @@ public final class Conversation {
 
     @Override
     public String toString() {
-        // externalIdentityRef is intentionally omitted (personal data).
-        return "Conversation[id=%s, agentId=%s, channelType=%s, status=%s]"
-                .formatted(id, agentId, channelType, status);
+        // The identity's value is intentionally omitted (personal data); its id is opaque.
+        return "Conversation[id=%s, agentId=%s, identityId=%s, status=%s]"
+                .formatted(id, agentId, identityId, status);
     }
 }

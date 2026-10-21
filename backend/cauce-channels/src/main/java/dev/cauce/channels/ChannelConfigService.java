@@ -15,7 +15,6 @@ import dev.cauce.core.tenant.NoTenantContext;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentRepository;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -101,18 +100,16 @@ public class ChannelConfigService {
     }
 
     /**
-     * The ACTIVE configs binding {@code channelType} to {@code agentId}, RLS-filtered under
-     * the current tenant context. Used by outbound delivery to resolve the channel instance
-     * a conversation's reply must go back through; more than one result means the origin is
-     * ambiguous (conversations do not record their originating config yet) and the caller
-     * must not guess.
+     * The config {@code configId} if it is visible under the current tenant context (RLS) and
+     * ACTIVE. Used by outbound delivery to resolve the channel instance a conversation came in
+     * through ({@code conversations.channel_config_id}, ADR 0004 PC-1), so a reply goes back
+     * through the same bot even when the agent has several on the same channel. Empty when the
+     * config was disabled after the thread started, or is not visible.
      */
     @Transactional(readOnly = true)
-    public List<ChannelConfig> findActiveConfigs(UUID agentId, String channelType) {
-        return channelConfigRepository
-                .findByAgentIdAndChannelTypeAndStatus(agentId, channelType, ChannelConfigStatus.ACTIVE)
-                .stream()
-                .map(channelConfigMapper::toDomain)
-                .toList();
+    public Optional<ChannelConfig> findActiveConfig(UUID configId) {
+        return channelConfigRepository.findById(configId)
+                .filter(entity -> entity.getStatus() == ChannelConfigStatus.ACTIVE)
+                .map(channelConfigMapper::toDomain);
     }
 }

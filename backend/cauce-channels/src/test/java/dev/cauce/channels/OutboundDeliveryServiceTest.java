@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.channels.config.ChannelConfig;
@@ -60,9 +61,9 @@ class OutboundDeliveryServiceTest {
                 channelConfigService, interlocutorLookup, new SyncTaskExecutor());
         interlocutor = Identity.create(TENANT_ID, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321");
         when(interlocutorLookup.find(interlocutor.id())).thenReturn(Optional.of(interlocutor));
-        conversation = Conversation.start(AGENT_ID, interlocutor, UUID.randomUUID());
-        reply = Message.from(conversation.id(), MessageRole.AGENT, "Hola, soy un agente");
         config = ChannelConfig.create(TENANT_ID, AGENT_ID, "telegram", "12345:token", "hash");
+        conversation = Conversation.start(AGENT_ID, interlocutor, config.id());
+        reply = Message.from(conversation.id(), MessageRole.AGENT, "Hola, soy un agente");
         TenantContext.setCurrentTenantId(TENANT_ID);
     }
 
@@ -72,20 +73,20 @@ class OutboundDeliveryServiceTest {
     }
 
     @Test
-    void dispatchAgentReply_channelWithoutOutboundAdapter_isNoOp() {
-        Conversation apiConversation = Conversation.start(AGENT_ID,
-                Identity.create(TENANT_ID, "api", IdentityKind.CLIENT_REFERENCE, "user-1"), null);
+    void dispatchAgentReply_conversationWithoutConfig_isNoOp_withoutTouchingTheDatabase() {
+        Identity apiIdentity = Identity.create(TENANT_ID, "api", IdentityKind.CLIENT_REFERENCE, "user-1");
+        Conversation apiConversation = Conversation.start(AGENT_ID, apiIdentity, null);
 
         service.dispatchAgentReply(apiConversation, reply);
 
+        verifyNoInteractions(channelConfigService, interlocutorLookup);
         verify(telegramOutbound, never()).deliver(any(), any());
     }
 
     @Test
-    void dispatchAgentReply_singleActiveConfig_deliversToTheConversationIdentity() {
+    void dispatchAgentReply_deliversThroughTheConversationsOwnConfig_toItsIdentity() {
         AtomicReference<UUID> tenantDuringDelivery = new AtomicReference<>();
-        when(channelConfigService.findActiveConfigs(AGENT_ID, "telegram"))
-                .thenReturn(List.of(config));
+        when(channelConfigService.findActiveConfig(config.id())).thenReturn(Optional.of(config));
         doAnswer(invocation -> {
             tenantDuringDelivery.set(TenantContext.getCurrentTenantId().orElse(null));
             return null;
@@ -103,8 +104,29 @@ class OutboundDeliveryServiceTest {
     }
 
     @Test
+    void dispatchAgentReply_configNoLongerActive_skipsDelivery() {
+        when(channelConfigService.findActiveConfig(config.id())).thenReturn(Optional.empty());
+
+        service.dispatchAgentReply(conversation, reply);
+
+        verify(telegramOutbound, never()).deliver(any(), any());
+    }
+
+    @Test
+    void dispatchAgentReply_configsChannelHasNoOutboundAdapter_skipsDelivery() {
+        ChannelConfig inboundOnly = ChannelConfig.create(TENANT_ID, AGENT_ID, "whatsapp", "token", "hash");
+        Conversation viaInboundOnly = Conversation.start(AGENT_ID, interlocutor, inboundOnly.id());
+        when(channelConfigService.findActiveConfig(inboundOnly.id())).thenReturn(Optional.of(inboundOnly));
+
+        service.dispatchAgentReply(viaInboundOnly, reply);
+
+        verify(telegramOutbound, never()).deliver(any(), any());
+        verifyNoInteractions(interlocutorLookup);
+    }
+
+    @Test
     void dispatchAgentReply_identityNotVisible_skipsDelivery() {
-        when(channelConfigService.findActiveConfigs(AGENT_ID, "telegram")).thenReturn(List.of(config));
+        when(channelConfigService.findActiveConfig(config.id())).thenReturn(Optional.of(config));
         when(interlocutorLookup.find(interlocutor.id())).thenReturn(Optional.empty());
 
         service.dispatchAgentReply(conversation, reply);
@@ -113,29 +135,8 @@ class OutboundDeliveryServiceTest {
     }
 
     @Test
-    void dispatchAgentReply_noActiveConfig_skipsDelivery() {
-        when(channelConfigService.findActiveConfigs(AGENT_ID, "telegram")).thenReturn(List.of());
-
-        service.dispatchAgentReply(conversation, reply);
-
-        verify(telegramOutbound, never()).deliver(any(), any());
-    }
-
-    @Test
-    void dispatchAgentReply_ambiguousConfigs_skipsDelivery() {
-        ChannelConfig second = ChannelConfig.create(TENANT_ID, AGENT_ID, "telegram", "other", "h");
-        when(channelConfigService.findActiveConfigs(AGENT_ID, "telegram"))
-                .thenReturn(List.of(config, second));
-
-        service.dispatchAgentReply(conversation, reply);
-
-        verify(telegramOutbound, never()).deliver(any(), any());
-    }
-
-    @Test
     void dispatchAgentReply_deliveryFailure_isSwallowed() {
-        when(channelConfigService.findActiveConfigs(AGENT_ID, "telegram"))
-                .thenReturn(List.of(config));
+        when(channelConfigService.findActiveConfig(config.id())).thenReturn(Optional.of(config));
         doThrow(new ChannelDeliveryException("Telegram is down"))
                 .when(telegramOutbound).deliver(any(), any());
 

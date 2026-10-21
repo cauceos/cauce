@@ -92,6 +92,12 @@ public class IdentityService {
                         + " on channel " + candidate.channelType()));
     }
 
+    /** Returns the identity only if it is visible under the current context (RLS). */
+    @Transactional
+    public Optional<Identity> getIdentity(UUID identityId) {
+        return identityRepository.findById(identityId).map(identityMapper::toDomain);
+    }
+
     private Optional<Identity> find(Identity key) {
         return identityRepository
                 .findByTenantIdAndChannelTypeAndKindAndValue(

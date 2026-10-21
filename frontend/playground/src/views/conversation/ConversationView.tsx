@@ -20,9 +20,10 @@ export function ConversationView() {
 const DEFAULT_IDENTITY_REF = 'playground-user-1'
 
 /**
- * A conversation is keyed by (agent, channel, external_identity_ref) among
- * the OPEN ones, and there is no create-conversation endpoint — so a fresh
- * identity ref IS how you start a new conversation. It is written into the
+ * An api conversation is keyed by (agent, identity) among the OPEN ones, the
+ * identity being the external_identity_ref sent with each message, and there
+ * is no create-conversation endpoint — so a fresh identity ref IS how you
+ * start a new conversation. It is written into the
  * visible field rather than held privately: nothing about which thread the
  * next send lands in should be hidden.
  */
@@ -78,7 +79,7 @@ function ConnectedConversation({ client }: { client: ApiClient }) {
   useEffect(() => {
     if (openDone.current || openConversationId == null) return
     if (state.conversation !== null && state.conversation.id === openConversationId) {
-      setIdentityRef(state.conversation.external_identity_ref)
+      setIdentityRef(state.conversation.identity.value)
       openDone.current = true
     }
   }, [openConversationId, state.conversation])
@@ -92,7 +93,7 @@ function ConnectedConversation({ client }: { client: ApiClient }) {
       ? (agents.agents.find((agent) => agent.id === state.conversation?.agent_id)?.name ??
         shortId(state.conversation.agent_id))
       : (selectedAgent?.name ?? 'agent')
-  const threadIdentityRef = state.conversation?.external_identity_ref ?? identityRef
+  const threadIdentityRef = state.conversation?.identity.value ?? identityRef
 
   return (
     <div className="convo-screen">

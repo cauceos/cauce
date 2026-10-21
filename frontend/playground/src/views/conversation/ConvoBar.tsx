@@ -47,7 +47,7 @@ export function ConvoBar({
   // the next send will resolve (or create) a different one. Derived, not
   // announced by the server.
   const pendingNewConversation =
-    conversation !== null && identityRef.trim() !== conversation.external_identity_ref
+    conversation !== null && identityRef.trim() !== conversation.identity.value
 
   return (
     <div className="ctx">
@@ -85,7 +85,7 @@ export function ConvoBar({
                 <span className={conversation.status === 'OPEN' ? 'chip ok' : 'chip'}>
                   {conversation.status}
                 </span>
-                <span className="chip quiet">channel {conversation.channel_type}</span>
+                <span className="chip quiet">channel {conversation.identity.channel_type}</span>
               </>
             )}
           </div>

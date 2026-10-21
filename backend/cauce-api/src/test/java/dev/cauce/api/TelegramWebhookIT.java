@@ -113,6 +113,14 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
                 "SELECT count(*) FROM pending_invocations WHERE conversation_id = ?",
                 Integer.class, conversationId);
         assertThat(invocations).isEqualTo(1);
+        // The thread records the door (the config) and the person (the typed identity).
+        mockMvc.perform(get("/v1/conversations/" + conversationId)
+                        .header(HttpHeaders.AUTHORIZATION, clientAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.channel_config_id").value(configId.toString()))
+                .andExpect(jsonPath("$.identity.channel_type").value("telegram"))
+                .andExpect(jsonPath("$.identity.kind").value("PROVIDER_USER_ID"))
+                .andExpect(jsonPath("$.identity.value").value("987654321"));
     }
 
     @Test

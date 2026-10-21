@@ -127,16 +127,28 @@ class ChannelConfigServiceIT extends AbstractChannelsIntegrationTest {
     }
 
     @Test
-    void findActiveConfigs_underTenantContext_returnsOnlyActiveBindings() {
+    void findActiveConfig_underTenantContext_returnsItOnlyWhileActive() {
         ChannelConfig created = createAsClientA().config();
         ChannelConfig disabled = createAsClientA().config();
         jdbc.update("UPDATE channel_configs SET status = 'DISABLED' WHERE id = ?", disabled.id());
 
         TenantContext.setCurrentTenantId(clientA.id());
         try {
-            assertThat(channelConfigService.findActiveConfigs(agent.id(), "telegram"))
-                    .extracting(ChannelConfig::id)
-                    .containsExactly(created.id());
+            assertThat(channelConfigService.findActiveConfig(created.id()))
+                    .map(ChannelConfig::id).contains(created.id());
+            assertThat(channelConfigService.findActiveConfig(disabled.id())).isEmpty();
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @Test
+    void findActiveConfig_underSiblingClientContext_isEmpty() {
+        ChannelConfig created = createAsClientA().config();
+
+        TenantContext.setCurrentTenantId(clientB.id());
+        try {
+            assertThat(channelConfigService.findActiveConfig(created.id())).isEmpty();
         } finally {
             TenantContext.clear();
         }
