@@ -123,7 +123,7 @@ class ApiKeyServiceTest {
         ApiKey existing = ApiKey.create(tenantId, "k", ApiKeyGenerator.newKey(), hasher);
         when(apiKeyRepository.findById(existing.id()))
                 .thenReturn(Optional.of(mapper.toEntity(existing)));
-        cache.put("ck_doesntmatter12345678901234567890", existing);
+        cache.put("ck_doesntmatter12345678901234567890", existing, Instant.now());
 
         ApiKey revoked = service.revokeApiKey(existing.id());
 

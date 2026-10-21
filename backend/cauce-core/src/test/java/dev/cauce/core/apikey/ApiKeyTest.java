@@ -131,9 +131,9 @@ class ApiKeyTest {
     void isActive_trueOnFreshKey() {
         ApiKey key = freshKey(new CountingHasher());
 
-        assertThat(key.isActive()).isTrue();
+        assertThat(key.isActiveAt(Instant.now())).isTrue();
         assertThat(key.isRevoked()).isFalse();
-        assertThat(key.isExpired()).isFalse();
+        assertThat(key.isExpiredAt(Instant.now())).isFalse();
     }
 
     @Test
@@ -141,7 +141,7 @@ class ApiKeyTest {
         ApiKey revoked = freshKey(new CountingHasher()).revoke();
 
         assertThat(revoked.isRevoked()).isTrue();
-        assertThat(revoked.isActive()).isFalse();
+        assertThat(revoked.isActiveAt(Instant.now())).isFalse();
         assertThat(revoked.revokedAt()).isNotNull();
     }
 
@@ -164,30 +164,31 @@ class ApiKeyTest {
     }
 
     @Test
-    void isExpired_trueWhenExpiresAtInPast() {
-        ApiKey expired = ApiKey.rehydrate(UUID.randomUUID(), TENANT, "n", "h", "ck_aaaa",
-                Instant.now().minusSeconds(60), null, null,
-                Instant.now().minusSeconds(10));
+    void isExpiredAt_trueFromTheExpiryOn() {
+        Instant expiry = Instant.parse("2026-10-21T10:00:00Z");
+        ApiKey key = ApiKey.rehydrate(UUID.randomUUID(), TENANT, "n", "h", "ck_aaaa",
+                expiry.minusSeconds(3600), null, null, expiry);
 
-        assertThat(expired.isExpired()).isTrue();
-        assertThat(expired.isActive()).isFalse();
+        assertThat(key.isExpiredAt(expiry)).isTrue();
+        assertThat(key.isExpiredAt(expiry.plusSeconds(10))).isTrue();
+        assertThat(key.isActiveAt(expiry)).isFalse();
     }
 
     @Test
-    void isExpired_falseWhenExpiresAtInFuture() {
-        ApiKey active = ApiKey.rehydrate(UUID.randomUUID(), TENANT, "n", "h", "ck_aaaa",
-                Instant.now().minusSeconds(60), null, null,
-                Instant.now().plusSeconds(60));
+    void isExpiredAt_falseBeforeTheExpiry() {
+        Instant expiry = Instant.parse("2026-10-21T10:00:00Z");
+        ApiKey key = ApiKey.rehydrate(UUID.randomUUID(), TENANT, "n", "h", "ck_aaaa",
+                expiry.minusSeconds(3600), null, null, expiry);
 
-        assertThat(active.isExpired()).isFalse();
-        assertThat(active.isActive()).isTrue();
+        assertThat(key.isExpiredAt(expiry.minusNanos(1000))).isFalse();
+        assertThat(key.isActiveAt(expiry.minusSeconds(60))).isTrue();
     }
 
     @Test
-    void isExpired_falseWhenExpiresAtNull() {
+    void isExpiredAt_falseWhenExpiresAtNull() {
         ApiKey key = freshKey(new CountingHasher());
 
-        assertThat(key.isExpired()).isFalse();
+        assertThat(key.isExpiredAt(Instant.now())).isFalse();
     }
 
     @Test

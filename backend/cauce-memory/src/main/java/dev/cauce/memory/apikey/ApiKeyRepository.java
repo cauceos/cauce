@@ -27,7 +27,7 @@ public interface ApiKeyRepository extends JpaRepository<ApiKeyEntity, UUID> {
      * {@link ApiKeyEntity}.
      *
      * <p>Expiry is NOT filtered here: an expired-but-not-revoked row is still returned and
-     * the caller checks {@link dev.cauce.core.apikey.ApiKey#isActive()} on the domain
+     * the caller checks {@link dev.cauce.core.apikey.ApiKey#isActiveAt} on the domain
      * object, which owns the "what counts as active" rule.
      */
     @Query(value = "SELECT * FROM api_keys_active_by_prefix(:keyPrefix)", nativeQuery = true)

@@ -2,6 +2,8 @@ package dev.cauce.tenancy.apikey;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Expiry;
+import com.github.benmanes.caffeine.cache.Ticker;
 import dev.cauce.core.apikey.ApiKey;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -11,6 +13,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
@@ -24,15 +27,20 @@ import org.springframework.stereotype.Component;
  * round-trip. The default 5-minute TTL bounds staleness; revocations invalidate eagerly via
  * {@link #invalidateById(UUID)}.
  *
+ * <p>An entry never outlives its key: a key with an expiry is cached for the shorter of the TTL and
+ * the validity it had left when it was verified, measured against the database clock (ADR 0008).
+ * From then on the remaining lifetime is counted by the cache's monotonic ticker, so a hit never
+ * consults the application host's wall clock.
+ *
  * <p>Storage model:
  * <ul>
  *   <li>Key: SHA-256 of the plaintext API key, encoded as 64 lowercase hex characters.
  *       The plaintext itself is never held in the cache; SHA-256 is appropriate here
  *       because the input is already a 32-character high-entropy random value and so
  *       not subject to rainbow-table attacks.</li>
- *   <li>Value: a {@link CachedApiKey} record carrying the {@code apiKeyId},
- *       {@code tenantId} and {@code expiresAt}. {@code revokedAt} is not stored because
- *       a revoked key is removed from the cache eagerly by
+ *   <li>Value: a {@link CachedApiKey} record carrying the {@code apiKeyId} and
+ *       {@code tenantId}, plus the entry's own lifetime. {@code revokedAt} is not stored
+ *       because a revoked key is removed from the cache eagerly by
  *       {@link #invalidateById(UUID)}.</li>
  * </ul>
  *
@@ -47,24 +55,45 @@ import org.springframework.stereotype.Component;
 @Component
 public class ApiKeyCache {
 
-    private final Cache<String, CachedApiKey> cache;
+    private final Cache<String, Entry> cache;
+    private final Duration ttl;
 
+    @Autowired
     public ApiKeyCache(ApiKeyCacheProperties properties) {
+        this(properties, Ticker.systemTicker());
+    }
+
+    /** With an explicit {@code ticker}: the monotonic time source entry lifetimes are counted on. */
+    ApiKeyCache(ApiKeyCacheProperties properties, Ticker ticker) {
+        this.ttl = Duration.ofSeconds(properties.getTtlSeconds());
         this.cache = Caffeine.newBuilder()
-                .expireAfterWrite(Duration.ofSeconds(properties.getTtlSeconds()))
+                .expireAfter(new EntryLifetime())
                 .maximumSize(properties.getMaxSize())
+                .ticker(ticker)
                 .build();
     }
 
     /** Returns the cached entry for {@code plaintextKey} if present and not expired. */
     public Optional<CachedApiKey> lookup(String plaintextKey) {
-        return Optional.ofNullable(cache.getIfPresent(digestOf(plaintextKey)));
+        return Optional.ofNullable(cache.getIfPresent(digestOf(plaintextKey))).map(Entry::key);
     }
 
-    /** Caches a successful verification of {@code plaintextKey} against {@code apiKey}. */
-    public void put(String plaintextKey, ApiKey apiKey) {
-        cache.put(digestOf(plaintextKey),
-                new CachedApiKey(apiKey.id(), apiKey.tenantId(), apiKey.expiresAt()));
+    /**
+     * Caches a successful verification of {@code plaintextKey} against {@code apiKey}, made at
+     * {@code now} (a reading of the database clock): for the TTL, or until the key expires if that is
+     * sooner. A key already expired at {@code now} is not cached.
+     */
+    public void put(String plaintextKey, ApiKey apiKey, Instant now) {
+        Duration lifetime = ttl;
+        if (apiKey.expiresAt() != null) {
+            Duration remaining = Duration.between(now, apiKey.expiresAt());
+            if (remaining.isNegative() || remaining.isZero()) {
+                return;
+            }
+            lifetime = remaining.compareTo(ttl) < 0 ? remaining : ttl;
+        }
+        cache.put(digestOf(plaintextKey), new Entry(new CachedApiKey(apiKey.id(), apiKey.tenantId()),
+                lifetime.toNanos()));
     }
 
     /**
@@ -73,7 +102,7 @@ public class ApiKeyCache {
      * waiting for the TTL to expire.
      */
     public void invalidateById(UUID apiKeyId) {
-        cache.asMap().values().removeIf(v -> v.apiKeyId().equals(apiKeyId));
+        cache.asMap().values().removeIf(v -> v.key().apiKeyId().equals(apiKeyId));
     }
 
     /** Clears every entry. Test hook. */
@@ -98,15 +127,32 @@ public class ApiKeyCache {
     }
 
     /**
-     * Snapshot of the fields the authentication filter needs from a verified key.
-     * {@code expiresAt} is intentionally part of the cached value so the filter can
-     * evict an expired key without going to the database.
+     * Snapshot of the fields the authentication filter needs from a verified key. It needs no
+     * expiry: an entry is gone from the cache by the time its key expires.
      */
-    public record CachedApiKey(UUID apiKeyId, UUID tenantId, Instant expiresAt) {
+    public record CachedApiKey(UUID apiKeyId, UUID tenantId) {
+    }
 
-        /** Returns whether the cached key has reached its (optional) expiry. */
-        public boolean isExpired() {
-            return expiresAt != null && !Instant.now().isBefore(expiresAt);
+    /** A cached key with the lifetime it was given when it was verified. */
+    private record Entry(CachedApiKey key, long lifetimeNanos) {
+    }
+
+    /** Each entry lives for its own lifetime from its write; a read does not extend it. */
+    private static final class EntryLifetime implements Expiry<String, Entry> {
+
+        @Override
+        public long expireAfterCreate(String key, Entry entry, long currentTime) {
+            return entry.lifetimeNanos();
+        }
+
+        @Override
+        public long expireAfterUpdate(String key, Entry entry, long currentTime, long currentDuration) {
+            return entry.lifetimeNanos();
+        }
+
+        @Override
+        public long expireAfterRead(String key, Entry entry, long currentTime, long currentDuration) {
+            return currentDuration;
         }
     }
 

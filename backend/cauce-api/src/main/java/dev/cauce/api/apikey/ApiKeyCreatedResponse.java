@@ -18,7 +18,7 @@ public record ApiKeyCreatedResponse(
         String status,
         Instant createdAt) {
 
-    public static ApiKeyCreatedResponse from(ApiKeyCreationResult result) {
+    public static ApiKeyCreatedResponse from(ApiKeyCreationResult result, Instant now) {
         ApiKey key = result.apiKey();
         return new ApiKeyCreatedResponse(
                 result.plaintextKey(),
@@ -26,7 +26,7 @@ public record ApiKeyCreatedResponse(
                 key.tenantId(),
                 key.keyPrefix(),
                 key.name(),
-                ApiKeyResponse.status(key),
+                ApiKeyResponse.status(key, now),
                 key.createdAt());
     }
 }

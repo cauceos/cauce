@@ -2,6 +2,8 @@ package dev.cauce.api.apikey;
 
 import dev.cauce.tenancy.ApiKeyService;
 import java.net.URI;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -30,9 +32,11 @@ public class ApiKeyController {
     private static final String DEFAULT_LABEL = "api-key";
 
     private final ApiKeyService apiKeyService;
+    private final Clock clock;
 
-    public ApiKeyController(ApiKeyService apiKeyService) {
+    public ApiKeyController(ApiKeyService apiKeyService, Clock clock) {
         this.apiKeyService = apiKeyService;
+        this.clock = clock;
     }
 
     @PostMapping("/v1/tenants/{tenantId}/api-keys")
@@ -42,13 +46,16 @@ public class ApiKeyController {
         String label = (request != null && request.label() != null && !request.label().isBlank())
                 ? request.label().trim()
                 : DEFAULT_LABEL;
-        ApiKeyCreatedResponse created = ApiKeyCreatedResponse.from(apiKeyService.createApiKey(tenantId, label));
+        ApiKeyCreatedResponse created = ApiKeyCreatedResponse.from(apiKeyService.createApiKey(tenantId, label),
+                clock.instant());
         return ResponseEntity.created(URI.create("/v1/api-keys/" + created.id())).body(created);
     }
 
     @GetMapping("/v1/tenants/{tenantId}/api-keys")
     public List<ApiKeyResponse> list(@PathVariable UUID tenantId) {
-        return apiKeyService.listApiKeysForTenant(tenantId).stream().map(ApiKeyResponse::from).toList();
+        // Expiry is judged on the database clock (ADR 0008), once for the whole listing.
+        Instant now = clock.instant();
+        return apiKeyService.listApiKeysForTenant(tenantId).stream().map(key -> ApiKeyResponse.from(key, now)).toList();
     }
 
     @DeleteMapping("/v1/api-keys/{keyId}")

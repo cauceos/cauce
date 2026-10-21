@@ -14,7 +14,6 @@ import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
 import dev.cauce.tenancy.apikey.ApiKeyCache;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -129,12 +128,10 @@ class ApiKeyAuthenticationFilterIT extends AbstractApiIntegrationTest {
     @Test
     void protectedEndpoint_withExpiredKey_returns401() throws Exception {
         ApiKeyCreationResult created = createKeyAs(clientA.id(), "to-expire");
-        // Backdate both created_at and expires_at into the past, preserving the
-        // CHECK constraint expires_at >= created_at. The key is now expired.
-        jdbc.update("UPDATE api_keys SET created_at = ?, expires_at = ? WHERE id = ?",
-                Timestamp.from(Instant.now().minusSeconds(120)),
-                Timestamp.from(Instant.now().minusSeconds(60)),
-                created.apiKey().id());
+        // Backdate both created_at and expires_at into the past on the database's clock (ADR 0008),
+        // preserving the CHECK constraint expires_at >= created_at. The key is now expired.
+        jdbc.update("UPDATE api_keys SET created_at = now() - interval '120 seconds', "
+                + "expires_at = now() - interval '60 seconds' WHERE id = ?", created.apiKey().id());
 
         mockMvc.perform(get("/test/protected-resource")
                         .header("Authorization", "Bearer " + created.plaintextKey()))

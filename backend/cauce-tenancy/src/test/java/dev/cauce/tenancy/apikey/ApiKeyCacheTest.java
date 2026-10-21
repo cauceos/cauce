@@ -5,12 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.cauce.core.apikey.ApiKey;
 import dev.cauce.core.apikey.ApiKeyGenerator;
 import dev.cauce.core.apikey.ApiKeyHasher;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class ApiKeyCacheTest {
 
+    private static final Instant NOW = Instant.parse("2026-10-21T10:00:00Z");
+
+    private final AtomicLong ticker = new AtomicLong();
     private ApiKeyCache cache;
     private ApiKeyHasher hasher;
 
@@ -19,7 +25,7 @@ class ApiKeyCacheTest {
         ApiKeyCacheProperties properties = new ApiKeyCacheProperties();
         properties.setTtlSeconds(300L);
         properties.setMaxSize(100L);
-        cache = new ApiKeyCache(properties);
+        cache = new ApiKeyCache(properties, ticker::get);
         hasher = new ApiKeyHasher() {
             @Override public String hash(String plaintext) { return "h:" + plaintext; }
             @Override public boolean matches(String p, String h) { return h.equals("h:" + p); }
@@ -36,19 +42,18 @@ class ApiKeyCacheTest {
         String plaintext = ApiKeyGenerator.newKey();
         ApiKey apiKey = ApiKey.create(UUID.randomUUID(), "k", plaintext, hasher);
 
-        cache.put(plaintext, apiKey);
+        cache.put(plaintext, apiKey, NOW);
 
         ApiKeyCache.CachedApiKey cached = cache.lookup(plaintext).orElseThrow();
         assertThat(cached.apiKeyId()).isEqualTo(apiKey.id());
         assertThat(cached.tenantId()).isEqualTo(apiKey.tenantId());
-        assertThat(cached.expiresAt()).isNull();
     }
 
     @Test
     void lookup_byDifferentPlaintext_returnsEmpty() {
         String stored = ApiKeyGenerator.newKey();
         ApiKey apiKey = ApiKey.create(UUID.randomUUID(), "k", stored, hasher);
-        cache.put(stored, apiKey);
+        cache.put(stored, apiKey, NOW);
 
         assertThat(cache.lookup(ApiKeyGenerator.newKey())).isEmpty();
     }
@@ -57,7 +62,7 @@ class ApiKeyCacheTest {
     void invalidateById_removesEntryForThatId() {
         String plaintext = ApiKeyGenerator.newKey();
         ApiKey apiKey = ApiKey.create(UUID.randomUUID(), "k", plaintext, hasher);
-        cache.put(plaintext, apiKey);
+        cache.put(plaintext, apiKey, NOW);
 
         cache.invalidateById(apiKey.id());
 
@@ -70,8 +75,8 @@ class ApiKeyCacheTest {
         String pb = ApiKeyGenerator.newKey();
         ApiKey a = ApiKey.create(UUID.randomUUID(), "a", pa, hasher);
         ApiKey b = ApiKey.create(UUID.randomUUID(), "b", pb, hasher);
-        cache.put(pa, a);
-        cache.put(pb, b);
+        cache.put(pa, a, NOW);
+        cache.put(pb, b, NOW);
 
         cache.invalidateById(a.id());
 
@@ -83,8 +88,8 @@ class ApiKeyCacheTest {
     void invalidateAll_clearsEverything() {
         String pa = ApiKeyGenerator.newKey();
         String pb = ApiKeyGenerator.newKey();
-        cache.put(pa, ApiKey.create(UUID.randomUUID(), "a", pa, hasher));
-        cache.put(pb, ApiKey.create(UUID.randomUUID(), "b", pb, hasher));
+        cache.put(pa, ApiKey.create(UUID.randomUUID(), "a", pa, hasher), NOW);
+        cache.put(pb, ApiKey.create(UUID.randomUUID(), "b", pb, hasher), NOW);
 
         cache.invalidateAll();
 
@@ -92,16 +97,45 @@ class ApiKeyCacheTest {
     }
 
     @Test
-    void cachedApiKey_isExpired_respectsExpiresAt() {
-        ApiKeyCache.CachedApiKey neverExpires =
-                new ApiKeyCache.CachedApiKey(UUID.randomUUID(), UUID.randomUUID(), null);
-        ApiKeyCache.CachedApiKey expired = new ApiKeyCache.CachedApiKey(
-                UUID.randomUUID(), UUID.randomUUID(), java.time.Instant.now().minusSeconds(60));
-        ApiKeyCache.CachedApiKey future = new ApiKeyCache.CachedApiKey(
-                UUID.randomUUID(), UUID.randomUUID(), java.time.Instant.now().plusSeconds(60));
+    void aKeyWithoutExpiry_isCachedForTheTtl() {
+        String plaintext = ApiKeyGenerator.newKey();
+        cache.put(plaintext, ApiKey.create(UUID.randomUUID(), "k", plaintext, hasher), NOW);
 
-        assertThat(neverExpires.isExpired()).isFalse();
-        assertThat(expired.isExpired()).isTrue();
-        assertThat(future.isExpired()).isFalse();
+        advance(Duration.ofSeconds(299));
+        assertThat(cache.lookup(plaintext)).isPresent();
+        advance(Duration.ofSeconds(1));
+        assertThat(cache.lookup(plaintext)).isEmpty();
+    }
+
+    @Test
+    void aKeyExpiringBeforeTheTtl_isCachedOnlyUntilItsExpiry_countedFromTheDatabaseNow() {
+        String plaintext = ApiKeyGenerator.newKey();
+        cache.put(plaintext, expiringAt(plaintext, NOW.plusSeconds(60)), NOW);
+
+        // The remaining validity is measured against the database clock's NOW, then counted by the
+        // monotonic ticker: the host's wall clock never takes part.
+        advance(Duration.ofSeconds(59));
+        assertThat(cache.lookup(plaintext)).isPresent();
+        advance(Duration.ofSeconds(1));
+        assertThat(cache.lookup(plaintext)).isEmpty();
+    }
+
+    @Test
+    void aKeyAlreadyExpiredAtTheDatabaseNow_isNotCached() {
+        String plaintext = ApiKeyGenerator.newKey();
+
+        cache.put(plaintext, expiringAt(plaintext, NOW), NOW);
+
+        assertThat(cache.lookup(plaintext)).isEmpty();
+    }
+
+    private ApiKey expiringAt(String plaintext, Instant expiresAt) {
+        ApiKey created = ApiKey.create(UUID.randomUUID(), "k", plaintext, hasher);
+        return ApiKey.rehydrate(created.id(), created.tenantId(), created.name(), created.keyHash(),
+                created.keyPrefix(), created.createdAt(), null, null, expiresAt);
+    }
+
+    private void advance(Duration duration) {
+        ticker.addAndGet(duration.toNanos());
     }
 }

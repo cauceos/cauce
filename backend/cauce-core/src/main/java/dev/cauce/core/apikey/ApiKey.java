@@ -122,7 +122,7 @@ public final class ApiKey {
 
     /**
      * Returns whether {@code plaintextKey} hashes to this key's stored hash. Does NOT
-     * check {@link #isActive()}; the caller is responsible for both.
+     * check {@link #isActiveAt(Instant)}; the caller is responsible for both.
      */
     public boolean matches(String plaintextKey, ApiKeyHasher hasher) {
         Objects.requireNonNull(hasher, "hasher");
@@ -132,17 +132,22 @@ public final class ApiKey {
         return hasher.matches(plaintextKey, keyHash);
     }
 
-    /** Returns whether the key is currently usable (not revoked and not expired). */
-    public boolean isActive() {
-        return !isRevoked() && !isExpired();
+    /**
+     * Returns whether the key is usable at {@code now} (not revoked and not expired). {@code now} is
+     * a reading of the database clock in the application (ADR 0008), the clock that decides expiry.
+     */
+    public boolean isActiveAt(Instant now) {
+        return !isRevoked() && !isExpiredAt(now);
     }
 
     public boolean isRevoked() {
         return revokedAt != null;
     }
 
-    public boolean isExpired() {
-        return expiresAt != null && !Instant.now().isBefore(expiresAt);
+    /** Returns whether the key's optional expiry has been reached at {@code now}. */
+    public boolean isExpiredAt(Instant now) {
+        Objects.requireNonNull(now, "now");
+        return expiresAt != null && !now.isBefore(expiresAt);
     }
 
     private static String requireText(String value, String field) {
@@ -206,7 +211,7 @@ public final class ApiKey {
     @Override
     public String toString() {
         // keyHash is intentionally omitted so it cannot leak through logs.
-        return "ApiKey[id=%s, tenantId=%s, name=%s, keyPrefix=%s, revoked=%s, expired=%s]"
-                .formatted(id, tenantId, name, keyPrefix, isRevoked(), isExpired());
+        return "ApiKey[id=%s, tenantId=%s, name=%s, keyPrefix=%s, revoked=%s, expiresAt=%s]"
+                .formatted(id, tenantId, name, keyPrefix, isRevoked(), expiresAt);
     }
 }

@@ -13,6 +13,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -66,16 +68,19 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
     /** A precomputed HMAC, used only to spend comparable time on a prefix miss. */
     private final String dummyHash;
+    private final Clock clock;
 
     public ApiKeyAuthenticationFilter(ApiKeyService apiKeyService,
                                       ApiKeyHasher apiKeyHasher,
                                       ApiKeyCache apiKeyCache,
-                                      ObjectMapper objectMapper) {
+                                      ObjectMapper objectMapper,
+                                      Clock clock) {
         this.apiKeyService = apiKeyService;
         this.apiKeyHasher = apiKeyHasher;
         this.apiKeyCache = apiKeyCache;
         this.objectMapper = objectMapper;
         this.dummyHash = apiKeyHasher.hash("timing-equalizer-not-a-real-key");
+        this.clock = clock;
     }
 
     @Override
@@ -120,16 +125,10 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private AuthenticatedKey resolveFromCacheOrDatabase(String plaintext) {
+        // A cached entry never outlives its key's expiry (the cache gives it that lifetime).
         Optional<ApiKeyCache.CachedApiKey> hit = apiKeyCache.lookup(plaintext);
         if (hit.isPresent()) {
-            ApiKeyCache.CachedApiKey cached = hit.get();
-            if (cached.isExpired()) {
-                // Expiry passed since we cached -> drop and fall through to the DB,
-                // which will load the row and let isActive() reject it.
-                apiKeyCache.invalidateById(cached.apiKeyId());
-            } else {
-                return new AuthenticatedKey(cached.apiKeyId(), cached.tenantId(), true);
-            }
+            return new AuthenticatedKey(hit.get().apiKeyId(), hit.get().tenantId(), true);
         }
 
         String prefix = plaintext.substring(0, 8);
@@ -140,9 +139,11 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             apiKeyHasher.matches(plaintext, dummyHash);
             return null;
         }
+        // Expiry is judged on the database clock (ADR 0008).
+        Instant now = clock.instant();
         for (ApiKey candidate : candidates) {
-            if (candidate.matches(plaintext, apiKeyHasher) && candidate.isActive()) {
-                apiKeyCache.put(plaintext, candidate);
+            if (candidate.matches(plaintext, apiKeyHasher) && candidate.isActiveAt(now)) {
+                apiKeyCache.put(plaintext, candidate, now);
                 return new AuthenticatedKey(candidate.id(), candidate.tenantId(), false);
             }
         }
