@@ -29,6 +29,7 @@ import dev.cauce.orchestration.events.ToolCallRequested;
 import dev.cauce.orchestration.events.ToolExecuted;
 import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
+import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
 import dev.cauce.orchestration.usage.LlmUsageRecord;
@@ -187,6 +188,13 @@ public class OrchestratorService {
                     response.usage().totalTokens(), Instant.now()));
 
             if (response.toolCalls().isEmpty()) {
+                if (response.content().isBlank()) {
+                    // ADR 0005, C1: an empty final reply is a failure, never a message.
+                    String error = ERROR_PREFIX + "The model ended its turn with an empty reply";
+                    log.warn("Conversation {} got an empty final reply from the model", conversationId);
+                    errorRecorder.recordError(conversationId, error);
+                    throw new EmptyReplyException(error);
+                }
                 // Final reply: persist the AGENT message and finish. The append is the
                 // terminal conduct fact, so the conduct.agent.responded audit record (with
                 // finish_reason and rounds — the completion record; there is no separate

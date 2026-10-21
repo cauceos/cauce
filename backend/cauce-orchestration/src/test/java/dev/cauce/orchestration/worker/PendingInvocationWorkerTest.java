@@ -18,6 +18,7 @@ import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
+import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.OrchestratorService;
 import java.util.List;
@@ -212,6 +213,20 @@ class PendingInvocationWorkerTest {
                 eq(claimed.id()), anyString(), eq(InvocationFailureType.MAX_TOOL_ITERATIONS));
         assertThat(publishedFailure().failureType())
                 .isEqualTo(InvocationFailureType.MAX_TOOL_ITERATIONS);
+    }
+
+    @Test
+    void processInvocation_whenReplyIsEmpty_marksFailedAsEmptyReply() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new EmptyReplyException("empty"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.EMPTY_REPLY));
+        verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
+        assertThat(publishedFailure().failureType()).isEqualTo(InvocationFailureType.EMPTY_REPLY);
     }
 
     @Test

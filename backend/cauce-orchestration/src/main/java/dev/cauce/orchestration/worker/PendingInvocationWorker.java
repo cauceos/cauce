@@ -7,6 +7,7 @@ import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
+import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.OrchestratorService;
 import java.time.Instant;
@@ -122,9 +123,7 @@ public class PendingInvocationWorker {
                 // not transient — failing the row is the correct action.
                 log.warn("Worker {} failing invocation {} due to non-LLM error: {}",
                         workerIdentity.getId(), invocation.id(), e.toString(), e);
-                InvocationFailureType failureType = e instanceof MaxToolIterationsExceededException
-                        ? InvocationFailureType.MAX_TOOL_ITERATIONS
-                        : InvocationFailureType.SETUP_ERROR;
+                InvocationFailureType failureType = failureTypeOf(e);
                 safeMark(() -> {
                     pendingInvocationService.markFailed(invocation.id(), e.toString(), failureType);
                     publishFailed(invocation, failureType, e.toString());
@@ -133,6 +132,16 @@ public class PendingInvocationWorker {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    private static InvocationFailureType failureTypeOf(RuntimeException e) {
+        if (e instanceof MaxToolIterationsExceededException) {
+            return InvocationFailureType.MAX_TOOL_ITERATIONS;
+        }
+        if (e instanceof EmptyReplyException) {
+            return InvocationFailureType.EMPTY_REPLY;
+        }
+        return InvocationFailureType.SETUP_ERROR;
     }
 
     private void handleLlmFailure(PendingInvocation invocation, LlmProviderException error) {

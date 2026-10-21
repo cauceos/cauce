@@ -17,6 +17,12 @@ public enum InvocationFailureType {
     MAX_TOOL_ITERATIONS,
 
     /**
+     * The model ended its turn with no text and no tool calls (ADR 0005, C1): an empty reply
+     * is a failure, never a message — row FAILED.
+     */
+    EMPTY_REPLY,
+
+    /**
      * A non-LLM setup error: conversation/agent/message not found, invalid trigger message,
      * provider not configured, context too large, and the like — row FAILED.
      */

@@ -41,6 +41,7 @@ import dev.cauce.orchestration.events.OrchestrationEvent;
 import dev.cauce.orchestration.events.ToolCallRequested;
 import dev.cauce.orchestration.events.ToolExecuted;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
+import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
 import dev.cauce.orchestration.usage.LlmUsageRecord;
@@ -191,6 +192,23 @@ class OrchestratorServiceTest {
         assertThat(toolResult.isError()).isTrue();
         assertThat(toolResult.output()).contains("Unknown tool");
         verifyNoInteractions(errorRecorder);
+    }
+
+    @Test
+    void respondToMessage_whenFinalReplyIsEmptyAfterATool_failsWithoutPersistingOrDispatchingIt() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("get_current_time"), reply("  "));
+
+        assertThatThrownBy(() ->
+                serviceWith(clockRegistry()).respondToMessage(invocationId, conversationId, triggerId))
+                .isInstanceOf(EmptyReplyException.class);
+
+        ArgumentCaptor<String> error = ArgumentCaptor.forClass(String.class);
+        verify(errorRecorder).recordError(eq(conversationId), error.capture());
+        assertThat(error.getValue()).startsWith("[orchestration_error] ").contains("empty reply");
+        verify(gateway, never()).appendAudited(any(), any());
+        verify(replyDispatcher, never()).dispatchAgentReply(any(), any());
     }
 
     @Test
