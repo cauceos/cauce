@@ -72,6 +72,23 @@ entity pattern:
   cauce-channels, which still ends in the same channel-agnostic ingest. The outbound half
   implements the ordinary `OutboundChannelAdapter`.
 
+**Explicit debt: app routing belongs in the SPI.** The WhatsApp inbound service living outside
+`InboundChannelAdapter` is accepted for one channel only. When a second Meta channel arrives
+(Messenger, Instagram — same app, same signature, same envelope), the inbound SPI gains app-level
+routing — resolve the app from the URL, verify with its secret, route each event to a config —
+and both channels implement it, instead of a second app-routed service being written beside this
+one.
+
+### Design note — anything proactive is designed against the 24-hour window
+
+Development of the agent continues on Telegram, which has no reply window; WhatsApp is complete
+and parked until go-to-market. Any proactive capability — reminders, follow-ups, a message the
+agent sends without having just been written to — is designed from the start under WhatsApp's
+constraint, even while it is only exercised on Telegram: outside 24 hours since the
+interlocutor's last message, only an approved template may be sent. So such a feature names, at
+design time, what it does outside the window (a template, or not sending and recording why); it
+never assumes the free-form delivery Telegram allows.
+
 ### W3 adjustment
 
 Tolerating plaintext rows is a read path only: every write is sealed. Removing that read path
