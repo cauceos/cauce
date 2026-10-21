@@ -19,6 +19,7 @@ import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelInboundMessage;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
+import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.identity.IdentityKind;
@@ -112,13 +113,24 @@ class TelegramChannelAdapterTest {
     }
 
     @Test
-    void parse_negativeGroupChatId_isPreserved() {
+    void parse_groupChat_failsLoudly_insteadOfMintingAPersonIdentity() {
         String update = """
-                {"update_id": 1, "message": {"chat": {"id": -100123456}, "text": "hi"}}
+                {"update_id": 1, "message": {"chat": {"id": -100123456, "type": "supergroup"}, "text": "hi"}}
                 """;
 
-        assertThat(adapter.parse(update, config)).hasValueSatisfying(message ->
-                assertThat(message.identityValue()).isEqualTo("-100123456"));
+        assertThatThrownBy(() -> adapter.parse(update, config))
+                .isInstanceOf(UnsupportedInterlocutorException.class)
+                .hasMessageContaining("supergroup");
+    }
+
+    @Test
+    void parse_textMessageWithoutChatType_failsLoudly() {
+        String update = """
+                {"update_id": 1, "message": {"chat": {"id": 987654321}, "text": "hi"}}
+                """;
+
+        assertThatThrownBy(() -> adapter.parse(update, config))
+                .isInstanceOf(UnsupportedInterlocutorException.class);
     }
 
     @Test
@@ -162,7 +174,7 @@ class TelegramChannelAdapterTest {
         stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson("{\"ok\": true}")));
 
         adapterAgainst(wm).deliver(
-                new ChannelOutboundMessage("987654321", "Hola, soy un agente"), config);
+                new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321", "Hola, soy un agente"), config);
 
         verify(postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage"))
                 .withRequestBody(equalToJson(
@@ -170,11 +182,20 @@ class TelegramChannelAdapterTest {
     }
 
     @Test
+    void deliver_toAKindTelegramDidNotProduce_failsWithoutCallingTelegram(WireMockRuntimeInfo wm) {
+        assertThatThrownBy(() -> adapterAgainst(wm).deliver(
+                new ChannelOutboundMessage(IdentityKind.PHONE_NUMBER, "+34600111222", "Hola"), config))
+                .isInstanceOf(ChannelDeliveryException.class)
+                .hasMessageContaining("PHONE_NUMBER");
+        verify(0, postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage")));
+    }
+
+    @Test
     void deliver_non2xx_throwsChannelDeliveryException(WireMockRuntimeInfo wm) {
         stubFor(post("/bot12345:bot-token/sendMessage").willReturn(serverError()));
 
         assertThatThrownBy(() -> adapterAgainst(wm).deliver(
-                new ChannelOutboundMessage("987654321", "Hola"), config))
+                new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321", "Hola"), config))
                 .isInstanceOf(ChannelDeliveryException.class)
                 .hasMessageContaining("500");
     }
@@ -185,7 +206,7 @@ class TelegramChannelAdapterTest {
                 "{\"ok\": false, \"description\": \"Bad Request: chat not found\"}")));
 
         assertThatThrownBy(() -> adapterAgainst(wm).deliver(
-                new ChannelOutboundMessage("987654321", "Hola"), config))
+                new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321", "Hola"), config))
                 .isInstanceOf(ChannelDeliveryException.class)
                 .hasMessageContaining("chat not found");
     }

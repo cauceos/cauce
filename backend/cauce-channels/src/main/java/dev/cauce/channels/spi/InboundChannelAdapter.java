@@ -34,6 +34,8 @@ public interface InboundChannelAdapter {
      * 2xx without ingesting, so the provider does not redeliver.
      *
      * @throws ChannelPayloadException if the payload is malformed for this channel
+     * @throws UnsupportedInterlocutorException if the update is authentic but its sender cannot
+     *     be named with any identity kind (e.g. a Telegram group)
      */
     Optional<ChannelInboundMessage> parse(String body, ChannelConfig config);
 }

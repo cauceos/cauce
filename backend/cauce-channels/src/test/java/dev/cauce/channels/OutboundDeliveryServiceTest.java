@@ -22,6 +22,7 @@ import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.TenantContext;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
@@ -40,7 +41,9 @@ class OutboundDeliveryServiceTest {
 
     private OutboundChannelAdapter telegramOutbound;
     private ChannelConfigService channelConfigService;
+    private InterlocutorLookup interlocutorLookup;
     private OutboundDeliveryService service;
+    private Identity interlocutor;
 
     private Conversation conversation;
     private Message reply;
@@ -51,11 +54,13 @@ class OutboundDeliveryServiceTest {
         telegramOutbound = mock(OutboundChannelAdapter.class);
         when(telegramOutbound.channelType()).thenReturn("telegram");
         channelConfigService = mock(ChannelConfigService.class);
+        interlocutorLookup = mock(InterlocutorLookup.class);
         service = new OutboundDeliveryService(
                 new ChannelAdapterRegistry(List.of(), List.of(telegramOutbound)),
-                channelConfigService, new SyncTaskExecutor());
-        conversation = Conversation.start(AGENT_ID,
-                Identity.create(TENANT_ID, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321"), UUID.randomUUID());
+                channelConfigService, interlocutorLookup, new SyncTaskExecutor());
+        interlocutor = Identity.create(TENANT_ID, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321");
+        when(interlocutorLookup.find(interlocutor.id())).thenReturn(Optional.of(interlocutor));
+        conversation = Conversation.start(AGENT_ID, interlocutor, UUID.randomUUID());
         reply = Message.from(conversation.id(), MessageRole.AGENT, "Hola, soy un agente");
         config = ChannelConfig.create(TENANT_ID, AGENT_ID, "telegram", "12345:token", "hash");
         TenantContext.setCurrentTenantId(TENANT_ID);
@@ -89,11 +94,22 @@ class OutboundDeliveryServiceTest {
         service.dispatchAgentReply(conversation, reply);
 
         verify(telegramOutbound).deliver(
-                new ChannelOutboundMessage("987654321", "Hola, soy un agente"), config);
+                new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321", "Hola, soy un agente"),
+                config);
         assertThat(tenantDuringDelivery.get()).isEqualTo(TENANT_ID);
         // The task cleared its own context; the dispatching thread ends clean (SyncTaskExecutor
         // runs it on the same thread here).
         assertThat(TenantContext.getCurrentTenantId()).isEmpty();
+    }
+
+    @Test
+    void dispatchAgentReply_identityNotVisible_skipsDelivery() {
+        when(channelConfigService.findActiveConfigs(AGENT_ID, "telegram")).thenReturn(List.of(config));
+        when(interlocutorLookup.find(interlocutor.id())).thenReturn(Optional.empty());
+
+        service.dispatchAgentReply(conversation, reply);
+
+        verify(telegramOutbound, never()).deliver(any(), any());
     }
 
     @Test

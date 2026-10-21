@@ -11,6 +11,7 @@ import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.spi.InboundChannelAdapter;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
+import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.identity.IdentityKind;
@@ -33,6 +34,12 @@ import java.util.Optional;
  * authentic-but-unsupported and reported as empty, so the webhook acknowledges it and
  * Telegram does not redeliver.
  *
+ * <p>Only private chats are accepted. A group's {@code chat.id} is not a person and there is
+ * no identity kind for it (ADR 0004, conscious limitation), so a text message from any chat
+ * whose {@code type} is not {@code private} — including one that omits the type — fails
+ * loudly with {@link UnsupportedInterlocutorException} instead of minting a person-kind
+ * identity for the group.
+ *
  * <p>Idempotency: Telegram redelivers an update with the <em>same</em> {@code update_id}
  * until it gets a 2xx, and {@code update_id} is sequential per bot — so
  * {@code configId + ":" + update_id} is the stable redelivery key ({@code message_id} is
@@ -40,8 +47,8 @@ import java.util.Optional;
  * same agent from colliding in the per-agent dedup table).
  *
  * <p>The outbound half delivers via {@code sendMessage}: {@code POST
- * {base-url}/bot{token}/sendMessage} with the conversation's {@code external_identity_ref}
- * as {@code chat_id}. The bot token is the config's credential; failures surface as
+ * {base-url}/bot{token}/sendMessage} with the interlocutor's identity value (the
+ * {@code chat.id} this adapter produced) as {@code chat_id}. The bot token is the config's credential; failures surface as
  * {@link dev.cauce.channels.spi.ChannelDeliveryException} for the (best-effort) caller.
  * Registered as a bean by {@code ChannelsConfig} (it carries the HTTP client and
  * properties, mirroring the LLM adapter configurations).
@@ -99,8 +106,13 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
             // media without text, ...): acknowledge without ingesting.
             return Optional.empty();
         }
-        // chat.id is the thread: the user's id in a private chat, the group's in a group. Named
-        // PROVIDER_USER_ID because it is minted by Telegram and meaningful only within it.
+        String chatType = message.path("chat").path("type").asText("");
+        if (!"private".equals(chatType)) {
+            throw new UnsupportedInterlocutorException("Telegram chat type '" + chatType
+                    + "' is not a person; only private chats are supported");
+        }
+        // In a private chat, chat.id is the user's id. Named PROVIDER_USER_ID because it is
+        // minted by Telegram and meaningful only within it.
         return Optional.of(new ChannelInboundMessage(
                 IdentityKind.PROVIDER_USER_ID,
                 String.valueOf(chatId.asLong()),
@@ -111,7 +123,11 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
     @Override
     public void deliver(ChannelOutboundMessage message, ChannelConfig config) {
         ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("chat_id", message.externalIdentityRef());
+        if (message.identityKind() != IdentityKind.PROVIDER_USER_ID) {
+            throw new ChannelDeliveryException("Telegram can only deliver to a PROVIDER_USER_ID, not "
+                    + message.identityKind());
+        }
+        payload.put("chat_id", message.identityValue());
         payload.put("text", message.content());
 
         HttpRequest request = HttpRequest.newBuilder(

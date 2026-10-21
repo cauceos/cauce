@@ -17,6 +17,7 @@ import dev.cauce.channels.spi.ChannelAdapterRegistry;
 import dev.cauce.channels.spi.ChannelInboundMessage;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.channels.spi.InboundChannelAdapter;
+import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.InboundMessageResult;
@@ -90,6 +91,18 @@ class ChannelWebhookServiceTest {
         when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.empty());
 
         assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.IGNORED);
+        verifyNoInteractions(inboundMessageService);
+    }
+
+    @Test
+    void handle_unsupportedInterlocutor_returnsRejectedWithoutIngesting() {
+        when(channelConfigService.resolveActiveChannelConfig(config.id()))
+                .thenReturn(Optional.of(config));
+        when(adapter.verify(REQUEST, config)).thenReturn(true);
+        when(adapter.parse(REQUEST.body(), config))
+                .thenThrow(new UnsupportedInterlocutorException("Telegram chat type 'group' is not a person"));
+
+        assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.REJECTED);
         verifyNoInteractions(inboundMessageService);
     }
 

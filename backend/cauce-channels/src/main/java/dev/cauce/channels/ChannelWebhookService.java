@@ -5,6 +5,7 @@ import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelAdapterRegistry;
 import dev.cauce.channels.spi.ChannelInboundMessage;
 import dev.cauce.channels.spi.InboundChannelAdapter;
+import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.InboundMessageService;
@@ -39,7 +40,13 @@ public class ChannelWebhookService {
         /** The payload was ingested (or replayed onto an earlier ingest). */
         ACCEPTED,
         /** Authentic but not an ingestable user message; acknowledged without effects. */
-        IGNORED
+        IGNORED,
+        /**
+         * Authentic and well formed, but from an interlocutor no identity kind can name (a
+         * Telegram group). Refused loudly — logged at WARN with the reason — and still
+         * acknowledged, because the provider would otherwise redeliver it forever.
+         */
+        REJECTED
     }
 
     private final ChannelConfigService channelConfigService;
@@ -70,7 +77,14 @@ public class ChannelWebhookService {
             throw new WebhookAuthenticationException(
                     "Webhook authentication failed for channel config " + configId);
         }
-        Optional<ChannelInboundMessage> message = adapter.parse(request.body(), config);
+        Optional<ChannelInboundMessage> message;
+        try {
+            message = adapter.parse(request.body(), config);
+        } catch (UnsupportedInterlocutorException e) {
+            log.warn("Rejected {} webhook update for config {}: {}", config.channelType(), configId,
+                    e.getMessage());
+            return WebhookResult.REJECTED;
+        }
         if (message.isEmpty()) {
             log.debug("Ignoring non-ingestable {} webhook payload for config {}",
                     config.channelType(), configId);

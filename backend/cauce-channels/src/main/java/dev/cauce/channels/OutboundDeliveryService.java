@@ -6,6 +6,7 @@ import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.conversation.Conversation;
+import dev.cauce.core.identity.Identity;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.tenant.TenantContext;
 import java.util.List;
@@ -43,13 +44,16 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
 
     private final ChannelAdapterRegistry adapterRegistry;
     private final ChannelConfigService channelConfigService;
+    private final InterlocutorLookup interlocutorLookup;
     private final TaskExecutor outboundExecutor;
 
     public OutboundDeliveryService(ChannelAdapterRegistry adapterRegistry,
                                    ChannelConfigService channelConfigService,
+                                   InterlocutorLookup interlocutorLookup,
                                    @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor) {
         this.adapterRegistry = adapterRegistry;
         this.channelConfigService = channelConfigService;
+        this.interlocutorLookup = interlocutorLookup;
         this.outboundExecutor = outboundExecutor;
     }
 
@@ -95,8 +99,15 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
                         conversation.channelType(), conversation.agentId());
                 return;
             }
-            adapter.deliver(new ChannelOutboundMessage(
-                    conversation.externalIdentityRef(), agentReply.content()), configs.get(0));
+            Optional<Identity> interlocutor = interlocutorLookup.find(conversation.identityId());
+            if (interlocutor.isEmpty()) {
+                log.warn("Skipping outbound delivery for conversation {}: its identity {} is not visible",
+                        conversation.id(), conversation.identityId());
+                return;
+            }
+            // The destination is the typed pair the inbound adapter produced (ADR 0004).
+            adapter.deliver(new ChannelOutboundMessage(interlocutor.get().kind(),
+                    interlocutor.get().value(), agentReply.content()), configs.get(0));
             log.debug("Delivered reply {} through channel '{}' for conversation {}",
                     agentReply.id(), conversation.channelType(), conversation.id());
         } catch (RuntimeException e) {

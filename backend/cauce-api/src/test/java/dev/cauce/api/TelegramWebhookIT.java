@@ -170,6 +170,20 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
     }
 
     @Test
+    void webhook_groupChatUpdate_is200_butMintsNoIdentityAndIngestsNothing() throws Exception {
+        // ADR 0004's conscious limitation: a group chat.id is not a person. The adapter refuses
+        // it loudly (WARN), and the webhook still acknowledges so Telegram does not redeliver.
+        String groupMessage = """
+                {"update_id": 6006,
+                 "message": {"chat": {"id": -100123456, "type": "group"}, "text": "hola grupo"}}
+                """;
+        postUpdate(groupMessage).andExpect(status().isOk());
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM identities", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM conversations", Integer.class)).isZero();
+    }
+
+    @Test
     void apiChannel_nextToTelegram_staysIntact() throws Exception {
         // The pre-channels public path: POST /v1 messages still ingests on channel "api" and
         // the thread is still readable by polling GET messages.
