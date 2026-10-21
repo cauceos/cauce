@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":cauce-observability"))
     implementation(project(":cauce-governance"))
     implementation(project(":cauce-tenancy"))
+    implementation(project(":cauce-business"))
     implementation(project(":cauce-orchestration"))
     // The invocation-status DTO maps InvocationFailureType to the public failure vocabulary
     // (implementation deps are not transitive at compile time, so the events module must be

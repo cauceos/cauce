@@ -24,6 +24,7 @@ include(
     "cauce-llm-openai",
     "cauce-tools",
     "cauce-evals",
+    "cauce-business",
     "cauce-observability",
     "cauce-governance",
     "cauce-tenancy",
