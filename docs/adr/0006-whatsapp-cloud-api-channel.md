@@ -1,6 +1,6 @@
 # ADR 0006: The WhatsApp Cloud API channel
 
-Status: Accepted in part (W1–W5 decided; the app record of W2 pending). Not yet implemented.
+Status: Accepted (not yet implemented).
 
 ## Context
 
@@ -49,17 +49,52 @@ loud failure". Templates are a later unit.
 (image, audio, document, location…) is acknowledged with a 2xx, recorded as an event, and
 answered with a fixed text telling the user that, for now, only text is read. Never silence.
 
-## Pending
+### W2 in detail — the WhatsApp app record
 
-**Where the app secret lives, and who owns it.** W2 verifies with the app secret before
-routing, so the secret must be found from the request URL alone, and one Meta app may serve
-numbers bound to agents of several tenants (a partner's app for its clients). This needs an
-app-level record, identified by the webhook URL, distinct from the per-number channel config.
-Its ownership and tenancy are not decided yet.
+The app secret must be found from the URL alone, and one Meta app may serve numbers bound to
+agents of several tenants. So the app is an entity of its own, following the hierarchical-RLS
+entity pattern:
+
+- **A WhatsApp app is owned by a tenant** (operator, partner or client) and holds the Meta app
+  id, the app secret sealed (W3), and the hash of a server-generated verify token, returned once.
+- **Its webhook URL is `/webhooks/whatsapp/{appId}`.** The subscription GET and every signed
+  POST arrive there. The app is resolved from the path through a `SECURITY DEFINER` function
+  (the webhook carries no tenant, ADR 0001), the signature is verified, and only then is the body
+  read.
+- **A number is a `channel_config`** of channel `whatsapp` with the app's id and its
+  `phone_number_id`, unique across the instance; its access token is the config's credential,
+  sealed. A number may be bound only to an app whose tenant is the number's tenant or an
+  ancestor of it: a partner's app serves its clients. Routing resolves `(app, phone_number_id)`
+  to the config through a second `SECURITY DEFINER` function; a number bound to another app is
+  not routed.
+- **Inbound is app-routed, so it does not fit the per-config `InboundChannelAdapter`**, whose
+  shape is one URL, one config, one message. The WhatsApp inbound flow is its own service in
+  cauce-channels, which still ends in the same channel-agnostic ingest. The outbound half
+  implements the ordinary `OutboundChannelAdapter`.
+
+### W3 adjustment
+
+Tolerating plaintext rows is a read path only: every write is sealed. Removing that read path
+once no plaintext row can remain is registered as deferred work.
+
+### W5 in detail
+
+The fixed text is a platform setting. Reusing C3's per-agent override would mean a second
+per-agent column and its write path, not a reuse, so a per-agent override is left out and noted.
+The text is sent directly through the outbound adapter (the message was not ingested, so it opens
+no thread) and the event is audited as `conduct.message.unsupported`: the message type and
+ids, no content.
+
+### Sending to a BSUID
+
+A reply is sent with `recipient_type: "individual"` and `recipient: "<BSUID>"`, without `to`.
+Third-party documentation disagrees on whether `to` also accepts a BSUID; the first real
+conversation confirms the field.
 
 ## References
 
 - [Meta: Business-scoped user IDs](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-scoped-user-ids/)
+- [Discussion of `recipient` vs `to` for BSUID sends](https://github.com/omnisolo-llc/onehumancorp/issues/36354)
 - `docs/adr/0001-rls-escape-hatches.md` — tenant discovery for a webhook with no tenant context
 - `docs/adr/0004-identity-message-parts-and-channel-capabilities.md` — typed identity, loud failure, the deferred memory subject
 - `docs/adr/0005-agentic-loop-hardening.md` — the fallback reply W4 may block
