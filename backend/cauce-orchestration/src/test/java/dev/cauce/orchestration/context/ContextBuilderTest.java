@@ -20,6 +20,8 @@ class ContextBuilderTest {
 
     private static final String MODEL = "claude-sonnet-4-7"; // 200_000 window
     private static final int EFFECTIVE_WINDOW = 200_000 - ContextBuilder.RESERVED_FOR_RESPONSE; // 190_000
+    /** Unknown to ModelContextWindow: the 16_384 fallback, so 6_384 tokens of effective window. */
+    private static final String SMALL_MODEL = "some-unknown-model";
     private static final String SYSTEM_PROMPT = "You are a helpful assistant.";
     private static final UUID CONVERSATION = UUID.randomUUID();
 
@@ -135,13 +137,71 @@ class ContextBuilderTest {
     @Test
     void build_toolCallMessage_countsInputArgumentTokens() {
         ToolCall call = new ToolCall("call-1", "search", Map.of("query", "x".repeat(70)));
+        Message user = Message.from(CONVERSATION, MessageRole.USER, "Search for it");
         Message toolCallMessage = Message.toolCall(CONVERSATION, call);
 
-        LlmInvocationContext context = builder.build(List.of(toolCallMessage), MODEL, SYSTEM_PROMPT);
+        LlmInvocationContext context = builder.build(List.of(user, toolCallMessage), MODEL, SYSTEM_PROMPT);
 
-        int expected = TokenEstimator.estimate(toolCallMessage.content())
+        int expected = TokenEstimator.estimate(user.content())
+                + TokenEstimator.estimate(toolCallMessage.content())
                 + TokenEstimator.estimate(String.valueOf(call.input()));
         assertThat(context.estimatedTokens()).isEqualTo(expected);
+    }
+
+    // --- ADR 0005, C2: the window always starts at a user turn ---
+
+    @Test
+    void build_whenTheCutOrphansAToolResult_startsTheWindowAtTheNextUserTurn() {
+        // 6000 tokens of window. The old turn's call does not fit, its result would; the window
+        // must not open on that orphaned result.
+        ToolCall call = new ToolCall("call-1", "search", Map.of("query", "x".repeat(70_000)));
+        List<Message> messages = List.of(
+                userMessageOfLength("OLD", 7000),
+                Message.toolCall(CONVERSATION, call),
+                Message.toolResult(CONVERSATION, ToolResult.success("call-1", "search", "found")),
+                Message.from(CONVERSATION, MessageRole.AGENT, "Found it."),
+                userMessageOfLength("NEW", 7000));
+
+        LlmInvocationContext context = builder.build(messages, SMALL_MODEL, SYSTEM_PROMPT);
+
+        assertThat(context.messages()).hasSize(1);
+        assertThat(context.messages().get(0).role()).isEqualTo(LlmRole.USER);
+        assertThat(context.messages().get(0).content()).startsWith("NEW:");
+        assertThat(context.estimatedTokens()).isEqualTo(2000);
+    }
+
+    @Test
+    void build_whenTheCutLandsOnAnAssistantTurn_dropsItAndKeepsWholeToolTurns() {
+        ToolCall call = new ToolCall("call-2", "get_current_time", Map.of());
+        ToolResult result = ToolResult.success("call-2", "get_current_time", "10:15");
+        List<Message> messages = List.of(
+                userMessageOfLength("OLD", 7000),
+                Message.from(CONVERSATION, MessageRole.AGENT, "a".repeat(10_500)), // 3000 tokens: fits, OLD then does not
+                userMessageOfLength("NEW", 7000),
+                Message.toolCall(CONVERSATION, call),
+                Message.toolResult(CONVERSATION, result));
+
+        LlmInvocationContext context = builder.build(messages, SMALL_MODEL, SYSTEM_PROMPT);
+
+        assertThat(context.messages()).extracting(LlmMessage::role)
+                .containsExactly(LlmRole.USER, LlmRole.ASSISTANT, LlmRole.USER);
+        assertThat(context.messages().get(0).content()).startsWith("NEW:");
+        assertThat(context.messages()).contains(LlmMessage.toolCall(call), LlmMessage.toolResult(result));
+    }
+
+    @Test
+    void build_whenNoUserTurnFits_throwsInsteadOfSendingAHeadlessHistory() {
+        // The current turn's user message plus its tool round exceed the window: only the
+        // tool messages would fit, and a history that opens on them is malformed.
+        ToolCall call = new ToolCall("call-3", "search", Map.of("query", "q"));
+        List<Message> messages = List.of(
+                userMessageOfLength("ASK", 7000),
+                Message.toolCall(CONVERSATION, call),
+                Message.toolResult(CONVERSATION, ToolResult.success("call-3", "search", "r".repeat(17_000))));
+
+        assertThatThrownBy(() -> builder.build(messages, SMALL_MODEL, SYSTEM_PROMPT))
+                .isInstanceOf(MessageTooLargeForContextException.class)
+                .hasMessageContaining("current turn");
     }
 
     @Test

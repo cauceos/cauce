@@ -1,6 +1,7 @@
 package dev.cauce.orchestration.context;
 
 import dev.cauce.core.message.Message;
+import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.model.LlmMessage;
@@ -13,13 +14,20 @@ import java.util.List;
 /**
  * Builds the message list sent to an LLM for one invocation, honouring the target model's
  * context window with a sliding-token-window strategy. Pure application logic: no Spring, no
- * persistence, no LLM call. Stateless and instantiable — a future {@code OrchestratorService}
- * will hold one as an injected, mockable collaborator.
+ * persistence, no LLM call. Stateless and instantiable; {@code OrchestratorService} holds one as
+ * an injected collaborator.
  *
  * <p>Strategy: reserve {@link #RESERVED_FOR_RESPONSE} tokens of the model's window for the
  * response, then walk the conversation newest-first, including each message while the
  * running estimate fits the remaining (effective) window, and stop at the first message that
  * would overflow. The surviving slice is returned in chronological order.
+ *
+ * <p>The window always starts at a user turn (ADR 0005, C2). A size cut can land anywhere: on a
+ * tool result whose call fell outside, in the middle of a batch of tool calls, or on an
+ * assistant turn — histories every provider rejects. So the leading messages before the first
+ * USER message of the slice are dropped as well. Everything from that user turn on is contiguous,
+ * which keeps every tool call together with its results. When no user turn fits at all, the
+ * current turn does not fit the window, and that is a context failure, not a silent cut.
  */
 public final class ContextBuilder {
 
@@ -31,7 +39,7 @@ public final class ContextBuilder {
      * (assumed chronological, oldest first).
      *
      * @throws MessageTooLargeForContextException if the most recent message alone exceeds the
-     *     effective context window
+     *     effective context window, or if no user turn fits in it
      */
     public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
                                       String systemPrompt) {
@@ -42,7 +50,7 @@ public final class ContextBuilder {
         // not the conversation history. TODO(v2): if system prompts grow large enough to
         // matter, subtract TokenEstimator.estimate(systemPrompt) from effectiveWindow here.
 
-        List<LlmMessage> selected = new ArrayList<>();
+        List<Message> selected = new ArrayList<>();
         int runningTokens = 0;
         int lastIndex = conversationMessages.size() - 1;
 
@@ -59,13 +67,27 @@ public final class ContextBuilder {
             if (runningTokens + messageTokens > effectiveWindow) {
                 break; // older messages cannot fit either; stop
             }
-            selected.add(toLlmMessage(message));
+            selected.add(message);
             runningTokens += messageTokens;
         }
 
         Collections.reverse(selected); // built newest-first; return chronological
+        int firstUserTurn = 0;
+        while (firstUserTurn < selected.size() && selected.get(firstUserTurn).role() != MessageRole.USER) {
+            runningTokens -= estimateTokens(selected.get(firstUserTurn));
+            firstUserTurn++;
+        }
+        if (!selected.isEmpty() && firstUserTurn == selected.size()) {
+            throw new MessageTooLargeForContextException(
+                    "The current turn does not fit the effective context window of "
+                            + effectiveWindow + " tokens for model '" + modelName
+                            + "' from its user message onwards");
+        }
+        List<LlmMessage> window = selected.subList(firstUserTurn, selected.size()).stream()
+                .map(ContextBuilder::toLlmMessage)
+                .toList();
         return new LlmInvocationContext(
-                selected, systemPrompt, runningTokens, contextWindow, RESERVED_FOR_RESPONSE);
+                window, systemPrompt, runningTokens, contextWindow, RESERVED_FOR_RESPONSE);
     }
 
     /**
