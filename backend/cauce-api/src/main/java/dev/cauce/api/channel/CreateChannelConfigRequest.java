@@ -2,6 +2,7 @@ package dev.cauce.api.channel;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.UUID;
 
 /**
  * Request body for {@code POST /v1/agents/{agentId}/channels}: binds a channel instance to
@@ -11,5 +12,12 @@ import jakarta.validation.constraints.Size;
  */
 public record CreateChannelConfigRequest(
         @NotBlank String channelType,
-        @NotBlank @Size(max = 512) String credential) {
+        @NotBlank @Size(max = 2048) String credential,
+        UUID whatsappAppId,
+        @Size(max = 64) String phoneNumberId) {
+
+    /** A per-config-webhook binding (Telegram). */
+    public CreateChannelConfigRequest(String channelType, String credential) {
+        this(channelType, credential, null, null);
+    }
 }

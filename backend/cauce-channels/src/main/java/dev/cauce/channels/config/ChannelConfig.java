@@ -23,6 +23,11 @@ import java.util.UUID;
  * AES-GCM by the persistence mapper (ADR 0006, W3). {@code webhookSecretHash} is
  * the hash of the server-generated webhook secret; the plaintext is returned exactly once
  * at creation and verified on every webhook via the {@code ApiKeyHasher} port.
+ *
+ * <p>Two shapes, mirrored by the V31 CHECK (ADR 0006, W2): a <b>per-config webhook</b>
+ * (Telegram) has a {@code webhookSecretHash} and no app binding; an <b>app-routed</b> number
+ * (WhatsApp) has the {@code whatsappAppId} that receives its webhooks and its {@code phoneNumberId},
+ * and no webhook secret of its own.
  */
 public record ChannelConfig(UUID id,
                             UUID tenantId,
@@ -31,7 +36,9 @@ public record ChannelConfig(UUID id,
                             String credential,
                             String webhookSecretHash,
                             ChannelConfigStatus status,
-                            Instant createdAt) {
+                            Instant createdAt,
+                            UUID whatsappAppId,
+                            String phoneNumberId) {
 
     public ChannelConfig {
         Objects.requireNonNull(id, "id must not be null");
@@ -39,9 +46,25 @@ public record ChannelConfig(UUID id,
         Objects.requireNonNull(agentId, "agentId must not be null");
         requireText(channelType, "channelType");
         requireText(credential, "credential");
-        requireText(webhookSecretHash, "webhookSecretHash");
         Objects.requireNonNull(status, "status must not be null");
         Objects.requireNonNull(createdAt, "createdAt must not be null");
+        if (whatsappAppId == null) {
+            requireText(webhookSecretHash, "webhookSecretHash");
+            if (phoneNumberId != null) {
+                throw new IllegalArgumentException("phoneNumberId requires a whatsappAppId");
+            }
+        } else {
+            requireText(phoneNumberId, "phoneNumberId");
+            if (webhookSecretHash != null) {
+                throw new IllegalArgumentException("an app-routed config has no webhook secret of its own");
+            }
+        }
+    }
+
+    /** A per-config-webhook config (no app binding). */
+    public ChannelConfig(UUID id, UUID tenantId, UUID agentId, String channelType, String credential,
+                         String webhookSecretHash, ChannelConfigStatus status, Instant createdAt) {
+        this(id, tenantId, agentId, channelType, credential, webhookSecretHash, status, createdAt, null, null);
     }
 
     /**
@@ -52,6 +75,22 @@ public record ChannelConfig(UUID id,
                                        String credential, String webhookSecretHash) {
         return new ChannelConfig(UuidGenerator.newV7(), tenantId, agentId, channelType,
                 credential, webhookSecretHash, ChannelConfigStatus.ACTIVE, Instant.now());
+    }
+
+    /**
+     * Binds the WhatsApp number {@code phoneNumberId}, served by the app {@code whatsappAppId}, to
+     * {@code agentId} (ADR 0006, W2). {@code accessToken} is the credential replies are sent with.
+     */
+    public static ChannelConfig createWhatsAppNumber(UUID tenantId, UUID agentId, UUID whatsappAppId,
+                                                     String phoneNumberId, String accessToken) {
+        return new ChannelConfig(UuidGenerator.newV7(), tenantId, agentId, "whatsapp", accessToken, null,
+                ChannelConfigStatus.ACTIVE, Instant.now(), Objects.requireNonNull(whatsappAppId, "whatsappAppId"),
+                phoneNumberId == null ? null : phoneNumberId.strip());
+    }
+
+    /** Whether this config receives its webhooks through an app rather than its own URL. */
+    public boolean isAppRouted() {
+        return whatsappAppId != null;
     }
 
     private static void requireText(String value, String name) {

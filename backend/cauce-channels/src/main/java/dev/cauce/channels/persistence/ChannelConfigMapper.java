@@ -30,7 +30,9 @@ public final class ChannelConfigMapper {
                 cipher.seal(config.credential()),
                 config.webhookSecretHash(),
                 config.status(),
-                config.createdAt());
+                config.createdAt(),
+                config.whatsappAppId(),
+                config.phoneNumberId());
     }
 
     public ChannelConfig toDomain(ChannelConfigEntity entity) {
@@ -44,6 +46,8 @@ public final class ChannelConfigMapper {
                         : entity.getCredential(), // legacy plaintext, sealed at startup
                 entity.getWebhookSecretHash(),
                 entity.getStatus(),
-                entity.getCreatedAt());
+                entity.getCreatedAt(),
+                entity.getWhatsappAppId(),
+                entity.getPhoneNumberId());
     }
 }

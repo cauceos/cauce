@@ -32,11 +32,17 @@ public class ChannelConfigEntity {
     @Column(name = "channel_type", nullable = false, updatable = false, length = 20)
     private String channelType;
 
-    @Column(name = "credential", nullable = false, length = 512)
+    @Column(name = "credential", nullable = false)
     private String credential;
 
-    @Column(name = "webhook_secret_hash", nullable = false, length = 255)
+    @Column(name = "webhook_secret_hash", length = 255)
     private String webhookSecretHash;
+
+    @Column(name = "whatsapp_app_id", updatable = false)
+    private UUID whatsappAppId;
+
+    @Column(name = "phone_number_id", updatable = false, length = 64)
+    private String phoneNumberId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -52,6 +58,15 @@ public class ChannelConfigEntity {
     public ChannelConfigEntity(UUID id, UUID tenantId, UUID agentId, String channelType,
                                String credential, String webhookSecretHash,
                                ChannelConfigStatus status, Instant createdAt) {
+        this(id, tenantId, agentId, channelType, credential, webhookSecretHash, status, createdAt, null, null);
+    }
+
+    public ChannelConfigEntity(UUID id, UUID tenantId, UUID agentId, String channelType,
+                               String credential, String webhookSecretHash,
+                               ChannelConfigStatus status, Instant createdAt, UUID whatsappAppId,
+                               String phoneNumberId) {
+        this.whatsappAppId = whatsappAppId;
+        this.phoneNumberId = phoneNumberId;
         this.id = id;
         this.tenantId = tenantId;
         this.agentId = agentId;
@@ -92,5 +107,13 @@ public class ChannelConfigEntity {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public UUID getWhatsappAppId() {
+        return whatsappAppId;
+    }
+
+    public String getPhoneNumberId() {
+        return phoneNumberId;
     }
 }

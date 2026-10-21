@@ -44,4 +44,16 @@ class ChannelConfigMapperTest {
 
         assertThat(mapper.toDomain(legacy).credential()).isEqualTo("12345:bot-token");
     }
+
+    @Test
+    void roundTrip_whatsAppNumber_preservesItsAppBinding() {
+        ChannelConfig number = ChannelConfig.createWhatsAppNumber(UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), "1234567890", "EAAG-token");
+
+        ChannelConfigEntity entity = mapper.toEntity(number);
+
+        assertThat(entity.getWebhookSecretHash()).isNull();
+        assertThat(entity.getCredential()).startsWith("v1:").doesNotContain("EAAG-token");
+        assertThat(mapper.toDomain(entity)).isEqualTo(number);
+    }
 }

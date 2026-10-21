@@ -7,6 +7,9 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
+import dev.cauce.api.channel.InvalidChannelConfigRequestException;
+import dev.cauce.channels.whatsapp.AppOutsideHierarchyException;
+import dev.cauce.channels.whatsapp.PhoneNumberAlreadyBoundException;
 import dev.cauce.channels.whatsapp.app.WhatsAppAppNotFoundException;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.core.agent.AgentNotFoundException;
@@ -91,6 +94,9 @@ public class GlobalExceptionHandler {
             Map.entry(PendingInvocationNotFoundException.class, "invocation_not_found"),
             Map.entry(ChannelConfigNotFoundException.class, "channel_config_not_found"),
             Map.entry(WhatsAppAppNotFoundException.class, "whatsapp_app_not_found"),
+            Map.entry(InvalidChannelConfigRequestException.class, "invalid_channel_config_request"),
+            Map.entry(AppOutsideHierarchyException.class, "whatsapp_app_outside_hierarchy"),
+            Map.entry(PhoneNumberAlreadyBoundException.class, "phone_number_already_bound"),
             // 400 BAD_REQUEST
             Map.entry(InvalidConversationTransitionException.class, "invalid_conversation_transition"),
             Map.entry(InvalidChannelTypeException.class, "invalid_channel_type"),
@@ -151,6 +157,7 @@ public class GlobalExceptionHandler {
             InvalidTriggerMessageException.class,
             InvalidIdempotencyKeyException.class,
             ChannelPayloadException.class,
+            InvalidChannelConfigRequestException.class,
             InvalidCursorException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex) {
         return clientError(HttpStatus.BAD_REQUEST, ex);
@@ -215,6 +222,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             ApiKeyAlreadyRevokedException.class,
+            PhoneNumberAlreadyBoundException.class,
             MaxRetriesExceededException.class,
             InvalidPendingInvocationTransitionException.class})
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex) {
@@ -224,6 +232,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             InvalidTenantTierException.class,
             UnknownToolException.class,
+            AppOutsideHierarchyException.class,
             MessageTooLargeForContextException.class})
     public ResponseEntity<ErrorResponse> handleUnprocessable(RuntimeException ex) {
         return clientError(HttpStatus.UNPROCESSABLE_ENTITY, ex);

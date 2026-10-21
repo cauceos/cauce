@@ -2,6 +2,7 @@ package dev.cauce.api.channel;
 
 import dev.cauce.channels.ChannelConfigCreationResult;
 import dev.cauce.channels.ChannelConfigService;
+import dev.cauce.channels.whatsapp.WhatsAppNumberService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -22,18 +23,35 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ChannelConfigController {
 
-    private final ChannelConfigService channelConfigService;
+    private static final String WHATSAPP = "whatsapp";
 
-    public ChannelConfigController(ChannelConfigService channelConfigService) {
+    private final ChannelConfigService channelConfigService;
+    private final WhatsAppNumberService whatsAppNumberService;
+
+    public ChannelConfigController(ChannelConfigService channelConfigService,
+                                   WhatsAppNumberService whatsAppNumberService) {
         this.channelConfigService = channelConfigService;
+        this.whatsAppNumberService = whatsAppNumberService;
     }
 
     @PostMapping("/v1/agents/{agentId}/channels")
     public ResponseEntity<ChannelConfigResponse> create(
             @PathVariable UUID agentId,
             @Valid @RequestBody CreateChannelConfigRequest request) {
-        ChannelConfigCreationResult result = channelConfigService.createChannelConfig(
-                agentId, request.channelType(), request.credential());
+        // A WhatsApp number is app-routed (ADR 0006): it names the app that receives its webhooks
+        // and Meta's phone_number_id, and its credential is the access token replies are sent with.
+        ChannelConfigCreationResult result;
+        if (WHATSAPP.equals(request.channelType())) {
+            if (request.whatsappAppId() == null || request.phoneNumberId() == null
+                    || request.phoneNumberId().isBlank()) {
+                throw new InvalidChannelConfigRequestException(
+                        "A whatsapp channel requires whatsapp_app_id and phone_number_id");
+            }
+            result = whatsAppNumberService.bindNumber(agentId, request.whatsappAppId(),
+                    request.phoneNumberId(), request.credential());
+        } else {
+            result = channelConfigService.createChannelConfig(agentId, request.channelType(), request.credential());
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(ChannelConfigResponse.from(result));
     }
 }

@@ -30,4 +30,13 @@ public interface ChannelConfigRepository extends JpaRepository<ChannelConfigEnti
      */
     @Query(value = "SELECT * FROM resolve_active_channel_config(:configId)", nativeQuery = true)
     Optional<ChannelConfigEntity> resolveActiveChannelConfig(@Param("configId") UUID configId);
+
+    /**
+     * Routes a WhatsApp event (ADR 0006, W2): the ACTIVE number {@code phoneNumberId} of exactly the
+     * app {@code appId}, regardless of tenant context, via the V31 {@code SECURITY DEFINER} function.
+     * Called only after the request's signature verified under that app's secret.
+     */
+    @Query(value = "SELECT * FROM resolve_whatsapp_number(:appId, :phoneNumberId)", nativeQuery = true)
+    Optional<ChannelConfigEntity> resolveWhatsAppNumber(@Param("appId") UUID appId,
+                                                       @Param("phoneNumberId") String phoneNumberId);
 }

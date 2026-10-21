@@ -52,4 +52,35 @@ class ChannelConfigTest {
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("webhookSecretHash");
     }
+
+    // --- app-routed numbers (ADR 0006, W2) ---
+
+    @Test
+    void createWhatsAppNumber_isAppRouted_withoutAWebhookSecretOfItsOwn() {
+        UUID appId = UUID.randomUUID();
+        ChannelConfig number = ChannelConfig.createWhatsAppNumber(UUID.randomUUID(), UUID.randomUUID(), appId,
+                " 1234567890 ", "EAAG-token");
+
+        assertThat(number.isAppRouted()).isTrue();
+        assertThat(number.channelType()).isEqualTo("whatsapp");
+        assertThat(number.whatsappAppId()).isEqualTo(appId);
+        assertThat(number.phoneNumberId()).isEqualTo("1234567890");
+        assertThat(number.webhookSecretHash()).isNull();
+    }
+
+    @Test
+    void theTwoShapes_cannotBeMixed() {
+        UUID id = UUID.randomUUID();
+        assertThatThrownBy(() -> new ChannelConfig(id, id, id, "telegram", "t", null,
+                ChannelConfigStatus.ACTIVE, java.time.Instant.now()))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new ChannelConfig(id, id, id, "whatsapp", "t", "hash",
+                ChannelConfigStatus.ACTIVE, java.time.Instant.now(), UUID.randomUUID(), "123"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ChannelConfig(id, id, id, "whatsapp", "t", "hash",
+                ChannelConfigStatus.ACTIVE, java.time.Instant.now(), null, "123"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ChannelConfig.createWhatsAppNumber(id, id, UUID.randomUUID(), " ", "t"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

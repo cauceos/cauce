@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.cauce.api.agent.CreateAgentRequest;
+import dev.cauce.api.channel.CreateChannelConfigRequest;
 import dev.cauce.api.channel.RegisterWhatsAppAppRequest;
 import dev.cauce.api.support.AbstractApiIntegrationTest;
 import dev.cauce.api.tenant.CreateClientRequest;
@@ -100,7 +102,42 @@ class WhatsAppApiIT extends AbstractApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void bindNumber_byThePartner_forItsClientsAgent_returnsTheBindingWithoutASecret() throws Exception {
+        String appId = registerApp(partnerAuth, partnerId);
+        UUID agentId = createAgent();
+
+        String body = mockMvc.perform(postAs(partnerAuth, "/v1/agents/" + agentId + "/channels",
+                        new CreateChannelConfigRequest("whatsapp", "EAAG-access-token", UUID.fromString(appId),
+                                "1111111111")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.channel_type").value("whatsapp"))
+                .andExpect(jsonPath("$.whatsapp_app_id").value(appId))
+                .andExpect(jsonPath("$.phone_number_id").value("1111111111"))
+                .andExpect(jsonPath("$.webhook_secret").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("EAAG-access-token");
+
+        // One number is one door.
+        mockMvc.perform(postAs(partnerAuth, "/v1/agents/" + agentId + "/channels",
+                        new CreateChannelConfigRequest("whatsapp", "t", UUID.fromString(appId), "1111111111")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("phone_number_already_bound"));
+        // A WhatsApp binding names its app and number.
+        mockMvc.perform(postAs(partnerAuth, "/v1/agents/" + agentId + "/channels",
+                        new CreateChannelConfigRequest("whatsapp", "t", null, "2222222222")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_channel_config_request"));
+    }
+
     // --- helpers ---
+
+    UUID createAgent() throws Exception {
+        return idFrom(mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-sonnet-4-7",
+                                null, null, null, null)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+    }
 
     String registerApp(String auth, UUID tenantId) throws Exception {
         return idFrom(mockMvc.perform(postAs(auth, "/v1/tenants/" + tenantId + "/whatsapp-apps",
