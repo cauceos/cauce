@@ -179,8 +179,6 @@ class ConversationServiceIT {
             assertThat(found.get().id()).isEqualTo(created.id());
             assertThat(found.get().identityId()).isEqualTo(created.identityId());
             assertThat(found.get().channelConfigId()).contains(configId);
-            assertThat(found.get().channelType()).isEqualTo("telegram");
-            assertThat(found.get().externalIdentityRef()).isEqualTo("987654321");
         } finally {
             TenantContext.clear();
         }
@@ -264,9 +262,9 @@ class ConversationServiceIT {
         jdbc.update("UPDATE conversations SET status = 'CLOSED', closed_at = now()");
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         Integer first = tx.execute(status -> conversationRepository.insertOpenConversationIfAbsent(
-                UuidGenerator.newV7(), agent.id(), identityId, null, "api", "seed"));
+                UuidGenerator.newV7(), agent.id(), identityId, null));
         Integer second = tx.execute(status -> conversationRepository.insertOpenConversationIfAbsent(
-                UuidGenerator.newV7(), agent.id(), identityId, null, "api", "seed"));
+                UuidGenerator.newV7(), agent.id(), identityId, null));
 
         assertThat(first).isEqualTo(1);
         assertThat(second).isZero();

@@ -302,8 +302,7 @@ class PendingInvocationServiceTest {
 
     private ConversationEntity conversationEntity() {
         Instant now = Instant.now();
-        return new ConversationEntity(conversationId, agentId, UUID.randomUUID(), UUID.randomUUID(), "whatsapp", "+34600000000",
-                ConversationStatus.OPEN, now, now, null, null, null);
+        return new ConversationEntity(conversationId, agentId, UUID.randomUUID(), UUID.randomUUID(), ConversationStatus.OPEN, now, now, null, null, null);
     }
 
     private MessageEntity messageEntity(UUID id) {

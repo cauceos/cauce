@@ -37,27 +37,22 @@ public interface ConversationRepository extends JpaRepository<ConversationEntity
      * call created the row, {@code 0} when a concurrent caller already had — the
      * {@code idx_conversations_one_open_thread} partial unique index (V26, {@code NULLS NOT
      * DISTINCT}, so a NULL api config deduplicates too) is the conflict arbiter. The caller then
-     * re-reads the OPEN row to obtain the winner. {@code channel_type} and
-     * {@code external_identity_ref} are still written until V27 drops them. {@code started_at}
-     * and {@code last_message_at} default to {@code now()}. Runs in the caller's transaction
+     * re-reads the OPEN row to obtain the winner. {@code started_at} and
+     * {@code last_message_at} default to {@code now()}. Runs in the caller's transaction
      * with the tenant RLS context applied, so the insert is subject to the conversations
      * {@code WITH CHECK} visibility policy.
      */
     @Modifying
     @Query(value = """
-            INSERT INTO conversations (id, agent_id, identity_id, channel_config_id,
-                                       channel_type, external_identity_ref, status)
-            VALUES (:id, :agentId, :identityId, CAST(:channelConfigId AS uuid),
-                    :channelType, :externalIdentityRef, 'OPEN')
+            INSERT INTO conversations (id, agent_id, identity_id, channel_config_id, status)
+            VALUES (:id, :agentId, :identityId, CAST(:channelConfigId AS uuid), 'OPEN')
             ON CONFLICT (agent_id, identity_id, channel_config_id) WHERE status = 'OPEN'
             DO NOTHING
             """, nativeQuery = true)
     int insertOpenConversationIfAbsent(@Param("id") UUID id,
                                        @Param("agentId") UUID agentId,
                                        @Param("identityId") UUID identityId,
-                                       @Param("channelConfigId") UUID channelConfigId,
-                                       @Param("channelType") String channelType,
-                                       @Param("externalIdentityRef") String externalIdentityRef);
+                                       @Param("channelConfigId") UUID channelConfigId);
 
     /**
      * Advances {@code lastMessageAt} of a conversation, called when a message is appended.

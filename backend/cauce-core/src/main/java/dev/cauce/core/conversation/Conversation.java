@@ -8,8 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * A conversation between an external user (patient, customer, citizen) and a specific
- * {@link dev.cauce.core.agent.Agent}, carried over a single communication channel.
+ * A conversation between an interlocutor (patient, customer, citizen) and a specific
+ * {@link dev.cauce.core.agent.Agent}, entered through a single channel instance.
  *
  * <p>Pure domain type: no persistence or framework dependencies. Immutable; created
  * via {@link #start} with status {@link ConversationStatus#OPEN} and a time-ordered
@@ -19,17 +19,11 @@ import java.util.UUID;
  * {@link InvalidConversationTransitionException} if the transition is not allowed from
  * the current status.
  *
- * <p>{@code channelType} is a free-form String identifier (e.g. {@code "whatsapp"}).
- * The domain deliberately does not enumerate channels: the set of valid channels is
- * owned by the (not-yet-implemented) cauce-channels SPI, keeping the core free of
- * channel-specific knowledge (architectural invariant: channels are pluggable). Until
- * the SPI exists, the application service validates against a temporary set.
- *
  * <p>The interlocutor is an {@link Identity} (ADR 0004, decision 1), referenced by
  * {@code identityId}; {@code channelConfigId} is the channel instance the thread came in
  * through (the door, not the person), {@code null} for the built-in {@code api} channel,
- * which has no config. {@code channelType} and {@code externalIdentityRef} are copies of the
- * identity's channel and value, kept only until the V27 migration drops their columns.
+ * which has no config. The conversation carries no channel type and no copy of the
+ * identity's value (ADR 0004, PC-2): the channel is the identity's and the config's.
  */
 public final class Conversation {
 
@@ -37,8 +31,6 @@ public final class Conversation {
     private final UUID agentId;
     private final UUID identityId;
     private final UUID channelConfigId; // null for the api channel
-    private final String channelType;
-    private final String externalIdentityRef;
     private final ConversationStatus status;
     private final Instant startedAt;
     private final Instant lastMessageAt;
@@ -47,14 +39,12 @@ public final class Conversation {
     private final Instant archivedAt;  // null unless ARCHIVED
 
     private Conversation(UUID id, UUID agentId, UUID identityId, UUID channelConfigId,
-                         String channelType, String externalIdentityRef, ConversationStatus status, Instant startedAt, Instant lastMessageAt,
+                         ConversationStatus status, Instant startedAt, Instant lastMessageAt,
                          Instant closedAt, Instant escalatedAt, Instant archivedAt) {
         this.id = id;
         this.agentId = agentId;
         this.identityId = identityId;
         this.channelConfigId = channelConfigId;
-        this.channelType = channelType;
-        this.externalIdentityRef = externalIdentityRef;
         this.status = status;
         this.startedAt = startedAt;
         this.lastMessageAt = lastMessageAt;
@@ -76,8 +66,6 @@ public final class Conversation {
                 Objects.requireNonNull(agentId, "agentId"),
                 identity.id(),
                 channelConfigId,
-                identity.channelType(),
-                identity.value(),
                 ConversationStatus.OPEN,
                 now,
                 now,
@@ -88,8 +76,7 @@ public final class Conversation {
 
     /** Rebuilds a conversation from already-persisted state. For the persistence layer only. */
     public static Conversation rehydrate(UUID id, UUID agentId, UUID identityId,
-                                         UUID channelConfigId, String channelType,
-                                         String externalIdentityRef, ConversationStatus status,
+                                         UUID channelConfigId, ConversationStatus status,
                                          Instant startedAt, Instant lastMessageAt, Instant closedAt,
                                          Instant escalatedAt, Instant archivedAt) {
         return new Conversation(
@@ -97,8 +84,6 @@ public final class Conversation {
                 Objects.requireNonNull(agentId, "agentId"),
                 Objects.requireNonNull(identityId, "identityId"),
                 channelConfigId, // nullable: api
-                Objects.requireNonNull(channelType, "channelType"),
-                Objects.requireNonNull(externalIdentityRef, "externalIdentityRef"),
                 Objects.requireNonNull(status, "status"),
                 Objects.requireNonNull(startedAt, "startedAt"),
                 Objects.requireNonNull(lastMessageAt, "lastMessageAt"),
@@ -118,8 +103,7 @@ public final class Conversation {
         if (status != ConversationStatus.OPEN && status != ConversationStatus.ESCALATED) {
             throw new InvalidConversationTransitionException(transitionError(ConversationStatus.CLOSED));
         }
-        return new Conversation(id, agentId, identityId, channelConfigId, channelType,
-                externalIdentityRef,
+        return new Conversation(id, agentId, identityId, channelConfigId,
                 ConversationStatus.CLOSED, startedAt, lastMessageAt, Instant.now(), escalatedAt, archivedAt);
     }
 
@@ -134,8 +118,7 @@ public final class Conversation {
         if (status != ConversationStatus.OPEN) {
             throw new InvalidConversationTransitionException(transitionError(ConversationStatus.ESCALATED));
         }
-        return new Conversation(id, agentId, identityId, channelConfigId, channelType,
-                externalIdentityRef,
+        return new Conversation(id, agentId, identityId, channelConfigId,
                 ConversationStatus.ESCALATED, startedAt, lastMessageAt, closedAt, Instant.now(), archivedAt);
     }
 
@@ -151,8 +134,7 @@ public final class Conversation {
         if (status == ConversationStatus.ARCHIVED) {
             throw new InvalidConversationTransitionException(transitionError(ConversationStatus.ARCHIVED));
         }
-        return new Conversation(id, agentId, identityId, channelConfigId, channelType,
-                externalIdentityRef,
+        return new Conversation(id, agentId, identityId, channelConfigId,
                 ConversationStatus.ARCHIVED, startedAt, lastMessageAt, closedAt, escalatedAt, Instant.now());
     }
 
@@ -175,14 +157,6 @@ public final class Conversation {
     /** The channel instance the thread came in through; empty for the {@code api} channel. */
     public Optional<UUID> channelConfigId() {
         return Optional.ofNullable(channelConfigId);
-    }
-
-    public String channelType() {
-        return channelType;
-    }
-
-    public String externalIdentityRef() {
-        return externalIdentityRef;
     }
 
     public ConversationStatus status() {

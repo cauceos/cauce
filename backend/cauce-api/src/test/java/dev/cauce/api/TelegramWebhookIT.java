@@ -105,8 +105,8 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
                 .andExpect(status().isOk());
 
         UUID conversationId = jdbc.queryForObject(
-                "SELECT id FROM conversations WHERE agent_id = ? AND channel_type = 'telegram' "
-                        + "AND external_identity_ref = '987654321'", UUID.class, agentId);
+                "SELECT c.id FROM conversations c JOIN identities i ON i.id = c.identity_id WHERE c.agent_id = ? AND i.channel_type = 'telegram' "
+                        + "AND i.value = '987654321'", UUID.class, agentId);
         assertThat(conversationId).isNotNull();
         assertThat(userMessageCount(conversationId)).isEqualTo(1);
         Integer invocations = jdbc.queryForObject(
@@ -130,7 +130,7 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
         postUpdate(update).andExpect(status().isOk()); // Telegram redelivery: same update_id
 
         UUID conversationId = jdbc.queryForObject(
-                "SELECT id FROM conversations WHERE agent_id = ? AND channel_type = 'telegram'",
+                "SELECT c.id FROM conversations c JOIN identities i ON i.id = c.identity_id WHERE c.agent_id = ? AND i.channel_type = 'telegram'",
                 UUID.class, agentId);
         assertThat(userMessageCount(conversationId)).isEqualTo(1);
         Integer invocations = jdbc.queryForObject(
@@ -150,7 +150,7 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.error").value("webhook_authentication_failed"));
 
         Integer conversations = jdbc.queryForObject(
-                "SELECT count(*) FROM conversations WHERE channel_type = 'telegram'", Integer.class);
+                "SELECT count(*) FROM conversations c JOIN identities i ON i.id = c.identity_id WHERE i.channel_type = 'telegram'", Integer.class);
         assertThat(conversations).isZero();
     }
 
@@ -173,7 +173,7 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
         postUpdate(editedMessage).andExpect(status().isOk());
 
         Integer conversations = jdbc.queryForObject(
-                "SELECT count(*) FROM conversations WHERE channel_type = 'telegram'", Integer.class);
+                "SELECT count(*) FROM conversations c JOIN identities i ON i.id = c.identity_id WHERE i.channel_type = 'telegram'", Integer.class);
         assertThat(conversations).isZero();
     }
 
@@ -203,7 +203,7 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
                 objectMapper.readTree(body).get("conversation_id").asText());
 
         String channel = jdbc.queryForObject(
-                "SELECT channel_type FROM conversations WHERE id = ?", String.class, conversationId);
+                "SELECT i.channel_type FROM conversations c JOIN identities i ON i.id = c.identity_id WHERE c.id = ?", String.class, conversationId);
         assertThat(channel).isEqualTo("api");
         mockMvc.perform(get("/v1/conversations/" + conversationId + "/messages")
                         .header(HttpHeaders.AUTHORIZATION, clientAuth))

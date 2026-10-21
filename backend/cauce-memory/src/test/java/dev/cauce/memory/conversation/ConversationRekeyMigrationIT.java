@@ -18,8 +18,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * The V26 re-key backfill, driven by Flyway directly: migrate to V25, seed conversations in the
- * pre-identity shape, migrate to V26, and check what the backfill derived. No Spring context —
+ * The V26 re-key backfill and the V27 drop, driven by Flyway directly: migrate to V25, seed
+ * conversations in the pre-identity shape, migrate on, and check what the migrations derived. No Spring context —
  * the subject is the SQL, and every test starts from an empty schema.
  */
 @Testcontainers
@@ -131,6 +131,21 @@ class ConversationRekeyMigrationIT {
         int second = jdbc.update(insert, UUID.randomUUID(), agent, identity);
 
         assertThat(List.of(first, second)).containsExactly(1, 0);
+    }
+
+    @Test
+    void v27_dropsTheOpaqueColumnsAndTheirIndex_keepingTheIdentityOfEveryThread() {
+        UUID conversation = seedConversation("api", "user-1", "OPEN");
+
+        flyway(null).migrate();
+
+        assertThat(jdbc.queryForList("SELECT column_name FROM information_schema.columns "
+                + "WHERE table_name = 'conversations'", String.class))
+                .contains("identity_id", "channel_config_id")
+                .doesNotContain("channel_type", "external_identity_ref");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_indexes WHERE indexname = 'idx_conversations_identity'",
+                Integer.class)).isZero();
+        assertThat(identityOf(conversation)).containsEntry("value", "user-1");
     }
 
     private Flyway flyway(String target) {

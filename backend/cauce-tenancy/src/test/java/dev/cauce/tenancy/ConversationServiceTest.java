@@ -88,8 +88,6 @@ class ConversationServiceTest {
                 "+34612345678");
         assertThat(conversation.agentId()).isEqualTo(agentId);
         assertThat(conversation.channelConfigId()).contains(CONFIG);
-        assertThat(conversation.channelType()).isEqualTo("whatsapp");
-        assertThat(conversation.externalIdentityRef()).isEqualTo("+34612345678");
         assertThat(conversation.status()).isEqualTo(ConversationStatus.OPEN);
         assertThat(conversation.closedAt()).isNull();
     }
@@ -102,7 +100,6 @@ class ConversationServiceTest {
         Conversation conversation = service.startConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE,
                 "user-1", null);
 
-        assertThat(conversation.channelType()).isEqualTo("api");
         assertThat(conversation.channelConfigId()).isEmpty();
         assertThat(conversation.status()).isEqualTo(ConversationStatus.OPEN);
     }
@@ -174,8 +171,7 @@ class ConversationServiceTest {
                 "user-1", null);
 
         assertThat(resolved.id()).isEqualTo(open.id());
-        verify(conversationRepository, never()).insertOpenConversationIfAbsent(any(), any(), any(), any(),
-                any(), any());
+        verify(conversationRepository, never()).insertOpenConversationIfAbsent(any(), any(), any(), any());
     }
 
     @Test
@@ -192,7 +188,7 @@ class ConversationServiceTest {
                 .thenReturn(Optional.empty())          // fast path: no open thread
                 .thenReturn(Optional.of(persisted));   // re-read after the insert
         when(conversationRepository.insertOpenConversationIfAbsent(any(UUID.class), eq(agentId),
-                eq(identity.id()), eq(CONFIG), eq("telegram"), eq("42"))).thenReturn(1);
+                eq(identity.id()), eq(CONFIG))).thenReturn(1);
 
         Conversation resolved = service.resolveOrStartConversation(agentId, "telegram",
                 IdentityKind.PROVIDER_USER_ID, "42", CONFIG);
@@ -216,7 +212,7 @@ class ConversationServiceTest {
                 .thenReturn(Optional.empty())        // fast path: none yet
                 .thenReturn(Optional.of(winner));    // re-read finds the concurrent winner
         when(conversationRepository.insertOpenConversationIfAbsent(any(UUID.class), eq(agentId),
-                eq(identity.id()), eq(null), eq("api"), eq("user-1"))).thenReturn(0);  // lost the race
+                eq(identity.id()), eq(null))).thenReturn(0);  // lost the race
 
         Conversation resolved = service.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE,
                 "user-1", null);
@@ -339,7 +335,7 @@ class ConversationServiceTest {
     private static ConversationEntity conversationEntity(UUID id, ConversationStatus status) {
         Instant now = Instant.now();
         return new ConversationEntity(id, UUID.randomUUID(), UUID.randomUUID(), CONFIG,
-                "whatsapp", "+34612345678", status, now, now,
+                status, now, now,
                 status == ConversationStatus.CLOSED ? now : null,
                 status == ConversationStatus.ESCALATED ? now : null,
                 status == ConversationStatus.ARCHIVED ? now : null);

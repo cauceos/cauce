@@ -159,7 +159,7 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
         worker.pollAndProcess();
 
         UUID conversationId = jdbc.queryForObject(
-                "SELECT id FROM conversations WHERE agent_id = ? AND channel_type = 'api'",
+                "SELECT c.id FROM conversations c JOIN identities i ON i.id = c.identity_id WHERE c.agent_id = ? AND i.channel_type = 'api'",
                 UUID.class, agentId);
         await().atMost(Duration.ofSeconds(10))
                 .untilAsserted(() -> assertThat(agentMessageCount(conversationId)).isEqualTo(1));
@@ -222,7 +222,7 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
 
     private UUID telegramConversationId() {
         return jdbc.queryForObject(
-                "SELECT id FROM conversations WHERE agent_id = ? AND channel_type = 'telegram'",
+                "SELECT c.id FROM conversations c JOIN identities i ON i.id = c.identity_id WHERE c.agent_id = ? AND i.channel_type = 'telegram'",
                 UUID.class, agentId);
     }
 

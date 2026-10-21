@@ -25,8 +25,6 @@ class ConversationMapperTest {
         assertThat(roundTripped.agentId()).isEqualTo(original.agentId());
         assertThat(roundTripped.identityId()).isEqualTo(original.identityId());
         assertThat(roundTripped.channelConfigId()).isEqualTo(original.channelConfigId());
-        assertThat(roundTripped.channelType()).isEqualTo(original.channelType());
-        assertThat(roundTripped.externalIdentityRef()).isEqualTo(original.externalIdentityRef());
         assertThat(roundTripped.status()).isEqualTo(ConversationStatus.OPEN);
         assertThat(roundTripped.startedAt()).isEqualTo(original.startedAt());
         assertThat(roundTripped.lastMessageAt()).isEqualTo(original.lastMessageAt());
@@ -40,7 +38,7 @@ class ConversationMapperTest {
     void roundTrip_preservesNonNullClosedAt() {
         Instant now = Instant.now();
         Conversation closed = Conversation.rehydrate(UUID.randomUUID(), UUID.randomUUID(),
-                UUID.randomUUID(), UUID.randomUUID(), "email", "patient@example.com", ConversationStatus.CLOSED, now, now, now, null, null);
+                UUID.randomUUID(), UUID.randomUUID(), ConversationStatus.CLOSED, now, now, now, null, null);
 
         Conversation roundTripped = mapper.toDomain(mapper.toEntity(closed));
 
@@ -54,7 +52,7 @@ class ConversationMapperTest {
         Instant archivedAt = Instant.now();
         // An archived conversation that had been escalated earlier.
         Conversation archived = Conversation.rehydrate(UUID.randomUUID(), UUID.randomUUID(),
-                UUID.randomUUID(), UUID.randomUUID(), "voice", "+34600111222", ConversationStatus.ARCHIVED,
+                UUID.randomUUID(), UUID.randomUUID(), ConversationStatus.ARCHIVED,
                 escalatedAt.minusSeconds(60), escalatedAt, null, escalatedAt, archivedAt);
 
         Conversation roundTripped = mapper.toDomain(mapper.toEntity(archived));
@@ -76,8 +74,6 @@ class ConversationMapperTest {
         assertThat(entity.getAgentId()).isEqualTo(conversation.agentId());
         assertThat(entity.getIdentityId()).isEqualTo(conversation.identityId());
         assertThat(entity.getChannelConfigId()).isNull();
-        assertThat(entity.getChannelType()).isEqualTo("api");
-        assertThat(entity.getExternalIdentityRef()).isEqualTo("session-abc");
         assertThat(entity.getStatus()).isEqualTo(ConversationStatus.OPEN);
         assertThat(entity.getClosedAt()).isNull();
         assertThat(entity.getEscalatedAt()).isNull();

@@ -32,12 +32,6 @@ public class ConversationEntity {
     @Column(name = "channel_config_id", updatable = false)
     private UUID channelConfigId;
 
-    @Column(name = "channel_type", nullable = false, length = 20)
-    private String channelType;
-
-    @Column(name = "external_identity_ref", nullable = false, length = 320)
-    private String externalIdentityRef;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private ConversationStatus status;
@@ -62,14 +56,12 @@ public class ConversationEntity {
     }
 
     public ConversationEntity(UUID id, UUID agentId, UUID identityId, UUID channelConfigId,
-                              String channelType, String externalIdentityRef, ConversationStatus status, Instant startedAt, Instant lastMessageAt,
+                              ConversationStatus status, Instant startedAt, Instant lastMessageAt,
                               Instant closedAt, Instant escalatedAt, Instant archivedAt) {
         this.id = id;
         this.agentId = agentId;
         this.identityId = identityId;
         this.channelConfigId = channelConfigId;
-        this.channelType = channelType;
-        this.externalIdentityRef = externalIdentityRef;
         this.status = status;
         this.startedAt = startedAt;
         this.lastMessageAt = lastMessageAt;
@@ -92,14 +84,6 @@ public class ConversationEntity {
 
     public UUID getChannelConfigId() {
         return channelConfigId;
-    }
-
-    public String getChannelType() {
-        return channelType;
-    }
-
-    public String getExternalIdentityRef() {
-        return externalIdentityRef;
     }
 
     public ConversationStatus getStatus() {

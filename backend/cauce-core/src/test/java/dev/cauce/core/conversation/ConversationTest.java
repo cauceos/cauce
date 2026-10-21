@@ -39,15 +39,13 @@ class ConversationTest {
     }
 
     @Test
-    void start_assignsFieldsFromTheIdentityAndTheConfig() {
+    void start_referencesTheIdentityAndTheConfig() {
         UUID configId = UUID.randomUUID();
         Conversation conversation = Conversation.start(AGENT, IDENTITY, configId);
 
         assertThat(conversation.agentId()).isEqualTo(AGENT);
         assertThat(conversation.identityId()).isEqualTo(IDENTITY.id());
         assertThat(conversation.channelConfigId()).contains(configId);
-        assertThat(conversation.channelType()).isEqualTo("whatsapp");
-        assertThat(conversation.externalIdentityRef()).isEqualTo("+34612345678");
     }
 
     @Test
@@ -71,7 +69,7 @@ class ConversationTest {
     void rehydrate_rejectsNullIdentityId() {
         Instant now = Instant.now();
         assertThatThrownBy(() -> Conversation.rehydrate(UUID.randomUUID(), AGENT, null, null,
-                "whatsapp", "+34612345678", ConversationStatus.OPEN, now, now, null, null, null))
+                ConversationStatus.OPEN, now, now, null, null, null))
                 .isInstanceOf(NullPointerException.class);
     }
 
@@ -79,8 +77,7 @@ class ConversationTest {
     void equalsAndHashCode_areBasedOnId() {
         Conversation a = newConversation();
         Conversation sameId = Conversation.rehydrate(a.id(), UUID.randomUUID(), UUID.randomUUID(),
-                null, "voice", "+34999",
-                ConversationStatus.CLOSED, a.startedAt(), a.lastMessageAt(), a.startedAt(), null, null);
+                null, ConversationStatus.CLOSED, a.startedAt(), a.lastMessageAt(), a.startedAt(), null, null);
         Conversation different = newConversation();
 
         assertThat(a).isEqualTo(sameId);
@@ -207,7 +204,6 @@ class ConversationTest {
     private static Conversation conversationIn(ConversationStatus status) {
         Instant now = Instant.now();
         return Conversation.rehydrate(UUID.randomUUID(), AGENT, IDENTITY.id(), null,
-                "whatsapp", "+34612345678",
                 status, now, now,
                 status == ConversationStatus.CLOSED ? now : null,
                 status == ConversationStatus.ESCALATED ? now : null,

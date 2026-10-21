@@ -76,7 +76,7 @@ class InboundMessageServiceIT extends AbstractOrchestrationIntegrationTest {
         assertThat(result.invocationId()).isNotNull();
 
         String channel = jdbc.queryForObject(
-                "SELECT channel_type FROM conversations WHERE id = ?", String.class, result.conversationId());
+                "SELECT i.channel_type FROM conversations c JOIN identities i ON i.id = c.identity_id WHERE c.id = ?", String.class, result.conversationId());
         assertThat(channel).isEqualTo("api");
 
         Integer userMessages = jdbc.queryForObject(
@@ -116,7 +116,7 @@ class InboundMessageServiceIT extends AbstractOrchestrationIntegrationTest {
 
         assertThat(two.conversationId()).isNotEqualTo(one.conversationId());
         Integer apiConversations = jdbc.queryForObject(
-                "SELECT count(*) FROM conversations WHERE agent_id = ? AND channel_type = 'api'",
+                "SELECT count(*) FROM conversations c JOIN identities i ON i.id = c.identity_id WHERE c.agent_id = ? AND i.channel_type = 'api'",
                 Integer.class, agent.id());
         assertThat(apiConversations).isEqualTo(2);
     }
@@ -134,8 +134,12 @@ class InboundMessageServiceIT extends AbstractOrchestrationIntegrationTest {
         }
 
         Integer conversations = jdbc.queryForObject(
-                "SELECT count(*) FROM conversations WHERE external_identity_ref = 'intruder'", Integer.class);
+                "SELECT count(*) FROM conversations c JOIN identities i ON i.id = c.identity_id "
+                        + "WHERE i.value = 'intruder'", Integer.class);
         assertThat(conversations).isZero();
+        // The agent is resolved before the identity: an invisible agent mints no identity.
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM identities WHERE value = 'intruder'",
+                Integer.class)).isZero();
         Integer invocations = jdbc.queryForObject(
                 "SELECT count(*) FROM pending_invocations", Integer.class);
         assertThat(invocations).isZero();

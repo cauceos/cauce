@@ -126,8 +126,7 @@ public class ConversationService {
         }
         Conversation candidate = Conversation.start(agent.getId(), identity, channelConfigId);
         int inserted = conversationRepository.insertOpenConversationIfAbsent(
-                candidate.id(), candidate.agentId(), candidate.identityId(),
-                channelConfigId, candidate.channelType(), candidate.externalIdentityRef());
+                candidate.id(), candidate.agentId(), candidate.identityId(), channelConfigId);
         if (inserted == 0) {
             log.debug("Concurrent OPEN conversation for agent {} and identity {}; reusing the existing thread",
                     candidate.agentId(), candidate.identityId());

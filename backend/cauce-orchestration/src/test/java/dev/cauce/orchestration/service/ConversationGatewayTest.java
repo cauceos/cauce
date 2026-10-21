@@ -79,8 +79,6 @@ class ConversationGatewayTest {
         assertThat(loaded.messages()).extracting(Message::content).containsExactly("Hola");
         // The conversation itself travels too: outbound dispatch needs its channel identity.
         assertThat(loaded.conversation().id()).isEqualTo(conversationId);
-        assertThat(loaded.conversation().channelType()).isEqualTo("whatsapp");
-        assertThat(loaded.conversation().externalIdentityRef()).isEqualTo("+34600000000");
     }
 
     @Test
@@ -153,8 +151,7 @@ class ConversationGatewayTest {
 
     private void stubConversation() {
         when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(
-                new ConversationEntity(conversationId, agentId, UUID.randomUUID(), UUID.randomUUID(), "whatsapp", "+34600000000",
-                        ConversationStatus.OPEN, now, now, null, null, null)));
+                new ConversationEntity(conversationId, agentId, UUID.randomUUID(), UUID.randomUUID(), ConversationStatus.OPEN, now, now, null, null, null)));
     }
 
     private void stubHistory(MessageEntity... history) {
