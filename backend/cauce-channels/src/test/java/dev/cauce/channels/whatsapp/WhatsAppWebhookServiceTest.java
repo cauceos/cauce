@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.channels.WebhookAuthenticationException;
+import dev.cauce.channels.InboundInterception;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
@@ -68,7 +69,7 @@ class WhatsAppWebhookServiceTest {
         outbound = mock(WhatsAppChannelAdapter.class);
         recorder = mock(WhatsAppEventRecorder.class);
         service = new WhatsAppWebhookService(appService, numberService, inbound, outbound, recorder,
-                new WhatsAppProperties(), FAKE_HASHER, new SyncTaskExecutor());
+                new WhatsAppProperties(), FAKE_HASHER, new SyncTaskExecutor(), mock(InboundInterception.class));
         app = WhatsAppApp.create(UUID.randomUUID(), "1234567890", SECRET, FAKE_HASHER.hash("verify-me"));
         number = ChannelConfig.createWhatsAppNumber(UUID.randomUUID(), UUID.randomUUID(), app.id(), "1111111111",
                 "EAAG-token");

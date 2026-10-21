@@ -52,13 +52,16 @@ public class ChannelWebhookService {
     private final ChannelConfigService channelConfigService;
     private final ChannelAdapterRegistry adapterRegistry;
     private final InboundMessageService inboundMessageService;
+    private final InboundInterception interception;
 
     public ChannelWebhookService(ChannelConfigService channelConfigService,
                                  ChannelAdapterRegistry adapterRegistry,
-                                 InboundMessageService inboundMessageService) {
+                                 InboundMessageService inboundMessageService,
+                                 InboundInterception interception) {
         this.channelConfigService = channelConfigService;
         this.adapterRegistry = adapterRegistry;
         this.inboundMessageService = inboundMessageService;
+        this.interception = interception;
     }
 
     /**
@@ -92,6 +95,11 @@ public class ChannelWebhookService {
         }
         TenantContext.setCurrentTenantId(config.tenantId());
         try {
+            // ADR 0007, B8: a text an interceptor handles (an owner's link code) reaches no agent.
+            if (interception.intercepted(config, message.get().identityKind(), message.get().identityValue(),
+                    message.get().content())) {
+                return WebhookResult.ACCEPTED;
+            }
             inboundMessageService.ingest(config.agentId(), config.channelType(), config.id(),
                     message.get().identityKind(), message.get().identityValue(),
                     message.get().content(), message.get().idempotencyKey());

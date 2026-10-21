@@ -38,6 +38,7 @@ class ChannelWebhookServiceTest {
     private ChannelConfigService channelConfigService;
     private InboundChannelAdapter adapter;
     private InboundMessageService inboundMessageService;
+    private InboundInterception interception;
     private ChannelWebhookService service;
 
     private ChannelConfig config;
@@ -47,9 +48,10 @@ class ChannelWebhookServiceTest {
         channelConfigService = mock(ChannelConfigService.class);
         adapter = mock(InboundChannelAdapter.class);
         inboundMessageService = mock(InboundMessageService.class);
+        interception = mock(InboundInterception.class);
         when(adapter.channelType()).thenReturn("telegram");
         service = new ChannelWebhookService(channelConfigService,
-                new ChannelAdapterRegistry(List.of(adapter), List.of()), inboundMessageService);
+                new ChannelAdapterRegistry(List.of(adapter), List.of()), inboundMessageService, interception);
         config = ChannelConfig.create(UUID.randomUUID(), UUID.randomUUID(), "telegram",
                 "token", "hash");
         TenantContext.clear();
@@ -127,6 +129,27 @@ class ChannelWebhookServiceTest {
 
         assertThat(result).isEqualTo(WebhookResult.ACCEPTED);
         assertThat(contextDuringIngest.get()).isEqualTo(config.tenantId());
+        assertThat(TenantContext.getCurrentTenantId()).isEmpty();
+    }
+
+    @Test
+    void handle_aTextAnInterceptorHandles_isNeverIngested_andRunsUnderTheConfigTenant() {
+        ChannelInboundMessage message =
+                new ChannelInboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321", "/start ABCDEFGHJK", "k");
+        when(channelConfigService.resolveActiveChannelConfig(config.id())).thenReturn(Optional.of(config));
+        when(adapter.verify(REQUEST, config)).thenReturn(true);
+        when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.of(message));
+        AtomicReference<UUID> contextDuringInterception = new AtomicReference<>();
+        when(interception.intercepted(config, IdentityKind.PROVIDER_USER_ID, "987654321", "/start ABCDEFGHJK"))
+                .thenAnswer(invocation -> {
+                    contextDuringInterception.set(TenantContext.getCurrentTenantId().orElse(null));
+                    return true;
+                });
+
+        assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.ACCEPTED);
+
+        assertThat(contextDuringInterception.get()).isEqualTo(config.tenantId());
+        verifyNoInteractions(inboundMessageService);
         assertThat(TenantContext.getCurrentTenantId()).isEmpty();
     }
 }

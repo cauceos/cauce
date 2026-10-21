@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelDeliveryException;
+import dev.cauce.channels.spi.OutsideReplyWindowException;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.core.identity.IdentityKind;
@@ -40,6 +41,8 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter {
     static final String CHANNEL_TYPE = "whatsapp";
     static final int MAX_TEXT_LENGTH = 4096;
     static final Duration SERVICE_WINDOW = Duration.ofHours(24);
+    /** Meta's error for a free-form message outside the customer service window. */
+    static final int REENGAGEMENT_ERROR = 131047;
 
     // Own mapper: the Graph API wire format must not inherit the application's Jackson settings.
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -68,9 +71,9 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter {
             throw new ChannelDeliveryException("Channel config " + config.id() + " is not a WhatsApp number");
         }
         Instant lastInbound = message.lastMessageAt().orElseThrow(() ->
-                new ChannelDeliveryException("The 24-hour window cannot be checked: no message from the interlocutor"));
+                new OutsideReplyWindowException("The 24-hour window cannot be checked: no message from the interlocutor"));
         if (Duration.between(lastInbound, clock.instant()).compareTo(SERVICE_WINDOW) > 0) {
-            throw new ChannelDeliveryException("Outside the WhatsApp 24-hour customer service window "
+            throw new OutsideReplyWindowException("Outside the WhatsApp 24-hour customer service window "
                     + "(last interlocutor message at " + lastInbound + "); templates are not supported yet");
         }
         if (message.content().length() > MAX_TEXT_LENGTH) {
@@ -104,8 +107,12 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter {
             throw new ChannelDeliveryException("Interrupted during WhatsApp delivery", e);
         }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new ChannelDeliveryException("WhatsApp send returned HTTP " + response.statusCode() + ": "
-                    + describeError(response.body()));
+            String described = describeError(response.body());
+            String failure = "WhatsApp send returned HTTP " + response.statusCode() + ": " + described;
+            // Meta's own re-engagement refusal is the window, seen from its side.
+            throw described.startsWith("error " + REENGAGEMENT_ERROR + " ")
+                    ? new OutsideReplyWindowException(failure)
+                    : new ChannelDeliveryException(failure);
         }
     }
 
@@ -114,7 +121,7 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter {
         try {
             JsonNode error = objectMapper.readTree(body).path("error");
             int code = error.path("code").asInt(-1);
-            String hint = code == 131047 ? " (re-engagement: outside the 24-hour window)" : "";
+            String hint = code == REENGAGEMENT_ERROR ? " (re-engagement: outside the 24-hour window)" : "";
             return "error " + code + hint + " — " + error.path("message").asText("(no message)");
         } catch (JacksonException e) {
             return "(unparseable error body)";

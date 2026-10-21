@@ -16,6 +16,7 @@ import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelDeliveryException;
+import dev.cauce.channels.spi.OutsideReplyWindowException;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.core.identity.IdentityKind;
 import java.net.http.HttpClient;
@@ -69,7 +70,7 @@ class WhatsAppChannelAdapterTest {
     @Test
     void deliver_outsideThe24HourWindow_failsLoudly_withoutCallingMeta(WireMockRuntimeInfo wm) {
         assertThatThrownBy(() -> adapterAgainst(wm).deliver(reply("Hola", Duration.ofHours(25)), number))
-                .isInstanceOf(ChannelDeliveryException.class)
+                .isInstanceOf(OutsideReplyWindowException.class)
                 .hasMessageContaining("24-hour");
         verify(0, postRequestedFor(urlEqualTo(SEND_PATH)));
     }
@@ -107,7 +108,7 @@ class WhatsAppChannelAdapterTest {
                 .withBody("{\"error\":{\"message\":\"Re-engagement message\",\"code\":131047}}")));
 
         assertThatThrownBy(() -> adapterAgainst(wm).deliver(reply("Hola", Duration.ofMinutes(1)), number))
-                .isInstanceOf(ChannelDeliveryException.class)
+                .isInstanceOf(OutsideReplyWindowException.class)
                 .hasMessageContaining("131047")
                 .hasMessageContaining("24-hour")
                 .satisfies(e -> assertThat(e.getMessage()).doesNotContain("EAAG-access-token"));

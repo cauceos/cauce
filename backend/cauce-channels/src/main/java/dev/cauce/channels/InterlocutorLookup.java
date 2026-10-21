@@ -44,6 +44,15 @@ public class InterlocutorLookup {
                 .map(MessageEntity::getCreatedAt);
     }
 
+    /**
+     * When {@code identityId} last wrote through channel config {@code channelConfigId}, in any of
+     * its conversations there, under RLS: the reply window of a proactive message (ADR 0007, B9).
+     */
+    @Transactional(readOnly = true)
+    public Optional<Instant> lastMessageAt(UUID identityId, UUID channelConfigId) {
+        return messageRepository.findLastUserMessageAt(identityId, channelConfigId);
+    }
+
     /** The identity, if it is visible under the current tenant context (RLS). */
     @Transactional(readOnly = true)
     public Optional<Identity> find(UUID identityId) {

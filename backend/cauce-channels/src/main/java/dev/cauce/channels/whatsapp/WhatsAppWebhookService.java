@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cauce.channels.WebhookAuthenticationException;
+import dev.cauce.channels.InboundInterception;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
@@ -63,6 +64,7 @@ public class WhatsAppWebhookService {
     private final WhatsAppProperties properties;
     private final ApiKeyHasher hasher;
     private final TaskExecutor outboundExecutor;
+    private final InboundInterception interception;
     // Own mapper: Meta's wire format must not inherit the application's Jackson settings.
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -70,7 +72,8 @@ public class WhatsAppWebhookService {
                                   InboundMessageService inboundMessageService, WhatsAppChannelAdapter outbound,
                                   WhatsAppEventRecorder eventRecorder, WhatsAppProperties properties,
                                   ApiKeyHasher hasher,
-                                  @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor) {
+                                  @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor,
+                                  InboundInterception interception) {
         this.appService = appService;
         this.numberService = numberService;
         this.inboundMessageService = inboundMessageService;
@@ -79,6 +82,7 @@ public class WhatsAppWebhookService {
         this.properties = properties;
         this.hasher = hasher;
         this.outboundExecutor = outboundExecutor;
+        this.interception = interception;
     }
 
     /**
@@ -174,6 +178,11 @@ public class WhatsAppWebhookService {
         TenantContext.setCurrentTenantId(number.tenantId());
         try {
             if ("text".equals(type) && !message.path("text").path("body").asText("").isBlank()) {
+                // ADR 0007, B8: a text an interceptor handles (an owner's link code) reaches no agent.
+                if (interception.intercepted(number, IdentityKind.PROVIDER_USER_ID, bsuid,
+                        message.path("text").path("body").asText())) {
+                    return;
+                }
                 inboundMessageService.ingest(number.agentId(), number.channelType(), number.id(),
                         IdentityKind.PROVIDER_USER_ID, bsuid, message.path("text").path("body").asText(),
                         number.id() + ":" + providerMessageId);
