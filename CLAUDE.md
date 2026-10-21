@@ -393,7 +393,11 @@ what the cauce-api integration tests assert. The rules every endpoint follows:
   the same agent replays the original 202 ids and ingests nothing new. Deduplication is insert-first
   inside the same ingest transaction on the `(agent_id, idempotency_key)` unique constraint;
   matching is by key only, the body is not fingerprinted. Channel adapters populate the key from
-  the provider's message id so redelivery replays instead of duplicating.
+  the provider's message id so redelivery replays instead of duplicating (Telegram `update_id`,
+  WhatsApp `wamid`, each prefixed with the config id). A provider message acknowledged without
+  being ingested (a WhatsApp image answered with the text-only reply) is claimed instead in
+  `channel_inbound_receipts`, unique per `(config, provider message id)`, so it is audited and
+  answered once. Every redelivery, concurrent or not, gets a 2xx.
 - **Provider webhooks** live outside `/v1` and outside API-key auth (`POST
   /webhooks/channels/{configId}`). Authentication is the per-config channel secret, verified by the
   adapter before anything is processed. The tenant is discovered from the config row — resolved

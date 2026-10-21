@@ -43,7 +43,8 @@ import org.springframework.stereotype.Service;
  *       and a new thread (W1's conscious limitation);</li>
  *   <li><b>a group message</b> — refused with a WARN, as for Telegram groups (ADR 0004);</li>
  *   <li><b>any other type</b> — audited as {@code conduct.message.unsupported} and answered with
- *       the fixed text-only reply (W5): never silence.</li>
+ *       the fixed text-only reply (W5): never silence. Exactly once: a receipt keyed by the
+ *       provider message id (V32) turns a redelivery into a no-op.</li>
  * </ul>
  * Status updates (sent, delivered, read, failed) are acknowledged and ignored. After a valid
  * signature everything is acknowledged with a 2xx except a malformed body, so Meta never
@@ -178,9 +179,16 @@ public class WhatsAppWebhookService {
                         number.id() + ":" + providerMessageId);
                 return;
             }
-            // W5: never silence. The message is not ingested, so it opens no thread.
-            eventRecorder.recordUnsupportedMessage(number, type, providerMessageId);
-            sendTextOnlyReply(number, bsuid);
+            // W5: never silence. The message is not ingested, so it opens no thread. Its receipt
+            // makes a redelivery a no-op: one audit record, one reply.
+            if (providerMessageId.isBlank()) {
+                log.warn("WhatsApp {} message for config {} carries no id; it cannot be deduplicated, so it is "
+                        + "neither recorded nor answered", type, number.id());
+                return;
+            }
+            if (eventRecorder.recordUnsupportedMessage(number, type, providerMessageId)) {
+                sendTextOnlyReply(number, bsuid);
+            }
         } finally {
             TenantContext.clear();
         }

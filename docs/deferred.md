@@ -18,7 +18,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 ## Ingest and idempotency
 
 - **No body fingerprint on `Idempotency-Key`.** Replay matches by key only; the threat model is byte-identical webhook redelivery, not a client reusing a key with a different body.
-- **No retention purge for `ingest_idempotency_records`.** The table has `created_at` and an index, so a scheduled `DELETE WHERE created_at < …` is a pure add.
+- **No retention purge for `ingest_idempotency_records` and `channel_inbound_receipts`.** Both tables have `created_at` and an index, so a scheduled `DELETE WHERE created_at < …` is a pure add. The retention must outlast the providers' redelivery horizon (Telegram and Meta retry for hours, not days), or a late redelivery would be handled twice.
 - **The `AFTER_COMMIT`/outbox question for `OrchestrationEvent` consumers is parked.** `InvocationRequested` is published inside the ingest transaction (TODO in `InboundMessageService`). The in-memory metrics listener is exempt; the first persisting consumer must resolve it.
 
 ## Credentials

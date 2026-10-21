@@ -32,8 +32,16 @@ import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
@@ -267,7 +275,67 @@ class WhatsAppApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.error").value("invalid_channel_config_request"));
     }
 
+    @Test
+    void aTextRedeliveredConcurrently_isIngestedOnce_andEveryDeliveryGets2xx() throws Exception {
+        String appId = registerApp(partnerAuth, partnerId);
+        bindNumber(appId, createAgent());
+        String body = textMessage("wamid.RACE", "Hola");
+
+        List<Integer> statuses = race(6, () -> postSigned(appId, body).andReturn().getResponse().getStatus());
+
+        assertThat(statuses).containsOnly(200);
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM messages WHERE role = 'USER'", Integer.class))
+                .isEqualTo(1);
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM pending_invocations", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void aNonTextMessageRedelivered_sequentiallyOrConcurrently_isAuditedAndAnsweredOnce() throws Exception {
+        String appId = registerApp(partnerAuth, partnerId);
+        bindNumber(appId, createAgent());
+        String body = envelope("""
+                {"from_user_id":"%s","id":"wamid.AUDIO","type":"audio","audio":{"id":"media-9"}}""".formatted(BSUID));
+
+        postSigned(appId, body).andExpect(status().isOk());
+        List<Integer> statuses = race(6, () -> postSigned(appId, body).andReturn().getResponse().getStatus());
+
+        assertThat(statuses).containsOnly(200);
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM audit_outbox WHERE event_type = "
+                + "'conduct.message.unsupported'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM channel_inbound_receipts", Integer.class))
+                .isEqualTo(1);
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                GRAPH.verify(1, postRequestedFor(urlEqualTo(SEND_PATH))));
+        Thread.sleep(500); // a late duplicate send would land here
+        GRAPH.verify(1, postRequestedFor(urlEqualTo(SEND_PATH)));
+    }
+
     // --- helpers ---
+
+    /**
+     * Fires {@code request} {@code parallel} times at once (a provider redelivering while the first
+     * delivery is still in flight) and returns the HTTP statuses.
+     */
+    private List<Integer> race(int parallel, Callable<Integer> request) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(parallel);
+        CyclicBarrier barrier = new CyclicBarrier(parallel);
+        List<Callable<Integer>> tasks = new ArrayList<>();
+        for (int i = 0; i < parallel; i++) {
+            tasks.add(() -> {
+                barrier.await(5, TimeUnit.SECONDS);
+                return request.call();
+            });
+        }
+        List<Integer> statuses = new ArrayList<>();
+        try {
+            for (Future<Integer> future : pool.invokeAll(tasks)) {
+                statuses.add(future.get(20, TimeUnit.SECONDS));
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        return statuses;
+    }
 
     private JsonNode registerAppJson() throws Exception {
         return objectMapper.readTree(mockMvc.perform(postAs(partnerAuth, "/v1/tenants/" + partnerId + "/whatsapp-apps",

@@ -17,7 +17,15 @@ import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.events.InvocationRequested;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -212,7 +220,44 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.data[0].content").value("Hola por API"));
     }
 
+    @Test
+    void webhook_updateRedeliveredConcurrently_isIngestedOnce_andEveryDeliveryGets2xx() throws Exception {
+        String update = update(3003, 987654321L, "Hola");
+
+        List<Integer> statuses = race(6, () -> postUpdate(update).andReturn().getResponse().getStatus());
+
+        assertThat(statuses).containsOnly(200);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM messages WHERE role = 'USER'", Integer.class))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pending_invocations", Integer.class)).isEqualTo(1);
+    }
+
     // --- helpers ---
+
+    /**
+     * Fires {@code request} {@code parallel} times at once (a provider redelivering while the first
+     * delivery is still in flight) and returns the HTTP statuses.
+     */
+    private List<Integer> race(int parallel, Callable<Integer> request) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(parallel);
+        CyclicBarrier barrier = new CyclicBarrier(parallel);
+        List<Callable<Integer>> tasks = new ArrayList<>();
+        for (int i = 0; i < parallel; i++) {
+            tasks.add(() -> {
+                barrier.await(5, TimeUnit.SECONDS);
+                return request.call();
+            });
+        }
+        List<Integer> statuses = new ArrayList<>();
+        try {
+            for (Future<Integer> future : pool.invokeAll(tasks)) {
+                statuses.add(future.get(20, TimeUnit.SECONDS));
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        return statuses;
+    }
 
     private org.springframework.test.web.servlet.ResultActions postUpdate(String updateJson)
             throws Exception {

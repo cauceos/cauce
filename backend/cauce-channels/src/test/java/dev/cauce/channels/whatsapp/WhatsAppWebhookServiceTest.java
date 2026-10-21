@@ -150,6 +150,7 @@ class WhatsAppWebhookServiceTest {
 
     @Test
     void handle_aNonTextMessage_isAudited_andAnsweredWithTheTextOnlyReply_neverSilence() {
+        when(recorder.recordUnsupportedMessage(number, "image", "wamid.B1")).thenReturn(true);
         service.handle(app.id(), signed(change("""
                 {"from_user_id":"%s","id":"wamid.B1","type":"image","image":{"id":"media-1"}}""".formatted(BSUID))));
 
@@ -160,6 +161,25 @@ class WhatsAppWebhookServiceTest {
         assertThat(reply.getValue().content()).isEqualTo(new WhatsAppProperties().getUnsupportedMessageReply());
         assertThat(reply.getValue().lastMessageAt()).isPresent();
         verify(inbound, never()).ingest(any(), anyString(), any(), any(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void handle_aRedeliveredNonTextMessage_whoseReceiptIsTaken_isNotAnsweredAgain() {
+        when(recorder.recordUnsupportedMessage(number, "audio", "wamid.B2")).thenReturn(false);
+
+        service.handle(app.id(), signed(change("""
+                {"from_user_id":"%s","id":"wamid.B2","type":"audio","audio":{"id":"media-2"}}""".formatted(BSUID))));
+
+        verify(recorder).recordUnsupportedMessage(number, "audio", "wamid.B2");
+        verifyNoInteractions(outbound);
+    }
+
+    @Test
+    void handle_aNonTextMessageWithoutAnId_cannotBeDeduplicated_soItIsNeitherRecordedNorAnswered() {
+        service.handle(app.id(), signed(change("""
+                {"from_user_id":"%s","type":"image","image":{"id":"media-3"}}""".formatted(BSUID))));
+
+        verifyNoInteractions(recorder, outbound);
     }
 
     @Test

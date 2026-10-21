@@ -74,7 +74,7 @@ class PendingInvocationServiceIT extends AbstractOrchestrationIntegrationTest {
         // TRUNCATE or read rows out of context). countVisibleAs uses the cauce_app datasource
         // so it exercises RLS for real.
         jdbc = new JdbcTemplate(adminDataSource);
-        jdbc.execute("TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox, llm_usage_records, channel_configs, whatsapp_apps, api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, identities, agents, tenants CASCADE");
+        jdbc.execute("TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox, llm_usage_records, channel_inbound_receipts, channel_configs, whatsapp_apps, api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, identities, agents, tenants CASCADE");
         TenantContext.clear();
 
         operator = tenantService.bootstrapOperator("Operator");
