@@ -3,8 +3,10 @@ package dev.cauce.tools;
 import dev.cauce.core.business.booking.BookingProvider;
 import dev.cauce.core.business.catalog.CatalogSource;
 import dev.cauce.core.business.gap.KnowledgeGapSink;
+import dev.cauce.core.business.handoff.HandoffSink;
 import dev.cauce.core.business.profile.BusinessProfileSource;
 import dev.cauce.tools.business.BookingTools;
+import dev.cauce.tools.business.EscalateToOwnerTool;
 import dev.cauce.tools.business.GetBusinessInfoTool;
 import dev.cauce.tools.business.RecordUnansweredQuestionTool;
 import dev.cauce.tools.business.SearchCatalogTool;
@@ -76,5 +78,10 @@ public class ToolsConfiguration {
     @Bean
     public Tool listMyBookingsTool(ObjectProvider<BookingProvider> bookings) {
         return BookingTools.listMyBookings(bookings::getIfAvailable);
+    }
+
+    @Bean
+    public EscalateToOwnerTool escalateToOwnerTool(ObjectProvider<HandoffSink> sinks) {
+        return new EscalateToOwnerTool(sinks::getIfAvailable);
     }
 }

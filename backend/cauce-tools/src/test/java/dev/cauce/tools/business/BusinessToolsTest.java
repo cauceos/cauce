@@ -2,6 +2,7 @@ package dev.cauce.tools.business;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -11,8 +12,12 @@ import static org.mockito.Mockito.when;
 import dev.cauce.core.business.catalog.Catalog;
 import dev.cauce.core.business.catalog.CatalogItem;
 import dev.cauce.core.business.catalog.CatalogSource;
+import dev.cauce.core.business.booking.Booking;
 import dev.cauce.core.business.gap.KnowledgeGap;
 import dev.cauce.core.business.gap.KnowledgeGapSink;
+import dev.cauce.core.business.handoff.Handoff;
+import dev.cauce.core.business.handoff.HandoffSink;
+import dev.cauce.core.business.handoff.InvalidHandoffCategoryException;
 import dev.cauce.core.business.profile.BusinessProfile;
 import dev.cauce.core.business.profile.BusinessProfile.Fact;
 import dev.cauce.core.business.profile.BusinessProfileSource;
@@ -26,6 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class BusinessToolsTest {
 
@@ -109,6 +115,32 @@ class BusinessToolsTest {
         assertThatThrownBy(() -> new RecordUnansweredQuestionTool(() -> sink)
                 .execute(call("record_unanswered_question", Map.of()), context))
                 .isInstanceOf(InvalidToolArgumentException.class);
+    }
+
+    @Test
+    void escalateToOwner_opensTheCaseForTheContext_andTellsTheAgentWhatNotToPromise() {
+        HandoffSink sink = mock(HandoffSink.class);
+        ArgumentCaptor<Booking.Requester> requester = ArgumentCaptor.forClass(Booking.Requester.class);
+        when(sink.open(requester.capture(), any())).thenAnswer(call -> new HandoffSink.HandoffReceipt(
+                Handoff.open(call.getArgument(0), call.getArgument(1)), true));
+
+        String output = new EscalateToOwnerTool(() -> sink).execute(call("escalate_to_owner", Map.of(
+                "category", "Evento", "summary", "Cumpleaños de 25 personas el 14 de noviembre",
+                "contact_name", "Marta", "contact_phone", "+34 600 111 222")), context).output();
+
+        assertThat(requester.getValue().identityId()).isEqualTo(context.identityId());
+        assertThat(output).contains("\"owner_notified\":true").contains("\"handoff_code\":")
+                .contains("Do not promise prices");
+    }
+
+    @Test
+    void escalateToOwner_withAnUnknownCategory_isAnArgumentTheModelMustFix() {
+        HandoffSink sink = mock(HandoffSink.class);
+        when(sink.open(any(), any())).thenThrow(new InvalidHandoffCategoryException("use one of evento, queja"));
+
+        assertThatThrownBy(() -> new EscalateToOwnerTool(() -> sink).execute(call("escalate_to_owner", Map.of(
+                "category", "boda", "summary", "s", "contact_name", "Marta")), context))
+                .isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("evento");
     }
 
     private static ToolCall call(String name, Map<String, Object> input) {
