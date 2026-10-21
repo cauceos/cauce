@@ -25,7 +25,9 @@ import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.persistence.PendingInvocationEntity;
 import dev.cauce.orchestration.persistence.PendingInvocationMapper;
 import dev.cauce.orchestration.persistence.PendingInvocationRepository;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,6 +37,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 class PendingInvocationServiceTest {
+
+    private static final Instant NOW = Instant.parse("2026-10-21T10:00:00Z");
 
     private final UUID agentId = UUID.randomUUID();
     private final UUID tenantId = UUID.randomUUID();
@@ -57,7 +61,7 @@ class PendingInvocationServiceTest {
         mapper = new PendingInvocationMapper();
         auditRecorder = Mockito.mock(AuditEventRecorder.class);
         service = new PendingInvocationService(pendingInvocationRepository, conversationRepository,
-                messageRepository, agentRepository, mapper, auditRecorder);
+                messageRepository, agentRepository, mapper, auditRecorder, Clock.fixed(NOW, ZoneOffset.UTC));
         when(pendingInvocationRepository.save(any(PendingInvocationEntity.class)))
                 .thenAnswer(call -> call.getArgument(0));
     }
@@ -254,7 +258,7 @@ class PendingInvocationServiceTest {
     }
 
     @Test
-    void releaseForRetry_savesPendingTransitionWithBackoff() {
+    void releaseForRetry_savesPendingTransitionWithBackoffFromTheClock() {
         PendingInvocation processing = processingInvocation();
         when(pendingInvocationRepository.findById(processing.id()))
                 .thenReturn(Optional.of(mapper.toEntity(processing)));
@@ -265,7 +269,9 @@ class PendingInvocationServiceTest {
                 ArgumentCaptor.forClass(PendingInvocationEntity.class);
         verify(pendingInvocationRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(PendingInvocationStatus.PENDING);
-        assertThat(captor.getValue().getNextAttemptAt()).isNotNull();
+        assertThat(captor.getValue().getNextAttemptAt())
+                .as("attempt 1 -> base seconds after the injected (database) clock")
+                .isEqualTo(NOW.plusSeconds(30L));
         assertThat(captor.getValue().getClaimedAt()).isNull();
         assertThat(captor.getValue().getClaimedBy()).isNull();
         // A retry release is not terminal: nothing is audited.

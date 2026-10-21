@@ -174,7 +174,9 @@ public final class PendingInvocation {
      * attempt (e.g. a transient provider error). Allowed only from
      * {@link PendingInvocationStatus#PROCESSING}. Clears the claim, records the error, and
      * schedules the next attempt with exponential backoff:
-     * {@code nextAttemptAt = now + baseIntervalSeconds * 2^(attemptCount - 1)}.
+     * {@code nextAttemptAt = now + baseIntervalSeconds * 2^(attemptCount - 1)}, where {@code now}
+     * is a reading of the database clock (ADR 0008): the claim compares it with the database's
+     * {@code now()}.
      *
      * <p>The first retry (after attempt 1) lands {@code baseIntervalSeconds} in the future;
      * the second {@code 2 * baseIntervalSeconds}; the third {@code 4 * baseIntervalSeconds};
@@ -183,13 +185,14 @@ public final class PendingInvocation {
      *
      * @param errorMessage the reason for the retry; may be {@code null}, truncated to 1000 chars
      * @param baseIntervalSeconds the seed of the backoff; must be &gt; 0
+     * @param now the time the backoff counts from
      * @return a new PENDING invocation with the claim cleared and {@code nextAttemptAt} set
      * @throws InvalidPendingInvocationTransitionException if not PROCESSING
      * @throws MaxRetriesExceededException if the attempt budget is already exhausted; the
      *     caller must use {@link #fail} or {@link #abandon} instead
      * @throws IllegalArgumentException if {@code baseIntervalSeconds} is not strictly positive
      */
-    public PendingInvocation releaseForRetry(String errorMessage, long baseIntervalSeconds) {
+    public PendingInvocation releaseForRetry(String errorMessage, long baseIntervalSeconds, Instant now) {
         if (status != PendingInvocationStatus.PROCESSING) {
             throw new InvalidPendingInvocationTransitionException(
                     transitionError(PendingInvocationStatus.PENDING));
@@ -204,7 +207,7 @@ public final class PendingInvocation {
                     "baseIntervalSeconds must be > 0 but was " + baseIntervalSeconds);
         }
         long delaySeconds = baseIntervalSeconds * (1L << (attemptCount - 1));
-        Instant next = Instant.now().plusSeconds(delaySeconds);
+        Instant next = Objects.requireNonNull(now, "now").plusSeconds(delaySeconds);
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.PENDING, attemptCount, maxAttempts, lastAttemptAt,
                 truncateError(errorMessage), failureType, createdAt, null, null, completedAt, next);

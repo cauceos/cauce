@@ -6,6 +6,7 @@ import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -41,12 +42,15 @@ public class PendingInvocationReaper {
     private final PendingInvocationWorkerProperties properties;
     private final FailureFallbackService failureFallbackService;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     public PendingInvocationReaper(PendingInvocationService pendingInvocationService,
                                    PendingInvocationWorkerProperties properties,
                                    ApplicationEventPublisher eventPublisher,
-                                   FailureFallbackService failureFallbackService) {
+                                   FailureFallbackService failureFallbackService,
+                                   Clock clock) {
         this.failureFallbackService = failureFallbackService;
+        this.clock = clock;
         this.pendingInvocationService = pendingInvocationService;
         this.properties = properties;
         this.eventPublisher = eventPublisher;
@@ -57,7 +61,8 @@ public class PendingInvocationReaper {
      */
     @Scheduled(fixedDelayString = "${cauce.orchestration.worker.reaper.interval-ms:300000}")
     public void reapOrphanedInvocations() {
-        Instant threshold = Instant.now().minus(Duration.ofMillis(properties.getReaper().getTimeoutMs()));
+        // The database clock (ADR 0008): claimed_at is the claim's now().
+        Instant threshold = clock.instant().minus(Duration.ofMillis(properties.getReaper().getTimeoutMs()));
         List<PendingInvocation> orphans;
         try {
             orphans = pendingInvocationService.findOrphanedSince(threshold);

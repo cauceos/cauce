@@ -24,6 +24,7 @@ import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -319,7 +320,7 @@ class PendingInvocationWorkerTest {
         PendingInvocation invocation =
                 PendingInvocation.create(tenantId, conversationId, triggerMessageId).claim(WORKER_ID);
         while (invocation.attemptCount() < targetAttempt) {
-            invocation = invocation.releaseForRetry("transient", 1L).claim(WORKER_ID);
+            invocation = invocation.releaseForRetry("transient", 1L, Instant.now()).claim(WORKER_ID);
         }
         return invocation;
     }

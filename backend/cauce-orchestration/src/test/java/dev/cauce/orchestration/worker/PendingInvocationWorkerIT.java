@@ -219,7 +219,7 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
                 "SELECT last_error FROM pending_invocations WHERE id = ?",
                 String.class, enqueued.id());
         assertThat(nextAttempt).isNotNull();
-        assertThat(nextAttempt.toInstant()).isAfter(Instant.now());
+        assertThat(nextAttempt.toInstant()).isAfter(clock.instant());
         assertThat(attemptCount).isEqualTo(1);
         assertThat(lastError).contains("LlmRateLimitException");
     }
@@ -296,7 +296,7 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
     void reapOrphanedInvocations_releasesHungProcessingRow() {
         PendingInvocation enqueued = enqueueAs(clientA.id());
         // Hand-craft a PROCESSING row whose claim is well past the 1s reaper timeout.
-        Instant oldClaim = Instant.now().minusSeconds(60);
+        Instant oldClaim = clock.instant().minusSeconds(60);
         jdbc.update("UPDATE pending_invocations SET status = 'PROCESSING', "
                 + "attempt_count = 1, claimed_at = ?, claimed_by = ? WHERE id = ?",
                 Timestamp.from(oldClaim), "dead-worker:1:deadbeef", enqueued.id());
@@ -317,7 +317,7 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
     @Test
     void reapOrphanedInvocations_whenBudgetExhausted_marksAbandoned() {
         PendingInvocation enqueued = enqueueAs(clientA.id());
-        Instant oldClaim = Instant.now().minusSeconds(60);
+        Instant oldClaim = clock.instant().minusSeconds(60);
         jdbc.update("UPDATE pending_invocations SET status = 'PROCESSING', "
                 + "attempt_count = 3, max_attempts = 3, claimed_at = ?, claimed_by = ? WHERE id = ?",
                 Timestamp.from(oldClaim), "dead-worker:1:deadbeef", enqueued.id());
@@ -455,7 +455,7 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
     void reaper_recoversOrphansAcrossTenants() {
         PendingInvocation invA = enqueueAs(clientA.id());
         PendingInvocation invB = enqueueForClientB();
-        Instant staleClaim = Instant.now().minusSeconds(60);
+        Instant staleClaim = clock.instant().minusSeconds(60);
         markProcessingStale(invA.id(), staleClaim);
         markProcessingStale(invB.id(), staleClaim);
 

@@ -14,6 +14,7 @@ import dev.cauce.memory.message.MessageRepository;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.persistence.PendingInvocationMapper;
 import dev.cauce.orchestration.persistence.PendingInvocationRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -46,19 +47,22 @@ public class PendingInvocationService {
     private final AgentRepository agentRepository;
     private final PendingInvocationMapper pendingInvocationMapper;
     private final AuditEventRecorder auditRecorder;
+    private final Clock clock;
 
     public PendingInvocationService(PendingInvocationRepository pendingInvocationRepository,
                                     ConversationRepository conversationRepository,
                                     MessageRepository messageRepository,
                                     AgentRepository agentRepository,
                                     PendingInvocationMapper pendingInvocationMapper,
-                                    AuditEventRecorder auditRecorder) {
+                                    AuditEventRecorder auditRecorder,
+                                    Clock clock) {
         this.pendingInvocationRepository = pendingInvocationRepository;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.agentRepository = agentRepository;
         this.pendingInvocationMapper = pendingInvocationMapper;
         this.auditRecorder = auditRecorder;
+        this.clock = clock;
     }
 
     /**
@@ -189,13 +193,14 @@ public class PendingInvocationService {
 
     /**
      * Releases {@code invocationId} back to PENDING with exponential backoff (see
-     * {@link PendingInvocation#releaseForRetry}). The caller must have set
+     * {@link PendingInvocation#releaseForRetry}), counted from the database clock (ADR 0008). The
+     * caller must have set
      * {@code TenantContext} to the invocation's owning tenant.
      */
     @Transactional
     public void releaseForRetry(UUID invocationId, String errorMessage, long baseIntervalSeconds) {
         PendingInvocation released =
-                loadVisible(invocationId).releaseForRetry(errorMessage, baseIntervalSeconds);
+                loadVisible(invocationId).releaseForRetry(errorMessage, baseIntervalSeconds, clock.instant());
         pendingInvocationRepository.save(pendingInvocationMapper.toEntity(released));
     }
 

@@ -16,7 +16,9 @@ import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.service.FailureFallbackService;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -28,6 +30,8 @@ import org.mockito.Mockito;
 import org.springframework.context.ApplicationEventPublisher;
 
 class PendingInvocationReaperTest {
+
+    private static final Instant NOW = Instant.parse("2026-10-21T10:00:00Z");
 
     private FailureFallbackService failureFallbackService;
 
@@ -48,13 +52,24 @@ class PendingInvocationReaperTest {
         properties.setRetryBaseIntervalSeconds(30L);
         properties.getReaper().setTimeoutMs(60_000L);
         eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
-        reaper = new PendingInvocationReaper(pendingInvocationService, properties, eventPublisher, failureFallbackService);
+        reaper = new PendingInvocationReaper(pendingInvocationService, properties, eventPublisher, failureFallbackService,
+                Clock.fixed(NOW, ZoneOffset.UTC));
         TenantContext.clear();
     }
 
     @AfterEach
     void tearDown() {
         TenantContext.clear();
+    }
+
+    @Test
+    void reapOrphanedInvocations_callsFindOrphanedSinceWithTheClockMinusTheTimeout() {
+        when(pendingInvocationService.findOrphanedSince(any())).thenReturn(List.of());
+
+        reaper.reapOrphanedInvocations();
+
+        // The injected clock is the database's (ADR 0008), the one that stamped claimed_at.
+        verify(pendingInvocationService).findOrphanedSince(NOW.minusMillis(60_000L));
     }
 
     @Test
@@ -132,22 +147,6 @@ class PendingInvocationReaperTest {
     }
 
     @Test
-    void reapOrphanedInvocations_callsFindOrphanedSinceWithThresholdRelativeToNow() {
-        when(pendingInvocationService.findOrphanedSince(any())).thenReturn(List.of());
-        Instant before = Instant.now();
-
-        reaper.reapOrphanedInvocations();
-
-        Instant expectedUpper = Instant.now().minusMillis(properties.getReaper().getTimeoutMs());
-        Instant expectedLower = before.minusMillis(properties.getReaper().getTimeoutMs());
-        org.mockito.ArgumentCaptor<Instant> captor = org.mockito.ArgumentCaptor.forClass(Instant.class);
-        verify(pendingInvocationService).findOrphanedSince(captor.capture());
-        assertThat(captor.getValue())
-                .isAfterOrEqualTo(expectedLower)
-                .isBeforeOrEqualTo(expectedUpper.plusSeconds(1));
-    }
-
-    @Test
     void reapOrphanedInvocations_whenScanFails_doesNotPropagate() {
         when(pendingInvocationService.findOrphanedSince(any()))
                 .thenThrow(new RuntimeException("DB outage"));
@@ -174,7 +173,7 @@ class PendingInvocationReaperTest {
         PendingInvocation invocation =
                 PendingInvocation.create(tenantId, conversationId, triggerMessageId).claim("w");
         while (invocation.attemptCount() < targetAttempt) {
-            invocation = invocation.releaseForRetry("transient", 1L).claim("w");
+            invocation = invocation.releaseForRetry("transient", 1L, Instant.now()).claim("w");
         }
         return invocation;
     }
