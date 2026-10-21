@@ -1,5 +1,6 @@
 package dev.cauce.memory.message;
 
+import dev.cauce.core.message.MessageRole;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +30,18 @@ public interface MessageRepository extends JpaRepository<MessageEntity, UUID> {
     /** Keyset page after the cursor: messages with {@code id > afterId}, ordered by id. */
     List<MessageEntity> findByConversationIdAndIdGreaterThanOrderByIdAsc(
             UUID conversationId, UUID afterId, Limit limit);
+
+    /**
+     * First keyset page of a conversation's messages without one role, ordered by id. The public
+     * messages listing passes {@code SYSTEM} (ADR 0005, C3); filtering in the query keeps every
+     * page full and the cursor exact.
+     */
+    List<MessageEntity> findByConversationIdAndRoleNotOrderByIdAsc(
+            UUID conversationId, MessageRole excludedRole, Limit limit);
+
+    /** Keyset page after the cursor, without one role; see the first-page variant. */
+    List<MessageEntity> findByConversationIdAndIdGreaterThanAndRoleNotOrderByIdAsc(
+            UUID conversationId, UUID afterId, MessageRole excludedRole, Limit limit);
 
     /**
      * Finds a message by id, scoped to a conversation. Used to validate that a referenced

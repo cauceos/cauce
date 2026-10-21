@@ -56,13 +56,18 @@ public class MessageService {
      * that is insertion order — starting after {@code afterId} when non-null (keyset
      * pagination). RLS filters by visibility. Context assembly does not use this: it reads
      * the full thread via {@code ConversationGateway} (ordered by {@code created_at}).
+     *
+     * <p>This is the public listing, so SYSTEM messages are left out (ADR 0005, C3): they are the
+     * orchestrator's internal error records and can carry provider detail. The interlocutor's
+     * view of a failure is the FALLBACK message, which is listed.
      */
     @Transactional
     public List<Message> listMessages(UUID conversationId, UUID afterId, int maxRows) {
         List<MessageEntity> page = afterId == null
-                ? messageRepository.findByConversationIdOrderByIdAsc(conversationId, Limit.of(maxRows))
-                : messageRepository.findByConversationIdAndIdGreaterThanOrderByIdAsc(
-                        conversationId, afterId, Limit.of(maxRows));
+                ? messageRepository.findByConversationIdAndRoleNotOrderByIdAsc(
+                        conversationId, MessageRole.SYSTEM, Limit.of(maxRows))
+                : messageRepository.findByConversationIdAndIdGreaterThanAndRoleNotOrderByIdAsc(
+                        conversationId, afterId, MessageRole.SYSTEM, Limit.of(maxRows));
         return page.stream().map(messageMapper::toDomain).toList();
     }
 }

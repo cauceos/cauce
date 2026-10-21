@@ -17,6 +17,7 @@ import dev.cauce.api.tenant.CreateClientRequest;
 import dev.cauce.api.tenant.CreatePartnerRequest;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.llm.exception.LlmInvalidRequestException;
+import dev.cauce.orchestration.service.FallbackReplyProperties;
 import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
@@ -181,6 +182,33 @@ class InvocationApiIT extends AbstractApiIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT failure_type FROM pending_invocations WHERE id = ?",
                 String.class, invocationId)).isEqualTo("LLM_ERROR");
+    }
+
+    @Test
+    void messages_afterTerminalFailure_showTheFallbackWithItsPublicReason_neverTheSystemError() throws Exception {
+        fakeLlmProvider.failNextWith(new LlmInvalidRequestException(
+                "anthropic", "claude-sonnet-4-7", PROVIDER_DETAIL));
+        JsonNode accepted = postMessage(clientAuth, "user-1", "Hola");
+        UUID invocationId = UUID.fromString(accepted.get("invocation_id").asText());
+        String conversationId = accepted.get("conversation_id").asText();
+
+        worker.pollAndProcess();
+        awaitTerminalStatus(invocationId, "FAILED");
+
+        // ADR 0005, C3: the writer reads USER then FALLBACK; the SYSTEM record stays internal.
+        String body = mockMvc.perform(getAs(clientAuth, "/v1/conversations/" + conversationId + "/messages"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].role").value("USER"))
+                .andExpect(jsonPath("$.data[1].role").value("FALLBACK"))
+                .andExpect(jsonPath("$.data[1].content").value(FallbackReplyProperties.DEFAULT_REPLY))
+                .andExpect(jsonPath("$.data[1].failure_reason").value("PROVIDER_ERROR"))
+                .andExpect(jsonPath("$.data[0].failure_reason").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("orchestration_error").doesNotContain("tool schema")
+                .doesNotContain("LLM_ERROR");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM messages WHERE role = 'SYSTEM' "
+                + "AND conversation_id = ?::uuid", Integer.class, conversationId)).isEqualTo(1);
     }
 
     @Test
@@ -353,7 +381,7 @@ class InvocationApiIT extends AbstractApiIntegrationTest {
         // A model the orchestrator's ModelContextWindow knows; FakeLlmProvider takes claude-*.
         String body = mockMvc.perform(postAs(auth, "/v1/tenants/" + tenantId + "/agents",
                         new CreateAgentRequest("Bot", "You are helpful", "anthropic",
-                                "claude-sonnet-4-7", null, null)))
+                                "claude-sonnet-4-7", null, null, null)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return UUID.fromString(objectMapper.readTree(body).get("id").asText());

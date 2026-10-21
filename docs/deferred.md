@@ -14,7 +14,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Per-model limits beyond the context window.** Only the context window has a registry plus a conservative fallback (`ModelContextWindow`); max response tokens is a flat default, never per-model.
 - **`RESERVED_FOR_RESPONSE`** is a hardcoded token constant in `ContextBuilder`; revisit when tuning context assembly.
 - **Streaming** is not part of the LLM SPI — explicitly deferred past v1.0, to be added as a separate method. The orchestrator does one blocking `invoke`.
-- **No conversation-visible trace for some failures.** Reaper-abandoned invocations and non-LLM setup failures append no SYSTEM `[orchestration_error]` message to the conversation (only LLM provider failures and the tool-iteration cap do), so their only client-visible signal is the invocation status.
+- **Operator access to the failure diagnostic.** Since ADR 0005 (C3) the public messages endpoint hides SYSTEM `[orchestration_error]` records and a FALLBACK message carries only the public failure reason; the provider detail lives in the SYSTEM text and `pending_invocations.last_error`. Exposing it to operators belongs to the invocation status endpoint (`GET /v1/invocations/{id}`), under an operator-only view, and is not built.
 
 ## Ingest and idempotency
 

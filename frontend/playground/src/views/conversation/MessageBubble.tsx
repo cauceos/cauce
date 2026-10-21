@@ -8,9 +8,10 @@ type BubbleItem = Extract<ThreadItem, { kind: 'user' | 'agent' | 'system' }>
  * A thread row. Only the user gets a bubble — the agent reply is the
  * content of the page, so it reads as body text rather than a quoted aside.
  *
- * SYSTEM messages are the backend's `[orchestration_error]` writes: they
- * carry the provider's own words and are rendered verbatim, in slate. The
- * palette has no danger colour and none is invented.
+ * A FALLBACK message is what the writer received after a terminal failure:
+ * the agent's (or the platform's) fallback text plus the public reason. It
+ * shares the failure card with SYSTEM, which only an older instance still
+ * lists — current ones keep the internal error record off the API.
  */
 export function MessageBubble({
   item,
@@ -39,7 +40,10 @@ export function MessageBubble({
     return (
       <div className="fail">
         <div className="t">
-          <span className="chip bad">SYSTEM</span>
+          <span className="chip bad">{item.message.role}</span>
+          {item.message.failure_reason !== undefined && (
+            <span className="chip quiet">{item.message.failure_reason}</span>
+          )}
           <span className="when">{when}</span>
         </div>
         <div className="m">{item.message.content}</div>

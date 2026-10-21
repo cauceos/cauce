@@ -1,6 +1,7 @@
 package dev.cauce.orchestration.worker;
 
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
@@ -38,11 +39,14 @@ public class PendingInvocationReaper {
 
     private final PendingInvocationService pendingInvocationService;
     private final PendingInvocationWorkerProperties properties;
+    private final FailureFallbackService failureFallbackService;
     private final ApplicationEventPublisher eventPublisher;
 
     public PendingInvocationReaper(PendingInvocationService pendingInvocationService,
                                    PendingInvocationWorkerProperties properties,
-                                   ApplicationEventPublisher eventPublisher) {
+                                   ApplicationEventPublisher eventPublisher,
+                                   FailureFallbackService failureFallbackService) {
+        this.failureFallbackService = failureFallbackService;
         this.pendingInvocationService = pendingInvocationService;
         this.properties = properties;
         this.eventPublisher = eventPublisher;
@@ -78,6 +82,9 @@ public class PendingInvocationReaper {
                             InvocationFailureType.REAPER_ABANDONED, REAP_ERROR, Instant.now()));
                     log.warn("Reaper abandoned invocation {} after exhausting {} attempt(s)",
                             invocation.id(), invocation.maxAttempts());
+                    // ADR 0005, C3: a terminal failure — the interlocutor gets the fallback.
+                    failureFallbackService.sendFallback(invocation.conversationId(),
+                            InvocationFailureType.REAPER_ABANDONED);
                 } else {
                     pendingInvocationService.releaseForRetry(invocation.id(), REAP_ERROR, base);
                     log.info("Reaper released invocation {} for retry (attempt {}/{})",

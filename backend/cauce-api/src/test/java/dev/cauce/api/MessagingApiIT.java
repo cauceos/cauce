@@ -290,7 +290,7 @@ class MessagingApiIT extends AbstractApiIntegrationTest {
         // Use a model the orchestrator's ModelContextWindow knows, so the worker can build the
         // context and the loop completes. FakeLlmProvider supports any claude-* model.
         String body = mockMvc.perform(postAs(auth, "/v1/tenants/" + tenantId + "/agents",
-                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-sonnet-4-7", null, null)))
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-sonnet-4-7", null, null, null)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return UUID.fromString(objectMapper.readTree(body).get("id").asText());

@@ -82,10 +82,28 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
         String clientAuth = bearerFor(clientId);
 
         mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
-                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null)))
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
-                .andExpect(jsonPath("$.tenant_id").value(clientId.toString()));
+                .andExpect(jsonPath("$.tenant_id").value(clientId.toString()))
+                .andExpect(jsonPath("$.fallback_reply").value((Object) null));
+    }
+
+    @Test
+    void createAgent_withFallbackReply_storesIt_andRejectsAnOverlongOne() throws Exception {
+        UUID partnerId = createPartner();
+        UUID clientId = createClient(bearerFor(partnerId), partnerId);
+        String clientAuth = bearerFor(clientId);
+
+        mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null,
+                                "  Ahora no puedo responder.  ")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.fallback_reply").value("Ahora no puedo responder."));
+        mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null,
+                                "x".repeat(1001))))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -207,7 +225,7 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
         // Regression: validation field names report the wire name (model_name), not the Java
         // property (modelName), derived from the configured Jackson naming strategy.
         mockMvc.perform(postAs(bearerFor(clientId), "/v1/tenants/" + clientId + "/agents",
-                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "  ", null, null)))
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "  ", null, null, null)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("validation_failed"))
                 .andExpect(jsonPath("$.errors[0].field").value("model_name"));
@@ -252,7 +270,7 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
 
     private UUID createAgent(String clientAuth, UUID clientId) throws Exception {
         String body = mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
-                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null)))
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return UUID.fromString(objectMapper.readTree(body).get("id").asText());

@@ -38,7 +38,7 @@ export interface CursorPage<T> {
 }
 
 /** Backend enum names, serialized verbatim. */
-export type MessageRole = 'USER' | 'AGENT' | 'SYSTEM' | 'TOOL_CALL' | 'TOOL_RESULT'
+export type MessageRole = 'USER' | 'AGENT' | 'SYSTEM' | 'TOOL_CALL' | 'TOOL_RESULT' | 'FALLBACK'
 export type ConversationStatus = 'OPEN' | 'CLOSED' | 'ESCALATED' | 'ARCHIVED'
 export type AgentStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED'
 /** The three fixed tiers of the tenant hierarchy (enum name, verbatim). */
@@ -149,6 +149,11 @@ export interface MessageResponse {
   role: MessageRole
   content: string
   tool_content?: ToolContentResponse
+  /**
+   * Present only on a FALLBACK message: the public reason of the terminal
+   * failure it answers. SYSTEM messages are no longer listed (ADR 0005, C3).
+   */
+  failure_reason?: FailureReason
   created_at: string
 }
 

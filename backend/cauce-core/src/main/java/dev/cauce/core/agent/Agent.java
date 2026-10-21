@@ -3,6 +3,7 @@ package dev.cauce.core.agent;
 import dev.cauce.core.UuidGenerator;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -32,6 +33,9 @@ public final class Agent {
     /** Default maximum response tokens applied when none is configured. */
     public static final int DEFAULT_MAX_RESPONSE_TOKENS = 4096;
 
+    /** Upper bound of a configured fallback reply (mirrors the V28 CHECK). */
+    public static final int MAX_FALLBACK_REPLY_LENGTH = 1000;
+
     private final UUID id;
     private final UUID tenantId;
     private final String name;
@@ -41,12 +45,13 @@ public final class Agent {
     private final double temperature;
     private final int maxResponseTokens;
     private final AgentStatus status;
+    private final String fallbackReply; // null: the platform default (ADR 0005, C3)
     private final Instant createdAt;
     private final Instant updatedAt;
 
     private Agent(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
                   String modelName, double temperature, int maxResponseTokens, AgentStatus status,
-                  Instant createdAt, Instant updatedAt) {
+                  String fallbackReply, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
@@ -56,6 +61,7 @@ public final class Agent {
         this.temperature = temperature;
         this.maxResponseTokens = maxResponseTokens;
         this.status = status;
+        this.fallbackReply = fallbackReply;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -85,8 +91,20 @@ public final class Agent {
                 validatedTemperature(resolveTemperature(temperature)),
                 validatedMaxResponseTokens(resolveMaxResponseTokens(maxResponseTokens)),
                 AgentStatus.DRAFT,
+                null,
                 now,
                 now);
+    }
+
+    /**
+     * Returns a copy of this agent whose fallback reply (ADR 0005, C3) is {@code fallbackReply}:
+     * the text the interlocutor receives when an invocation fails for good. {@code null} means
+     * the platform default; a non-null text is stripped and must be non-blank and at most
+     * {@value #MAX_FALLBACK_REPLY_LENGTH} characters.
+     */
+    public Agent withFallbackReply(String fallbackReply) {
+        return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, validatedFallbackReply(fallbackReply), createdAt, updatedAt);
     }
 
     /**
@@ -99,6 +117,15 @@ public final class Agent {
                                   String modelProvider, String modelName, Double temperature,
                                   Integer maxResponseTokens, AgentStatus status,
                                   Instant createdAt, Instant updatedAt) {
+        return rehydrate(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, null, createdAt, updatedAt);
+    }
+
+    /** Rebuilds an agent, its fallback reply included ({@code null}: platform default). */
+    public static Agent rehydrate(UUID id, UUID tenantId, String name, String systemPrompt,
+                                  String modelProvider, String modelName, Double temperature,
+                                  Integer maxResponseTokens, AgentStatus status, String fallbackReply,
+                                  Instant createdAt, Instant updatedAt) {
         return new Agent(
                 Objects.requireNonNull(id, "id"),
                 Objects.requireNonNull(tenantId, "tenantId"),
@@ -109,6 +136,7 @@ public final class Agent {
                 resolveTemperature(temperature),
                 resolveMaxResponseTokens(maxResponseTokens),
                 Objects.requireNonNull(status, "status"),
+                fallbackReply, // nullable; the V28 CHECK guarantees its shape
                 Objects.requireNonNull(createdAt, "createdAt"),
                 Objects.requireNonNull(updatedAt, "updatedAt"));
     }
@@ -118,6 +146,21 @@ public final class Agent {
             throw new IllegalArgumentException(field + " must not be blank");
         }
         return value.strip();
+    }
+
+    private static String validatedFallbackReply(String fallbackReply) {
+        if (fallbackReply == null) {
+            return null;
+        }
+        String stripped = fallbackReply.strip();
+        if (stripped.isEmpty()) {
+            throw new IllegalArgumentException("fallbackReply must not be blank");
+        }
+        if (stripped.length() > MAX_FALLBACK_REPLY_LENGTH) {
+            throw new IllegalArgumentException("fallbackReply must be at most "
+                    + MAX_FALLBACK_REPLY_LENGTH + " characters");
+        }
+        return stripped;
     }
 
     private static double resolveTemperature(Double temperature) {
@@ -174,6 +217,11 @@ public final class Agent {
 
     public int maxResponseTokens() {
         return maxResponseTokens;
+    }
+
+    /** The configured fallback reply; empty means the platform default (ADR 0005, C3). */
+    public Optional<String> fallbackReply() {
+        return Optional.ofNullable(fallbackReply);
     }
 
     public AgentStatus status() {

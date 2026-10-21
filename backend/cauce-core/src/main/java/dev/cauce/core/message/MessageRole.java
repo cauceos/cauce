@@ -16,5 +16,11 @@ public enum MessageRole {
     /** A tool invocation the agent requested; the structured call is the message's tool content. */
     TOOL_CALL,
     /** The result of executing a tool call; the structured result is the message's tool content. */
-    TOOL_RESULT
+    TOOL_RESULT,
+    /**
+     * The platform's reply to the interlocutor when an invocation failed for good (ADR 0005, C3):
+     * the agent's configured fallback text, with the failure type it answers. Delivered like a
+     * reply, but it is not the agent's conduct and never enters the model's context.
+     */
+    FALLBACK
 }

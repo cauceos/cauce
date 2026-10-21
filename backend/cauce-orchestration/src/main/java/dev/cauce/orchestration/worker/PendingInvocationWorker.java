@@ -9,6 +9,7 @@ import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
+import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
 import java.time.Instant;
 import java.util.List;
@@ -58,6 +59,7 @@ public class PendingInvocationWorker {
     private final TaskExecutor executor;
     private final PendingInvocationWorkerProperties properties;
     private final ApplicationEventPublisher eventPublisher;
+    private final FailureFallbackService failureFallbackService;
 
     public PendingInvocationWorker(PendingInvocationService pendingInvocationService,
                                    OrchestratorService orchestratorService,
@@ -65,13 +67,15 @@ public class PendingInvocationWorker {
                                    @Qualifier(OrchestrationConfig.WORKER_EXECUTOR_BEAN)
                                            TaskExecutor executor,
                                    PendingInvocationWorkerProperties properties,
-                                   ApplicationEventPublisher eventPublisher) {
+                                   ApplicationEventPublisher eventPublisher,
+                                   FailureFallbackService failureFallbackService) {
         this.pendingInvocationService = pendingInvocationService;
         this.orchestratorService = orchestratorService;
         this.workerIdentity = workerIdentity;
         this.executor = executor;
         this.properties = properties;
         this.eventPublisher = eventPublisher;
+        this.failureFallbackService = failureFallbackService;
     }
 
     /**
@@ -187,6 +191,8 @@ public class PendingInvocationWorker {
                                String detail) {
         eventPublisher.publishEvent(
                 new InvocationFailed(invocation.id(), failureType, detail, Instant.now()));
+        // ADR 0005, C3: the terminal transition committed, so the interlocutor gets the fallback.
+        failureFallbackService.sendFallback(invocation.conversationId(), failureType);
     }
 
     private void safeMark(Runnable action, PendingInvocation invocation, String label) {

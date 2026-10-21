@@ -51,7 +51,7 @@ class AgentControllerTest {
 
     private String validBody() throws Exception {
         return objectMapper.writeValueAsString(
-                new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null));
+                new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null));
     }
 
     @Test
@@ -59,7 +59,7 @@ class AgentControllerTest {
         UUID tenantId = UUID.randomUUID();
         Agent agent = Agent.create(tenantId, "Bot", "You are helpful", "anthropic", "claude-opus-4-8");
         given(agentService.createAgent(eq(tenantId), eq("Bot"), eq("You are helpful"),
-                eq("anthropic"), eq("claude-opus-4-8"), any(), any())).willReturn(agent);
+                eq("anthropic"), eq("claude-opus-4-8"), any(), any(), any())).willReturn(agent);
 
         mockMvc.perform(post("/v1/tenants/" + tenantId + "/agents")
                         .contentType(MediaType.APPLICATION_JSON).content(validBody()))
@@ -74,7 +74,7 @@ class AgentControllerTest {
     void createAgent_blankSystemPrompt_returns400() throws Exception {
         UUID tenantId = UUID.randomUUID();
         String body = objectMapper.writeValueAsString(
-                new CreateAgentRequest("Bot", "  ", "anthropic", "claude-opus-4-8", null, null));
+                new CreateAgentRequest("Bot", "  ", "anthropic", "claude-opus-4-8", null, null, null));
 
         mockMvc.perform(post("/v1/tenants/" + tenantId + "/agents")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -86,7 +86,7 @@ class AgentControllerTest {
     @Test
     void createAgent_nonClientTenant_returns422() throws Exception {
         UUID tenantId = UUID.randomUUID();
-        given(agentService.createAgent(eq(tenantId), any(), any(), any(), any(), any(), any()))
+        given(agentService.createAgent(eq(tenantId), any(), any(), any(), any(), any(), any(), any()))
                 .willThrow(new InvalidTenantTierException("not a CLIENT"));
 
         mockMvc.perform(post("/v1/tenants/" + tenantId + "/agents")
@@ -98,7 +98,7 @@ class AgentControllerTest {
     @Test
     void createAgent_unknownTenant_returns404() throws Exception {
         UUID tenantId = UUID.randomUUID();
-        given(agentService.createAgent(eq(tenantId), any(), any(), any(), any(), any(), any()))
+        given(agentService.createAgent(eq(tenantId), any(), any(), any(), any(), any(), any(), any()))
                 .willThrow(new TenantNotFoundException("no tenant"));
 
         mockMvc.perform(post("/v1/tenants/" + tenantId + "/agents")

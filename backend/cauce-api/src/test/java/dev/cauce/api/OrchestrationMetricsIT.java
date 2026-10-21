@@ -90,7 +90,7 @@ class OrchestrationMetricsIT extends AbstractApiIntegrationTest {
         clientAuth = bearerFor(clientId);
         String agentBody = mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
                         new CreateAgentRequest("Bot", "You are helpful", "anthropic",
-                                "claude-sonnet-4-7", null, null)))
+                                "claude-sonnet-4-7", null, null, null)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         agentId = UUID.fromString(objectMapper.readTree(agentBody).get("id").asText());

@@ -54,6 +54,10 @@ public class AgentEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** Per-agent fallback reply (ADR 0005, C3); null means the platform default (V28). */
+    @Column(name = "fallback_reply")
+    private String fallbackReply;
+
     protected AgentEntity() {
         // for JPA
     }
@@ -61,6 +65,14 @@ public class AgentEntity {
     public AgentEntity(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
                        String modelName, Double temperature, Integer maxResponseTokens,
                        AgentStatus status, Instant createdAt, Instant updatedAt) {
+        this(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature, maxResponseTokens,
+                status, null, createdAt, updatedAt);
+    }
+
+    public AgentEntity(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
+                       String modelName, Double temperature, Integer maxResponseTokens,
+                       AgentStatus status, String fallbackReply, Instant createdAt, Instant updatedAt) {
+        this.fallbackReply = fallbackReply;
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
@@ -116,5 +128,9 @@ public class AgentEntity {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public String getFallbackReply() {
+        return fallbackReply;
     }
 }

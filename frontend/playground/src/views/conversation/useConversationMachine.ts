@@ -237,7 +237,9 @@ export function useConversationMachine(client: ApiClient, ledger: LedgerRecorder
         const trigger = machine.live.triggerMessageId
         const hasReply = () =>
           [...entry.messages.values()].some(
-            (m) => m.id > trigger && (m.role === 'AGENT' || m.role === 'SYSTEM'),
+            (m) =>
+              m.id > trigger &&
+              (m.role === 'AGENT' || m.role === 'FALLBACK' || m.role === 'SYSTEM'),
           )
         // Status and messages are separate reads: COMPLETED can be visible
         // a beat before the final AGENT append. A couple of grace refetches

@@ -28,6 +28,9 @@ import java.util.List;
  * USER message of the slice are dropped as well. Everything from that user turn on is contiguous,
  * which keeps every tool call together with its results. When no user turn fits at all, the
  * current turn does not fit the window, and that is a context failure, not a silent cut.
+ *
+ * <p>FALLBACK messages are skipped entirely (ADR 0005, C3): they are the platform's reply to a
+ * failed invocation, not a turn of the agent, and the model must not read them as its own.
  */
 public final class ContextBuilder {
 
@@ -56,6 +59,9 @@ public final class ContextBuilder {
 
         for (int i = lastIndex; i >= 0; i--) {
             Message message = conversationMessages.get(i);
+            if (message.role() == MessageRole.FALLBACK) {
+                continue; // the platform's reply to a failure, not the agent's turn (ADR 0005, C3)
+            }
             int messageTokens = estimateTokens(message);
 
             if (i == lastIndex && messageTokens > effectiveWindow) {
@@ -116,6 +122,7 @@ public final class ContextBuilder {
             case SYSTEM -> new LlmMessage(LlmRole.SYSTEM, message.content());
             case TOOL_CALL -> LlmMessage.toolCall((ToolCall) message.toolContent().orElseThrow());
             case TOOL_RESULT -> LlmMessage.toolResult((ToolResult) message.toolContent().orElseThrow());
+            case FALLBACK -> throw new IllegalStateException("FALLBACK messages never reach the model");
         };
     }
 }

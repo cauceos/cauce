@@ -1,11 +1,13 @@
 package dev.cauce.api.message;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import dev.cauce.api.invocation.FailureReason;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolContent;
 import dev.cauce.core.tool.ToolResult;
+import dev.cauce.orchestration.events.InvocationFailureType;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -30,14 +32,20 @@ public record MessageResponse(
         MessageRole role,
         String content,
         @JsonInclude(JsonInclude.Include.NON_NULL) ToolContentResponse toolContent,
+        @JsonInclude(JsonInclude.Include.NON_NULL) FailureReason failureReason,
         Instant createdAt) {
 
     public static MessageResponse from(Message message) {
         ToolContentResponse toolContent = message.toolContent()
                 .map(ToolContentResponse::from)
                 .orElse(null);
+        // A FALLBACK carries the public reason only, the invocation endpoint's vocabulary
+        // (ADR 0005, C3); the internal type it is stored as never reaches the wire.
+        FailureReason failureReason = message.failureType()
+                .map(type -> FailureReason.from(InvocationFailureType.valueOf(type)))
+                .orElse(null);
         return new MessageResponse(message.id(), message.role(), message.content(), toolContent,
-                message.createdAt());
+                failureReason, message.createdAt());
     }
 
     /**

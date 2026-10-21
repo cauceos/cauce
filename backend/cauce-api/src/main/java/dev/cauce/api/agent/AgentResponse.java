@@ -19,6 +19,7 @@ public record AgentResponse(
         double temperature,
         int maxResponseTokens,
         AgentStatus status,
+        String fallbackReply,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -33,6 +34,7 @@ public record AgentResponse(
                 agent.temperature(),
                 agent.maxResponseTokens(),
                 agent.status(),
+                agent.fallbackReply().orElse(null),
                 agent.createdAt(),
                 agent.updatedAt());
     }

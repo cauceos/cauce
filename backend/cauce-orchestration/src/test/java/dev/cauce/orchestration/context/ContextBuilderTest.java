@@ -245,4 +245,19 @@ class ContextBuilderTest {
         assertThat(context.estimatedTokens()).isLessThanOrEqualTo(EFFECTIVE_WINDOW);
         assertThat(context.systemPrompt()).isEqualTo(largeSystemPrompt);
     }
+
+    @Test
+    void build_neverSendsFallbackMessagesToTheModel() {
+        List<Message> messages = List.of(
+                Message.from(CONVERSATION, MessageRole.USER, "Hello"),
+                Message.fallback(CONVERSATION, "Sorry, try again later.", "LLM_ERROR"),
+                Message.from(CONVERSATION, MessageRole.USER, "Hello again"));
+
+        LlmInvocationContext context = builder.build(messages, MODEL, SYSTEM_PROMPT);
+
+        assertThat(context.messages()).extracting(LlmMessage::content)
+                .containsExactly("Hello", "Hello again");
+        assertThat(context.estimatedTokens())
+                .isEqualTo(TokenEstimator.estimate("Hello") + TokenEstimator.estimate("Hello again"));
+    }
 }

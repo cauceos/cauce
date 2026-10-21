@@ -60,6 +60,19 @@ public class AgentService {
     public Agent createAgent(UUID tenantId, String name, String systemPrompt,
                              String modelProvider, String modelName,
                              Double temperature, Integer maxResponseTokens) {
+        return createAgent(tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, null);
+    }
+
+    /**
+     * Creates an agent with its full configuration. {@code fallbackReply} is the text the
+     * interlocutor receives when an invocation fails for good (ADR 0005, C3); {@code null} means
+     * the platform default.
+     */
+    @Transactional
+    public Agent createAgent(UUID tenantId, String name, String systemPrompt,
+                             String modelProvider, String modelName,
+                             Double temperature, Integer maxResponseTokens, String fallbackReply) {
         TenantEntity tenant = tenantRepository.findById(tenantId).orElseThrow(() ->
                 new TenantNotFoundException("No tenant found for id " + tenantId));
         if (tenant.getTier() != Tier.CLIENT) {
@@ -71,7 +84,7 @@ public class AgentService {
         }
 
         Agent agent = Agent.create(tenantId, name, systemPrompt, modelProvider, modelName,
-                temperature, maxResponseTokens);
+                temperature, maxResponseTokens).withFallbackReply(fallbackReply);
         Agent saved = agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(agent)));
         // Admin audit in the same tx, in the owning tenant's chain; the prompt enters only
         // as a hash (sensitive, mutable business logic never lands in the append-only sink).

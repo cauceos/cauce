@@ -32,6 +32,7 @@ import dev.cauce.orchestration.worker.PendingInvocationWorkerProperties;
 import dev.cauce.orchestration.worker.WorkerIdentity;
 import dev.cauce.tenancy.AgentService;
 import dev.cauce.tenancy.TenantService;
+import dev.cauce.orchestration.service.FailureFallbackService;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,6 +56,9 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @RecordApplicationEvents
 @Import(MockLlmProviderTestConfig.class)
 class OrchestrationEventFlowIT extends AbstractOrchestrationIntegrationTest {
+
+    @Autowired
+    private FailureFallbackService failureFallbackService;
 
     @Autowired
     private TenantService tenantService;
@@ -196,7 +200,7 @@ class OrchestrationEventFlowIT extends AbstractOrchestrationIntegrationTest {
         assertThat(claimed).hasSize(1);
         PendingInvocationWorker syncWorker = new PendingInvocationWorker(pendingInvocationService,
                 orchestratorService, workerIdentity, new SyncTaskExecutor(), properties,
-                applicationContext);
+                applicationContext, failureFallbackService);
         syncWorker.processInvocation(claimed.get(0));
         return result;
     }

@@ -36,7 +36,8 @@ public class AgentController {
     public ResponseEntity<AgentResponse> create(@PathVariable UUID tenantId,
                                                 @Valid @RequestBody CreateAgentRequest request) {
         var agent = agentService.createAgent(tenantId, request.name(), request.systemPrompt(),
-                request.modelProvider(), request.modelName(), request.temperature(), request.maxResponseTokens());
+                request.modelProvider(), request.modelName(), request.temperature(), request.maxResponseTokens(),
+                request.fallbackReply());
         return ResponseEntity.created(URI.create("/v1/agents/" + agent.id())).body(AgentResponse.from(agent));
     }
 

@@ -21,6 +21,7 @@ public final class AgentMapper {
                 agent.temperature(),
                 agent.maxResponseTokens(),
                 agent.status(),
+                agent.fallbackReply().orElse(null),
                 agent.createdAt(),
                 agent.updatedAt());
     }
@@ -36,6 +37,7 @@ public final class AgentMapper {
                 entity.getTemperature(),
                 entity.getMaxResponseTokens(),
                 entity.getStatus(),
+                entity.getFallbackReply(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt());
     }

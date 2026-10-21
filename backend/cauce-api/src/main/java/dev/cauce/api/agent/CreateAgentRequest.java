@@ -1,9 +1,11 @@
 package dev.cauce.api.agent;
 
+import dev.cauce.core.agent.Agent;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 /**
  * Request body for {@code POST /v1/tenants/{tenantId}/agents}.
@@ -20,5 +22,6 @@ public record CreateAgentRequest(
         @NotBlank String modelProvider,
         @NotBlank String modelName,
         @DecimalMin("0.0") @DecimalMax("1.0") Double temperature,
-        @Positive Integer maxResponseTokens) {
+        @Positive Integer maxResponseTokens,
+        @Size(max = Agent.MAX_FALLBACK_REPLY_LENGTH) String fallbackReply) {
 }

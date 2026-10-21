@@ -19,6 +19,7 @@ import dev.cauce.orchestration.InboundMessageResult;
 import dev.cauce.orchestration.InboundMessageService;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
+import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.MockLlmProvider;
 import dev.cauce.orchestration.service.OrchestratorService;
 import dev.cauce.orchestration.support.AbstractOrchestrationIntegrationTest;
@@ -61,6 +62,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 @Import(MockLlmProviderTestConfig.class)
 class AuditConductIT extends AbstractOrchestrationIntegrationTest {
+
+    @Autowired
+    private FailureFallbackService failureFallbackService;
 
     @Autowired
     private TenantService tenantService;
@@ -298,7 +302,7 @@ class AuditConductIT extends AbstractOrchestrationIntegrationTest {
         assertThat(claimed).hasSize(1);
         PendingInvocationWorker syncWorker = new PendingInvocationWorker(pendingInvocationService,
                 orchestratorService, workerIdentity, new SyncTaskExecutor(), workerProperties,
-                applicationContext);
+                applicationContext, failureFallbackService);
         syncWorker.processInvocation(claimed.get(0));
         return result;
     }

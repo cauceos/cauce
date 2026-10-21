@@ -71,6 +71,27 @@ public class ConversationGateway {
     public record LoadedConversation(Conversation conversation, Agent agent, List<Message> messages) {
     }
 
+    /** A conversation and its agent, without the history (the fallback path needs no more). */
+    public record ConversationAgent(Conversation conversation, Agent agent) {
+    }
+
+    /**
+     * Loads a conversation and its agent under RLS, for the fallback reply (ADR 0005, C3).
+     *
+     * @throws ConversationNotFoundException if the conversation does not exist or is not visible
+     * @throws AgentNotFoundException if the conversation's agent no longer exists
+     */
+    @Transactional
+    public ConversationAgent loadConversationAndAgent(UUID conversationId) {
+        ConversationEntity conversation = conversationRepository.findById(conversationId).orElseThrow(() ->
+                new ConversationNotFoundException("No conversation found for id " + conversationId));
+        Agent agent = agentRepository.findById(conversation.getAgentId())
+                .map(agentMapper::toDomain)
+                .orElseThrow(() -> new AgentNotFoundException(
+                        "No agent found for id " + conversation.getAgentId()));
+        return new ConversationAgent(conversationMapper.toDomain(conversation), agent);
+    }
+
     /**
      * Loads the conversation's agent and message history, validating that {@code triggerMessageId}
      * is a USER message within it.

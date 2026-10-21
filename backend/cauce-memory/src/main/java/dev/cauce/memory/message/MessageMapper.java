@@ -33,11 +33,22 @@ public final class MessageMapper {
                 message.role(),
                 message.content(),
                 toToolContentMap(message.toolContent().orElse(null)),
+                message.failureType().orElse(null),
                 message.createdAt());
     }
 
     public Message toDomain(MessageEntity entity) {
         ToolContent toolContent = toToolContent(entity.getRole(), entity.getToolContent());
+        if (entity.getFailureType() != null) {
+            return Message.rehydrate(
+                    entity.getId(),
+                    entity.getConversationId(),
+                    entity.getRole(),
+                    entity.getContent(),
+                    null,
+                    entity.getFailureType(),
+                    entity.getCreatedAt());
+        }
         if (toolContent == null) {
             return Message.rehydrate(
                     entity.getId(),
@@ -82,7 +93,7 @@ public final class MessageMapper {
             case TOOL_RESULT -> new ToolResult(toolCallId, toolName,
                     (String) map.get(KEY_OUTPUT), Boolean.TRUE.equals(map.get(KEY_IS_ERROR)));
             // Text roles carry no tool content (enforced by the V14 guard CHECK).
-            case USER, AGENT, SYSTEM -> null;
+            case USER, AGENT, SYSTEM, FALLBACK -> null;
         };
     }
 

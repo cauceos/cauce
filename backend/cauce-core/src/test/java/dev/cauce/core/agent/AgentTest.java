@@ -136,4 +136,31 @@ class AgentTest {
     private static Agent newAgent() {
         return Agent.create(TENANT, "DentalBot", "prompt", "anthropic", "claude-sonnet-4-7");
     }
+
+    // --- fallback reply (ADR 0005, C3) ---
+
+    @Test
+    void create_hasNoFallbackReply_soThePlatformDefaultApplies() {
+        Agent agent = Agent.create(UUID.randomUUID(), "Bot", "p", "anthropic", "m");
+
+        assertThat(agent.fallbackReply()).isEmpty();
+    }
+
+    @Test
+    void withFallbackReply_stripsAndKeepsTheText() {
+        Agent agent = Agent.create(UUID.randomUUID(), "Bot", "p", "anthropic", "m")
+                .withFallbackReply("  Lo siento, inténtalo más tarde.  ");
+
+        assertThat(agent.fallbackReply()).contains("Lo siento, inténtalo más tarde.");
+    }
+
+    @Test
+    void withFallbackReply_rejectsBlankAndOverlongText() {
+        Agent agent = Agent.create(UUID.randomUUID(), "Bot", "p", "anthropic", "m");
+
+        assertThatThrownBy(() -> agent.withFallbackReply("   ")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> agent.withFallbackReply("x".repeat(Agent.MAX_FALLBACK_REPLY_LENGTH + 1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(agent.withFallbackReply(null).fallbackReply()).isEmpty();
+    }
 }

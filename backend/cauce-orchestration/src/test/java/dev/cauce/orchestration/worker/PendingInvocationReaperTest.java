@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.core.tenant.TenantContext;
@@ -14,6 +15,7 @@ import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
+import dev.cauce.orchestration.service.FailureFallbackService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +29,8 @@ import org.springframework.context.ApplicationEventPublisher;
 
 class PendingInvocationReaperTest {
 
+    private FailureFallbackService failureFallbackService;
+
     private PendingInvocationService pendingInvocationService;
     private PendingInvocationWorkerProperties properties;
     private ApplicationEventPublisher eventPublisher;
@@ -38,12 +42,13 @@ class PendingInvocationReaperTest {
 
     @BeforeEach
     void setUp() {
+        failureFallbackService = Mockito.mock(FailureFallbackService.class);
         pendingInvocationService = Mockito.mock(PendingInvocationService.class);
         properties = new PendingInvocationWorkerProperties();
         properties.setRetryBaseIntervalSeconds(30L);
         properties.getReaper().setTimeoutMs(60_000L);
         eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
-        reaper = new PendingInvocationReaper(pendingInvocationService, properties, eventPublisher);
+        reaper = new PendingInvocationReaper(pendingInvocationService, properties, eventPublisher, failureFallbackService);
         TenantContext.clear();
     }
 
@@ -72,6 +77,7 @@ class PendingInvocationReaperTest {
 
         verify(pendingInvocationService)
                 .releaseForRetry(eq(orphan.id()), anyString(), eq(30L));
+        verifyNoInteractions(failureFallbackService);
         verify(pendingInvocationService, never()).markAbandoned(any(), anyString(), any());
         // A retry release is not permanent: no failure event.
         verify(eventPublisher, never()).publishEvent(any(InvocationFailed.class));
@@ -91,6 +97,8 @@ class PendingInvocationReaperTest {
         ArgumentCaptor<InvocationFailed> captor = ArgumentCaptor.forClass(InvocationFailed.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().invocationId()).isEqualTo(orphan.id());
+        verify(failureFallbackService).sendFallback(orphan.conversationId(),
+                InvocationFailureType.REAPER_ABANDONED);
         assertThat(captor.getValue().failureType())
                 .isEqualTo(InvocationFailureType.REAPER_ABANDONED);
     }

@@ -186,4 +186,32 @@ class MessageTest {
     private static Message newMessage() {
         return Message.from(CONVERSATION, MessageRole.USER, "Hello");
     }
+
+    // --- FALLBACK (ADR 0005, C3) ---
+
+    @Test
+    void fallback_carriesItsTextAndTheFailureType() {
+        UUID conversationId = UUID.randomUUID();
+
+        Message fallback = Message.fallback(conversationId, "Sorry, try again later.", "EMPTY_REPLY");
+
+        assertThat(fallback.role()).isEqualTo(MessageRole.FALLBACK);
+        assertThat(fallback.content()).isEqualTo("Sorry, try again later.");
+        assertThat(fallback.failureType()).contains("EMPTY_REPLY");
+        assertThat(fallback.toolContent()).isEmpty();
+    }
+
+    @Test
+    void fallback_withoutFailureType_isRejected() {
+        assertThatThrownBy(() -> Message.fallback(UUID.randomUUID(), "Sorry.", " "))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void otherRoles_neverCarryAFailureType() {
+        assertThat(Message.from(UUID.randomUUID(), MessageRole.AGENT, "Hi").failureType()).isEmpty();
+        assertThatThrownBy(() -> Message.rehydrate(UUID.randomUUID(), UUID.randomUUID(), MessageRole.SYSTEM,
+                "[orchestration_error] x", null, "LLM_ERROR", java.time.Instant.now()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

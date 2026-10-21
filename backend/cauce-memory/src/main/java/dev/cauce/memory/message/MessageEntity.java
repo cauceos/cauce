@@ -45,6 +45,10 @@ public class MessageEntity {
     @Column(name = "tool_content")
     private Map<String, Object> toolContent;
 
+    /** The internal failure type a FALLBACK message answers; null for every other role (V28). */
+    @Column(name = "failure_type", length = 50)
+    private String failureType;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -60,12 +64,22 @@ public class MessageEntity {
 
     public MessageEntity(UUID id, UUID conversationId, MessageRole role, String content,
                          Map<String, Object> toolContent, Instant createdAt) {
+        this(id, conversationId, role, content, toolContent, null, createdAt);
+    }
+
+    public MessageEntity(UUID id, UUID conversationId, MessageRole role, String content,
+                         Map<String, Object> toolContent, String failureType, Instant createdAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.role = role;
         this.content = content;
         this.toolContent = toolContent;
+        this.failureType = failureType;
         this.createdAt = createdAt;
+    }
+
+    public String getFailureType() {
+        return failureType;
     }
 
     public UUID getId() {

@@ -12,13 +12,13 @@ import type { FailureReason, InvocationStatus, MessageResponse } from '../../api
  *   concurrent writer to the same conversation (second tab, same identity)
  *   is indistinguishable on the wire; accepted playground heuristic.
  * · Grouping: each maximal run of consecutive TOOL_CALL/TOOL_RESULT
- *   messages renders as one collapsible loop-trace block. A SYSTEM message
- *   landing mid-loop (retryable provider failure) splits the run in two —
- *   honest: that is the wire order.
+ *   messages renders as one collapsible loop-trace block. On an older
+ *   instance a SYSTEM message landing mid-loop (retryable provider failure)
+ *   splits the run in two — honest: that is the wire order.
  * · Meta: one meta line per finished invocation, attached to its last
- *   attributed AGENT bubble; if the invocation left no AGENT bubble
- *   (FAILED after SYSTEM cards, or TIMEOUT/INTERNAL_ERROR which write no
- *   thread message at all), a standalone meta-only row instead. Historical
+ *   attributed AGENT bubble; if the invocation left no AGENT bubble (a
+ *   terminal failure ends in a FALLBACK card, or a SYSTEM card on an older
+ *   instance), a standalone meta-only row instead. Historical
  *   messages get no meta — the wire does not carry it and none is invented.
  */
 

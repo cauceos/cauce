@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.core.agent.AgentNotFoundException;
@@ -20,6 +21,7 @@ import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
+import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +36,8 @@ import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 
 class PendingInvocationWorkerTest {
+
+    private FailureFallbackService failureFallbackService;
 
     private static final String WORKER_ID = "host:1:abc12345";
 
@@ -51,6 +55,7 @@ class PendingInvocationWorkerTest {
 
     @BeforeEach
     void setUp() {
+        failureFallbackService = Mockito.mock(FailureFallbackService.class);
         pendingInvocationService = Mockito.mock(PendingInvocationService.class);
         orchestratorService = Mockito.mock(OrchestratorService.class);
         workerIdentity = Mockito.mock(WorkerIdentity.class);
@@ -61,7 +66,7 @@ class PendingInvocationWorkerTest {
         properties.setRetryBaseIntervalSeconds(30L);
         eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
         worker = new PendingInvocationWorker(pendingInvocationService, orchestratorService,
-                workerIdentity, executor, properties, eventPublisher);
+                workerIdentity, executor, properties, eventPublisher, failureFallbackService);
         TenantContext.clear();
     }
 
@@ -119,6 +124,8 @@ class PendingInvocationWorkerTest {
         verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
         verify(pendingInvocationService, never()).markFailed(any(), anyString(), any());
         verify(pendingInvocationService, never()).markAbandoned(any(), anyString(), any());
+        // ADR 0005, C3: a failure that will be retried sends no fallback.
+        verifyNoInteractions(failureFallbackService);
     }
 
     @Test
@@ -164,6 +171,7 @@ class PendingInvocationWorkerTest {
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
         assertThat(publishedFailure().failureType()).isEqualTo(InvocationFailureType.LLM_ERROR);
+        verify(failureFallbackService).sendFallback(claimed.conversationId(), InvocationFailureType.LLM_ERROR);
     }
 
     @Test
@@ -181,6 +189,8 @@ class PendingInvocationWorkerTest {
         verify(pendingInvocationService, never()).markFailed(any(), anyString(), any());
         assertThat(publishedFailure().failureType())
                 .isEqualTo(InvocationFailureType.LLM_RETRIES_EXHAUSTED);
+        verify(failureFallbackService).sendFallback(claimed.conversationId(),
+                InvocationFailureType.LLM_RETRIES_EXHAUSTED);
     }
 
     @Test
@@ -227,6 +237,7 @@ class PendingInvocationWorkerTest {
                 eq(claimed.id()), anyString(), eq(InvocationFailureType.EMPTY_REPLY));
         verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
         assertThat(publishedFailure().failureType()).isEqualTo(InvocationFailureType.EMPTY_REPLY);
+        verify(failureFallbackService).sendFallback(claimed.conversationId(), InvocationFailureType.EMPTY_REPLY);
     }
 
     @Test

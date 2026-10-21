@@ -32,15 +32,17 @@ public final class Message {
     private final MessageRole role;
     private final String content;
     private final ToolContent toolContent;
+    private final String failureType; // present exactly for FALLBACK
     private final Instant createdAt;
 
     private Message(UUID id, UUID conversationId, MessageRole role, String content,
-                    ToolContent toolContent, Instant createdAt) {
+                    ToolContent toolContent, String failureType, Instant createdAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.role = role;
         this.content = content;
         this.toolContent = toolContent;
+        this.failureType = failureType;
         this.createdAt = createdAt;
     }
 
@@ -61,13 +63,28 @@ public final class Message {
         return create(conversationId, MessageRole.TOOL_RESULT, renderContent(result), result);
     }
 
+    /**
+     * Creates a new FALLBACK message: the platform's {@code text} to the interlocutor after a
+     * terminal failure of type {@code failureType} (ADR 0005, C3). The type is the internal
+     * failure taxonomy's name, held as a String so the core does not depend on it; the API maps
+     * it to the public failure reason.
+     */
+    public static Message fallback(UUID conversationId, String text, String failureType) {
+        return create(conversationId, MessageRole.FALLBACK, text, null, failureType);
+    }
+
     private static Message create(UUID conversationId, MessageRole role, String content,
                                   ToolContent toolContent) {
+        return create(conversationId, role, content, toolContent, null);
+    }
+
+    private static Message create(UUID conversationId, MessageRole role, String content,
+                                  ToolContent toolContent, String failureType) {
         Objects.requireNonNull(conversationId, "conversationId");
         Objects.requireNonNull(role, "role");
-        validate(role, content, toolContent);
+        validate(role, content, toolContent, failureType);
         return new Message(UuidGenerator.newV7(), conversationId, role, content, toolContent,
-                Instant.now());
+                failureType, Instant.now());
     }
 
     /** Rebuilds a text message from persisted state. For the persistence layer only. */
@@ -81,12 +98,22 @@ public final class Message {
      */
     public static Message rehydrate(UUID id, UUID conversationId, MessageRole role,
                                     String content, ToolContent toolContent, Instant createdAt) {
+        return rehydrate(id, conversationId, role, content, toolContent, null, createdAt);
+    }
+
+    /**
+     * Rebuilds any message, a FALLBACK included, from persisted state. For the persistence
+     * layer only.
+     */
+    public static Message rehydrate(UUID id, UUID conversationId, MessageRole role,
+                                    String content, ToolContent toolContent, String failureType,
+                                    Instant createdAt) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(conversationId, "conversationId");
         Objects.requireNonNull(role, "role");
         Objects.requireNonNull(createdAt, "createdAt");
-        validate(role, content, toolContent);
-        return new Message(id, conversationId, role, content, toolContent, createdAt);
+        validate(role, content, toolContent, failureType);
+        return new Message(id, conversationId, role, content, toolContent, failureType, createdAt);
     }
 
     private static String renderContent(ToolResult result) {
@@ -94,12 +121,21 @@ public final class Message {
     }
 
     /**
-     * Enforces the message invariants: content is always present (non-blank), and tool
-     * content is present exactly for the tool roles, matching the role's kind.
+     * Enforces the message invariants: content is always present (non-blank), tool content is
+     * present exactly for the tool roles, matching the role's kind, and a failure type is
+     * present exactly for FALLBACK.
      */
-    private static void validate(MessageRole role, String content, ToolContent toolContent) {
+    private static void validate(MessageRole role, String content, ToolContent toolContent,
+                                 String failureType) {
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException("content must not be blank");
+        }
+        if (role == MessageRole.FALLBACK) {
+            if (failureType == null || failureType.isBlank()) {
+                throw new IllegalArgumentException("FALLBACK requires a failure type");
+            }
+        } else if (failureType != null) {
+            throw new IllegalArgumentException(role + " must not carry a failure type");
         }
         switch (role) {
             case TOOL_CALL -> {
@@ -140,6 +176,11 @@ public final class Message {
     /** The structured tool payload, present only for TOOL_CALL / TOOL_RESULT messages. */
     public Optional<ToolContent> toolContent() {
         return Optional.ofNullable(toolContent);
+    }
+
+    /** The failure type a FALLBACK message answers; empty for every other role. */
+    public Optional<String> failureType() {
+        return Optional.ofNullable(failureType);
     }
 
     public Instant createdAt() {

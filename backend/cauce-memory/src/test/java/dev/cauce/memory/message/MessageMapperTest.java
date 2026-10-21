@@ -84,4 +84,19 @@ class MessageMapperTest {
                 .containsEntry("tool_name", "get_current_time")
                 .containsKey("input");
     }
+
+    @Test
+    void roundTrip_fallbackMessage_preservesItsFailureType() {
+        Message fallback = Message.fallback(java.util.UUID.randomUUID(), "Sorry.", "MAX_TOOL_ITERATIONS");
+        MessageMapper messageMapper = new MessageMapper();
+
+        MessageEntity entity = messageMapper.toEntity(fallback);
+        Message roundTripped = messageMapper.toDomain(entity);
+
+        assertThat(entity.getFailureType()).isEqualTo("MAX_TOOL_ITERATIONS");
+        assertThat(entity.getToolContent()).isNull();
+        assertThat(roundTripped.role()).isEqualTo(dev.cauce.core.message.MessageRole.FALLBACK);
+        assertThat(roundTripped.failureType()).contains("MAX_TOOL_ITERATIONS");
+        assertThat(roundTripped.content()).isEqualTo("Sorry.");
+    }
 }
