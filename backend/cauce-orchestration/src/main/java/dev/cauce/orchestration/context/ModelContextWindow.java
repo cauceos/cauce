@@ -29,16 +29,26 @@ public final class ModelContextWindow {
      */
     static final int DEFAULT_CONTEXT_WINDOW = 16_384;
 
-    // Context windows are the Claude API defaults (docs.anthropic.com, build-with-claude/
-    // context-windows): Opus 4.8/4.7/4.6 and Sonnet 4.6 are 1M on the Claude API (the adapter
-    // needs no beta header); Sonnet 4.7 and Haiku 4.5 are 200K.
-    private static final Map<String, Integer> KNOWN_MODELS = Map.of(
-            "claude-opus-4-8", 1_000_000,
-            "claude-opus-4-7", 1_000_000,
-            "claude-opus-4-6", 1_000_000,
-            "claude-sonnet-4-6", 1_000_000,
-            "claude-sonnet-4-7", 200_000,
-            "claude-haiku-4-5", 200_000);
+    // Context windows are the Claude API defaults, checked on 2026-10-21 against
+    // platform.claude.com/docs/en/build-with-claude/context-windows and models/overview: Fable 5.1,
+    // Opus 5.5, Sonnet 5.5 and Haiku 5.5 (current), and Fable 5, Opus 5, Sonnet 5, Opus 4.8/4.7/4.6
+    // and Sonnet 4.6 (legacy) have a 1M window by default (no beta header); every other model,
+    // Haiku 4.5 among them, has 200K. Sonnet 4.7 is not listed there and keeps the 200K it had.
+    private static final Map<String, Integer> KNOWN_MODELS = Map.ofEntries(
+            Map.entry("claude-fable-5-1", 1_000_000),
+            Map.entry("claude-opus-5-5", 1_000_000),
+            Map.entry("claude-sonnet-5-5", 1_000_000),
+            Map.entry("claude-haiku-5-5", 1_000_000),
+            Map.entry("claude-fable-5", 1_000_000),
+            Map.entry("claude-opus-5", 1_000_000),
+            Map.entry("claude-sonnet-5", 1_000_000),
+            Map.entry("claude-opus-4-8", 1_000_000),
+            Map.entry("claude-opus-4-7", 1_000_000),
+            Map.entry("claude-opus-4-6", 1_000_000),
+            Map.entry("claude-sonnet-4-6", 1_000_000),
+            Map.entry("claude-sonnet-4-7", 200_000),
+            Map.entry("claude-haiku-4-5", 200_000),
+            Map.entry("claude-haiku-4-5-20251001", 200_000));
 
     /** Unknown model ids already warned about, so the fallback WARN fires once per id per JVM. */
     private static final Set<String> WARNED_UNKNOWN_MODELS = ConcurrentHashMap.newKeySet();

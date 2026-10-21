@@ -16,13 +16,15 @@ class ModelContextWindowTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
+            "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+            "claude-fable-5", "claude-opus-5", "claude-sonnet-5",
             "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6"})
     void contextWindowFor_when1mModel_returns1m(String model) {
         assertThat(ModelContextWindow.contextWindowFor(model)).isEqualTo(1_000_000);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"claude-sonnet-4-7", "claude-haiku-4-5"})
+    @ValueSource(strings = {"claude-sonnet-4-7", "claude-haiku-4-5", "claude-haiku-4-5-20251001"})
     void contextWindowFor_when200kModel_returns200k(String model) {
         assertThat(ModelContextWindow.contextWindowFor(model)).isEqualTo(200_000);
     }
