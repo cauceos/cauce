@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.audit.AuditContentHash;
 import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditToolHash;
 import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
@@ -150,8 +151,8 @@ class OrchestratorServiceTest {
         assertThat(result.role()).isEqualTo(MessageRole.AGENT);
         assertThat(result.content()).isEqualTo("It is 2026-06-13T10:15:30Z.");
 
-        // Persisted in order: TOOL_CALL, TOOL_RESULT (the clock output) via plain appends;
-        // the final AGENT reply goes through the audited append (asserted via the result).
+        // Persisted in order: TOOL_CALL, TOOL_RESULT (the clock output), then the final AGENT
+        // reply — each through the audited append.
         List<Message> persisted = capturedAppends(2);
         assertThat(persisted.get(0).role()).isEqualTo(MessageRole.TOOL_CALL);
         assertThat(persisted.get(1).role()).isEqualTo(MessageRole.TOOL_RESULT);
@@ -230,7 +231,8 @@ class OrchestratorServiceTest {
         ArgumentCaptor<String> error = ArgumentCaptor.forClass(String.class);
         verify(errorRecorder).recordError(eq(conversationId), error.capture());
         assertThat(error.getValue()).startsWith("[orchestration_error] ").contains("empty reply");
-        verify(gateway, never()).appendAudited(any(), any());
+        assertThat(capturedAudits()).extracting(AuditEvent::eventType)
+                .doesNotContain(ConductAuditEvents.AGENT_RESPONDED); // nothing empty is the answer
         verify(replyDispatcher, never()).dispatchAgentReply(any(), any());
     }
 
@@ -541,19 +543,34 @@ class OrchestratorServiceTest {
     }
 
     @Test
-    void respondToMessage_toolRound_auditsOnlyTheFinalReplyWithRoundCount() {
+    void respondToMessage_toolRound_auditsTheCallTheResultAndTheFinalReply_byHashOnly() {
         stubLoadAndEchoAppend();
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
         when(provider.invoke(any())).thenReturn(
-                toolRequest("get_current_time"),
+                new LlmResponse("", List.of(new ToolCall("call-7", "get_current_time", Map.of("tz", "Europe/Madrid"))),
+                        FinishReason.TOOL_USE, LlmUsage.of(3, 4)),
                 reply("It is 2026-06-13T10:15:30Z."));
 
         serviceWith(clockRegistry()).respondToMessage(invocationId, conversationId, triggerId);
 
-        // Intermediate tool messages go through the plain (unaudited) append; the single
-        // audited append is the terminal conduct fact, carrying the real round count.
-        AuditEvent event = capturedFinalAudit();
-        assertThat(event.payload()).containsEntry("rounds", 2);
+        // ADR 0005, C5: one record per tool call and per result, then the terminal reply.
+        List<AuditEvent> audits = capturedAudits();
+        assertThat(audits).extracting(AuditEvent::eventType).containsExactly(
+                ConductAuditEvents.TOOL_CALLED, ConductAuditEvents.TOOL_RETURNED, ConductAuditEvents.AGENT_RESPONDED);
+        assertThat(audits.get(0).payload())
+                .containsEntry("tool_name", "get_current_time")
+                .containsEntry("tool_call_id", "call-7")
+                .containsEntry("round", 0)
+                .containsEntry("arguments_hash", AuditToolHash.of(tenantId, Map.of("tz", "Europe/Madrid")));
+        assertThat(audits.get(1).payload())
+                .containsEntry("tool_call_id", "call-7")
+                .containsEntry("outcome", "success")
+                .containsEntry("output_hash", AuditToolHash.of(tenantId, "2026-06-13T10:15:30Z"))
+                .containsKey("duration_ms");
+        // Arguments and output never enter in clear.
+        assertThat(audits.get(0).payload().values()).doesNotContain("Europe/Madrid", Map.of("tz", "Europe/Madrid"));
+        assertThat(audits.get(1).payload().values()).doesNotContain("2026-06-13T10:15:30Z");
+        assertThat(capturedFinalAudit().payload()).containsEntry("rounds", 2);
     }
 
     // === OUTBOUND DISPATCH (explicit port) ===
@@ -647,17 +664,33 @@ class OrchestratorServiceTest {
         when(gateway.appendAudited(any(), any())).thenAnswer(call -> call.getArgument(0));
     }
 
+    /**
+     * The tool messages persisted, in order. Since ADR 0005 (C5) each one goes through the audited
+     * append with its own conduct record, like the final reply.
+     */
     private List<Message> capturedAppends(int times) {
         ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
-        verify(gateway, times(times)).append(captor.capture());
+        verify(gateway, Mockito.atLeastOnce()).appendAudited(captor.capture(), any());
+        List<Message> toolMessages = captor.getAllValues().stream()
+                .filter(m -> m.role() == MessageRole.TOOL_CALL || m.role() == MessageRole.TOOL_RESULT)
+                .toList();
+        assertThat(toolMessages).hasSize(times);
+        return toolMessages;
+    }
+
+    /** Every audit record written with an append, in order. */
+    private List<AuditEvent> capturedAudits() {
+        ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(gateway, Mockito.atLeastOnce()).appendAudited(any(), captor.capture());
         return captor.getAllValues();
     }
 
-    /** The single audited (final) append and its audit event. */
+    /** The audit event of the final reply (the last audited append). */
     private AuditEvent capturedFinalAudit() {
-        ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
-        verify(gateway).appendAudited(any(), captor.capture());
-        return captor.getValue();
+        List<AuditEvent> audits = capturedAudits();
+        AuditEvent last = audits.get(audits.size() - 1);
+        assertThat(last.eventType()).isEqualTo(ConductAuditEvents.AGENT_RESPONDED);
+        return last;
     }
 
     private static ToolRegistry emptyRegistry() {

@@ -221,8 +221,11 @@ public class OrchestratorService {
                 messages.add(conversationGateway.append(
                         Message.from(conversationId, MessageRole.AGENT, response.content())));
             }
+            // ADR 0005, C5: each tool call and each result commits with its audit record.
             for (ToolCall call : response.toolCalls()) {
-                messages.add(conversationGateway.append(Message.toolCall(conversationId, call)));
+                Message callMessage = Message.toolCall(conversationId, call);
+                messages.add(conversationGateway.appendAudited(callMessage, ConductAuditEvents.toolCalled(
+                        agent.tenantId(), invocationId, agent.id(), callMessage, call, iteration)));
                 eventPublisher.publishEvent(new ToolCallRequested(invocationId, iteration,
                         call.toolName(), call.toolCallId(), Instant.now()));
             }
@@ -230,7 +233,10 @@ public class OrchestratorService {
                 long dispatchStartNanos = System.nanoTime();
                 ToolResult result = dispatch(call, agent);
                 long dispatchMillis = elapsedMillis(dispatchStartNanos);
-                messages.add(conversationGateway.append(Message.toolResult(conversationId, result)));
+                Message resultMessage = Message.toolResult(conversationId, result);
+                messages.add(conversationGateway.appendAudited(resultMessage, ConductAuditEvents.toolReturned(
+                        agent.tenantId(), invocationId, agent.id(), resultMessage, result, iteration,
+                        dispatchMillis)));
                 eventPublisher.publishEvent(new ToolExecuted(invocationId, iteration,
                         call.toolName(), call.toolCallId(), result.isError(), dispatchMillis,
                         Instant.now()));

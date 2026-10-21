@@ -2,7 +2,10 @@ package dev.cauce.orchestration.audit;
 
 import dev.cauce.core.audit.AuditContentHash;
 import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditToolHash;
 import dev.cauce.core.message.Message;
+import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolResult;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -18,7 +21,9 @@ import java.util.UUID;
  * where deletion operates; the append-only chain keeps only its hash.
  *
  * <p><b>Emitted</b> — each inside the transaction of the business fact it audits:
- * {@link #MESSAGE_RECEIVED} (the ingest transaction), {@link #AGENT_RESPONDED} (the final
+ * {@link #MESSAGE_RECEIVED} (the ingest transaction), {@link #TOOL_CALLED} and
+ * {@link #TOOL_RETURNED} (the append of each TOOL_CALL and TOOL_RESULT message, ADR 0005, C5 —
+ * the tool's arguments and output enter only as {@link AuditToolHash} hashes), {@link #AGENT_RESPONDED} (the final
  * AGENT append — carrying {@code finish_reason} and {@code rounds}, it IS the terminal
  * success record; there is no separate COMPLETED audit event, because the queue's
  * PROCESSING→COMPLETED flip is bookkeeping, not conduct), and {@link #INVOCATION_FAILED}
@@ -39,6 +44,8 @@ public final class ConductAuditEvents {
     public static final String MESSAGE_RECEIVED = "conduct.message.received";
     public static final String AGENT_RESPONDED = "conduct.agent.responded";
     public static final String INVOCATION_FAILED = "conduct.invocation.failed";
+    public static final String TOOL_CALLED = "conduct.tool.called";
+    public static final String TOOL_RETURNED = "conduct.tool.returned";
 
     // Reserved hook types — defined, never emitted until a transactional trigger exists.
     public static final String EXTERNAL_ACTION = "conduct.external.action";
@@ -64,6 +71,49 @@ public final class ConductAuditEvents {
                 "identity_id", identityId.toString(),
                 "content_hash", AuditContentHash.of(tenantId, userMessage.content()),
                 "content_length", userMessage.content().length()));
+    }
+
+    /**
+     * The model asked for a tool and the TOOL_CALL message was persisted (its append tx). The
+     * arguments enter only as their hash ({@link AuditToolHash}); {@code round} is the LLM round
+     * that produced the call, counted per inbound message.
+     */
+    public static AuditEvent toolCalled(UUID tenantId, UUID invocationId, UUID agentId,
+                                        Message toolCallMessage, ToolCall call, int round) {
+        Objects.requireNonNull(toolCallMessage, "toolCallMessage must not be null");
+        Objects.requireNonNull(call, "call must not be null");
+        return new AuditEvent(tenantId, TOOL_CALLED, Map.of(
+                "invocation_id", invocationId.toString(),
+                "conversation_id", toolCallMessage.conversationId().toString(),
+                "message_id", toolCallMessage.id().toString(),
+                "agent_id", agentId.toString(),
+                "tool_name", call.toolName(),
+                "tool_call_id", call.toolCallId(),
+                "round", round,
+                "arguments_hash", AuditToolHash.of(tenantId, call.input())));
+    }
+
+    /**
+     * A tool call finished and its TOOL_RESULT message was persisted (its append tx): how long it
+     * ran, whether it succeeded, and the hash of its output — never the output itself, which can
+     * carry whatever the tool read.
+     */
+    public static AuditEvent toolReturned(UUID tenantId, UUID invocationId, UUID agentId,
+                                          Message toolResultMessage, ToolResult result, int round,
+                                          long durationMillis) {
+        Objects.requireNonNull(toolResultMessage, "toolResultMessage must not be null");
+        Objects.requireNonNull(result, "result must not be null");
+        return new AuditEvent(tenantId, TOOL_RETURNED, Map.of(
+                "invocation_id", invocationId.toString(),
+                "conversation_id", toolResultMessage.conversationId().toString(),
+                "message_id", toolResultMessage.id().toString(),
+                "agent_id", agentId.toString(),
+                "tool_name", result.toolName(),
+                "tool_call_id", result.toolCallId(),
+                "round", round,
+                "duration_ms", durationMillis,
+                "outcome", result.isError() ? "error" : "success",
+                "output_hash", AuditToolHash.of(tenantId, result.output())));
     }
 
     /**

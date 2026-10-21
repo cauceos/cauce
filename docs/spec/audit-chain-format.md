@@ -288,6 +288,30 @@ If `payload` is `NULL`, this check is skipped and the stored `payload_hash` is u
 the entry hash of §5. The chain still verifies. This is a property of the construction: the
 chain commits to the hash of the payload, never to the payload itself.
 
+### 6.3 Hashes inside payloads (informative)
+
+Some payloads carry, as ordinary string members, hashes of business content that the ledger
+never stores. They are not part of the chain's verification: a verifier sees only the payload,
+never the content, and cannot recompute them. They are published so that anyone holding the
+business row can.
+
+The `conduct.tool.called` and `conduct.tool.returned` payloads carry `arguments_hash` and
+`output_hash`:
+
+```
+tool_hash = lowercase_hex( SHA-256( UTF-8( "cauce-tool:v1:" + tenant_id + ":" + canonical_json( value ) ) ) )
+```
+
+`tenant_id` is the payload's tenant in its canonical UUID form (§3). `value` is the tool call's
+argument object, or the tool result's output string, and `canonical_json` follows §4 **with**
+NFC normalisation (§4.4). With `tenant_id` = `00000000-0000-0000-0000-000000000001`:
+
+| `value` | `canonical_json(value)` | `tool_hash` |
+|---|---|---|
+| `{"tz":"UTC"}` | `{"tz":"UTC"}` | `c6bc66c84ec00d8fe688137dc1d49994a08ab77bdd59e25ebc3219197cc1c2d4` |
+| `"10:15"` | `"10:15"` | `47e996141ce415480a5dc139f04a40a07cdbc1f8bc34debfca1768578043d056` |
+| `{}` | `{}` | `793a69aa841b41563205c132eb5540b0829a87f830fc201ce4219167645086dd` |
+
 ---
 
 ## 7. Chaining

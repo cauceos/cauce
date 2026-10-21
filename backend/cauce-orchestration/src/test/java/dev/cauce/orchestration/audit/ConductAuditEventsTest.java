@@ -4,8 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.cauce.core.audit.AuditContentHash;
 import dev.cauce.core.audit.AuditEvent;
+import dev.cauce.core.audit.AuditToolHash;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
+import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolResult;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -85,5 +89,42 @@ class ConductAuditEventsTest {
                 .doesNotContain(ConductAuditEvents.MESSAGE_RECEIVED,
                         ConductAuditEvents.AGENT_RESPONDED,
                         ConductAuditEvents.INVOCATION_FAILED);
+    }
+
+    // --- tool calls and results (ADR 0005, C5) ---
+
+    @Test
+    void toolCalled_carriesTheCallsIdentityAndTheHashOfItsArguments_neverTheArguments() {
+        ToolCall call = new ToolCall("call-1", "lookup_order", Map.of("order_id", "A-1234"));
+        Message message = Message.toolCall(conversationId, call);
+
+        AuditEvent event = ConductAuditEvents.toolCalled(tenantId, invocationId, agentId, message, call, 2);
+
+        assertThat(event.eventType()).isEqualTo("conduct.tool.called");
+        assertThat(event.payload())
+                .containsEntry("tool_name", "lookup_order")
+                .containsEntry("tool_call_id", "call-1")
+                .containsEntry("message_id", message.id().toString())
+                .containsEntry("round", 2)
+                .containsEntry("arguments_hash", AuditToolHash.of(tenantId, Map.of("order_id", "A-1234")));
+        assertThat(event.payload().values()).doesNotContain("A-1234");
+        assertThat(event.payload()).doesNotContainKeys("input", "arguments");
+    }
+
+    @Test
+    void toolReturned_carriesDurationOutcomeAndTheHashOfItsOutput_neverTheOutput() {
+        ToolResult result = ToolResult.error("call-1", "lookup_order", "order A-1234 not found");
+        Message message = Message.toolResult(conversationId, result);
+
+        AuditEvent event = ConductAuditEvents.toolReturned(tenantId, invocationId, agentId, message, result, 2, 37L);
+
+        assertThat(event.eventType()).isEqualTo("conduct.tool.returned");
+        assertThat(event.payload())
+                .containsEntry("tool_call_id", "call-1")
+                .containsEntry("duration_ms", 37L)
+                .containsEntry("outcome", "error")
+                .containsEntry("output_hash", AuditToolHash.of(tenantId, "order A-1234 not found"));
+        assertThat(event.payload().values()).doesNotContain("order A-1234 not found");
+        assertThat(event.payload()).doesNotContainKeys("output");
     }
 }
