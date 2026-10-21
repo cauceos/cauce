@@ -1,6 +1,6 @@
 # ADR 0006: The WhatsApp Cloud API channel
 
-Status: Accepted (not yet implemented).
+Status: Accepted and implemented; the first real conversation confirms the `recipient` field.
 
 ## Context
 

@@ -46,7 +46,10 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Delivery guarantee.** Outbound delivery is best-effort: fire-and-forget on the `channelOutboundExecutor`, no outbox, no retries, no delivery dedup; failures are logged and the reply stays readable by polling. The `AgentReplyDispatcher` port carries the TODO: persist the delivery intent behind the same port and drain it from a scheduled dispatcher, additively.
 - **Channel-config list and disable endpoints.** Only creation exists.
 - **`SUPPORTED_CHANNELS` by SPI.** `ConversationService` validates `channel_type` against a hardcoded set; replacing it with the adapter registry needs a port, since a direct dependency would be a cycle.
-- **WhatsApp adapter.** The SPI was designed against it (HMAC over the raw body in `verify`); no adapter exists.
+- **WhatsApp templates.** Outside the 24-hour customer service window a reply, or a fallback, is not sent: a loud failure (ADR 0006, W4). Sending approved templates there is a later unit.
+- **WhatsApp identity joining.** A changed number or BSUID (`system` webhook) starts a new identity and thread, with a WARN; joining the two is the memory subject ADR 0004 defers. The parent BSUID (`parent_user_id`, across portfolios) is not read.
+- **Per-agent text-only reply.** The answer to a non-text WhatsApp message is the platform's `cauce.channels.whatsapp.unsupported-message-reply`; a per-agent override like the fallback's (ADR 0005, C3) would be a second per-agent column and write path (ADR 0006, W5).
+- **WhatsApp group messages.** Refused with a WARN when the message carries `group_id`; whether that is the field Meta's Groups API uses for every group event is to be confirmed against a real group.
 - **Outbound delivery metrics.** Log-only; an outbound event would let observability count it.
 - **Message parts and per-channel capabilities** are ADR 0004's second and third units: decided, not yet implemented. Typed identity (the first unit) has landed.
 - **Telegram groups.** A group `chat.id` is not a person and there is no `GROUP` identity kind (ADR 0004, conscious limitation): the adapter accepts private chats only and refuses the rest with a WARN.

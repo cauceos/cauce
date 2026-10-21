@@ -401,6 +401,13 @@ what the cauce-api integration tests assert. The rules every endpoint follows:
   and ingest then runs under RLS. 2xx is returned for an authentic-but-unsupported update so the
   provider does not redeliver. Local development against a real provider needs a public URL (a
   tunnel) plus the provider's webhook registration; the ITs drive the endpoint directly.
+- **WhatsApp webhooks are per app, not per config** (ADR 0006): `GET|POST
+  /webhooks/whatsapp/{appId}`. The app's signature (`X-Hub-Signature-256`, HMAC over the raw body
+  with the sealed app secret) is verified before the body is read; events are then routed by
+  `phone_number_id` to a number of that app. Provider secrets the system must read back (access
+  tokens, app secrets) are sealed with AES-GCM under `cauce.security.secrets-encryption-key`, a key
+  that never lives in the database; values only ever compared (webhook secrets, verify tokens, API
+  keys) are hashed.
 
 ### Frontend (playground)
 
