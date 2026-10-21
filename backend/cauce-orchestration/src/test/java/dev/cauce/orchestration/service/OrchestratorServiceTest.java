@@ -23,6 +23,7 @@ import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolDefinition;
+import dev.cauce.core.tool.ToolExecutionContext;
 import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.exception.LlmRateLimitException;
 import dev.cauce.llm.model.FinishReason;
@@ -162,6 +163,32 @@ class OrchestratorServiceTest {
         verify(gateway).appendAudited(eq(result), any());
         verify(provider, times(2)).invoke(any());
         verifyNoInteractions(errorRecorder);
+    }
+
+    @Test
+    void respondToMessage_executesTheToolWithTheContextTheOrchestratorBuilt() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("boom_tool"), reply("Done."));
+        List<ToolExecutionContext> seen = new java.util.ArrayList<>();
+        Tool recording = new Tool() {
+            @Override
+            public ToolDefinition definition() {
+                return new ToolDefinition("boom_tool", "records its context", Map.of("type", "object"));
+            }
+
+            @Override
+            public ToolResult execute(ToolCall call, ToolExecutionContext context) {
+                seen.add(context);
+                return ToolResult.success(call.toolCallId(), call.toolName(), "ok");
+            }
+        };
+
+        serviceWith(new ToolRegistry(List.of(recording))).respondToMessage(invocationId, conversationId, triggerId);
+
+        // ADR 0007, B3: the subject of the action comes from the orchestrator, never the model.
+        assertThat(seen).containsExactly(new ToolExecutionContext(tenantId, agent.id(), conversationId,
+                conversation.identityId(), triggerId, invocationId));
     }
 
     @Test
@@ -718,7 +745,7 @@ class OrchestratorServiceTest {
             }
 
             @Override
-            public ToolResult execute(ToolCall call) {
+            public ToolResult execute(ToolCall call, ToolExecutionContext context) {
                 throw new IllegalStateException("boom");
             }
         };

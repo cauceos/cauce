@@ -2,6 +2,7 @@ package dev.cauce.tools.clock;
 
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolDefinition;
+import dev.cauce.core.tool.ToolExecutionContext;
 import dev.cauce.core.tool.ToolResult;
 import dev.cauce.tools.spi.Tool;
 import java.time.Clock;
@@ -37,7 +38,7 @@ public final class ClockTool implements Tool {
     }
 
     @Override
-    public ToolResult execute(ToolCall call) {
+    public ToolResult execute(ToolCall call, ToolExecutionContext context) {
         Objects.requireNonNull(call, "call");
         String now = Instant.now(clock).toString();
         return ToolResult.success(call.toolCallId(), NAME, now);

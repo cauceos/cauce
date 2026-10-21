@@ -4,21 +4,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolDefinition;
+import dev.cauce.core.tool.ToolExecutionContext;
 import dev.cauce.core.tool.ToolResult;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ClockToolTest {
 
     private static final Instant FIXED = Instant.parse("2026-06-13T10:15:30Z");
+    private static final ToolExecutionContext CONTEXT = new ToolExecutionContext(UUID.randomUUID(),
+            UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
     private final ClockTool tool = new ClockTool(Clock.fixed(FIXED, ZoneOffset.UTC));
 
     @Test
     void execute_returnsTheInjectedClockInstant() {
-        ToolResult result = tool.execute(new ToolCall("call-1", ClockTool.NAME, Map.of()));
+        ToolResult result = tool.execute(new ToolCall("call-1", ClockTool.NAME, Map.of()), CONTEXT);
 
         assertThat(result.toolCallId()).isEqualTo("call-1");
         assertThat(result.toolName()).isEqualTo("get_current_time");
@@ -28,7 +32,7 @@ class ClockToolTest {
 
     @Test
     void execute_correlatesResultToTheCallId() {
-        ToolResult result = tool.execute(new ToolCall("abc-123", ClockTool.NAME, Map.of()));
+        ToolResult result = tool.execute(new ToolCall("abc-123", ClockTool.NAME, Map.of()), CONTEXT);
 
         assertThat(result.toolCallId()).isEqualTo("abc-123");
     }
@@ -44,7 +48,7 @@ class ClockToolTest {
 
     @Test
     void execute_rejectsNullCall() {
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> tool.execute(null))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> tool.execute(null, CONTEXT))
                 .isInstanceOf(NullPointerException.class);
     }
 }

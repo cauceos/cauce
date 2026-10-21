@@ -10,6 +10,7 @@ import dev.cauce.core.message.MessageNotFoundException;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolDefinition;
+import dev.cauce.core.tool.ToolExecutionContext;
 import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.exception.LlmProviderException;
 import dev.cauce.llm.model.LlmInvocation;
@@ -158,6 +159,9 @@ public class OrchestratorService {
                         + agent.modelProvider() + "' (is its API key configured?). Available: "
                         + llmProviderRegistry.availableProviders()));
         List<ToolDefinition> toolDefinitions = toolDefinitions(agent);
+        // ADR 0007, B3: who the tools act for is decided here, never by the model.
+        ToolExecutionContext toolContext = new ToolExecutionContext(agent.tenantId(), agent.id(),
+                conversationId, loaded.conversation().identityId(), triggerMessageId, invocationId);
 
         // ADR 0005, C6: the cap is per inbound message. Rounds an earlier attempt of this
         // invocation already spent (its tool calls are persisted after the trigger) count.
@@ -231,7 +235,7 @@ public class OrchestratorService {
             }
             for (ToolCall call : response.toolCalls()) {
                 long dispatchStartNanos = System.nanoTime();
-                ToolResult result = dispatch(call, agent);
+                ToolResult result = dispatch(call, agent, toolContext);
                 long dispatchMillis = elapsedMillis(dispatchStartNanos);
                 Message resultMessage = Message.toolResult(conversationId, result);
                 messages.add(conversationGateway.appendAudited(resultMessage, ConductAuditEvents.toolReturned(
@@ -296,7 +300,7 @@ public class OrchestratorService {
      * input) never fail the invocation: they become an errored {@link ToolResult} fed back to the
      * model, which can react.
      */
-    private ToolResult dispatch(ToolCall call, Agent agent) {
+    private ToolResult dispatch(ToolCall call, Agent agent, ToolExecutionContext context) {
         // ADR 0005, C4: a tool outside the agent's grant is, to the model, an unknown tool.
         Optional<Tool> tool = agent.toolNames().contains(call.toolName())
                 ? toolRegistry.getTool(call.toolName())
@@ -307,7 +311,7 @@ public class OrchestratorService {
                     "Unknown tool '" + call.toolName() + "'");
         }
         try {
-            return tool.get().execute(call);
+            return tool.get().execute(call, context);
         } catch (RuntimeException e) {
             log.warn("Tool '{}' execution failed: {}", call.toolName(), e.toString(), e);
             return ToolResult.error(call.toolCallId(), call.toolName(), TOOL_FAILURE_OUTPUT);
