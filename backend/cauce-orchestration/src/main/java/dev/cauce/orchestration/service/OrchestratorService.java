@@ -67,7 +67,7 @@ import org.springframework.stereotype.Service;
  * <p><b>Errors:</b> a tool failure (it throws, is unknown, or its input is rejected) becomes a
  * TOOL_RESULT with {@code is_error} fed back to the model — the invocation does not fail. A
  * provider failure ({@link LlmProviderException}) is recorded and re-thrown (the worker retries
- * or fails it as before); exceeding {@link #MAX_TOOL_ITERATIONS} records a SYSTEM error and
+ * or fails it as before); exceeding the per-message cap ({@link AgenticLoopProperties}) records a SYSTEM error and
  * throws {@link MaxToolIterationsExceededException} (the worker fails the invocation).
  *
  * <p><b>Usage:</b> every provider response writes one row to the per-tenant usage ledger via
@@ -92,12 +92,10 @@ public class OrchestratorService {
     private static final Logger log = LoggerFactory.getLogger(OrchestratorService.class);
 
     /**
-     * Hard cap on LLM invocations per inbound message (no configuration — YAGNI). The loop runs
-     * at most this many rounds; if the model still requests tools on the last one, the invocation
-     * fails. This also bounds an agent looping on a broken tool, so no separate error budget is
-     * needed.
+     * What a failed tool returns to the model (ADR 0005, C6): sanitized, never the exception
+     * message or a stack trace, which can carry internal detail. The full error is logged.
      */
-    static final int MAX_TOOL_ITERATIONS = 10;
+    static final String TOOL_FAILURE_OUTPUT = "The tool failed to run. No further detail is available.";
 
     private static final String ERROR_PREFIX = "[orchestration_error] ";
     private static final int ERROR_MESSAGE_MAX_LENGTH = 2000;
@@ -111,6 +109,7 @@ public class OrchestratorService {
     private final LlmUsageRecorder usageRecorder;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectProvider<AgentReplyDispatcher> replyDispatcher;
+    private final AgenticLoopProperties loopProperties;
 
     public OrchestratorService(ConversationGateway conversationGateway,
                                LlmProviderRegistry llmProviderRegistry,
@@ -120,7 +119,8 @@ public class OrchestratorService {
                                OrchestrationErrorRecorder errorRecorder,
                                LlmUsageRecorder usageRecorder,
                                ApplicationEventPublisher eventPublisher,
-                               ObjectProvider<AgentReplyDispatcher> replyDispatcher) {
+                               ObjectProvider<AgentReplyDispatcher> replyDispatcher,
+                               AgenticLoopProperties loopProperties) {
         this.conversationGateway = conversationGateway;
         this.llmProviderRegistry = llmProviderRegistry;
         this.contextBuilder = contextBuilder;
@@ -130,6 +130,7 @@ public class OrchestratorService {
         this.usageRecorder = usageRecorder;
         this.eventPublisher = eventPublisher;
         this.replyDispatcher = replyDispatcher;
+        this.loopProperties = loopProperties;
     }
 
     /**
@@ -158,7 +159,11 @@ public class OrchestratorService {
                         + llmProviderRegistry.availableProviders()));
         List<ToolDefinition> toolDefinitions = toolDefinitions();
 
-        for (int iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+        // ADR 0005, C6: the cap is per inbound message. Rounds an earlier attempt of this
+        // invocation already spent (its tool calls are persisted after the trigger) count.
+        int maxIterations = loopProperties.getMaxIterations();
+        int alreadyUsed = roundsAlreadyUsed(loaded.messages(), triggerMessageId);
+        for (int iteration = alreadyUsed; iteration < maxIterations; iteration++) {
             LlmInvocationContext context =
                     contextBuilder.build(messages, agent.modelName(), agent.systemPrompt());
             eventPublisher.publishEvent(new ContextAssembled(invocationId, iteration,
@@ -232,9 +237,9 @@ public class OrchestratorService {
             }
         }
 
-        String error = ERROR_PREFIX + "Agent exceeded the maximum of " + MAX_TOOL_ITERATIONS
+        String error = ERROR_PREFIX + "Agent exceeded the maximum of " + maxIterations
                 + " tool iterations without producing a final reply";
-        log.warn("Conversation {} hit the tool-iteration cap ({})", conversationId, MAX_TOOL_ITERATIONS);
+        log.warn("Conversation {} hit the tool-iteration cap ({})", conversationId, maxIterations);
         errorRecorder.recordError(conversationId, error);
         throw new MaxToolIterationsExceededException(error);
     }
@@ -296,9 +301,31 @@ public class OrchestratorService {
             return tool.get().execute(call);
         } catch (RuntimeException e) {
             log.warn("Tool '{}' execution failed: {}", call.toolName(), e.toString(), e);
-            return ToolResult.error(call.toolCallId(), call.toolName(),
-                    "Tool execution failed: " + e.getMessage());
+            return ToolResult.error(call.toolCallId(), call.toolName(), TOOL_FAILURE_OUTPUT);
         }
+    }
+
+    /**
+     * The LLM rounds already spent on {@code triggerMessageId}: each non-final round persisted
+     * one batch of TOOL_CALL messages after the trigger, so the batches (maximal runs of
+     * consecutive TOOL_CALL messages) are the rounds. Zero on a first attempt.
+     */
+    static int roundsAlreadyUsed(List<Message> history, UUID triggerMessageId) {
+        int rounds = 0;
+        boolean afterTrigger = false;
+        boolean inBatch = false;
+        for (Message message : history) {
+            if (!afterTrigger) {
+                afterTrigger = message.id().equals(triggerMessageId);
+                continue;
+            }
+            boolean toolCall = message.role() == MessageRole.TOOL_CALL;
+            if (toolCall && !inBatch) {
+                rounds++;
+            }
+            inBatch = toolCall;
+        }
+        return rounds;
     }
 
     /** All registered tools (global scoping; per-agent scoping is deferred). */

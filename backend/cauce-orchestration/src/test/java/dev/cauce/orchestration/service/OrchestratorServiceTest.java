@@ -175,7 +175,9 @@ class OrchestratorServiceTest {
         assertThat(result.content()).isEqualTo("Recovered."); // invocation completes, not failed
         ToolResult toolResult = (ToolResult) capturedAppends(2).get(1).toolContent().orElseThrow();
         assertThat(toolResult.isError()).isTrue();
-        assertThat(toolResult.output()).contains("Tool execution failed");
+        // ADR 0005, C6: sanitized — the exception's own message never reaches the model.
+        assertThat(toolResult.output()).isEqualTo(OrchestratorService.TOOL_FAILURE_OUTPUT);
+        assertThat(toolResult.output()).doesNotContain("boom");
         verifyNoInteractions(errorRecorder);
     }
 
@@ -212,6 +214,64 @@ class OrchestratorServiceTest {
     }
 
     @Test
+    void respondToMessage_capIsAPlatformSetting() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("get_current_time"));
+
+        assertThatThrownBy(() ->
+                serviceWith(clockRegistry(), 3).respondToMessage(invocationId, conversationId, triggerId))
+                .isInstanceOf(MaxToolIterationsExceededException.class)
+                .hasMessageContaining("maximum of 3");
+
+        verify(provider, times(3)).invoke(any());
+    }
+
+    @Test
+    void respondToMessage_onARetry_countsTheRoundsAnEarlierAttemptAlreadySpent() {
+        // A first attempt spent two tool rounds on this trigger, then the provider failed. The
+        // retry has one round left of a cap of 3: the cap is per inbound message, not per attempt.
+        agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL);
+        conversation = Conversation.start(agent.id(),
+                Identity.create(tenantId, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321"), UUID.randomUUID());
+        Message trigger = Message.from(conversationId, MessageRole.USER, "Hola");
+        ToolCall call = new ToolCall("call-1", "get_current_time", Map.of());
+        ToolResult result = ToolResult.success("call-1", "get_current_time", "10:15");
+        List<Message> history = List.of(trigger,
+                Message.toolCall(conversationId, call), Message.toolResult(conversationId, result),
+                Message.toolCall(conversationId, call), Message.toolResult(conversationId, result));
+        when(gateway.load(conversationId, trigger.id()))
+                .thenReturn(new LoadedConversation(conversation, agent, history));
+        when(gateway.append(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("get_current_time"));
+
+        assertThatThrownBy(() ->
+                serviceWith(clockRegistry(), 3).respondToMessage(invocationId, conversationId, trigger.id()))
+                .isInstanceOf(MaxToolIterationsExceededException.class);
+
+        verify(provider, times(1)).invoke(any());
+    }
+
+    @Test
+    void roundsAlreadyUsed_countsToolCallBatchesAfterTheTriggerOnly() {
+        Message before = Message.from(conversationId, MessageRole.USER, "earlier");
+        ToolCall call = new ToolCall("c", "get_current_time", Map.of());
+        ToolResult result = ToolResult.success("c", "get_current_time", "t");
+        Message trigger = Message.from(conversationId, MessageRole.USER, "now");
+        List<Message> history = List.of(
+                before, Message.toolCall(conversationId, call), Message.toolResult(conversationId, result),
+                trigger,
+                Message.from(conversationId, MessageRole.AGENT, "let me check"),
+                Message.toolCall(conversationId, call), Message.toolCall(conversationId, call), // one batch
+                Message.toolResult(conversationId, result), Message.toolResult(conversationId, result),
+                Message.toolCall(conversationId, call), Message.toolResult(conversationId, result));
+
+        assertThat(OrchestratorService.roundsAlreadyUsed(history, trigger.id())).isEqualTo(2);
+        assertThat(OrchestratorService.roundsAlreadyUsed(history, UUID.randomUUID())).isZero();
+    }
+
+    @Test
     void respondToMessage_whenModelNeverStopsCallingTools_failsAtTheCap() {
         stubLoadAndEchoAppend();
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
@@ -221,7 +281,7 @@ class OrchestratorServiceTest {
                 serviceWith(clockRegistry()).respondToMessage(invocationId, conversationId, triggerId))
                 .isInstanceOf(MaxToolIterationsExceededException.class);
 
-        verify(provider, times(OrchestratorService.MAX_TOOL_ITERATIONS)).invoke(any());
+        verify(provider, times(AgenticLoopProperties.DEFAULT_MAX_ITERATIONS)).invoke(any());
         ArgumentCaptor<String> error = ArgumentCaptor.forClass(String.class);
         verify(errorRecorder).recordError(eq(conversationId), error.capture());
         assertThat(error.getValue()).startsWith("[orchestration_error] ").contains("maximum");
@@ -534,9 +594,15 @@ class OrchestratorServiceTest {
     // === helpers ===
 
     private OrchestratorService serviceWith(ToolRegistry toolRegistry) {
+        return serviceWith(toolRegistry, AgenticLoopProperties.DEFAULT_MAX_ITERATIONS);
+    }
+
+    private OrchestratorService serviceWith(ToolRegistry toolRegistry, int maxIterations) {
+        AgenticLoopProperties loop = new AgenticLoopProperties();
+        loop.setMaxIterations(maxIterations);
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
                 new MockEnvironment(), errorRecorder, usageRecorder, eventPublisher,
-                replyDispatcherProvider);
+                replyDispatcherProvider, loop);
     }
 
     /** All lifecycle events published so far, in publication order. */

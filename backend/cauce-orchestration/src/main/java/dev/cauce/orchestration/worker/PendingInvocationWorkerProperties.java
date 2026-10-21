@@ -23,7 +23,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * </pre>
  *
  * <p>The reaper timeout accommodates the agentic loop: one invocation may make up to
- * {@code MAX_TOOL_ITERATIONS} (10) provider calls, each bounded by the provider HTTP timeout
+ * {@code cauce.orchestration.loop.max-iterations} (default 10) provider calls, each bounded by the provider HTTP timeout
  * (60s default), so 12 minutes leaves a margin over the 10-minute worst case before a still-
  * running claim is treated as orphaned.
  */
@@ -90,7 +90,7 @@ public class PendingInvocationWorkerProperties {
 
         private boolean enabled = true;
         private long intervalMs = 300_000L;
-        // 12 minutes: covers an agentic loop of up to MAX_TOOL_ITERATIONS (10) provider calls at
+        // 12 minutes: covers an agentic loop of up to the default loop cap (10) provider calls at
         // the 60s HTTP timeout (10 min worst case) plus margin, so a running loop is not reaped.
         private long timeoutMs = 720_000L;
 
