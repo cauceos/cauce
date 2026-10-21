@@ -26,6 +26,7 @@ import dev.cauce.core.tool.ToolExecutionContext;
 import dev.cauce.core.tool.ToolResult;
 import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -105,7 +106,7 @@ class BusinessToolsTest {
     void recordUnansweredQuestion_recordsForTheContextNeverTheArguments() {
         KnowledgeGapSink sink = mock(KnowledgeGapSink.class);
         when(sink.recordUnansweredQuestion(eq(tenantId), eq(context.agentId()), eq(context.conversationId()),
-                anyString())).thenReturn(KnowledgeGap.record(tenantId, context.agentId(), context.conversationId(), "q"));
+                anyString())).thenReturn(KnowledgeGap.record(tenantId, context.agentId(), context.conversationId(), "q", Instant.now()));
 
         ToolResult result = new RecordUnansweredQuestionTool(() -> sink).execute(call("record_unanswered_question",
                 Map.of("question", " ¿Tenéis wifi? ", "tenant_id", UUID.randomUUID().toString())), context);

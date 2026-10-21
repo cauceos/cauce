@@ -67,7 +67,7 @@ class BusinessMappersTest {
     @Test
     void knowledgeGapMapper_roundTrips() {
         KnowledgeGapMapper mapper = new KnowledgeGapMapper();
-        KnowledgeGap gap = KnowledgeGap.record(tenantId, UUID.randomUUID(), UUID.randomUUID(), "¿Wifi?");
+        KnowledgeGap gap = KnowledgeGap.record(tenantId, UUID.randomUUID(), UUID.randomUUID(), "¿Wifi?", Instant.now());
 
         assertThat(mapper.toDomain(mapper.toEntity(gap))).isEqualTo(gap);
     }

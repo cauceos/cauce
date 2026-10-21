@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Clock;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,6 +60,10 @@ public abstract class AbstractBusinessIntegrationTest {
     @Autowired
     @Qualifier("appDataSource")
     protected DataSource appDataSource;
+
+    /** The application's clock, the database's (ADR 0008): a test reads "now" from it, never from the JVM. */
+    @Autowired
+    protected Clock clock;
 
     /**
      * Resets all tenant-scoped tables via the privileged owner connection. cauce_app is

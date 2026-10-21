@@ -5,6 +5,7 @@ import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.business.owner.OwnerNotifier.Delivery;
 import dev.cauce.core.business.owner.OwnerNotifier.Recipient;
 import dev.cauce.core.tenant.NoTenantContext;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,13 +26,16 @@ public class OwnerNotificationService {
     private final OwnerNotificationMapper mapper;
     private final OwnerRecipientRepository recipientRepository;
     private final AuditEventRecorder auditRecorder;
+    private final Clock clock;
 
     public OwnerNotificationService(OwnerNotificationRepository repository, OwnerNotificationMapper mapper,
-                                    OwnerRecipientRepository recipientRepository, AuditEventRecorder auditRecorder) {
+                                    OwnerRecipientRepository recipientRepository, AuditEventRecorder auditRecorder,
+                                    Clock clock) {
         this.repository = repository;
         this.mapper = mapper;
         this.recipientRepository = recipientRepository;
         this.auditRecorder = auditRecorder;
+        this.clock = clock;
     }
 
     /**
@@ -43,7 +47,7 @@ public class OwnerNotificationService {
     public OwnerNotification queue(UUID tenantId, OwnerNotification.Kind kind, UUID subjectId, String content) {
         boolean ownerLinked = recipientRepository.findByTenantId(tenantId).isPresent();
         OwnerNotification saved = mapper.toDomain(repository.save(mapper.toEntity(
-                OwnerNotification.queue(tenantId, kind, subjectId, content, ownerLinked))));
+                OwnerNotification.queue(tenantId, kind, subjectId, content, ownerLinked, clock.instant()))));
         if (!ownerLinked) {
             auditFinal(saved);
         }
@@ -79,7 +83,7 @@ public class OwnerNotificationService {
         }
         Optional<OwnerRecipientEntity> recipient = recipientRepository.findByTenantId(notification.get().tenantId());
         if (recipient.isEmpty()) {
-            close(notification.get().notSent(OwnerNotification.NO_OWNER_RECIPIENT));
+            close(notification.get().notSent(OwnerNotification.NO_OWNER_RECIPIENT, clock.instant()));
             return Optional.empty();
         }
         OwnerRecipientEntity r = recipient.get();
@@ -92,7 +96,7 @@ public class OwnerNotificationService {
     public OwnerNotification record(UUID id, Delivery delivery, int maxAttempts) {
         OwnerNotification current = repository.findById(id).map(mapper::toDomain).orElseThrow(() ->
                 new IllegalStateException("notification " + id + " vanished while it was being sent"));
-        return close(current.after(delivery, maxAttempts));
+        return close(current.after(delivery, maxAttempts, clock.instant()));
     }
 
     /**

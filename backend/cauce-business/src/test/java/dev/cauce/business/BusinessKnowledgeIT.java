@@ -132,7 +132,7 @@ class BusinessKnowledgeIT extends AbstractBusinessIntegrationTest {
 
     @Test
     void unansweredQuestions_areRecordedForTheBusiness_paginated_andWindowedByTime() {
-        Instant before = Instant.now();
+        Instant before = clock.instant();
         List<KnowledgeGap> recorded = as(f.clientA(), () -> List.of(
                 gapService.recordUnansweredQuestion(f.clientA().id(), f.agent().id(), f.conversation().id(), "¿Wifi?"),
                 gapService.recordUnansweredQuestion(f.clientA().id(), f.agent().id(), f.conversation().id(), "¿Parking?"),
@@ -144,7 +144,7 @@ class BusinessKnowledgeIT extends AbstractBusinessIntegrationTest {
 
         assertThat(firstPage).extracting(KnowledgeGap::question).containsExactly("¿Wifi?", "¿Parking?");
         assertThat(secondPage).extracting(KnowledgeGap::question).containsExactly("¿Música?");
-        assertThat(as(f.clientA(), () -> gapService.listRecordedBetween(f.clientA().id(), before, Instant.now())))
+        assertThat(as(f.clientA(), () -> gapService.listRecordedBetween(f.clientA().id(), before, clock.instant())))
                 .containsExactlyElementsOf(recorded);
         assertThat(as(f.clientB(), () -> gapService.listForTenant(f.clientA().id(), null, 10))).isEmpty();
     }

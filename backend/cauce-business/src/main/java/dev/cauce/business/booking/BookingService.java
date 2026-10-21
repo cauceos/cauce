@@ -31,7 +31,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,7 +57,7 @@ public class BookingService implements BookingProvider {
 
     public BookingService(AgendaRepository agendaRepository, AgendaMapper agendaMapper,
                           BookingRepository bookingRepository, BookingMapper bookingMapper,
-                          BusinessProfileRepository profileRepository, @Qualifier("businessClock") Clock clock) {
+                          BusinessProfileRepository profileRepository, Clock clock) {
         this.agendaRepository = agendaRepository;
         this.agendaMapper = agendaMapper;
         this.bookingRepository = bookingRepository;

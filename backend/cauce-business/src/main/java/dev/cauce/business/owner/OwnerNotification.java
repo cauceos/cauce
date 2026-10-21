@@ -3,7 +3,6 @@ package dev.cauce.business.owner;
 import dev.cauce.core.UuidGenerator;
 import dev.cauce.core.business.owner.OwnerNotifier.Delivery;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,10 +47,14 @@ public record OwnerNotification(UUID id, UUID tenantId, Kind kind, UUID subjectI
         Objects.requireNonNull(updatedAt, "updatedAt");
     }
 
-    /** A notice due now; NOT_SENT at once when there is no owner to send it to. */
+    /**
+     * A notice due at {@code now}, a reading of the database clock (ADR 0008): the dispatcher's claim
+     * compares it with the database's {@code now()}. NOT_SENT at once when there is no owner to send
+     * it to.
+     */
     public static OwnerNotification queue(UUID tenantId, Kind kind, UUID subjectId, String content,
-                                          boolean ownerLinked) {
-        Instant now = now();
+                                          boolean ownerLinked, Instant now) {
+        Objects.requireNonNull(now, "now");
         return new OwnerNotification(UuidGenerator.newV7(), tenantId, kind, subjectId, content,
                 ownerLinked ? Status.PENDING : Status.NOT_SENT, ownerLinked ? null : NO_OWNER_RECIPIENT, 0, now,
                 null, now, now);
@@ -60,10 +63,9 @@ public record OwnerNotification(UUID id, UUID tenantId, Kind kind, UUID subjectI
     /**
      * This notice after an attempt that ended in {@code delivery}: SENT; NOT_SENT for good; or, on a
      * FAILED send, still PENDING for the next lease unless {@code attempts} reached
-     * {@code maxAttempts}, then FAILED.
+     * {@code maxAttempts}, then FAILED. A retry is due when the lease its claim took ends.
      */
-    public OwnerNotification after(Delivery delivery, int maxAttempts) {
-        Instant now = now();
+    public OwnerNotification after(Delivery delivery, int maxAttempts, Instant now) {
         return switch (delivery.outcome()) {
             case SENT -> with(Status.SENT, null, now, now);
             case NOT_SENT -> with(Status.NOT_SENT, delivery.reason(), null, now);
@@ -73,12 +75,13 @@ public record OwnerNotification(UUID id, UUID tenantId, Kind kind, UUID subjectI
         };
     }
 
-    /** This notice closed as NOT_SENT with {@code reason}. */
-    public OwnerNotification notSent(String reason) {
-        return with(Status.NOT_SENT, reason, null, now());
+    /** This notice closed as NOT_SENT with {@code reason} at {@code now}. */
+    public OwnerNotification notSent(String reason, Instant now) {
+        return with(Status.NOT_SENT, reason, null, now);
     }
 
     private OwnerNotification with(Status newStatus, String newReason, Instant newSentAt, Instant now) {
+        Objects.requireNonNull(now, "now");
         String bounded = newReason == null ? null : newReason.substring(0, Math.min(200, newReason.length()));
         return new OwnerNotification(id, tenantId, kind, subjectId, content, newStatus, bounded, attempts,
                 nextAttemptAt, newSentAt, createdAt, now);
@@ -86,9 +89,5 @@ public record OwnerNotification(UUID id, UUID tenantId, Kind kind, UUID subjectI
 
     public Optional<String> reasonIfAny() {
         return Optional.ofNullable(reason);
-    }
-
-    private static Instant now() {
-        return Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 }

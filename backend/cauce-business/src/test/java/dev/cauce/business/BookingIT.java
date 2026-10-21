@@ -86,7 +86,7 @@ class BookingIT extends AbstractBusinessIntegrationTest {
         as(f.clientA(), () -> agendaService.putAgenda(f.clientA().id(), new Settings("comensales", 8, 10, 60, false,
                 List.of(new Shift("cena", EnumSet.allOf(DayOfWeek.class), LocalTime.of(20, 30), LocalTime.of(23, 0),
                         10)), Set.of())));
-        nextTuesday = LocalDate.now(MADRID).plusDays(1);
+        nextTuesday = LocalDate.now(clock.withZone(MADRID)).plusDays(1);
         while (nextTuesday.getDayOfWeek() != DayOfWeek.TUESDAY) {
             nextTuesday = nextTuesday.plusDays(1);
         }
@@ -138,7 +138,7 @@ class BookingIT extends AbstractBusinessIntegrationTest {
         assertRefused(() -> bookings.propose(requester(other, UUID.randomUUID()), details(2)), Reason.FULL);
         assertRefused(() -> bookings.propose(requester(other, UUID.randomUUID()), details(9)),
                 Reason.PARTY_TOO_LARGE);
-        assertThat(held.takesCapacityAt(java.time.Instant.now())).isTrue();
+        assertThat(held.takesCapacityAt(clock.instant())).isTrue();
     }
 
     @Test

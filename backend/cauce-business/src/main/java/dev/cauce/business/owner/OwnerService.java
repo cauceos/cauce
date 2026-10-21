@@ -23,7 +23,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,7 +61,7 @@ public class OwnerService implements InboundMessageInterceptor {
     public OwnerService(OwnerLinkCodeRepository codeRepository, OwnerRecipientRepository recipientRepository,
                         BusinessProfileRepository profileRepository, BusinessTenants businessTenants,
                         IdentityService identityService, AuditEventRecorder auditRecorder,
-                        @Qualifier("businessClock") Clock clock) {
+                        Clock clock) {
         this.codeRepository = codeRepository;
         this.recipientRepository = recipientRepository;
         this.profileRepository = profileRepository;

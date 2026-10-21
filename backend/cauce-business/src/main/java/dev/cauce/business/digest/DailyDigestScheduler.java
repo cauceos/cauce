@@ -7,7 +7,6 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -28,7 +27,7 @@ public class DailyDigestScheduler {
     private final Clock clock;
     private final DailyDigestProperties properties;
 
-    public DailyDigestScheduler(DailyDigestService digests, @Qualifier("businessClock") Clock clock,
+    public DailyDigestScheduler(DailyDigestService digests, Clock clock,
                                 DailyDigestProperties properties) {
         this.digests = digests;
         this.clock = clock;

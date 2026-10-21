@@ -41,7 +41,7 @@ class BookingApiIT extends AbstractBusinessApiIT {
         putJson(clientAuth, "/v1/tenants/" + clientId + "/business-profile",
                 "{\"name\": \"Bar\", \"time_zone\": \"Europe/Madrid\", \"facts\": {}}").andExpect(status().isOk());
         putJson(clientAuth, "/v1/tenants/" + clientId + "/agenda", AGENDA).andExpect(status().isOk());
-        nextTuesday = LocalDate.now(ZoneId.of("Europe/Madrid")).plusDays(1);
+        nextTuesday = LocalDate.now(clock.withZone(ZoneId.of("Europe/Madrid"))).plusDays(1);
         while (nextTuesday.getDayOfWeek() != DayOfWeek.TUESDAY) {
             nextTuesday = nextTuesday.plusDays(1);
         }

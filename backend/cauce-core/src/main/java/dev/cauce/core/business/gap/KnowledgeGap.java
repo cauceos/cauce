@@ -31,10 +31,14 @@ public record KnowledgeGap(UUID id, UUID tenantId, UUID agentId, UUID conversati
         }
     }
 
-    /** A newly recorded question, with a UUIDv7 id. */
-    public static KnowledgeGap record(UUID tenantId, UUID agentId, UUID conversationId, String question) {
+    /**
+     * A question recorded at {@code recordedAt}, with a UUIDv7 id. The time comes from the caller's
+     * clock, the database's in the application (ADR 0008): a digest selects its questions by it.
+     */
+    public static KnowledgeGap record(UUID tenantId, UUID agentId, UUID conversationId, String question,
+                                      Instant recordedAt) {
         // Microseconds: what the database keeps, so a recorded gap equals the one read back.
         return new KnowledgeGap(UuidGenerator.newV7(), tenantId, agentId, conversationId, question,
-                Instant.now().truncatedTo(ChronoUnit.MICROS));
+                Objects.requireNonNull(recordedAt, "recordedAt").truncatedTo(ChronoUnit.MICROS));
     }
 }

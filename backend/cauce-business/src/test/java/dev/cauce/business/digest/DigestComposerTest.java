@@ -37,7 +37,7 @@ class DigestComposerTest {
         Handoff handoff = Handoff.open(requester, new Handoff.Request("evento", "Cumpleaños de 25 personas",
                 "Marta", null));
         KnowledgeGap question = KnowledgeGap.record(tenantId, requester.agentId(), requester.conversationId(),
-                "¿Tenéis wifi?");
+                "¿Tenéis wifi?", Instant.now());
 
         String text = DigestComposer.compose(new Contents("Bar La Esquina", "es", TOMORROW, Optional.of(agenda),
                 List.of(booking), List.of(handoff), List.of(question)));
@@ -61,7 +61,7 @@ class DigestComposerTest {
     void compose_staysWithinOneChannelMessage() {
         List<KnowledgeGap> many = java.util.stream.IntStream.range(0, 200)
                 .mapToObj(i -> KnowledgeGap.record(tenantId, requester.agentId(), requester.conversationId(),
-                        "Pregunta número " + i + " " + "x".repeat(60)))
+                        "Pregunta número " + i + " " + "x".repeat(60), Instant.now()))
                 .toList();
 
         String text = DigestComposer.compose(new Contents("Bar", "es", TOMORROW, Optional.empty(), List.of(), List.of(),

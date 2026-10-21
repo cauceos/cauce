@@ -111,7 +111,7 @@ class DigestIT extends AbstractBusinessIntegrationTest {
         DailyDigest again = as(f.clientA(), () -> digests.runToday(f.clientA().id()));
 
         assertThat(again.id()).isEqualTo(first.id());
-        assertThat(first.localDate()).isEqualTo(LocalDate.now(MADRID));
+        assertThat(first.localDate()).isEqualTo(LocalDate.now(clock.withZone(MADRID)));
         assertThat(first.content()).contains("Ana López").contains(booking.code()).contains(handoff.code())
                 .contains("¿Tenéis wifi?");
         assertThat(first.bookingCount()).isEqualTo(1);
@@ -132,10 +132,10 @@ class DigestIT extends AbstractBusinessIntegrationTest {
         profile(f.clientA().id(), new DigestSchedule(LocalTime.MIDNIGHT, false));
         as(f.clientA(), () -> questions.recordUnansweredQuestion(f.clientA().id(), f.agent().id(),
                 f.conversation().id(), "¿Pregunta de ayer?"));
-        Instant yesterdaysCut = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant yesterdaysCut = clock.instant().truncatedTo(ChronoUnit.MICROS);
         new JdbcTemplate(adminDataSource).update("INSERT INTO daily_digests (id, tenant_id, local_date, covered_from, "
                 + "covered_to, booking_count, handoff_count, question_count, content, notified) VALUES (?, ?, ?, ?, ?, "
-                + "0, 0, 1, 'ayer', true)", UUID.randomUUID(), f.clientA().id(), LocalDate.now(MADRID).minusDays(1),
+                + "0, 0, 1, 'ayer', true)", UUID.randomUUID(), f.clientA().id(), LocalDate.ofInstant(yesterdaysCut, MADRID).minusDays(1),
                 java.sql.Timestamp.from(yesterdaysCut.minusSeconds(86_400)), java.sql.Timestamp.from(yesterdaysCut));
         as(f.clientA(), () -> questions.recordUnansweredQuestion(f.clientA().id(), f.agent().id(),
                 f.conversation().id(), "¿Pregunta de hoy?"));
@@ -178,7 +178,7 @@ class DigestIT extends AbstractBusinessIntegrationTest {
     }
 
     private Booking confirmTomorrow(String name) {
-        LocalDate tomorrow = LocalDate.now(MADRID).plusDays(1);
+        LocalDate tomorrow = LocalDate.now(clock.withZone(MADRID)).plusDays(1);
         Booking held = as(f.clientA(), () -> bookings.propose(requester(),
                 new Booking.Details(tomorrow, "cena", 4, name, null, null)));
         return as(f.clientA(), () -> bookings.confirm(requester(), held.code()));

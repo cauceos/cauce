@@ -22,7 +22,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,7 +51,7 @@ public class DailyDigestService {
     public DailyDigestService(DailyDigestRepository repository, BusinessProfileRepository profileRepository,
                               BusinessProfileMapper profileMapper, BookingService bookings, HandoffService handoffs,
                               KnowledgeGapService questions, OwnerNotificationService notifications,
-                              @Qualifier("businessClock") Clock clock) {
+                              Clock clock) {
         this.repository = repository;
         this.profileRepository = profileRepository;
         this.profileMapper = profileMapper;

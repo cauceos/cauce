@@ -1,5 +1,6 @@
 package dev.cauce.api.support;
 
+import java.time.Clock;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -72,6 +73,10 @@ public abstract class AbstractApiIntegrationTest {
     @Autowired
     @Qualifier("adminDataSource")
     protected DataSource adminDataSource;
+
+    /** The application's clock, the database's (ADR 0008): a test reads "now" from it, never from the JVM. */
+    @Autowired
+    protected Clock clock;
 
     /**
      * Resets all tenant-scoped tables via the privileged owner connection. cauce_app is

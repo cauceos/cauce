@@ -2,6 +2,7 @@ package dev.cauce.business.gap;
 
 import dev.cauce.core.business.gap.KnowledgeGap;
 import dev.cauce.core.business.gap.KnowledgeGapSink;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -18,16 +19,18 @@ public class KnowledgeGapService implements KnowledgeGapSink {
 
     private final KnowledgeGapRepository repository;
     private final KnowledgeGapMapper mapper;
+    private final Clock clock;
 
-    public KnowledgeGapService(KnowledgeGapRepository repository, KnowledgeGapMapper mapper) {
+    public KnowledgeGapService(KnowledgeGapRepository repository, KnowledgeGapMapper mapper, Clock clock) {
         this.repository = repository;
         this.mapper = mapper;
+        this.clock = clock;
     }
 
     @Override
     @Transactional
     public KnowledgeGap recordUnansweredQuestion(UUID tenantId, UUID agentId, UUID conversationId, String question) {
-        KnowledgeGap gap = KnowledgeGap.record(tenantId, agentId, conversationId, question);
+        KnowledgeGap gap = KnowledgeGap.record(tenantId, agentId, conversationId, question, clock.instant());
         return mapper.toDomain(repository.save(mapper.toEntity(gap)));
     }
 
