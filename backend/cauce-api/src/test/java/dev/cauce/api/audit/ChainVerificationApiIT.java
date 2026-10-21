@@ -399,7 +399,7 @@ class ChainVerificationApiIT extends AbstractApiIntegrationTest {
     private void createAgent(String auth, UUID tenantId) throws Exception {
         mockMvc.perform(postAs(auth, "/v1/tenants/" + tenantId + "/agents",
                         new CreateAgentRequest("Bot", "You are helpful", "anthropic",
-                                "claude-sonnet-4-7", null, null, null)))
+                                "claude-sonnet-4-7", null, null, null, null)))
                 .andExpect(status().isCreated());
     }
 

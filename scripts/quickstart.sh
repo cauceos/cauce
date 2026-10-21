@@ -162,6 +162,10 @@ if [ -z "${CAUCE_AGENT_ID:-}" ]; then
     echo "   Agent $CAUCE_AGENT_ID ready."
 fi
 
+# Agents start with no tools (ADR 0005, C4): grant the clock on every run, so an agent left
+# by an earlier run (created before tools were per agent) is covered too.
+api PUT "/v1/agents/$CAUCE_AGENT_ID/tools" '{"tools":["get_current_time"]}' > /dev/null
+
 # --- 4. first message --------------------------------------------------------
 
 say "Loading the model into memory (first load takes a while on CPU)..."

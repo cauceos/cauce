@@ -99,6 +99,8 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
         TenantContext.setCurrentTenantId(clientA.id());
         agent = agentService.createAgent(clientA.id(), "DentalBot",
                 "You are a dentist receptionist.", "anthropic", "claude-sonnet-4-7");
+        // ADR 0005, C4: the clock must be granted; agents start with no tools.
+        agent = agentService.setTools(agent.id(), List.of("get_current_time"));
         conversation = conversationService.startConversation(agent.id(), "api", IdentityKind.CLIENT_REFERENCE, "+34612345678", null);
         triggerMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola");
         TenantContext.clear();

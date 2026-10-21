@@ -182,6 +182,27 @@ class OrchestratorServiceTest {
     }
 
     @Test
+    void respondToMessage_offersOnlyTheAgentsGrantedTools() {
+        stubLoadAndEchoAppend();
+        agent = agent.withTools(List.of()); // ADR 0005, C4: empty by default, not even the clock
+        when(gateway.load(conversationId, triggerId))
+                .thenReturn(new LoadedConversation(conversation, agent,
+                        List.of(Message.from(conversationId, MessageRole.USER, "Hola"))));
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(toolRequest("get_current_time"), reply("Sin reloj."));
+
+        serviceWith(clockRegistry()).respondToMessage(invocationId, conversationId, triggerId);
+
+        ArgumentCaptor<LlmInvocation> captor = ArgumentCaptor.forClass(LlmInvocation.class);
+        verify(provider, times(2)).invoke(captor.capture());
+        assertThat(captor.getAllValues().get(0).tools()).isEmpty();
+        // A call to a registered tool outside the grant is, to the model, an unknown tool.
+        ToolResult toolResult = (ToolResult) capturedAppends(2).get(1).toolContent().orElseThrow();
+        assertThat(toolResult.isError()).isTrue();
+        assertThat(toolResult.output()).contains("Unknown tool");
+    }
+
+    @Test
     void respondToMessage_whenToolUnknown_feedsErrorBackAndCompletes() {
         stubLoadAndEchoAppend();
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
@@ -231,7 +252,8 @@ class OrchestratorServiceTest {
     void respondToMessage_onARetry_countsTheRoundsAnEarlierAttemptAlreadySpent() {
         // A first attempt spent two tool rounds on this trigger, then the provider failed. The
         // retry has one round left of a cap of 3: the cap is per inbound message, not per attempt.
-        agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL);
+        agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL)
+                .withTools(List.of("get_current_time", "boom_tool"));
         conversation = Conversation.start(agent.id(),
                 Identity.create(tenantId, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321"), UUID.randomUUID());
         Message trigger = Message.from(conversationId, MessageRole.USER, "Hola");
@@ -614,7 +636,8 @@ class OrchestratorServiceTest {
     }
 
     private void stubLoadAndEchoAppend() {
-        agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL);
+        agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL)
+                .withTools(List.of("get_current_time", "boom_tool"));
         conversation = Conversation.start(agent.id(),
                 Identity.create(tenantId, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321"), UUID.randomUUID());
         Message user = Message.from(conversationId, MessageRole.USER, "Hola");

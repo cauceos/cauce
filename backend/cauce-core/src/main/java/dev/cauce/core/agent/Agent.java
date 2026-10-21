@@ -2,8 +2,12 @@ package dev.cauce.core.agent;
 
 import dev.cauce.core.UuidGenerator;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -46,12 +50,13 @@ public final class Agent {
     private final int maxResponseTokens;
     private final AgentStatus status;
     private final String fallbackReply; // null: the platform default (ADR 0005, C3)
+    private final List<String> toolNames; // the granted tools; empty by default (ADR 0005, C4)
     private final Instant createdAt;
     private final Instant updatedAt;
 
     private Agent(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
                   String modelName, double temperature, int maxResponseTokens, AgentStatus status,
-                  String fallbackReply, Instant createdAt, Instant updatedAt) {
+                  String fallbackReply, List<String> toolNames, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
@@ -62,6 +67,7 @@ public final class Agent {
         this.maxResponseTokens = maxResponseTokens;
         this.status = status;
         this.fallbackReply = fallbackReply;
+        this.toolNames = toolNames;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -92,6 +98,7 @@ public final class Agent {
                 validatedMaxResponseTokens(resolveMaxResponseTokens(maxResponseTokens)),
                 AgentStatus.DRAFT,
                 null,
+                List.of(),
                 now,
                 now);
     }
@@ -104,7 +111,25 @@ public final class Agent {
      */
     public Agent withFallbackReply(String fallbackReply) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, validatedFallbackReply(fallbackReply), createdAt, updatedAt);
+                maxResponseTokens, status, validatedFallbackReply(fallbackReply), toolNames, createdAt,
+                updatedAt);
+    }
+
+    /**
+     * Returns a copy of this agent granted exactly {@code tools} (ADR 0005, C4), in the given
+     * order, keeping its timestamps (the creation path). Each name is stripped and must be
+     * non-blank, and a name may appear once. Whether a tool exists is not the domain's concern:
+     * the application service validates the names against the tool catalog.
+     */
+    public Agent withTools(Collection<String> tools) {
+        return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, fallbackReply, validatedToolNames(tools), createdAt, updatedAt);
+    }
+
+    /** {@link #withTools} as a modification of an existing agent: {@code updatedAt} moves to now. */
+    public Agent retooled(Collection<String> tools) {
+        return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, fallbackReply, validatedToolNames(tools), createdAt, Instant.now());
     }
 
     /**
@@ -118,14 +143,17 @@ public final class Agent {
                                   Integer maxResponseTokens, AgentStatus status,
                                   Instant createdAt, Instant updatedAt) {
         return rehydrate(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, null, createdAt, updatedAt);
+                maxResponseTokens, status, null, List.of(), createdAt, updatedAt);
     }
 
-    /** Rebuilds an agent, its fallback reply included ({@code null}: platform default). */
+    /**
+     * Rebuilds an agent with its full configuration: the fallback reply ({@code null}: platform
+     * default) and the granted tool names.
+     */
     public static Agent rehydrate(UUID id, UUID tenantId, String name, String systemPrompt,
                                   String modelProvider, String modelName, Double temperature,
                                   Integer maxResponseTokens, AgentStatus status, String fallbackReply,
-                                  Instant createdAt, Instant updatedAt) {
+                                  List<String> toolNames, Instant createdAt, Instant updatedAt) {
         return new Agent(
                 Objects.requireNonNull(id, "id"),
                 Objects.requireNonNull(tenantId, "tenantId"),
@@ -137,6 +165,7 @@ public final class Agent {
                 resolveMaxResponseTokens(maxResponseTokens),
                 Objects.requireNonNull(status, "status"),
                 fallbackReply, // nullable; the V28 CHECK guarantees its shape
+                List.copyOf(Objects.requireNonNull(toolNames, "toolNames")),
                 Objects.requireNonNull(createdAt, "createdAt"),
                 Objects.requireNonNull(updatedAt, "updatedAt"));
     }
@@ -161,6 +190,20 @@ public final class Agent {
                     + MAX_FALLBACK_REPLY_LENGTH + " characters");
         }
         return stripped;
+    }
+
+    private static List<String> validatedToolNames(Collection<String> tools) {
+        Objects.requireNonNull(tools, "tools");
+        Set<String> seen = new LinkedHashSet<>();
+        for (String tool : tools) {
+            if (tool == null || tool.isBlank()) {
+                throw new IllegalArgumentException("tool names must not be blank");
+            }
+            if (!seen.add(tool.strip())) {
+                throw new IllegalArgumentException("tool '" + tool.strip() + "' is granted twice");
+            }
+        }
+        return List.copyOf(seen);
     }
 
     private static double resolveTemperature(Double temperature) {
@@ -222,6 +265,11 @@ public final class Agent {
     /** The configured fallback reply; empty means the platform default (ADR 0005, C3). */
     public Optional<String> fallbackReply() {
         return Optional.ofNullable(fallbackReply);
+    }
+
+    /** The tools this agent may use, in grant order; empty means none (ADR 0005, C4). */
+    public List<String> toolNames() {
+        return toolNames;
     }
 
     public AgentStatus status() {

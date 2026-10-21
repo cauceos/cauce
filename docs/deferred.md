@@ -8,7 +8,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 ## Agentic loop and tools
 
-- **Per-agent tool scoping.** Every registered tool is offered to every agent. The registry is global.
 - **A heartbeat instead of the flat reaper timeout.** The orphan timeout is a fixed duration sized for the multi-step loop; a long-running loop would need a liveness signal rather than a bigger constant.
 - **Counting the tool-definition schema against the context window.** Only tool-message content is counted; the schema the provider receives is not.
 - **Per-model limits beyond the context window.** Only the context window has a registry plus a conservative fallback (`ModelContextWindow`); max response tokens is a flat default, never per-model.
@@ -37,7 +36,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Export artefact and independent-verifier input.** A self-contained document with entries, signatures, the public keys needed and the `prev_hash` anchoring the start of a range. The reference verifier under `tools/audit-chain-verifier/` reads its own SQL-produced dump format until this lands, and the export may choose a different shape.
 - **External time anchoring.** Publishing the chain head to an external medium (an open timestamping protocol, a qualified timestamping authority, or both) — the only thing that would make a `TRUNCATED` verdict issuable, which is why that verdict was withdrawn (`be5c178`).
 - **Per-tenant signing keys.** Additive thanks to `key_id`.
-- **Six reserved audit hooks, unemitted**: `conduct.external.action` (when a side-effect tool exists), `conduct.data.access` (when a tool reaches external data), `conduct.human.escalation` (when `escalateConversation` gets a caller), `conduct.reply.delivered` (when delivery becomes transactional), `admin.agent.updated` (when an agent-update operation exists), `admin.credential.changed` (when per-tenant credentials land).
+- **Five reserved audit hooks, unemitted**: `conduct.external.action` (when a side-effect tool exists), `conduct.data.access` (when a tool reaches external data), `conduct.human.escalation` (when `escalateConversation` gets a caller), `conduct.reply.delivered` (when delivery becomes transactional), `admin.credential.changed` (when per-tenant credentials land).
 - **Actor attribution by API-key id.** Audit records carry the acting tenant, not the key; needs the principal plumbed from the auth filter. Goes with fine-grained authorization.
 - **Retention purge of DRAINED outbox rows.** Raw payloads also live in `audit_outbox` until purged.
 

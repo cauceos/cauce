@@ -1,6 +1,7 @@
 package dev.cauce.memory.agent;
 
 import dev.cauce.core.agent.Agent;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,6 +23,7 @@ public final class AgentMapper {
                 agent.maxResponseTokens(),
                 agent.status(),
                 agent.fallbackReply().orElse(null),
+                agent.toolNames().toArray(String[]::new),
                 agent.createdAt(),
                 agent.updatedAt());
     }
@@ -38,6 +40,7 @@ public final class AgentMapper {
                 entity.getMaxResponseTokens(),
                 entity.getStatus(),
                 entity.getFallbackReply(),
+                List.of(entity.getToolNames()),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt());
     }

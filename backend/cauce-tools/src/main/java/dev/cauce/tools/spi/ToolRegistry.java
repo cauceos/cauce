@@ -1,5 +1,6 @@
 package dev.cauce.tools.spi;
 
+import dev.cauce.core.tool.ToolCatalog;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -17,7 +18,7 @@ import org.springframework.stereotype.Component;
  * tool name is a configuration error and fails fast at startup (duplicate map key).
  */
 @Component
-public class ToolRegistry {
+public class ToolRegistry implements ToolCatalog {
 
     private final Map<String, Tool> toolsByName;
 
@@ -46,6 +47,12 @@ public class ToolRegistry {
     }
 
     /** The names of all registered tools. */
+    /** {@inheritDoc} The registry is the catalog: a name is known exactly when a tool is registered. */
+    @Override
+    public boolean contains(String toolName) {
+        return getTool(toolName).isPresent();
+    }
+
     public Set<String> availableTools() {
         return toolsByName.keySet();
     }

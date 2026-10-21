@@ -28,12 +28,12 @@ import java.util.UUID;
  * <p><b>Emitted</b> — each inside the transaction of the admin operation it audits:
  * {@link #TENANT_CREATED} (createPartner/createClient; the operator bootstrap is the
  * documented exception — it runs without a transaction, tenant context, or actor, on the
- * privileged genesis path), {@link #AGENT_CREATED}, {@link #APIKEY_ISSUED},
- * {@link #APIKEY_REVOKED}. {@code admin.channel.configured} is emitted by cauce-channels
- * (its constant lives with that emitter).
+ * privileged genesis path), {@link #AGENT_CREATED}, {@link #AGENT_UPDATED} (today only for a
+ * change of the agent's tools), {@link #APIKEY_ISSUED}, {@link #APIKEY_REVOKED}.
+ * {@code admin.channel.configured} is emitted by cauce-channels (its constant lives with that
+ * emitter).
  *
- * <p><b>Reserved hooks</b> — type defined now, no emission because no trigger exists:
- * {@link #AGENT_UPDATED} (there is no agent-modification operation yet) and
+ * <p><b>Reserved hook</b> — type defined now, no emission because no trigger exists:
  * {@link #CREDENTIAL_CHANGED} (no per-tenant LLM credential path exists — only the
  * system-default env credential).
  */
@@ -42,11 +42,11 @@ public final class AdminAuditEvents {
     // Emitted types.
     public static final String TENANT_CREATED = "admin.tenant.created";
     public static final String AGENT_CREATED = "admin.agent.created";
+    public static final String AGENT_UPDATED = "admin.agent.updated";
     public static final String APIKEY_ISSUED = "admin.apikey.issued";
     public static final String APIKEY_REVOKED = "admin.apikey.revoked";
 
-    // Reserved hook types — defined, never emitted until a real trigger exists.
-    public static final String AGENT_UPDATED = "admin.agent.updated";
+    // Reserved hook type — defined, never emitted until a real trigger exists.
     public static final String CREDENTIAL_CHANGED = "admin.credential.changed";
 
     private AdminAuditEvents() {
@@ -64,6 +64,22 @@ public final class AdminAuditEvents {
     }
 
     /** An agent was created under its owning tenant — the prompt enters only as a hash. */
+    /**
+     * The tools an agent may use were replaced (ADR 0005, C4) — the first real trigger of
+     * {@link #AGENT_UPDATED}. Recorded in the agent's tenant chain. Tool names are metadata of
+     * the deployment, not business content, so they enter in clear.
+     */
+    public static AuditEvent agentToolsUpdated(Agent agent, UUID actorTenantId) {
+        Objects.requireNonNull(agent, "agent must not be null");
+        Objects.requireNonNull(actorTenantId, "actorTenantId must not be null");
+        return new AuditEvent(agent.tenantId(), AGENT_UPDATED, Map.of(
+                "agent_id", agent.id().toString(),
+                "tenant_id", agent.tenantId().toString(),
+                "change", "tools",
+                "tool_names", agent.toolNames(),
+                "actor_tenant_id", actorTenantId.toString()));
+    }
+
     public static AuditEvent agentCreated(Agent agent, UUID actorTenantId) {
         Objects.requireNonNull(agent, "agent must not be null");
         Objects.requireNonNull(actorTenantId, "actorTenantId must not be null");

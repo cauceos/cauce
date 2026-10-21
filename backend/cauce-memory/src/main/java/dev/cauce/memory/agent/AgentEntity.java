@@ -9,6 +9,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * JPA persistence mapping for an agent row. Infrastructure detail of cauce-memory;
@@ -58,6 +60,11 @@ public class AgentEntity {
     @Column(name = "fallback_reply")
     private String fallbackReply;
 
+    /** The tools the agent may use (ADR 0005, C4); empty by default (V29). */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "tool_names", nullable = false, columnDefinition = "text[]")
+    private String[] toolNames = new String[0];
+
     protected AgentEntity() {
         // for JPA
     }
@@ -72,7 +79,16 @@ public class AgentEntity {
     public AgentEntity(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
                        String modelName, Double temperature, Integer maxResponseTokens,
                        AgentStatus status, String fallbackReply, Instant createdAt, Instant updatedAt) {
+        this(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature, maxResponseTokens,
+                status, fallbackReply, new String[0], createdAt, updatedAt);
+    }
+
+    public AgentEntity(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
+                       String modelName, Double temperature, Integer maxResponseTokens,
+                       AgentStatus status, String fallbackReply, String[] toolNames, Instant createdAt,
+                       Instant updatedAt) {
         this.fallbackReply = fallbackReply;
+        this.toolNames = toolNames;
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
@@ -132,5 +148,9 @@ public class AgentEntity {
 
     public String getFallbackReply() {
         return fallbackReply;
+    }
+
+    public String[] getToolNames() {
+        return toolNames.clone();
     }
 }

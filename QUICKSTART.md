@@ -113,7 +113,8 @@ curl -s -X POST $BASE/v1/tenants/<client id>/agents -H "Authorization: Bearer $K
        "name": "Demo Agent",
        "system_prompt": "You have a get_current_time tool; use it for time questions.",
        "model_provider": "ollama",
-       "model_name": "qwen2.5:3b"
+       "model_name": "qwen2.5:3b",
+       "tools": ["get_current_time"]
      }'
 
 # 3. Message (returns 202 with conversation_id and invocation_id — processing is async)

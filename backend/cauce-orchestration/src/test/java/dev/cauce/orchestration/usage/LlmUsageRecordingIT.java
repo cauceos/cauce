@@ -100,6 +100,8 @@ class LlmUsageRecordingIT extends AbstractOrchestrationIntegrationTest {
         TenantContext.setCurrentTenantId(client.id());
         agent = agentService.createAgent(client.id(), "DentalBot",
                 "You are a dentist receptionist.", "anthropic", "claude-sonnet-4-7");
+        // ADR 0005, C4: the clock must be granted; agents start with no tools.
+        agent = agentService.setTools(agent.id(), List.of("get_current_time"));
     }
 
     @AfterEach

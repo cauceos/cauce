@@ -1,11 +1,14 @@
 package dev.cauce.tenancy;
 
 import dev.cauce.core.agent.Agent;
+import dev.cauce.core.agent.AgentNotFoundException;
+import dev.cauce.core.agent.UnknownToolException;
 import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
+import dev.cauce.core.tool.ToolCatalog;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;
@@ -16,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,13 +39,20 @@ public class AgentService {
     private final TenantRepository tenantRepository;
     private final AgentMapper agentMapper;
     private final AuditEventRecorder auditRecorder;
+    private final ObjectProvider<ToolCatalog> toolCatalog;
 
+    /**
+     * {@code toolCatalog} is optional: without a tool registry in the application (a module test
+     * context), no tool exists, so granting any tool is rejected while an empty grant still works.
+     */
     public AgentService(AgentRepository agentRepository, TenantRepository tenantRepository,
-                        AgentMapper agentMapper, AuditEventRecorder auditRecorder) {
+                        AgentMapper agentMapper, AuditEventRecorder auditRecorder,
+                        ObjectProvider<ToolCatalog> toolCatalog) {
         this.agentRepository = agentRepository;
         this.tenantRepository = tenantRepository;
         this.agentMapper = agentMapper;
         this.auditRecorder = auditRecorder;
+        this.toolCatalog = toolCatalog;
     }
 
     /** Creates an agent with the default LLM configuration. */
@@ -61,18 +72,22 @@ public class AgentService {
                              String modelProvider, String modelName,
                              Double temperature, Integer maxResponseTokens) {
         return createAgent(tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, null);
+                maxResponseTokens, null, List.of());
     }
 
     /**
      * Creates an agent with its full configuration. {@code fallbackReply} is the text the
      * interlocutor receives when an invocation fails for good (ADR 0005, C3); {@code null} means
-     * the platform default.
+     * the platform default. {@code tools} are the tools it may use (ADR 0005, C4), each validated
+     * against the tool catalog; an empty list — the default — grants none.
+     *
+     * @throws UnknownToolException if a tool name is not registered
      */
     @Transactional
     public Agent createAgent(UUID tenantId, String name, String systemPrompt,
                              String modelProvider, String modelName,
-                             Double temperature, Integer maxResponseTokens, String fallbackReply) {
+                             Double temperature, Integer maxResponseTokens, String fallbackReply,
+                             List<String> tools) {
         TenantEntity tenant = tenantRepository.findById(tenantId).orElseThrow(() ->
                 new TenantNotFoundException("No tenant found for id " + tenantId));
         if (tenant.getTier() != Tier.CLIENT) {
@@ -84,13 +99,48 @@ public class AgentService {
         }
 
         Agent agent = Agent.create(tenantId, name, systemPrompt, modelProvider, modelName,
-                temperature, maxResponseTokens).withFallbackReply(fallbackReply);
+                temperature, maxResponseTokens).withFallbackReply(fallbackReply).withTools(tools);
+        requireRegistered(agent.toolNames());
         Agent saved = agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(agent)));
         // Admin audit in the same tx, in the owning tenant's chain; the prompt enters only
         // as a hash (sensitive, mutable business logic never lands in the append-only sink).
         auditRecorder.record(AdminAuditEvents.agentCreated(
                 saved, TenantContext.getCurrentTenantId().orElseThrow()));
         return saved;
+    }
+
+    /**
+     * Replaces the tools {@code agentId} may use with exactly {@code tools} (ADR 0005, C4). The
+     * agent must be visible under the current context (RLS) and every name registered in the tool
+     * catalog; an empty list revokes all. Recorded as {@code admin.agent.updated} in the agent's
+     * tenant chain, with the granted names (non-sensitive metadata).
+     *
+     * @throws AgentNotFoundException if the agent is not visible
+     * @throws UnknownToolException if a tool name is not registered
+     */
+    @Transactional
+    public Agent setTools(UUID agentId, List<String> tools) {
+        Agent current = agentRepository.findById(agentId).map(agentMapper::toDomain).orElseThrow(() ->
+                new AgentNotFoundException("No agent found for id " + agentId));
+        Agent retooled = current.retooled(tools);
+        requireRegistered(retooled.toolNames());
+        Agent saved = agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(retooled)));
+        auditRecorder.record(AdminAuditEvents.agentToolsUpdated(
+                saved, TenantContext.getCurrentTenantId().orElseThrow()));
+        return saved;
+    }
+
+    private void requireRegistered(List<String> toolNames) {
+        if (toolNames.isEmpty()) {
+            return;
+        }
+        ToolCatalog catalog = toolCatalog.getIfAvailable();
+        List<String> unknown = toolNames.stream()
+                .filter(name -> catalog == null || !catalog.contains(name))
+                .toList();
+        if (!unknown.isEmpty()) {
+            throw new UnknownToolException("No registered tool named " + String.join(", ", unknown));
+        }
     }
 
     /**

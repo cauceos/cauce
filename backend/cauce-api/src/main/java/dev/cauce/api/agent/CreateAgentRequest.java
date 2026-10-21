@@ -6,6 +6,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 
 /**
  * Request body for {@code POST /v1/tenants/{tenantId}/agents}.
@@ -23,5 +24,6 @@ public record CreateAgentRequest(
         @NotBlank String modelName,
         @DecimalMin("0.0") @DecimalMax("1.0") Double temperature,
         @Positive Integer maxResponseTokens,
-        @Size(max = Agent.MAX_FALLBACK_REPLY_LENGTH) String fallbackReply) {
+        @Size(max = Agent.MAX_FALLBACK_REPLY_LENGTH) String fallbackReply,
+        List<@NotBlank String> tools) {
 }

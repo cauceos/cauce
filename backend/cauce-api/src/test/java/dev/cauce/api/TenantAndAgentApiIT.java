@@ -2,18 +2,21 @@ package dev.cauce.api;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cauce.api.agent.CreateAgentRequest;
+import dev.cauce.api.agent.UpdateAgentToolsRequest;
 import dev.cauce.api.support.AbstractApiIntegrationTest;
 import dev.cauce.api.tenant.CreateClientRequest;
 import dev.cauce.api.tenant.CreatePartnerRequest;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,7 +85,7 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
         String clientAuth = bearerFor(clientId);
 
         mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
-                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null)))
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null, null)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
                 .andExpect(jsonPath("$.tenant_id").value(clientId.toString()))
@@ -97,13 +100,42 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
 
         mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
                         new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null,
-                                "  Ahora no puedo responder.  ")))
+                                "  Ahora no puedo responder.  ", null)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.fallback_reply").value("Ahora no puedo responder."));
         mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
                         new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null,
-                                "x".repeat(1001))))
+                                "x".repeat(1001), null)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void agentTools_areEmptyByDefault_grantedByPut_andValidatedAgainstTheRegistry() throws Exception {
+        UUID partnerId = createPartner();
+        UUID clientId = createClient(bearerFor(partnerId), partnerId);
+        String clientAuth = bearerFor(clientId);
+        UUID agentId = createAgent(clientAuth, clientId);
+
+        mockMvc.perform(getAs(clientAuth, "/v1/agents/" + agentId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tools").isEmpty());
+        mockMvc.perform(putAs(clientAuth, "/v1/agents/" + agentId + "/tools",
+                        new UpdateAgentToolsRequest(List.of("get_current_time"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tools[0]").value("get_current_time"));
+        mockMvc.perform(putAs(clientAuth, "/v1/agents/" + agentId + "/tools",
+                        new UpdateAgentToolsRequest(List.of("send_email"))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.error").value("unknown_tool"));
+        // The rejected grant left the previous one in place.
+        mockMvc.perform(getAs(clientAuth, "/v1/agents/" + agentId))
+                .andExpect(jsonPath("$.tools[0]").value("get_current_time"));
+
+        UUID otherPartner = createPartner();
+        UUID otherClient = createClient(bearerFor(otherPartner), otherPartner);
+        mockMvc.perform(putAs(bearerFor(otherClient), "/v1/agents/" + agentId + "/tools",
+                        new UpdateAgentToolsRequest(List.of())))
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -225,7 +257,7 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
         // Regression: validation field names report the wire name (model_name), not the Java
         // property (modelName), derived from the configured Jackson naming strategy.
         mockMvc.perform(postAs(bearerFor(clientId), "/v1/tenants/" + clientId + "/agents",
-                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "  ", null, null, null)))
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "  ", null, null, null, null)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("validation_failed"))
                 .andExpect(jsonPath("$.errors[0].field").value("model_name"));
@@ -245,6 +277,13 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
 
     private MockHttpServletRequestBuilder postAs(String auth, String path, Object body) throws Exception {
         return post(path)
+                .header(HttpHeaders.AUTHORIZATION, auth)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body));
+    }
+
+    private MockHttpServletRequestBuilder putAs(String auth, String path, Object body) throws Exception {
+        return put(path)
                 .header(HttpHeaders.AUTHORIZATION, auth)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(body));
@@ -270,7 +309,7 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
 
     private UUID createAgent(String clientAuth, UUID clientId) throws Exception {
         String body = mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
-                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null)))
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null, null)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return UUID.fromString(objectMapper.readTree(body).get("id").asText());

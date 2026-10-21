@@ -9,6 +9,7 @@ import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.core.agent.AgentNotFoundException;
+import dev.cauce.core.agent.UnknownToolException;
 import dev.cauce.core.apikey.ApiKeyAlreadyRevokedException;
 import dev.cauce.core.apikey.ApiKeyNotFoundException;
 import dev.cauce.core.conversation.ConversationNotFoundException;
@@ -103,6 +104,7 @@ public class GlobalExceptionHandler {
             Map.entry(InvalidPendingInvocationTransitionException.class, "invalid_pending_invocation_transition"),
             // 422 UNPROCESSABLE_ENTITY
             Map.entry(InvalidTenantTierException.class, "invalid_tenant_tier"),
+            Map.entry(UnknownToolException.class, "unknown_tool"),
             Map.entry(MessageTooLargeForContextException.class, "message_too_large_for_context"),
             // 502 BAD_GATEWAY
             Map.entry(LlmAuthenticationException.class, "llm_authentication_error"),
@@ -218,6 +220,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             InvalidTenantTierException.class,
+            UnknownToolException.class,
             MessageTooLargeForContextException.class})
     public ResponseEntity<ErrorResponse> handleUnprocessable(RuntimeException ex) {
         return clientError(HttpStatus.UNPROCESSABLE_ENTITY, ex);

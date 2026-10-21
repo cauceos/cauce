@@ -166,6 +166,10 @@ if (-not $state['CAUCE_AGENT_ID']) {
         "CAUCE_AGENT_ID=$($agent.id)`n", [Text.Encoding]::ASCII)
     Write-Host "   Agent $($agent.id) ready."
 }
+
+# Agents start with no tools (ADR 0005, C4): grant the clock on every run, so an agent left
+# by an earlier run (created before tools were per agent) is covered too.
+Invoke-Api PUT "/v1/agents/$($state['CAUCE_AGENT_ID'])/tools" (@{ tools = @('get_current_time') } | ConvertTo-Json) | Out-Null
 $agentId = $state['CAUCE_AGENT_ID']
 
 # --- 4. first message --------------------------------------------------------

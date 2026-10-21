@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,8 +38,17 @@ public class AgentController {
                                                 @Valid @RequestBody CreateAgentRequest request) {
         var agent = agentService.createAgent(tenantId, request.name(), request.systemPrompt(),
                 request.modelProvider(), request.modelName(), request.temperature(), request.maxResponseTokens(),
-                request.fallbackReply());
+                request.fallbackReply(), request.tools() == null ? List.of() : request.tools());
         return ResponseEntity.created(URI.create("/v1/agents/" + agent.id())).body(AgentResponse.from(agent));
+    }
+
+    /**
+     * Replaces the tools the agent may use (ADR 0005, C4). Every name must be a registered tool
+     * ({@code 422 unknown_tool} otherwise); an agent outside the caller's scope is a 404.
+     */
+    @PutMapping("/v1/agents/{id}/tools")
+    public AgentResponse setTools(@PathVariable UUID id, @Valid @RequestBody UpdateAgentToolsRequest request) {
+        return AgentResponse.from(agentService.setTools(id, request.tools()));
     }
 
     @GetMapping("/v1/agents/{id}")

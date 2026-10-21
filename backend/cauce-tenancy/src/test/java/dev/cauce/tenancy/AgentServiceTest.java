@@ -3,12 +3,15 @@ package dev.cauce.tenancy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.core.agent.Agent;
+import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.agent.AgentStatus;
+import dev.cauce.core.agent.UnknownToolException;
 import dev.cauce.core.audit.AuditContentHash;
 import dev.cauce.core.audit.AuditEvent;
 import dev.cauce.core.audit.AuditEventRecorder;
@@ -16,6 +19,7 @@ import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.core.tenant.Tier;
+import dev.cauce.core.tool.ToolCatalog;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;
@@ -23,13 +27,16 @@ import dev.cauce.memory.tenant.TenantEntity;
 import dev.cauce.memory.tenant.TenantRepository;
 import dev.cauce.tenancy.audit.AdminAuditEvents;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.ObjectProvider;
 
 class AgentServiceTest {
 
@@ -46,7 +53,7 @@ class AgentServiceTest {
         tenantRepository = Mockito.mock(TenantRepository.class);
         auditRecorder = Mockito.mock(AuditEventRecorder.class);
         service = new AgentService(agentRepository, tenantRepository, new AgentMapper(),
-                auditRecorder);
+                auditRecorder, catalogWith("get_current_time"));
         when(agentRepository.save(any(AgentEntity.class))).thenAnswer(call -> call.getArgument(0));
         TenantContext.setCurrentTenantId(actorTenantId);
     }
@@ -169,5 +176,102 @@ class AgentServiceTest {
     private static TenantEntity tenant(UUID id, Tier tier) {
         Instant now = Instant.now();
         return new TenantEntity(id, null, tier, "name", now, now);
+    }
+
+    // --- tools per agent (ADR 0005, C4) ---
+
+    @Test
+    void createAgent_grantsNoToolByDefault() {
+        UUID tenantId = stubClientTenant();
+
+        Agent agent = service.createAgent(tenantId, "Bot", "p", "anthropic", "m");
+
+        assertThat(agent.toolNames()).isEmpty();
+    }
+
+    @Test
+    void createAgent_withARegisteredTool_grantsIt() {
+        UUID tenantId = stubClientTenant();
+
+        Agent agent = service.createAgent(tenantId, "Bot", "p", "anthropic", "m", null, null, null,
+                List.of("get_current_time"));
+
+        assertThat(agent.toolNames()).containsExactly("get_current_time");
+    }
+
+    @Test
+    void createAgent_withAnUnregisteredTool_isRejectedAndPersistsNothing() {
+        UUID tenantId = stubClientTenant();
+
+        assertThatThrownBy(() -> service.createAgent(tenantId, "Bot", "p", "anthropic", "m", null, null, null,
+                List.of("get_current_time", "send_email")))
+                .isInstanceOf(UnknownToolException.class)
+                .hasMessageContaining("send_email");
+        verify(agentRepository, never()).save(any());
+    }
+
+    @Test
+    void setTools_replacesTheGrant_andAuditsItAsAnAgentUpdate() {
+        Agent existing = Agent.create(UUID.randomUUID(), "Bot", "p", "anthropic", "m");
+        when(agentRepository.findById(existing.id()))
+                .thenReturn(Optional.of(new AgentMapper().toEntity(existing)));
+
+        Agent updated = service.setTools(existing.id(), List.of("get_current_time"));
+
+        assertThat(updated.toolNames()).containsExactly("get_current_time");
+        ArgumentCaptor<AuditEvent> audit = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditRecorder).record(audit.capture());
+        assertThat(audit.getValue().eventType()).isEqualTo("admin.agent.updated");
+        assertThat(audit.getValue().tenantId()).isEqualTo(existing.tenantId());
+        assertThat(audit.getValue().payload())
+                .containsEntry("change", "tools")
+                .containsEntry("tool_names", List.of("get_current_time"))
+                .containsEntry("actor_tenant_id", actorTenantId.toString());
+    }
+
+    @Test
+    void setTools_withAnUnregisteredTool_isRejected_andNothingIsSavedOrAudited() {
+        Agent existing = Agent.create(UUID.randomUUID(), "Bot", "p", "anthropic", "m");
+        when(agentRepository.findById(existing.id()))
+                .thenReturn(Optional.of(new AgentMapper().toEntity(existing)));
+
+        assertThatThrownBy(() -> service.setTools(existing.id(), List.of("send_email")))
+                .isInstanceOf(UnknownToolException.class);
+        verify(agentRepository, never()).save(any());
+        verify(auditRecorder, never()).record(any());
+    }
+
+    @Test
+    void setTools_whenTheAgentIsNotVisible_throwsAgentNotFound() {
+        UUID agentId = UUID.randomUUID();
+        when(agentRepository.findById(agentId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setTools(agentId, List.of()))
+                .isInstanceOf(AgentNotFoundException.class);
+    }
+
+    @Test
+    void withoutAToolCatalog_anyGrantIsRejected_butAnEmptyOneWorks() {
+        AgentService noCatalog = new AgentService(agentRepository, tenantRepository, new AgentMapper(),
+                auditRecorder, catalogWith());
+        UUID tenantId = stubClientTenant();
+
+        assertThat(noCatalog.createAgent(tenantId, "Bot", "p", "anthropic", "m").toolNames()).isEmpty();
+        assertThatThrownBy(() -> noCatalog.createAgent(tenantId, "Bot", "p", "anthropic", "m", null, null, null,
+                List.of("get_current_time")))
+                .isInstanceOf(UnknownToolException.class);
+    }
+
+    private UUID stubClientTenant() {
+        UUID tenantId = UUID.randomUUID();
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant(tenantId, Tier.CLIENT)));
+        return tenantId;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ObjectProvider<ToolCatalog> catalogWith(String... names) {
+        ObjectProvider<ToolCatalog> provider = Mockito.mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(names.length == 0 ? null : Set.of(names)::contains);
+        return provider;
     }
 }

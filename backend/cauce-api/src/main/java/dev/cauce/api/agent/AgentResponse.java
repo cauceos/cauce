@@ -3,6 +3,7 @@ package dev.cauce.api.agent;
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentStatus;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -20,6 +21,7 @@ public record AgentResponse(
         int maxResponseTokens,
         AgentStatus status,
         String fallbackReply,
+        List<String> tools,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -35,6 +37,7 @@ public record AgentResponse(
                 agent.maxResponseTokens(),
                 agent.status(),
                 agent.fallbackReply().orElse(null),
+                agent.toolNames(),
                 agent.createdAt(),
                 agent.updatedAt());
     }

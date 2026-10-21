@@ -157,7 +157,7 @@ public class OrchestratorService {
                 new LlmProviderNotAvailableException("No LLM provider available for '"
                         + agent.modelProvider() + "' (is its API key configured?). Available: "
                         + llmProviderRegistry.availableProviders()));
-        List<ToolDefinition> toolDefinitions = toolDefinitions();
+        List<ToolDefinition> toolDefinitions = toolDefinitions(agent);
 
         // ADR 0005, C6: the cap is per inbound message. Rounds an earlier attempt of this
         // invocation already spent (its tool calls are persisted after the trigger) count.
@@ -228,7 +228,7 @@ public class OrchestratorService {
             }
             for (ToolCall call : response.toolCalls()) {
                 long dispatchStartNanos = System.nanoTime();
-                ToolResult result = dispatch(call);
+                ToolResult result = dispatch(call, agent);
                 long dispatchMillis = elapsedMillis(dispatchStartNanos);
                 messages.add(conversationGateway.append(Message.toolResult(conversationId, result)));
                 eventPublisher.publishEvent(new ToolExecuted(invocationId, iteration,
@@ -290,8 +290,11 @@ public class OrchestratorService {
      * input) never fail the invocation: they become an errored {@link ToolResult} fed back to the
      * model, which can react.
      */
-    private ToolResult dispatch(ToolCall call) {
-        Optional<Tool> tool = toolRegistry.getTool(call.toolName());
+    private ToolResult dispatch(ToolCall call, Agent agent) {
+        // ADR 0005, C4: a tool outside the agent's grant is, to the model, an unknown tool.
+        Optional<Tool> tool = agent.toolNames().contains(call.toolName())
+                ? toolRegistry.getTool(call.toolName())
+                : Optional.empty();
         if (tool.isEmpty()) {
             log.warn("Agent requested unknown tool '{}'", call.toolName());
             return ToolResult.error(call.toolCallId(), call.toolName(),
@@ -328,11 +331,21 @@ public class OrchestratorService {
         return rounds;
     }
 
-    /** All registered tools (global scoping; per-agent scoping is deferred). */
-    private List<ToolDefinition> toolDefinitions() {
-        return toolRegistry.availableTools().stream()
-                .map(name -> toolRegistry.requireTool(name).definition())
-                .toList();
+    /**
+     * The tools offered to the model: exactly the agent's grant (ADR 0005, C4), empty by default.
+     * A granted name no longer registered (a deployment dropped the tool) is left out with a WARN.
+     */
+    private List<ToolDefinition> toolDefinitions(Agent agent) {
+        List<ToolDefinition> definitions = new ArrayList<>();
+        for (String name : agent.toolNames()) {
+            Optional<Tool> tool = toolRegistry.getTool(name);
+            if (tool.isPresent()) {
+                definitions.add(tool.get().definition());
+            } else {
+                log.warn("Agent {} is granted tool '{}', which is not registered; not offered", agent.id(), name);
+            }
+        }
+        return List.copyOf(definitions);
     }
 
     private static long elapsedMillis(long startNanos) {
