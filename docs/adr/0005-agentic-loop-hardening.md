@@ -1,6 +1,6 @@
 # ADR 0005: Hardening of the agentic tool loop
 
-Status: Accepted (not yet implemented)
+Status: Accepted and implemented (C1–C6).
 
 ## Context
 
