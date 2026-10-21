@@ -40,7 +40,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestPropertySource;
 
 /**
  * The owner of a business end to end below the channel layer (ADR 0007, B7, B8, B9): binding the
@@ -48,7 +47,6 @@ import org.springframework.test.context.TestPropertySource;
  * why it did not deliver — the owner's notice. The channel is a recording {@link OwnerNotifier}.
  */
 @Import(OwnerIT.RecordingNotifierConfig.class)
-@TestPropertySource(properties = "cauce.business.notifications.enabled=false")
 class OwnerIT extends AbstractBusinessIntegrationTest {
 
     /** Records every send and answers with the armed outcome. */

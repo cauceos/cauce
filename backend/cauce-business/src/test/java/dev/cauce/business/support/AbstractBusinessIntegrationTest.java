@@ -66,7 +66,7 @@ public abstract class AbstractBusinessIntegrationTest {
      */
     protected void truncateAll() {
         new JdbcTemplate(adminDataSource).execute(
-                "TRUNCATE TABLE owner_notifications, owner_recipients, owner_link_codes, handoffs, bookings, agendas, knowledge_gaps, catalogs, business_profiles, audit_chain_heads, audit_log_entries, audit_outbox, llm_usage_records, channel_inbound_receipts, channel_configs, whatsapp_apps, api_keys, ingest_idempotency_records, "
+                "TRUNCATE TABLE daily_digests, owner_notifications, owner_recipients, owner_link_codes, handoffs, bookings, agendas, knowledge_gaps, catalogs, business_profiles, audit_chain_heads, audit_log_entries, audit_outbox, llm_usage_records, channel_inbound_receipts, channel_configs, whatsapp_apps, api_keys, ingest_idempotency_records, "
                         + "pending_invocations, messages, conversations, identities, agents, tenants CASCADE");
     }
 

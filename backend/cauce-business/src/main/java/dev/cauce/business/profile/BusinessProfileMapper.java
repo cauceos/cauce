@@ -16,6 +16,8 @@ public class BusinessProfileMapper {
                 .toList();
         return new BusinessProfileEntity(profile.id(), profile.tenantId(), profile.name(),
                 profile.timeZone().getId(), profile.locale(), facts, profile.handoffCategories().toArray(String[]::new),
+                profile.digestSchedule().map(BusinessProfile.DigestSchedule::localTime).orElse(null),
+                profile.digestSchedule().map(BusinessProfile.DigestSchedule::skipWhenEmpty).orElse(false),
                 profile.createdAt(), profile.updatedAt());
     }
 
@@ -25,6 +27,8 @@ public class BusinessProfileMapper {
                 .toList();
         return BusinessProfile.rehydrate(entity.getId(), entity.getTenantId(), entity.getName(),
                 entity.getTimeZone(), entity.getLocale(), facts, List.of(entity.getHandoffCategories()),
+                entity.getDailyDigestTime() == null ? null
+                        : new BusinessProfile.DigestSchedule(entity.getDailyDigestTime(), entity.isDailyDigestSkipEmpty()),
                 entity.getCreatedAt(), entity.getUpdatedAt());
     }
 }

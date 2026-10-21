@@ -1,5 +1,6 @@
 package dev.cauce.business;
 
+import dev.cauce.business.digest.DailyDigestProperties;
 import dev.cauce.business.owner.OwnerNotificationProperties;
 import java.time.Clock;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -13,7 +14,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @Configuration
 @EnableScheduling
-@EnableConfigurationProperties(OwnerNotificationProperties.class)
+@EnableConfigurationProperties({OwnerNotificationProperties.class, DailyDigestProperties.class})
 public class BusinessConfig {
 
     /** The time the business capabilities measure holds, shifts and digests against. */

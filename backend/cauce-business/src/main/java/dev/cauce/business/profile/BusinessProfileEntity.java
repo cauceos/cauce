@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,6 +41,12 @@ public class BusinessProfileEntity {
     @Column(name = "handoff_categories", nullable = false, columnDefinition = "text[]")
     private String[] handoffCategories = new String[0];
 
+    @Column(name = "daily_digest_time")
+    private LocalTime dailyDigestTime;
+
+    @Column(name = "daily_digest_skip_empty", nullable = false)
+    private boolean dailyDigestSkipEmpty;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -51,7 +58,8 @@ public class BusinessProfileEntity {
     }
 
     public BusinessProfileEntity(UUID id, UUID tenantId, String name, String timeZone, String locale,
-                                 List<Map<String, String>> facts, String[] handoffCategories, Instant createdAt,
+                                 List<Map<String, String>> facts, String[] handoffCategories,
+                                 LocalTime dailyDigestTime, boolean dailyDigestSkipEmpty, Instant createdAt,
                                  Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
@@ -60,6 +68,8 @@ public class BusinessProfileEntity {
         this.locale = locale;
         this.facts = facts;
         this.handoffCategories = handoffCategories;
+        this.dailyDigestTime = dailyDigestTime;
+        this.dailyDigestSkipEmpty = dailyDigestSkipEmpty;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -90,6 +100,14 @@ public class BusinessProfileEntity {
 
     public String[] getHandoffCategories() {
         return handoffCategories;
+    }
+
+    public LocalTime getDailyDigestTime() {
+        return dailyDigestTime;
+    }
+
+    public boolean isDailyDigestSkipEmpty() {
+        return dailyDigestSkipEmpty;
     }
 
     public Instant getCreatedAt() {
