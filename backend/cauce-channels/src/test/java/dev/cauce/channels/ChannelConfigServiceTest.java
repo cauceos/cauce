@@ -12,6 +12,8 @@ import dev.cauce.channels.audit.ChannelAuditEvents;
 import dev.cauce.channels.persistence.ChannelConfigEntity;
 import dev.cauce.channels.persistence.ChannelConfigMapper;
 import dev.cauce.channels.persistence.ChannelConfigRepository;
+import dev.cauce.channels.secret.AesGcmSecretCipher;
+import dev.cauce.channels.secret.SecretEncryptionProperties;
 import dev.cauce.channels.spi.ChannelAdapterRegistry;
 import dev.cauce.channels.spi.InboundChannelAdapter;
 import dev.cauce.core.agent.AgentNotFoundException;
@@ -60,7 +62,7 @@ class ChannelConfigServiceTest {
         auditRecorder = mock(AuditEventRecorder.class);
         InboundChannelAdapter telegram = mock(InboundChannelAdapter.class);
         when(telegram.channelType()).thenReturn("telegram");
-        service = new ChannelConfigService(repository, new ChannelConfigMapper(),
+        service = new ChannelConfigService(repository, new ChannelConfigMapper(new AesGcmSecretCipher(SecretEncryptionProperties.DEV_ONLY_KEY)),
                 agentRepository, new ChannelAdapterRegistry(List.of(telegram), List.of()),
                 FAKE_HASHER, auditRecorder);
         agentId = UUID.randomUUID();

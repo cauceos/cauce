@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.config.ChannelConfigStatus;
+import dev.cauce.channels.secret.ChannelCredentialSealingRunner;
 import dev.cauce.channels.support.AbstractChannelsIntegrationTest;
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.tenant.Tenant;
@@ -36,6 +37,9 @@ class ChannelConfigServiceIT extends AbstractChannelsIntegrationTest {
     private ChannelConfigService channelConfigService;
 
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private ChannelCredentialSealingRunner sealingRunner;
 
     private Tenant operator;
     private Tenant partner;
@@ -84,6 +88,31 @@ class ChannelConfigServiceIT extends AbstractChannelsIntegrationTest {
                 "SELECT webhook_secret_hash FROM channel_configs WHERE id = ?",
                 String.class, result.config().id());
         assertThat(storedHash).isNotEqualTo(result.webhookSecret());
+    }
+
+    @Test
+    void createChannelConfig_sealsTheCredentialAtRest_andTheServiceReadsItBack() {
+        ChannelConfig created = createAsClientA().config();
+
+        String stored = jdbc.queryForObject("SELECT credential FROM channel_configs WHERE id = ?",
+                String.class, created.id());
+        assertThat(stored).startsWith("v1:").doesNotContain("12345:token");
+        assertThat(channelConfigService.resolveActiveChannelConfig(created.id()))
+                .map(ChannelConfig::credential).contains("12345:token");
+    }
+
+    @Test
+    void sealingRunner_sealsLegacyPlaintextCredentials_once() {
+        ChannelConfig created = createAsClientA().config();
+        jdbc.update("UPDATE channel_configs SET credential = '12345:legacy' WHERE id = ?", created.id());
+
+        assertThat(sealingRunner.sealLegacyCredentials()).isEqualTo(1);
+        assertThat(sealingRunner.sealLegacyCredentials()).isZero();
+
+        assertThat(jdbc.queryForObject("SELECT credential FROM channel_configs WHERE id = ?",
+                String.class, created.id())).startsWith("v1:");
+        assertThat(channelConfigService.resolveActiveChannelConfig(created.id()))
+                .map(ChannelConfig::credential).contains("12345:legacy");
     }
 
     @Test

@@ -19,8 +19,8 @@ import java.util.UUID;
  * the tenant context before ingesting (same rationale as {@code PendingInvocation}).
  *
  * <p>{@code credential} is the provider credential (Telegram bot token; WhatsApp access
- * token), needed by the outbound half. Stored at rest as-is for now — encryption-at-rest
- * is deferred alongside per-tenant LLM credentials (TODO). {@code webhookSecretHash} is
+ * token), needed by the outbound half. The domain holds it in clear; at rest it is sealed with
+ * AES-GCM by the persistence mapper (ADR 0006, W3). {@code webhookSecretHash} is
  * the hash of the server-generated webhook secret; the plaintext is returned exactly once
  * at creation and verified on every webhook via the {@code ApiKeyHasher} port.
  */

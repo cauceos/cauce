@@ -1,8 +1,11 @@
 package dev.cauce.channels;
 
+import dev.cauce.channels.secret.AesGcmSecretCipher;
+import dev.cauce.channels.secret.SecretEncryptionProperties;
 import dev.cauce.channels.telegram.TelegramChannelAdapter;
 import dev.cauce.channels.telegram.TelegramProperties;
 import dev.cauce.core.apikey.ApiKeyHasher;
+import dev.cauce.core.secret.SecretCipher;
 import java.net.http.HttpClient;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -16,8 +19,14 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  * outbound deliveries.
  */
 @Configuration
-@EnableConfigurationProperties(TelegramProperties.class)
+@EnableConfigurationProperties({TelegramProperties.class, SecretEncryptionProperties.class})
 public class ChannelsConfig {
+
+    /** Seals provider secrets at rest (ADR 0006, W3); fails startup on a missing or malformed key. */
+    @Bean
+    public SecretCipher secretCipher(SecretEncryptionProperties properties) {
+        return new AesGcmSecretCipher(properties.getSecretsEncryptionKey());
+    }
 
     @Bean
     public TelegramChannelAdapter telegramChannelAdapter(ApiKeyHasher hasher,

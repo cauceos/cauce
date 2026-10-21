@@ -24,7 +24,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 ## Credentials
 
 - **Per-tenant LLM credentials.** Only the system-default credential exists (`SystemDefaultLlmCredential`, env-var based); there is no per-tenant/BYO-key path. Gates the commercial model.
-- **Channel credential encryption at rest.** The provider credential (e.g. a bot token) on `ChannelConfig` is stored in plaintext (TODO on the record), to be solved consistently with per-tenant LLM credentials.
+- **Rotation of the secrets encryption key.** Channel credentials are sealed with AES-GCM under `cauce.security.secrets-encryption-key` (ADR 0006, W3). There is one key and no rotation: changing it makes every sealed value unreadable. The `v1:` prefix leaves room for a key id and a re-sealing pass. Per-tenant LLM credentials, when they land, should reuse the same `SecretCipher` port.
 
 ## Usage and cost
 
