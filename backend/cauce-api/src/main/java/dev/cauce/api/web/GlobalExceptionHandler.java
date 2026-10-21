@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
+import dev.cauce.channels.whatsapp.app.WhatsAppAppNotFoundException;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.agent.UnknownToolException;
@@ -89,6 +90,7 @@ public class GlobalExceptionHandler {
             Map.entry(ApiKeyNotFoundException.class, "api_key_not_found"),
             Map.entry(PendingInvocationNotFoundException.class, "invocation_not_found"),
             Map.entry(ChannelConfigNotFoundException.class, "channel_config_not_found"),
+            Map.entry(WhatsAppAppNotFoundException.class, "whatsapp_app_not_found"),
             // 400 BAD_REQUEST
             Map.entry(InvalidConversationTransitionException.class, "invalid_conversation_transition"),
             Map.entry(InvalidChannelTypeException.class, "invalid_channel_type"),
@@ -137,7 +139,8 @@ public class GlobalExceptionHandler {
             MessageNotFoundException.class,
             ApiKeyNotFoundException.class,
             PendingInvocationNotFoundException.class,
-            ChannelConfigNotFoundException.class})
+            ChannelConfigNotFoundException.class,
+            WhatsAppAppNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex) {
         return clientError(HttpStatus.NOT_FOUND, ex);
     }

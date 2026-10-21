@@ -1,6 +1,7 @@
 package dev.cauce.channels.audit;
 
 import dev.cauce.channels.config.ChannelConfig;
+import dev.cauce.channels.whatsapp.app.WhatsAppApp;
 import dev.cauce.core.audit.AuditEvent;
 import java.util.Map;
 import java.util.Objects;
@@ -20,6 +21,7 @@ import java.util.UUID;
 public final class ChannelAuditEvents {
 
     public static final String CHANNEL_CONFIGURED = "admin.channel.configured";
+    public static final String WHATSAPP_APP_REGISTERED = "admin.whatsapp_app.registered";
 
     private ChannelAuditEvents() {
     }
@@ -33,6 +35,20 @@ public final class ChannelAuditEvents {
                 "agent_id", config.agentId().toString(),
                 "tenant_id", config.tenantId().toString(),
                 "channel_type", config.channelType(),
+                "actor_tenant_id", actorTenantId.toString()));
+    }
+
+    /**
+     * A WhatsApp app was registered (ADR 0006, W2) — recorded in the owning tenant's chain: ids
+     * and Meta's app id only, never the app secret, the verify token or its hash.
+     */
+    public static AuditEvent whatsAppAppRegistered(WhatsAppApp app, UUID actorTenantId) {
+        Objects.requireNonNull(app, "app must not be null");
+        Objects.requireNonNull(actorTenantId, "actorTenantId must not be null");
+        return new AuditEvent(app.tenantId(), WHATSAPP_APP_REGISTERED, Map.of(
+                "whatsapp_app_id", app.id().toString(),
+                "tenant_id", app.tenantId().toString(),
+                "meta_app_id", app.metaAppId(),
                 "actor_tenant_id", actorTenantId.toString()));
     }
 }
