@@ -5,6 +5,7 @@ import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -25,6 +26,7 @@ public final class BusinessProfile {
     public static final int MAX_FACTS = 200;
     public static final int MAX_FACT_KEY_LENGTH = 100;
     public static final int MAX_FACT_VALUE_LENGTH = 2000;
+    public static final int MAX_HANDOFF_CATEGORIES = 20;
     /** The language of a business that does not set one. */
     public static final String DEFAULT_LOCALE = "es";
 
@@ -57,17 +59,20 @@ public final class BusinessProfile {
     private final ZoneId timeZone;
     private final String locale;
     private final List<Fact> facts;
+    private final List<String> handoffCategories;
     private final Instant createdAt;
     private final Instant updatedAt;
 
     private BusinessProfile(UUID id, UUID tenantId, String name, ZoneId timeZone, String locale,
-                            List<Fact> facts, Instant createdAt, Instant updatedAt) {
+                            List<Fact> facts, List<String> handoffCategories, Instant createdAt,
+                            Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
         this.timeZone = timeZone;
         this.locale = locale;
         this.facts = facts;
+        this.handoffCategories = handoffCategories;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -82,21 +87,31 @@ public final class BusinessProfile {
         Instant now = Instant.now();
         return new BusinessProfile(UuidGenerator.newV7(), Objects.requireNonNull(tenantId, "tenantId"),
                 validatedName(name), validatedZone(timeZone), validatedLocale(locale), validatedFacts(facts),
-                now, now);
+                List.of(), now, now);
     }
 
     /** This profile with its content replaced: same id, tenant and creation time; updated now. */
     public BusinessProfile replacedBy(String name, String timeZone, String locale, List<Fact> facts) {
         return new BusinessProfile(id, tenantId, validatedName(name), validatedZone(timeZone),
-                validatedLocale(locale), validatedFacts(facts), createdAt, Instant.now());
+                validatedLocale(locale), validatedFacts(facts), handoffCategories, createdAt, Instant.now());
+    }
+
+    /**
+     * This profile with the categories its agents may hand cases to the owner under (ADR 0007, B7):
+     * lower-cased, unique, at most {@value #MAX_HANDOFF_CATEGORIES}. Empty means any category.
+     */
+    public BusinessProfile withHandoffCategories(List<String> categories) {
+        return new BusinessProfile(id, tenantId, name, timeZone, locale, facts, validatedCategories(categories),
+                createdAt, updatedAt);
     }
 
     /** Rebuilds a persisted profile. For the persistence layer only. */
     public static BusinessProfile rehydrate(UUID id, UUID tenantId, String name, String timeZone, String locale,
-                                            List<Fact> facts, Instant createdAt, Instant updatedAt) {
+                                            List<Fact> facts, List<String> handoffCategories, Instant createdAt,
+                                            Instant updatedAt) {
         return new BusinessProfile(Objects.requireNonNull(id, "id"), Objects.requireNonNull(tenantId, "tenantId"),
                 Objects.requireNonNull(name, "name"), ZoneId.of(timeZone), Objects.requireNonNull(locale, "locale"),
-                List.copyOf(facts), Objects.requireNonNull(createdAt, "createdAt"),
+                List.copyOf(facts), List.copyOf(handoffCategories), Objects.requireNonNull(createdAt, "createdAt"),
                 Objects.requireNonNull(updatedAt, "updatedAt"));
     }
 
@@ -148,6 +163,31 @@ public final class BusinessProfile {
         return List.copyOf(facts);
     }
 
+    private static List<String> validatedCategories(List<String> categories) {
+        if (categories == null) {
+            return List.of();
+        }
+        if (categories.size() > MAX_HANDOFF_CATEGORIES) {
+            throw new IllegalArgumentException("at most " + MAX_HANDOFF_CATEGORIES + " handoff categories");
+        }
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        for (String category : categories) {
+            if (category == null || category.isBlank() || category.strip().length() > 40) {
+                throw new IllegalArgumentException("a handoff category must be 1 to 40 characters");
+            }
+            if (!unique.add(category.strip().toLowerCase(Locale.ROOT))) {
+                throw new IllegalArgumentException("handoff category '" + category.strip() + "' appears twice");
+            }
+        }
+        return List.copyOf(unique);
+    }
+
+    /** Whether an agent may hand a case over under {@code category}: any, when none are listed. */
+    public boolean acceptsHandoffCategory(String category) {
+        return handoffCategories.isEmpty()
+                || category != null && handoffCategories.contains(category.strip().toLowerCase(Locale.ROOT));
+    }
+
     public UUID id() {
         return id;
     }
@@ -170,6 +210,10 @@ public final class BusinessProfile {
 
     public List<Fact> facts() {
         return facts;
+    }
+
+    public List<String> handoffCategories() {
+        return handoffCategories;
     }
 
     public Instant createdAt() {
