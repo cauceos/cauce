@@ -49,4 +49,17 @@ class BusinessProfileTest {
         assertThat(replaced.locale()).isEqualTo("pt");
         assertThat(replaced.facts()).isEmpty();
     }
+
+    @Test
+    void aDigestSchedule_isOffByDefault_truncatedToTheMinute_andSurvivesAReplacement() {
+        BusinessProfile profile = BusinessProfile.create(tenantId, "Bar", "Europe/Madrid", null, List.of());
+
+        assertThat(profile.digestSchedule()).isEmpty();
+        BusinessProfile scheduled = profile.withDigestSchedule(
+                new BusinessProfile.DigestSchedule(java.time.LocalTime.of(22, 30, 15), true));
+        assertThat(scheduled.digestSchedule()).contains(
+                new BusinessProfile.DigestSchedule(java.time.LocalTime.of(22, 30), true));
+        assertThat(scheduled.replacedBy("Bar", "UTC", null, List.of()).digestSchedule()).isPresent();
+        assertThat(scheduled.withDigestSchedule(null).digestSchedule()).isEmpty();
+    }
 }

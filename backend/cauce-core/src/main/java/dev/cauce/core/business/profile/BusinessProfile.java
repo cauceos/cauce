@@ -3,12 +3,14 @@ package dev.cauce.core.business.profile;
 import dev.cauce.core.UuidGenerator;
 import java.time.DateTimeException;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -60,12 +62,13 @@ public final class BusinessProfile {
     private final String locale;
     private final List<Fact> facts;
     private final List<String> handoffCategories;
+    private final DigestSchedule dailyDigest; // null: no daily digest
     private final Instant createdAt;
     private final Instant updatedAt;
 
     private BusinessProfile(UUID id, UUID tenantId, String name, ZoneId timeZone, String locale,
-                            List<Fact> facts, List<String> handoffCategories, Instant createdAt,
-                            Instant updatedAt) {
+                            List<Fact> facts, List<String> handoffCategories, DigestSchedule dailyDigest,
+                            Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
@@ -73,6 +76,7 @@ public final class BusinessProfile {
         this.locale = locale;
         this.facts = facts;
         this.handoffCategories = handoffCategories;
+        this.dailyDigest = dailyDigest;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -87,13 +91,13 @@ public final class BusinessProfile {
         Instant now = Instant.now();
         return new BusinessProfile(UuidGenerator.newV7(), Objects.requireNonNull(tenantId, "tenantId"),
                 validatedName(name), validatedZone(timeZone), validatedLocale(locale), validatedFacts(facts),
-                List.of(), now, now);
+                List.of(), null, now, now);
     }
 
     /** This profile with its content replaced: same id, tenant and creation time; updated now. */
     public BusinessProfile replacedBy(String name, String timeZone, String locale, List<Fact> facts) {
         return new BusinessProfile(id, tenantId, validatedName(name), validatedZone(timeZone),
-                validatedLocale(locale), validatedFacts(facts), handoffCategories, createdAt, Instant.now());
+                validatedLocale(locale), validatedFacts(facts), handoffCategories, dailyDigest, createdAt, Instant.now());
     }
 
     /**
@@ -102,17 +106,35 @@ public final class BusinessProfile {
      */
     public BusinessProfile withHandoffCategories(List<String> categories) {
         return new BusinessProfile(id, tenantId, name, timeZone, locale, facts, validatedCategories(categories),
+                dailyDigest, createdAt, updatedAt);
+    }
+
+    /**
+     * When the business wants its nightly summary (ADR 0007, B10): the local time it is sent at and
+     * whether a day with nothing to report is skipped. Null: no digest.
+     */
+    public record DigestSchedule(LocalTime localTime, boolean skipWhenEmpty) {
+
+        public DigestSchedule {
+            Objects.requireNonNull(localTime, "localTime");
+            localTime = localTime.withSecond(0).withNano(0);
+        }
+    }
+
+    /** This profile with {@code dailyDigest} as its nightly summary setting; null turns it off. */
+    public BusinessProfile withDigestSchedule(DigestSchedule dailyDigest) {
+        return new BusinessProfile(id, tenantId, name, timeZone, locale, facts, handoffCategories, dailyDigest,
                 createdAt, updatedAt);
     }
 
     /** Rebuilds a persisted profile. For the persistence layer only. */
     public static BusinessProfile rehydrate(UUID id, UUID tenantId, String name, String timeZone, String locale,
-                                            List<Fact> facts, List<String> handoffCategories, Instant createdAt,
-                                            Instant updatedAt) {
+                                            List<Fact> facts, List<String> handoffCategories,
+                                            DigestSchedule dailyDigest, Instant createdAt, Instant updatedAt) {
         return new BusinessProfile(Objects.requireNonNull(id, "id"), Objects.requireNonNull(tenantId, "tenantId"),
                 Objects.requireNonNull(name, "name"), ZoneId.of(timeZone), Objects.requireNonNull(locale, "locale"),
-                List.copyOf(facts), List.copyOf(handoffCategories), Objects.requireNonNull(createdAt, "createdAt"),
-                Objects.requireNonNull(updatedAt, "updatedAt"));
+                List.copyOf(facts), List.copyOf(handoffCategories), dailyDigest,
+                Objects.requireNonNull(createdAt, "createdAt"), Objects.requireNonNull(updatedAt, "updatedAt"));
     }
 
     private static String validatedName(String name) {
@@ -214,6 +236,11 @@ public final class BusinessProfile {
 
     public List<String> handoffCategories() {
         return handoffCategories;
+    }
+
+    /** The nightly summary setting; empty when the business has none. */
+    public Optional<DigestSchedule> digestSchedule() {
+        return Optional.ofNullable(dailyDigest);
     }
 
     public Instant createdAt() {
