@@ -138,6 +138,37 @@ class OwnerApiIT extends AbstractBusinessApiIT {
         TELEGRAM.verify(0, postRequestedFor(urlEqualTo(OWNER_BOT_SEND)));
     }
 
+    @Test
+    void theNightlySummary_reachesTheLinkedOwner_once_evenWhenRunTwice() throws Exception {
+        putJson(clientAuth, "/v1/tenants/" + clientId + "/business-profile", """
+                {"name": "Bar La Esquina", "time_zone": "Europe/Madrid", "facts": {},
+                 "daily_digest_time": "00:00"}""").andExpect(status().isOk())
+                .andExpect(jsonPath("$.daily_digest_time").value("00:00:00"));
+        String code = json(mockMvc.perform(post("/v1/tenants/" + clientId + "/owner-link-codes")
+                        .header(HttpHeaders.AUTHORIZATION, clientAuth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"channel_config_id\": \"" + ownerBotId + "\"}"))
+                .andExpect(status().isCreated())).get("code").asText();
+        postToOwnerBot(2, code).andExpect(status().isOk());
+
+        JsonNode first = json(mockMvc.perform(post("/v1/tenants/" + clientId + "/daily-digests")
+                .header(HttpHeaders.AUTHORIZATION, clientAuth)).andExpect(status().isOk()));
+        JsonNode second = json(mockMvc.perform(post("/v1/tenants/" + clientId + "/daily-digests")
+                .header(HttpHeaders.AUTHORIZATION, clientAuth)).andExpect(status().isOk()));
+        assertThat(second.get("id")).isEqualTo(first.get("id"));
+        assertThat(first.get("content").asText()).contains("Resumen de Bar La Esquina para mañana")
+                .endsWith("Nada pendiente.");
+
+        assertThat(dispatcher.dispatchDue()).isEqualTo(1);
+        TELEGRAM.verify(1, postRequestedFor(urlEqualTo(OWNER_BOT_SEND))
+                .withRequestBody(containing("Resumen de Bar La Esquina")));
+        getAs(partnerAuth, "/v1/tenants/" + clientId + "/daily-digests").andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].notified").value(true));
+        mockMvc.perform(post("/v1/tenants/" + clientId + "/daily-digests")
+                        .header(HttpHeaders.AUTHORIZATION, otherClientAuth))
+                .andExpect(status().isNotFound());
+    }
+
     private org.springframework.test.web.servlet.ResultActions postToOwnerBot(long updateId, String text)
             throws Exception {
         return mockMvc.perform(post("/webhooks/channels/" + ownerBotId).contentType(MediaType.APPLICATION_JSON)

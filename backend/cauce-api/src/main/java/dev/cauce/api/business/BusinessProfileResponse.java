@@ -2,6 +2,7 @@ package dev.cauce.api.business;
 
 import dev.cauce.core.business.profile.BusinessProfile;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,8 @@ public record BusinessProfileResponse(
         String locale,
         Map<String, String> facts,
         List<String> handoffCategories,
+        LocalTime dailyDigestTime,
+        boolean dailyDigestSkipWhenEmpty,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -23,7 +26,9 @@ public record BusinessProfileResponse(
         Map<String, String> facts = new LinkedHashMap<>();
         profile.facts().forEach(fact -> facts.put(fact.key(), fact.value()));
         return new BusinessProfileResponse(profile.id(), profile.tenantId(), profile.name(),
-                profile.timeZone().getId(), profile.locale(), facts, profile.handoffCategories(), profile.createdAt(),
-                profile.updatedAt());
+                profile.timeZone().getId(), profile.locale(), facts, profile.handoffCategories(),
+                profile.digestSchedule().map(BusinessProfile.DigestSchedule::localTime).orElse(null),
+                profile.digestSchedule().map(BusinessProfile.DigestSchedule::skipWhenEmpty).orElse(false),
+                profile.createdAt(), profile.updatedAt());
     }
 }

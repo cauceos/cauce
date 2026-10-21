@@ -7,6 +7,7 @@ import dev.cauce.business.gap.KnowledgeGapService;
 import dev.cauce.business.profile.BusinessProfileService;
 import dev.cauce.core.business.catalog.CatalogItem;
 import dev.cauce.core.business.catalog.CatalogNotFoundException;
+import dev.cauce.core.business.profile.BusinessProfile;
 import dev.cauce.core.business.profile.BusinessProfile.Fact;
 import dev.cauce.core.business.profile.BusinessProfileNotFoundException;
 import jakarta.validation.Valid;
@@ -45,8 +46,12 @@ public class BusinessKnowledgeController {
         List<Fact> facts = request.facts().entrySet().stream()
                 .map(entry -> new Fact(entry.getKey(), entry.getValue()))
                 .toList();
+        BusinessProfile.DigestSchedule digest = request.dailyDigestTime() == null ? null
+                : new BusinessProfile.DigestSchedule(request.dailyDigestTime(),
+                        Boolean.TRUE.equals(request.dailyDigestSkipWhenEmpty()));
         return BusinessProfileResponse.from(profileService.putProfile(tenantId, request.name(), request.timeZone(),
-                request.locale(), facts, request.handoffCategories() == null ? List.of() : request.handoffCategories()));
+                request.locale(), facts, request.handoffCategories() == null ? List.of() : request.handoffCategories(),
+                digest));
     }
 
     @GetMapping("/v1/tenants/{tenantId}/business-profile")
