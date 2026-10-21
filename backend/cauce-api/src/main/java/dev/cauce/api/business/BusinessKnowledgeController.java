@@ -46,7 +46,7 @@ public class BusinessKnowledgeController {
                 .map(entry -> new Fact(entry.getKey(), entry.getValue()))
                 .toList();
         return BusinessProfileResponse.from(profileService.putProfile(tenantId, request.name(), request.timeZone(),
-                request.locale(), facts));
+                request.locale(), facts, request.handoffCategories() == null ? List.of() : request.handoffCategories()));
     }
 
     @GetMapping("/v1/tenants/{tenantId}/business-profile")
