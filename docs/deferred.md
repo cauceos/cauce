@@ -68,6 +68,8 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 - **The product dashboard** (`frontend/cauce-dashboard`, Angular) has not been started. The React playground is a developer testing tool, not the dashboard.
 - **A frontend test harness for the playground.** Its gate is `npm run build` plus manual browser verification, by deliberate choice of its first unit.
+- **Chain break and failure states in `--color-danger`.** `.interface-design/system.md` makes danger (`#C8664B` + `--color-danger-bg`) the error signal, always with icon and label; neither token exists in `tokens.css` yet, and the playground still paints the broken chain link and failure marks in slate (`audit.css`, `conversation.css`). The same unit covers revoked keys and failed invocations.
+- **UI copy into the `src/i18n/` catalogue.** User-facing strings are literals in the components; `system.md` requires them in a per-locale catalogue (`en` only) so adding Spanish is one file. The vocabulary guard already scans `src/i18n/`.
 
 ## Modules not started
 

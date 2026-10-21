@@ -237,6 +237,22 @@ When introducing a new domain entity that participates in the tenant hierarchy, 
 3. Run tests after each step.
 4. Do not mix refactoring with behavior changes in a single commit.
 
+### When adding a third-party agent skill
+
+1. Project level only, under `.claude/skills/` (committed; the rest of `.claude/` stays
+   ignored). Never `-g`, never `-y`.
+2. Install with `npx skills add <source> --skill <name> --agent claude-code --copy`: a
+   plain copy, because the CLI's default link is skipped when `.claude/` does not exist yet
+   and on Windows it is an absolute-path junction that does not survive a clone.
+   `skills-lock.json` records the source and hash.
+3. Read the whole `SKILL.md` (and any file it loads) before committing it.
+4. A skill that must be pinned or changed locally — e.g. one that fetches its content from a
+   branch at run time — is vendored instead: files copied at a fixed commit, provenance and
+   local changes recorded in its `SKILL.md`, kept out of `skills-lock.json` so
+   `npx skills update` cannot overwrite it.
+5. Brand and vocabulary win over any skill: `.interface-design/system.md` is the anchor for
+   design skills.
+
 ## Communication protocol for strategic chat
 
 This project uses two AI assistants in parallel:
