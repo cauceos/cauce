@@ -112,7 +112,8 @@ class InvocationControllerTest {
 
         Assertions.assertThat(body)
                 .as("the raw provider error string must never reach the client")
-                .doesNotContain("401").doesNotContain("x-api-key");
+                // Not a bare "401": the body carries random UUIDs and timestamps that can hold it.
+                .doesNotContain(PROVIDER_DETAIL).doesNotContain("x-api-key").doesNotContain("LlmAuthenticationException");
     }
 
     @Test
