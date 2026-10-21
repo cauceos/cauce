@@ -32,7 +32,9 @@ build/
 !**/gradle/wrapper/gradle-wrapper.jar
 
 # --- Claude Code local state (not for the public repo) ---
-.claude/
+# Project skills are the exception: they are reviewed, vendored content.
+.claude/*
+!.claude/skills/
 
 # --- Local environment / Docker overrides (.example templates ARE tracked) ---
 .env
