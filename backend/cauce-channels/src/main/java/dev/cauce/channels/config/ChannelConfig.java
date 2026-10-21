@@ -88,6 +88,19 @@ public record ChannelConfig(UUID id,
                 phoneNumberId == null ? null : phoneNumberId.strip());
     }
 
+    /**
+     * This config with a new webhook secret, by its hash: the old secret stops authenticating.
+     *
+     * @throws IllegalStateException for an app-routed config, which has no secret of its own
+     */
+    public ChannelConfig withWebhookSecretHash(String newWebhookSecretHash) {
+        if (isAppRouted()) {
+            throw new IllegalStateException("an app-routed config has no webhook secret of its own");
+        }
+        return new ChannelConfig(id, tenantId, agentId, channelType, credential, newWebhookSecretHash, status,
+                createdAt, null, null);
+    }
+
     /** Whether this config receives its webhooks through an app rather than its own URL. */
     public boolean isAppRouted() {
         return whatsappAppId != null;

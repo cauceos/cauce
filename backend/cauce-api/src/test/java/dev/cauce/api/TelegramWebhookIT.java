@@ -163,6 +163,28 @@ class TelegramWebhookIT extends AbstractApiIntegrationTest {
     }
 
     @Test
+    void rotatingTheWebhookSecret_retiresTheOldOne_andTheNewOneAuthenticates() throws Exception {
+        String rotatedBody = mockMvc.perform(post("/v1/channel-configs/" + configId + "/webhook-secret")
+                        .header(HttpHeaders.AUTHORIZATION, clientAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(configId.toString()))
+                .andExpect(jsonPath("$.webhook_secret").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        String rotated = objectMapper.readTree(rotatedBody).get("webhook_secret").asText();
+
+        mockMvc.perform(post("/webhooks/channels/" + configId).contentType(MediaType.APPLICATION_JSON)
+                        .header(SECRET_HEADER, webhookSecret).content(update(3101, 987654321L, "Hola")))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/webhooks/channels/" + configId).contentType(MediaType.APPLICATION_JSON)
+                        .header(SECRET_HEADER, rotated).content(update(3102, 987654321L, "Hola")))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/v1/channel-configs/" + UUID.randomUUID() + "/webhook-secret")
+                        .header(HttpHeaders.AUTHORIZATION, clientAuth))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("channel_config_not_found"));
+    }
+
+    @Test
     void webhook_unknownConfig_is404() throws Exception {
         mockMvc.perform(post("/webhooks/channels/" + UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)

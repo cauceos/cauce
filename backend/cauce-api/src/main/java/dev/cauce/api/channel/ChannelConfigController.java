@@ -54,4 +54,15 @@ public class ChannelConfigController {
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(ChannelConfigResponse.from(result));
     }
+
+    /**
+     * Replaces the webhook secret of a channel instance and returns the new one, once. The secret
+     * is stored only hashed, so re-registering a provider webhook (Telegram {@code setWebhook})
+     * goes through here. A config outside the caller's scope is a 404; a WhatsApp number, which
+     * has no secret of its own, a 400.
+     */
+    @PostMapping("/v1/channel-configs/{configId}/webhook-secret")
+    public ChannelConfigResponse rotateWebhookSecret(@PathVariable UUID configId) {
+        return ChannelConfigResponse.from(channelConfigService.rotateWebhookSecret(configId));
+    }
 }

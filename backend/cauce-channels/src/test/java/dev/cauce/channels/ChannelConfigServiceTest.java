@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.channels.audit.ChannelAuditEvents;
+import dev.cauce.channels.config.ChannelConfig;
+import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.persistence.ChannelConfigEntity;
 import dev.cauce.channels.persistence.ChannelConfigMapper;
 import dev.cauce.channels.persistence.ChannelConfigRepository;
@@ -76,6 +78,39 @@ class ChannelConfigServiceTest {
     @AfterEach
     void tearDown() {
         TenantContext.clear();
+    }
+
+    @Test
+    void rotateWebhookSecret_storesOnlyTheNewHash_andAuditsWithoutTheSecret() {
+        ChannelConfig existing = ChannelConfig.create(tenantId, agentId, "telegram", "12345:token", "hash:old");
+        ChannelConfigMapper mapper = new ChannelConfigMapper(new AesGcmSecretCipher(SecretEncryptionProperties.DEV_ONLY_KEY));
+        when(repository.findById(existing.id())).thenReturn(Optional.of(mapper.toEntity(existing)));
+
+        ChannelConfigCreationResult rotated = service.rotateWebhookSecret(existing.id());
+
+        assertThat(rotated.webhookSecret()).isNotBlank();
+        assertThat(rotated.config().id()).isEqualTo(existing.id());
+        assertThat(rotated.config().webhookSecretHash()).isEqualTo("hash:" + rotated.webhookSecret());
+        ArgumentCaptor<AuditEvent> audit = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditRecorder).record(audit.capture());
+        assertThat(audit.getValue().eventType()).isEqualTo("admin.channel.webhook_secret_rotated");
+        assertThat(audit.getValue().payload().values()).doesNotContain(rotated.webhookSecret(),
+                rotated.config().webhookSecretHash());
+    }
+
+    @Test
+    void rotateWebhookSecret_ofAnInvisibleConfig_isNotFound_andOfAWhatsAppNumberIsRefused() {
+        UUID missing = UUID.randomUUID();
+        when(repository.findById(missing)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.rotateWebhookSecret(missing))
+                .isInstanceOf(ChannelConfigNotFoundException.class);
+
+        ChannelConfig number = ChannelConfig.createWhatsAppNumber(tenantId, agentId, UUID.randomUUID(), "111",
+                "EAAG-token");
+        ChannelConfigMapper mapper = new ChannelConfigMapper(new AesGcmSecretCipher(SecretEncryptionProperties.DEV_ONLY_KEY));
+        when(repository.findById(number.id())).thenReturn(Optional.of(mapper.toEntity(number)));
+        assertThatThrownBy(() -> service.rotateWebhookSecret(number.id()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

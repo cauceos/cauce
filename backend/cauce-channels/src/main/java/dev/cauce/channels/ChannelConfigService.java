@@ -2,6 +2,7 @@ package dev.cauce.channels;
 
 import dev.cauce.channels.audit.ChannelAuditEvents;
 import dev.cauce.channels.config.ChannelConfig;
+import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.config.ChannelConfigStatus;
 import dev.cauce.channels.persistence.ChannelConfigMapper;
 import dev.cauce.channels.persistence.ChannelConfigRepository;
@@ -82,6 +83,32 @@ public class ChannelConfigService {
         // Admin audit in the same tx, in the owning tenant's chain: ids + channel type +
         // actor only — never the provider credential, the webhook secret, or its hash.
         auditRecorder.record(ChannelAuditEvents.channelConfigured(
+                saved, TenantContext.getCurrentTenantId().orElseThrow()));
+        return new ChannelConfigCreationResult(saved, webhookSecret);
+    }
+
+    /**
+     * Replaces the webhook secret of the config {@code configId} and returns the new one in
+     * plaintext, exactly once; only its hash is stored and the old secret stops authenticating.
+     * The secret is never recoverable, so this is how a provider webhook is registered again
+     * (Telegram: {@code setWebhook} with the new {@code secret_token}). Recorded as
+     * {@code admin.channel.webhook_secret_rotated}, ids only.
+     *
+     * @throws ChannelConfigNotFoundException if the config is not visible
+     * @throws IllegalArgumentException if it is app-routed (a WhatsApp number has no secret of its own)
+     */
+    @Transactional
+    public ChannelConfigCreationResult rotateWebhookSecret(UUID configId) {
+        ChannelConfig current = channelConfigRepository.findById(configId).map(channelConfigMapper::toDomain)
+                .orElseThrow(() -> new ChannelConfigNotFoundException("No channel config found for id " + configId));
+        if (current.isAppRouted()) {
+            throw new IllegalArgumentException("Channel config " + configId
+                    + " receives its webhooks through its WhatsApp app and has no secret of its own");
+        }
+        String webhookSecret = ApiKeyGenerator.newKey();
+        ChannelConfig saved = channelConfigMapper.toDomain(channelConfigRepository.save(
+                channelConfigMapper.toEntity(current.withWebhookSecretHash(hasher.hash(webhookSecret)))));
+        auditRecorder.record(ChannelAuditEvents.webhookSecretRotated(
                 saved, TenantContext.getCurrentTenantId().orElseThrow()));
         return new ChannelConfigCreationResult(saved, webhookSecret);
     }
