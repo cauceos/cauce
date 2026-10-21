@@ -25,6 +25,7 @@ import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.InboundMessageService;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -69,7 +70,8 @@ class WhatsAppWebhookServiceTest {
         outbound = mock(WhatsAppChannelAdapter.class);
         recorder = mock(WhatsAppEventRecorder.class);
         service = new WhatsAppWebhookService(appService, numberService, inbound, outbound, recorder,
-                new WhatsAppProperties(), FAKE_HASHER, new SyncTaskExecutor(), mock(InboundInterception.class));
+                new WhatsAppProperties(), FAKE_HASHER, new SyncTaskExecutor(), mock(InboundInterception.class),
+                Clock.systemUTC());
         app = WhatsAppApp.create(UUID.randomUUID(), "1234567890", SECRET, FAKE_HASHER.hash("verify-me"));
         number = ChannelConfig.createWhatsAppNumber(UUID.randomUUID(), UUID.randomUUID(), app.id(), "1111111111",
                 "EAAG-token");

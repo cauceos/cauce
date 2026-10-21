@@ -231,7 +231,7 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
 
     private void seedLargeHistory(int count, int chars) {
         List<Object[]> rows = new ArrayList<>();
-        Instant base = Instant.now();
+        Instant base = clock.instant();
         for (int i = 0; i < count; i++) {
             String prefix = "MSG" + i + ":";
             String content = prefix + "x".repeat(chars - prefix.length());

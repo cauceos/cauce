@@ -8,7 +8,7 @@ import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.inbound.InboundMessageInterceptor;
 import dev.cauce.core.inbound.InboundMessageInterceptor.InboundText;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -29,11 +29,14 @@ public class InboundInterception {
 
     private final ObjectProvider<InboundMessageInterceptor> interceptors;
     private final ChannelAdapterRegistry adapterRegistry;
+    private final Clock clock;
 
     public InboundInterception(ObjectProvider<InboundMessageInterceptor> interceptors,
-                               ChannelAdapterRegistry adapterRegistry) {
+                               ChannelAdapterRegistry adapterRegistry,
+                               Clock clock) {
         this.interceptors = interceptors;
         this.adapterRegistry = adapterRegistry;
+        this.clock = clock;
     }
 
     /**
@@ -60,8 +63,9 @@ public class InboundInterception {
             return;
         }
         try {
-            // The interlocutor has just written, so any reply window is open.
-            adapter.get().deliver(new ChannelOutboundMessage(kind, identityValue, reply, Instant.now()), config);
+            // The interlocutor has just written, so any reply window is open (measured, like every
+            // window, on the database clock: ADR 0008).
+            adapter.get().deliver(new ChannelOutboundMessage(kind, identityValue, reply, clock.instant()), config);
         } catch (ChannelDeliveryException e) {
             log.warn("Could not answer an intercepted message through config {}: {}", config.id(), e.getMessage());
         }

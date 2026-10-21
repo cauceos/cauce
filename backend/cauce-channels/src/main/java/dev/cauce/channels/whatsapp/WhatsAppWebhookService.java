@@ -17,7 +17,7 @@ import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.InboundMessageService;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -65,6 +65,7 @@ public class WhatsAppWebhookService {
     private final ApiKeyHasher hasher;
     private final TaskExecutor outboundExecutor;
     private final InboundInterception interception;
+    private final Clock clock;
     // Own mapper: Meta's wire format must not inherit the application's Jackson settings.
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -73,7 +74,8 @@ public class WhatsAppWebhookService {
                                   WhatsAppEventRecorder eventRecorder, WhatsAppProperties properties,
                                   ApiKeyHasher hasher,
                                   @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor,
-                                  InboundInterception interception) {
+                                  InboundInterception interception,
+                                  Clock clock) {
         this.appService = appService;
         this.numberService = numberService;
         this.inboundMessageService = inboundMessageService;
@@ -83,6 +85,7 @@ public class WhatsAppWebhookService {
         this.hasher = hasher;
         this.outboundExecutor = outboundExecutor;
         this.interception = interception;
+        this.clock = clock;
     }
 
     /**
@@ -207,7 +210,7 @@ public class WhatsAppWebhookService {
     private void sendTextOnlyReply(ChannelConfig number, String bsuid) {
         // The interlocutor has just written, so the 24-hour window is open.
         ChannelOutboundMessage reply = new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, bsuid,
-                properties.getUnsupportedMessageReply(), Instant.now());
+                properties.getUnsupportedMessageReply(), clock.instant());
         try {
             outboundExecutor.execute(() -> {
                 try {

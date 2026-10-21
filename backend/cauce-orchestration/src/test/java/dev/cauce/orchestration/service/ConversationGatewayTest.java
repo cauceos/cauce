@@ -29,7 +29,9 @@ import dev.cauce.memory.message.MessageMapper;
 import dev.cauce.memory.message.MessageRepository;
 import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +44,7 @@ class ConversationGatewayTest {
 
     private static final String MODEL = "claude-sonnet-4-7";
     private static final String PROVIDER = "anthropic";
+    private static final Instant STAMP = Instant.parse("2026-10-21T10:00:00Z");
 
     private final UUID conversationId = UUID.randomUUID();
     private final UUID agentId = UUID.randomUUID();
@@ -63,7 +66,7 @@ class ConversationGatewayTest {
         auditRecorder = Mockito.mock(AuditEventRecorder.class);
         gateway = new ConversationGateway(conversationRepository, new ConversationMapper(),
                 messageRepository, new MessageMapper(), agentRepository, new AgentMapper(),
-                auditRecorder);
+                auditRecorder, Clock.fixed(STAMP, ZoneOffset.UTC));
     }
 
     @Test
@@ -124,11 +127,12 @@ class ConversationGatewayTest {
 
         Message saved = gateway.append(message);
 
+        assertThat(saved.createdAt()).as("stamped from the injected (database) clock").isEqualTo(STAMP);
         assertThat(saved.role()).isEqualTo(MessageRole.AGENT);
         assertThat(saved.content()).isEqualTo("Reply");
         verify(messageRepository).save(argThat(entity ->
                 entity.getRole() == MessageRole.AGENT && entity.getContent().equals("Reply")));
-        verify(conversationRepository).touchLastMessageAt(eq(conversationId), any());
+        verify(conversationRepository).touchLastMessageAt(conversationId, STAMP);
         verifyNoInteractions(auditRecorder); // the plain append is deliberately unaudited
     }
 

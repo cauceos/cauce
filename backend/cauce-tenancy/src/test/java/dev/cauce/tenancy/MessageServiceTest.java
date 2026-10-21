@@ -15,7 +15,9 @@ import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageEntity;
 import dev.cauce.memory.message.MessageMapper;
 import dev.cauce.memory.message.MessageRepository;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,6 +28,8 @@ import org.springframework.data.domain.Limit;
 
 class MessageServiceTest {
 
+    private static final Instant NOW = Instant.parse("2026-10-21T10:00:00Z");
+
     private MessageRepository messageRepository;
     private ConversationRepository conversationRepository;
     private MessageService service;
@@ -34,7 +38,8 @@ class MessageServiceTest {
     void setUp() {
         messageRepository = Mockito.mock(MessageRepository.class);
         conversationRepository = Mockito.mock(ConversationRepository.class);
-        service = new MessageService(messageRepository, conversationRepository, new MessageMapper());
+        service = new MessageService(messageRepository, conversationRepository, new MessageMapper(),
+                Clock.fixed(NOW, ZoneOffset.UTC));
         when(messageRepository.save(any(MessageEntity.class))).thenAnswer(call -> call.getArgument(0));
     }
 
@@ -61,14 +66,16 @@ class MessageServiceTest {
     }
 
     @Test
-    void appendMessage_advancesConversationLastMessageAt_toMessageTimestamp() {
+    void appendMessage_stampsTheMessageFromTheClock_andAdvancesLastMessageAtToIt() {
         UUID conversationId = UUID.randomUUID();
         when(conversationRepository.findById(conversationId))
                 .thenReturn(Optional.of(conversation(conversationId)));
 
         Message message = service.appendMessage(conversationId, MessageRole.AGENT, "Reply");
 
-        verify(conversationRepository).touchLastMessageAt(conversationId, message.createdAt());
+        // The injected clock is the database's (ADR 0008): a reply window is measured against it.
+        assertThat(message.createdAt()).isEqualTo(NOW);
+        verify(conversationRepository).touchLastMessageAt(conversationId, NOW);
     }
 
     @Test

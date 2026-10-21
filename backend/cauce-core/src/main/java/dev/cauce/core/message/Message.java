@@ -116,6 +116,17 @@ public final class Message {
         return new Message(id, conversationId, role, content, toolContent, failureType, createdAt);
     }
 
+    /**
+     * This message with its creation time set to {@code createdAt}. The persistence choke points
+     * stamp each message from the database clock as they store it (ADR 0008): a channel's reply
+     * window measures the interlocutor's last message against that clock, and the thread is read
+     * back in this order.
+     */
+    public Message stampedAt(Instant createdAt) {
+        return new Message(id, conversationId, role, content, toolContent, failureType,
+                Objects.requireNonNull(createdAt, "createdAt"));
+    }
+
     private static String renderContent(ToolResult result) {
         return result.output().isBlank() ? "[empty result]" : result.output();
     }

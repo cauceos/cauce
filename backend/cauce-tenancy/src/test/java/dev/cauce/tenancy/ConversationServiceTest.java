@@ -22,7 +22,9 @@ import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationMapper;
 import dev.cauce.memory.conversation.ConversationRepository;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +33,7 @@ import org.mockito.Mockito;
 
 class ConversationServiceTest {
 
+    private static final Instant NOW = Instant.parse("2026-10-21T10:00:00Z");
     private static final UUID CONFIG = UUID.randomUUID();
 
     private ConversationRepository conversationRepository;
@@ -44,7 +47,7 @@ class ConversationServiceTest {
         agentRepository = Mockito.mock(AgentRepository.class);
         identityService = Mockito.mock(IdentityService.class);
         service = new ConversationService(conversationRepository, agentRepository, new ConversationMapper(),
-                identityService);
+                identityService, Clock.fixed(NOW, ZoneOffset.UTC));
         when(conversationRepository.save(any(ConversationEntity.class)))
                 .thenAnswer(call -> call.getArgument(0));
         when(identityService.resolveOrCreate(any(UUID.class), any(String.class), any(IdentityKind.class),
@@ -90,6 +93,9 @@ class ConversationServiceTest {
         assertThat(conversation.channelConfigId()).contains(CONFIG);
         assertThat(conversation.status()).isEqualTo(ConversationStatus.OPEN);
         assertThat(conversation.closedAt()).isNull();
+        // Stamped from the injected (database) clock, which every message then advances it with.
+        assertThat(conversation.startedAt()).isEqualTo(NOW);
+        assertThat(conversation.lastMessageAt()).isEqualTo(NOW);
     }
 
     @Test

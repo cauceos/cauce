@@ -11,6 +11,7 @@ import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationMapper;
 import dev.cauce.memory.conversation.ConversationRepository;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,15 +47,18 @@ public class ConversationService {
     private final AgentRepository agentRepository;
     private final ConversationMapper conversationMapper;
     private final IdentityService identityService;
+    private final Clock clock;
 
     public ConversationService(ConversationRepository conversationRepository,
                                AgentRepository agentRepository,
                                ConversationMapper conversationMapper,
-                               IdentityService identityService) {
+                               IdentityService identityService,
+                               Clock clock) {
         this.conversationRepository = conversationRepository;
         this.agentRepository = agentRepository;
         this.conversationMapper = conversationMapper;
         this.identityService = identityService;
+        this.clock = clock;
     }
 
     /**
@@ -72,7 +76,9 @@ public class ConversationService {
                                           String identityValue, UUID channelConfigId) {
         AgentEntity agent = requireVisibleAgentForSupportedChannel(agentId, channelType, channelConfigId);
         Identity identity = identityService.resolveOrCreate(agent.getTenantId(), channelType, kind, identityValue);
-        Conversation conversation = Conversation.start(agent.getId(), identity, channelConfigId);
+        // Stamped from the database clock (ADR 0008), like the race-safe insert's column defaults.
+        Conversation conversation = Conversation.start(agent.getId(), identity, channelConfigId)
+                .stampedAt(clock.instant());
         return conversationMapper.toDomain(conversationRepository.save(conversationMapper.toEntity(conversation)));
     }
 

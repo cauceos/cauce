@@ -17,6 +17,7 @@ import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageMapper;
 import dev.cauce.memory.message.MessageRepository;
 import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
+import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -46,6 +47,7 @@ public class ConversationGateway {
     private final AgentRepository agentRepository;
     private final AgentMapper agentMapper;
     private final AuditEventRecorder auditRecorder;
+    private final Clock clock;
 
     public ConversationGateway(ConversationRepository conversationRepository,
                                ConversationMapper conversationMapper,
@@ -53,7 +55,8 @@ public class ConversationGateway {
                                MessageMapper messageMapper,
                                AgentRepository agentRepository,
                                AgentMapper agentMapper,
-                               AuditEventRecorder auditRecorder) {
+                               AuditEventRecorder auditRecorder,
+                               Clock clock) {
         this.conversationRepository = conversationRepository;
         this.conversationMapper = conversationMapper;
         this.messageRepository = messageRepository;
@@ -61,6 +64,7 @@ public class ConversationGateway {
         this.agentRepository = agentRepository;
         this.agentMapper = agentMapper;
         this.auditRecorder = auditRecorder;
+        this.clock = clock;
     }
 
     /**
@@ -139,7 +143,9 @@ public class ConversationGateway {
      */
     @Transactional
     public Message append(Message message) {
-        Message saved = messageMapper.toDomain(messageRepository.save(messageMapper.toEntity(message)));
+        // Stamped from the database clock (ADR 0008): reply windows are measured against it.
+        Message stamped = message.stampedAt(clock.instant());
+        Message saved = messageMapper.toDomain(messageRepository.save(messageMapper.toEntity(stamped)));
         conversationRepository.touchLastMessageAt(message.conversationId(), saved.createdAt());
         return saved;
     }

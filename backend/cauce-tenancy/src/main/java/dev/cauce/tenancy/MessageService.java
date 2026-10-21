@@ -7,6 +7,7 @@ import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageEntity;
 import dev.cauce.memory.message.MessageMapper;
 import dev.cauce.memory.message.MessageRepository;
+import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Limit;
@@ -25,13 +26,16 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
     private final MessageMapper messageMapper;
+    private final Clock clock;
 
     public MessageService(MessageRepository messageRepository,
                           ConversationRepository conversationRepository,
-                          MessageMapper messageMapper) {
+                          MessageMapper messageMapper,
+                          Clock clock) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.messageMapper = messageMapper;
+        this.clock = clock;
     }
 
     /**
@@ -45,7 +49,8 @@ public class MessageService {
         conversationRepository.findById(conversationId).orElseThrow(() ->
                 new ConversationNotFoundException("No conversation found for id " + conversationId));
 
-        Message message = Message.from(conversationId, role, content);
+        // Stamped from the database clock (ADR 0008): reply windows are measured against it.
+        Message message = Message.from(conversationId, role, content).stampedAt(clock.instant());
         Message saved = messageMapper.toDomain(messageRepository.save(messageMapper.toEntity(message)));
         conversationRepository.touchLastMessageAt(conversationId, saved.createdAt());
         return saved;

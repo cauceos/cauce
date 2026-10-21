@@ -5,6 +5,7 @@ import dev.cauce.core.message.MessageRole;
 import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageMapper;
 import dev.cauce.memory.message.MessageRepository;
+import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -29,13 +30,16 @@ public class OrchestrationErrorRecorder {
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
     private final MessageMapper messageMapper;
+    private final Clock clock;
 
     public OrchestrationErrorRecorder(MessageRepository messageRepository,
                                       ConversationRepository conversationRepository,
-                                      MessageMapper messageMapper) {
+                                      MessageMapper messageMapper,
+                                      Clock clock) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.messageMapper = messageMapper;
+        this.clock = clock;
     }
 
     /**
@@ -44,7 +48,7 @@ public class OrchestrationErrorRecorder {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Message recordError(UUID conversationId, String content) {
-        Message message = Message.from(conversationId, MessageRole.SYSTEM, content);
+        Message message = Message.from(conversationId, MessageRole.SYSTEM, content).stampedAt(clock.instant());
         Message saved = messageMapper.toDomain(messageRepository.save(messageMapper.toEntity(message)));
         conversationRepository.touchLastMessageAt(conversationId, saved.createdAt());
         return saved;

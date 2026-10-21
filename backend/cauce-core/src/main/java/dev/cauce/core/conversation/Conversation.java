@@ -74,6 +74,17 @@ public final class Conversation {
                 null);
     }
 
+    /**
+     * This newly started conversation, started at {@code startedAt}: its {@code lastMessageAt}
+     * starts there too. A service stamps a conversation from the database clock as it stores it
+     * (ADR 0008), the clock every later message advances {@code lastMessageAt} with.
+     */
+    public Conversation stampedAt(Instant startedAt) {
+        Objects.requireNonNull(startedAt, "startedAt");
+        return new Conversation(id, agentId, identityId, channelConfigId, status, startedAt, startedAt, closedAt,
+                escalatedAt, archivedAt);
+    }
+
     /** Rebuilds a conversation from already-persisted state. For the persistence layer only. */
     public static Conversation rehydrate(UUID id, UUID agentId, UUID identityId,
                                          UUID channelConfigId, ConversationStatus status,

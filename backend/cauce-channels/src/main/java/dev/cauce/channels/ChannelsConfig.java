@@ -26,13 +26,16 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
         WhatsAppProperties.class})
 public class ChannelsConfig {
 
-    /** Outbound half of the WhatsApp Cloud API channel (ADR 0006). */
+    /**
+     * Outbound half of the WhatsApp Cloud API channel (ADR 0006). Its 24-hour window is measured
+     * with the application's clock, the database's (ADR 0008), which stamped the last message.
+     */
     @Bean
-    public WhatsAppChannelAdapter whatsAppChannelAdapter(WhatsAppProperties properties) {
+    public WhatsAppChannelAdapter whatsAppChannelAdapter(WhatsAppProperties properties, Clock clock) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(properties.getTimeout())
                 .build();
-        return new WhatsAppChannelAdapter(httpClient, properties, Clock.systemUTC());
+        return new WhatsAppChannelAdapter(httpClient, properties, clock);
     }
 
     /** Seals provider secrets at rest (ADR 0006, W3); fails startup on a missing or malformed key. */
