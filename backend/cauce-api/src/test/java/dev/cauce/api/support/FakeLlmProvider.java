@@ -1,8 +1,10 @@
 package dev.cauce.api.support;
 
 import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.model.FinishReason;
 import dev.cauce.llm.model.LlmInvocation;
+import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmResponse;
 import dev.cauce.llm.model.LlmUsage;
 import dev.cauce.llm.spi.LlmProvider;
@@ -13,6 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 /**
  * Test double standing in for an Anthropic-style LLM adapter so the cauce-api end-to-end
@@ -41,7 +44,7 @@ public class FakeLlmProvider implements LlmProvider {
     private volatile RuntimeException nextFailure;
     private volatile boolean useTool;
     private final AtomicInteger calls = new AtomicInteger();
-    private final Queue<LlmResponse> scripted = new ConcurrentLinkedQueue<>();
+    private final Queue<Function<LlmInvocation, LlmResponse>> scripted = new ConcurrentLinkedQueue<>();
     private final List<LlmInvocation> invocations = new CopyOnWriteArrayList<>();
 
     @Override
@@ -57,9 +60,9 @@ public class FakeLlmProvider implements LlmProvider {
     @Override
     public LlmResponse invoke(LlmInvocation invocation) {
         invocations.add(invocation);
-        LlmResponse next = scripted.poll();
+        Function<LlmInvocation, LlmResponse> next = scripted.poll();
         if (next != null) {
-            return next;
+            return next.apply(invocation);
         }
         RuntimeException failure = nextFailure;
         if (failure != null) {
@@ -97,7 +100,23 @@ public class FakeLlmProvider implements LlmProvider {
      * a test plays a model that calls given tools with given arguments, then replies.
      */
     public void script(LlmResponse... responses) {
-        scripted.addAll(List.of(responses));
+        for (LlmResponse response : responses) {
+            scripted.add(invocation -> response);
+        }
+    }
+
+    /**
+     * Scripts the next response as a function of the invocation, for a model that reacts to what a
+     * tool just returned (its last message is that tool's result).
+     */
+    public void scriptReacting(Function<LlmInvocation, LlmResponse> response) {
+        scripted.add(response);
+    }
+
+    /** The output of the last message of {@code invocation}, which must be a tool result. */
+    public static String lastToolOutput(LlmInvocation invocation) {
+        LlmMessage last = invocation.messages().get(invocation.messages().size() - 1);
+        return ((ToolResult) last.toolContent()).output();
     }
 
     /** A scripted round asking for one tool call. */
