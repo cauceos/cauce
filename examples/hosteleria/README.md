@@ -8,6 +8,7 @@ datos e instrucciones; el código de Cauce no sabe qué es una tapa:
 | `agente-clientes.prompt.md` | Instrucciones del agente que atiende a los clientes |
 | `agente-dueno.prompt.md` | Instrucciones del canal del dueño (fase 1: solo recibe avisos) |
 | `herramientas.json` | Herramientas que se conceden a cada agente |
+| `respaldo.json` | Texto que recibe la persona si su mensaje no se puede procesar (ADR 0005, C3) |
 | `bar-ejemplo/ficha.json` | Ficha del bar de referencia: `PUT /v1/tenants/{id}/business-profile` |
 | `bar-ejemplo/carta.json` | Carta con los 14 alérgenos UE como atributo declarado: `PUT .../catalog` |
 | `bar-ejemplo/agenda.json` | Turnos, capacidad y días cerrados: `PUT .../agenda` |
@@ -64,6 +65,10 @@ El script imprime el id del negocio, el enlace del bot de clientes y un enlace
 Abre el enlace del dueño en el móvil del dueño y pulsa **Iniciar**. El bot responde «Listo: este
 chat recibirá los avisos de Bar La Esquina.» Desde ese momento los casos y el resumen nocturno
 llegan a ese chat. Comprobación: `GET /v1/tenants/{id}/owner` devuelve el chat vinculado.
+
+Si ese chat con el bot ya existía, Telegram envía `/start` sin el código y el bot contesta pidiendo
+el código: envíalo como mensaje (el código solo, o `/start CÓDIGO`). En el bot del dueño, un chat
+que no es el dueño vinculado nunca llega al agente.
 
 ### 3. Una conversación por tarea (desde otro móvil, en el bot de clientes)
 

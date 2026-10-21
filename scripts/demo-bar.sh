@@ -130,10 +130,16 @@ echo "   Loaded."
 
 # --- 3. agents ---------------------------------------------------------------
 
-agent_body() { # agent_body NAME PROMPT_FILE TOOLS_KEY
-    printf '{"name":"%s","system_prompt":%s,"model_provider":"%s","model_name":"%s","tools":%s}' \
+# The agents' configuration from the pack: prompt, tool grant and fallback reply (respaldo.json,
+# the text a person gets when an invocation fails for good, ADR 0005 C3).
+agent_body() { # agent_body NAME PROMPT_FILE KEY
+    printf '{"name":"%s","system_prompt":%s,"model_provider":"%s","model_name":"%s","tools":%s,"fallback_reply":%s}' \
         "$1" "$(json_string < "$PACK/$2")" "$MODEL_PROVIDER" "$MODEL_NAME" \
-        "$(json_list "$PACK/herramientas.json" "$3")"
+        "$(json_list "$PACK/herramientas.json" "$3")" "$(json_list "$PACK/respaldo.json" "$3")"
+}
+agent_patch() { # agent_patch PROMPT_FILE KEY
+    printf '{"system_prompt":%s,"fallback_reply":%s}' \
+        "$(json_string < "$PACK/$1")" "$(json_list "$PACK/respaldo.json" "$2")"
 }
 if [ -z "${CUSTOMER_AGENT_ID:-}" ]; then
     say "Creating the customer agent ($MODEL_PROVIDER / $MODEL_NAME)..."
@@ -144,13 +150,11 @@ if [ -z "${CUSTOMER_AGENT_ID:-}" ]; then
         "$(agent_body 'Canal del dueño' agente-dueno.prompt.md agente_dueno)" | json_get id)
     save OWNER_AGENT_ID "$OWNER_AGENT_ID"
 else
-    say "Refreshing the prompts of the existing agents..."
-    api PATCH "/v1/agents/$CUSTOMER_AGENT_ID" \
-        "{\"system_prompt\":$(json_string < "$PACK/agente-clientes.prompt.md")}" > /dev/null
+    say "Refreshing the prompts, tools and fallback replies of the existing agents..."
+    api PATCH "/v1/agents/$CUSTOMER_AGENT_ID" "$(agent_patch agente-clientes.prompt.md agente_clientes)" > /dev/null
     api PUT "/v1/agents/$CUSTOMER_AGENT_ID/tools" \
         "{\"tools\":$(json_list "$PACK/herramientas.json" agente_clientes)}" > /dev/null
-    api PATCH "/v1/agents/$OWNER_AGENT_ID" \
-        "{\"system_prompt\":$(json_string < "$PACK/agente-dueno.prompt.md")}" > /dev/null
+    api PATCH "/v1/agents/$OWNER_AGENT_ID" "$(agent_patch agente-dueno.prompt.md agente_dueno)" > /dev/null
 fi
 echo "   Customer agent: $CUSTOMER_AGENT_ID"
 echo "   Owner agent:    $OWNER_AGENT_ID"

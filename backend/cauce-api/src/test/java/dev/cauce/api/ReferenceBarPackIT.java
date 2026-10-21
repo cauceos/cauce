@@ -39,6 +39,7 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
                 .andExpect(jsonPath("$.shifts.length()").value(2));
 
         JsonNode grants = objectMapper.readTree(read("herramientas.json"));
+        JsonNode fallbacks = objectMapper.readTree(read("respaldo.json"));
         for (String agent : List.of("agente_clientes", "agente_dueno")) {
             List<String> tools = new ArrayList<>();
             grants.get(agent).forEach(tool -> tools.add(tool.asText()));
@@ -46,8 +47,10 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
             mockMvc.perform(post("/v1/tenants/" + clientId + "/agents").header(HttpHeaders.AUTHORIZATION, clientAuth)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(Map.of("name", agent, "system_prompt", prompt,
-                                    "model_provider", "anthropic", "model_name", "claude-sonnet-4-7", "tools", tools))))
-                    .andExpect(status().isCreated());
+                                    "model_provider", "anthropic", "model_name", "claude-sonnet-4-7", "tools", tools,
+                                    "fallback_reply", fallbacks.get(agent).asText()))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.fallback_reply").value(fallbacks.get(agent).asText()));
         }
         assertThat(grants.get("agente_clientes")).hasSize(11);
     }
