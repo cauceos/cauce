@@ -1,0 +1,12 @@
+{
+  "unit": "comensales",
+  "max_party_size": 8,
+  "hold_minutes": 10,
+  "horizon_days": 60,
+  "require_phone": true,
+  "shifts": [
+    {"id": "comida", "days": ["tue", "wed", "thu", "fri", "sat", "sun"], "start": "13:00", "end": "15:30", "capacity": 40},
+    {"id": "cena", "days": ["tue", "wed", "thu", "fri", "sat"], "start": "20:30", "end": "23:00", "capacity": 50}
+  ],
+  "closed_dates": ["2026-12-24", "2026-12-25", "2027-01-01"]
+}

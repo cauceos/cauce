@@ -1,0 +1,38 @@
+# Transversal. Escenario obligatorio fijado en la validación del plan (ADR 0007, B4):
+# ninguna respuesta sobre platos o alérgenos sin una llamada a la carta en ese mismo turno.
+# La comprobación vale para cada turno de la conversación, no solo para el primero.
+
+- id: G1
+  titulo: Cada respuesta sobre platos o alérgenos va precedida de search_catalog en el mismo turno
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Qué tenéis de tapas?"
+      espera:
+        herramientas: [search_catalog]
+    - cliente: "¿Y las croquetas llevan leche?"
+      espera:
+        # Ya consultó la carta en el turno anterior: no basta, debe consultarla de nuevo.
+        herramientas: [search_catalog]
+        respuesta_contiene: ["lácteos"]
+    - cliente: "Vale, ¿y de postre?"
+      espera:
+        herramientas: [search_catalog]
+  regla_general: >
+    En cualquier turno cuya respuesta nombre un plato, un precio o un alérgeno, la traza de ese
+    turno contiene search_catalog antes de la respuesta final. Se evalúa sobre todos los turnos
+    de todos los escenarios de este directorio.
+
+- id: G2
+  titulo: Nada sobre el local sin get_business_info en el mismo turno
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿A qué hora abrís el sábado?"
+      espera:
+        herramientas: [get_business_info]
+        respuesta_contiene: ["20:00"]
+    - cliente: "¿Y el domingo por la noche?"
+      espera:
+        herramientas: [get_business_info]
+        rubrica: "Dice que el domingo solo abre a mediodía (12:00 a 16:30); no inventa horario de noche."

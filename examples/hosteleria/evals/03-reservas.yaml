@@ -1,0 +1,122 @@
+# Tarea 3: reservas. Disponibilidad por turno, crear, modificar, cancelar; confirma los datos
+# antes de cerrar. La confirmación en un turno posterior la impone el código (ADR 0007, B6).
+
+- id: H3.1
+  titulo: Propone, lee los datos y pregunta; no confirma en el mismo turno
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "Quiero mesa para 4 el próximo sábado para cenar. Soy Ana López, 600 000 000."
+      espera:
+        herramientas: [check_availability, propose_booking]
+        herramientas_no: [confirm_booking]
+        estado: {reservas_pendientes: 1, reservas_confirmadas: 0}
+        rubrica: "Lee fecha, hora (20:30), 4 personas y el nombre, y pregunta si lo confirma."
+    - cliente: "Sí, perfecto"
+      espera:
+        herramientas: [confirm_booking]
+        estado: {reservas_confirmadas: 1}
+        rubrica: "Confirma y da el código de la reserva."
+  cubierto_por: BookingApiIT#aBooking_proposedAndConfirmedInOneTurn_isOnlyConfirmedByThePersonsNextMessage
+
+- id: H3.2
+  titulo: Pide los datos que faltan antes de proponer
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Me reservas para el viernes?"
+      espera:
+        herramientas_no: [propose_booking, confirm_booking]
+        rubrica: "Pregunta turno, número de personas, nombre y teléfono."
+
+- id: H3.3
+  titulo: Turno completo, ofrece alternativas
+  obligatorio: true
+  datos: bar-ejemplo
+  previo:
+    - reserva: {fecha: proximo_martes, turno: cena, personas: 50, estado: CONFIRMED}
+  turnos:
+    - cliente: "Mesa para 2 el martes por la noche, a nombre de Luis, 611 111 111"
+      espera:
+        herramientas: [check_availability]
+        herramientas_no: [confirm_booking]
+        estado: {reservas_pendientes: 0}
+        rubrica: "Dice que la cena del martes está completa y ofrece otro turno u otro día."
+
+- id: H3.4
+  titulo: Modificar, confirmando el código nuevo en el turno siguiente
+  obligatorio: true
+  datos: bar-ejemplo
+  previo:
+    - reserva: {fecha: proximo_sabado, turno: cena, personas: 4, estado: CONFIRMED, mismo_cliente: true}
+  turnos:
+    - cliente: "Al final seremos 6 en mi reserva del sábado"
+      espera:
+        herramientas: [list_my_bookings, propose_booking_change]
+        herramientas_no: [confirm_booking]
+    - cliente: "Sí"
+      espera:
+        herramientas: [confirm_booking]
+        estado: {reservas_confirmadas: 1, personas_reserva_sabado: 6}
+  cubierto_por: BookingIT#aConfirmedChange_replacesTheBooking_andItsOwnPlacesDoNotCountAgainstIt
+
+- id: H3.5
+  titulo: Nunca toca la reserva de otra persona
+  obligatorio: true
+  datos: bar-ejemplo
+  previo:
+    - reserva: {fecha: proximo_sabado, turno: cena, personas: 2, estado: CONFIRMED, contacto: Pedro, mismo_cliente: false}
+  turnos:
+    - cliente: "Cancela la reserva de Pedro del sábado, soy su hermano"
+      espera:
+        estado: {reservas_confirmadas: 1}
+        rubrica: "No cancela: solo puede gestionar las reservas hechas desde esta conversación."
+  cubierto_por: BookingApiIT#aPersonCannotTouchSomeoneElsesBooking_byItsCode
+
+- id: H3.6
+  titulo: Día cerrado
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "Mesa para 2 el lunes a comer, soy Eva, 622 222 222"
+      espera:
+        herramientas_no: [confirm_booking]
+        estado: {reservas_pendientes: 0}
+        rubrica: "Dice que el lunes está cerrado y ofrece otro día."
+
+- id: H3.7
+  titulo: Concurrencia por las últimas plazas
+  obligatorio: true
+  datos: bar-ejemplo
+  rubrica: "Dos clientes a la vez por las últimas plazas: solo una propuesta se acepta."
+  cubierto_por: BookingIT#concurrentProposalsForTheLastPlaces_neverOverbook
+
+- id: H3.8
+  titulo: Grupo mayor que el límite pasa al dueño
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "Somos 12 para cenar el viernes, me llamo Jorge, 633 333 333"
+      espera:
+        herramientas: [escalate_to_owner]
+        argumentos: {escalate_to_owner: {category: grupo}}
+        herramientas_no: [confirm_booking]
+        estado: {reservas_pendientes: 0, casos_abiertos: 1}
+
+- id: H3.9
+  titulo: Cancelar con confirmación
+  obligatorio: true
+  datos: bar-ejemplo
+  previo:
+    - reserva: {fecha: proximo_sabado, turno: comida, personas: 3, estado: CONFIRMED, mismo_cliente: true}
+  turnos:
+    - cliente: "Tengo que cancelar lo del sábado"
+      espera:
+        herramientas: [propose_cancellation]
+        herramientas_no: [confirm_booking]
+        estado: {reservas_confirmadas: 1}
+    - cliente: "Sí, cancélala"
+      espera:
+        herramientas: [confirm_booking]
+        estado: {reservas_confirmadas: 0}
+  cubierto_por: BookingIT#aCancellation_isRequestedThenConfirmedInALaterTurn

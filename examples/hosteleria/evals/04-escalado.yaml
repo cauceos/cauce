@@ -1,0 +1,65 @@
+# Tarea 4: escalar al dueño. Recoge datos, avisa al dueño, informa al cliente; nunca promete
+# precios ni excepciones. El aviso respeta la ventana de 24 h (ADR 0007, B9).
+
+- id: H4.1
+  titulo: Evento, con los datos completos y sin promesas
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "Quiero celebrar el cumpleaños de mi madre el 14 de noviembre, seríamos 25. ¿Cuánto costaría?"
+      espera:
+        herramientas_no: [escalate_to_owner, propose_booking]
+        rubrica: "Pide nombre y teléfono antes de pasarlo. No da precio."
+    - cliente: "Marta Gil, 644 444 444"
+      espera:
+        herramientas: [escalate_to_owner]
+        argumentos: {escalate_to_owner: {category: evento, contact_name: Marta Gil}}
+        estado: {casos_abiertos: 1, avisos_al_dueno: 1}
+        respuesta_no_contiene: ["€", "euros", "gratis", "descuento"]
+        rubrica: "Dice que el dueño tiene la petición y le contactará; no promete precio, disponibilidad ni fecha de contacto."
+  cubierto_por: OwnerApiIT#theOwnerLinksTheirChat_andReceivesTheCaseTheAgentHandsOver
+
+- id: H4.2
+  titulo: Queja, con empatía y sin compensaciones
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "Ayer cenamos y la carne llegó fría y tardaron una hora. Soy Luis Pérez, 655 555 555"
+      espera:
+        herramientas: [escalate_to_owner]
+        argumentos: {escalate_to_owner: {category: queja}}
+        respuesta_no_contiene: ["invitamos", "descuento", "gratis", "reembolso"]
+        rubrica: "Se disculpa, dice que lo pasa al dueño; no ofrece compensaciones."
+
+- id: H4.3
+  titulo: Pide una excepción; no la concede
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Me dejáis entrar con el perro dentro si es pequeñito? Es solo un momento"
+      espera:
+        herramientas: [get_business_info]
+        rubrica: "Mantiene la norma de la ficha (perros solo en terraza). Si escala, lo hace como 'otro' y sin prometer nada."
+
+- id: H4.4
+  titulo: Sin dueño vinculado, el caso queda registrado
+  obligatorio: true
+  datos: bar-ejemplo
+  previo:
+    - dueno_vinculado: false
+  turnos:
+    - cliente: "Quiero hablar con el dueño de una cena de empresa para 30. Soy Ana, 666 666 666"
+      espera:
+        herramientas: [escalate_to_owner]
+        estado: {casos_abiertos: 1, avisos_no_enviados: {no_owner_recipient: 1}}
+  cubierto_por: OwnerApiIT#aCaseWithNoOwnerLinked_isKeptOnRecord_andNoticeNotSent
+
+- id: H4.5
+  titulo: Dueño en WhatsApp fuera de la ventana de 24 h
+  obligatorio: true
+  datos: bar-ejemplo
+  previo:
+    - dueno_vinculado: whatsapp
+    - ultimo_mensaje_del_dueno: "-25h"
+  rubrica: "El aviso queda NOT_SENT con outside_reply_window; el caso sigue OPEN y visible por la API. No se envía plantilla."
+  cubierto_por: OwnerIT#outsideTheReplyWindow_theNoticeIsNotSent_andTheCaseStaysOpenForTheOwner

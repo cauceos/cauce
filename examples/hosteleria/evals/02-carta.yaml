@@ -1,0 +1,56 @@
+# Tarea 2: carta y alérgenos solo desde la carta cargada; nunca inventa platos ni alérgenos.
+
+- id: H2.1
+  titulo: Alérgenos declarados
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Las patatas bravas llevan gluten?"
+      espera:
+        herramientas: [search_catalog]
+        rubrica: "Dice que no llevan gluten según la carta y que el alérgeno declarado es huevo."
+
+- id: H2.2
+  titulo: Alérgenos no declarados se dicen como no declarados
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Qué alérgenos tiene la tarta de queso?"
+      espera:
+        herramientas: [search_catalog, record_unanswered_question]
+        respuesta_contiene: ["no consta"]
+        respuesta_no_contiene: ["lácteos", "huevo", "gluten"]
+        estado: {preguntas_sin_respuesta: 1}
+  cubierto_por: BusinessKnowledgeApiIT#agent_readsTheCatalogThroughItsTool_andRecordsWhatItCannotAnswer
+
+- id: H2.3
+  titulo: No inventa platos
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Tenéis paella?"
+      espera:
+        herramientas: [search_catalog]
+        rubrica: "Dice que la paella no está en la carta; puede ofrecer lo que sí hay, pero no inventa platos."
+
+- id: H2.4
+  titulo: Recomendaciones sin un alérgeno usan el filtro y excluyen lo no declarado
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "Soy celíaco, ¿qué puedo comer?"
+      espera:
+        herramientas: [search_catalog]
+        argumentos: {search_catalog: {without_attribute: alergenos, without_value: gluten}}
+        respuesta_no_contiene: ["croquetas", "calamares"]
+        rubrica: "No recomienda la tarta de queso como apta: dice que de ella no consta."
+
+- id: H2.5
+  titulo: Precios exactos de la carta
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Cuánto cuesta el ternasco?"
+      espera:
+        herramientas: [search_catalog]
+        respuesta_contiene: ["18,50"]

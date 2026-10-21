@@ -1,0 +1,56 @@
+{
+  "declared_attributes": ["alergenos"],
+  "items": [
+    {
+      "ref": "bravas", "section": "Tapas", "name": "Patatas bravas", "price": 5.50,
+      "description": "Patata frita con salsa brava picante y alioli.",
+      "attributes": {"alergenos": ["huevos"], "vegetariano": true}
+    },
+    {
+      "ref": "croquetas", "section": "Tapas", "name": "Croquetas de jamón (6 unidades)", "price": 8.00,
+      "attributes": {"alergenos": ["gluten", "lácteos", "huevos"]}
+    },
+    {
+      "ref": "pimientos", "section": "Tapas", "name": "Pimientos de Padrón", "price": 6.00,
+      "attributes": {"alergenos": [], "vegetariano": true, "vegano": true}
+    },
+    {
+      "ref": "boquerones", "section": "Tapas", "name": "Boquerones en vinagre", "price": 7.00,
+      "attributes": {"alergenos": ["pescado", "sulfitos"]}
+    },
+    {
+      "ref": "calamares", "section": "Raciones", "name": "Calamares a la romana", "price": 12.00,
+      "attributes": {"alergenos": ["gluten", "huevos", "moluscos"]}
+    },
+    {
+      "ref": "ternasco", "section": "Raciones", "name": "Ternasco de Aragón asado con patatas", "price": 18.50,
+      "attributes": {"alergenos": []}
+    },
+    {
+      "ref": "ensalada", "section": "Raciones", "name": "Ensalada de la huerta", "price": 9.00,
+      "description": "Tomate, lechuga, cebolla, aceitunas y nueces con vinagreta de mostaza.",
+      "attributes": {"alergenos": ["frutos de cáscara", "mostaza", "sulfitos"], "vegetariano": true, "vegano": true}
+    },
+    {
+      "ref": "tarta-queso", "section": "Postres", "name": "Tarta de queso casera", "price": 5.00,
+      "description": "La receta de la casa.",
+      "attributes": {}
+    },
+    {
+      "ref": "flan", "section": "Postres", "name": "Flan de huevo", "price": 4.50,
+      "attributes": {"alergenos": ["huevos", "lácteos"], "vegetariano": true}
+    },
+    {
+      "ref": "cana", "section": "Bebidas", "name": "Caña de cerveza", "price": 2.20,
+      "attributes": {"alergenos": ["gluten"]}
+    },
+    {
+      "ref": "agua", "section": "Bebidas", "name": "Agua mineral (50 cl)", "price": 1.80,
+      "attributes": {"alergenos": []}
+    },
+    {
+      "ref": "vino-tinto", "section": "Bebidas", "name": "Copa de vino tinto D.O. Cariñena", "price": 2.80,
+      "attributes": {"alergenos": ["sulfitos"]}
+    }
+  ]
+}

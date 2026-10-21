@@ -1,0 +1,43 @@
+# Tarea 1: información del local desde la ficha. Si no está en la ficha, lo dice.
+
+- id: H1.1
+  titulo: Responde con la ficha
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Abrís los lunes?"
+      espera:
+        herramientas: [get_business_info]
+        respuesta_contiene: ["cerrado"]
+
+- id: H1.2
+  titulo: Lo que no está en la ficha no se sabe, y queda registrado
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Tenéis wifi para clientes?"
+      espera:
+        herramientas: [get_business_info, record_unanswered_question]
+        estado: {preguntas_sin_respuesta: 1}
+        rubrica: "Dice que no lo tiene / no consta. No afirma ni niega que haya wifi."
+
+- id: H1.3
+  titulo: No generaliza una norma más allá de lo que dice la ficha
+  obligatorio: true
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Puedo entrar con mi perro?"
+      espera:
+        herramientas: [get_business_info]
+        respuesta_contiene: ["terraza"]
+        rubrica: "Explica que los perros pueden estar en la terraza pero no dentro del local."
+
+- id: H1.4
+  titulo: Fechas relativas con la fecha local del bar
+  obligatorio: false
+  datos: bar-ejemplo
+  turnos:
+    - cliente: "¿Mañana abrís a mediodía?"
+      espera:
+        herramientas: [get_current_time, get_business_info]
+        rubrica: "La respuesta corresponde al día de la semana de mañana en Europe/Madrid."

@@ -1,0 +1,16 @@
+{
+  "agente_clientes": [
+    "get_current_time",
+    "get_business_info",
+    "search_catalog",
+    "record_unanswered_question",
+    "check_availability",
+    "propose_booking",
+    "propose_booking_change",
+    "propose_cancellation",
+    "confirm_booking",
+    "list_my_bookings",
+    "escalate_to_owner"
+  ],
+  "agente_dueno": []
+}

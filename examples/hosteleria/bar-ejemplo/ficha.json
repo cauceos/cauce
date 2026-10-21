@@ -1,0 +1,21 @@
+{
+  "name": "Bar La Esquina",
+  "time_zone": "Europe/Madrid",
+  "locale": "es",
+  "facts": {
+    "direccion": "Calle Mayor 12, 50001 Zaragoza (esquina con la plaza del Pilar)",
+    "telefono": "+34 976 000 000",
+    "horario": "Lunes cerrado. Martes a jueves de 12:00 a 16:00 y de 20:00 a 23:30. Viernes y sábado de 12:00 a 16:30 y de 20:00 a 00:30. Domingo de 12:00 a 16:30.",
+    "cocina": "La cocina sirve comidas de 13:00 a 15:30 y cenas de 20:30 a 23:00.",
+    "terraza": "Sí, 6 mesas en la plaza. La terraza no se reserva: por orden de llegada.",
+    "mascotas": "Los perros son bienvenidos en la terraza; dentro del local no.",
+    "accesibilidad": "Entrada sin escalones y baño adaptado.",
+    "pago": "Efectivo y tarjeta. No aceptamos cheques restaurante.",
+    "aparcamiento": "No tenemos aparcamiento propio. Parking público de la plaza del Pilar a 200 metros.",
+    "grupos": "Reservamos por aquí hasta 8 personas. Los grupos mayores y las celebraciones los gestiona el dueño.",
+    "menu_del_dia": "De martes a viernes al mediodía, 14,50 € con primero, segundo, postre o café, pan y bebida."
+  },
+  "handoff_categories": ["grupo", "evento", "queja", "otro"],
+  "daily_digest_time": "22:30",
+  "daily_digest_skip_when_empty": false
+}
