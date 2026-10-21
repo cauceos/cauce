@@ -1,38 +1,97 @@
 package dev.cauce.api;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import dev.cauce.api.agent.CreateAgentRequest;
 import dev.cauce.api.channel.CreateChannelConfigRequest;
 import dev.cauce.api.channel.RegisterWhatsAppAppRequest;
 import dev.cauce.api.support.AbstractApiIntegrationTest;
+import dev.cauce.api.support.FakeLlmProvider;
 import dev.cauce.api.tenant.CreateClientRequest;
 import dev.cauce.api.tenant.CreatePartnerRequest;
+import dev.cauce.channels.whatsapp.WhatsAppProperties;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.HexFormat;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * End-to-end tests of the WhatsApp channel's REST and webhook surface (ADR 0006) against a real
- * datasource, with API-key authentication and hierarchical RLS over HTTP.
+ * End-to-end tests of the WhatsApp channel (ADR 0006) against a real datasource: the REST surface
+ * with API-key auth and hierarchical RLS, and the webhook — Meta's subscription check, a signed
+ * text message in, the agent's reply out to the BSUID through a WireMock stand-in for the Graph
+ * API, and the text-only answer to a message of another type. The worker runs with a one-hour poll
+ * (mirror of {@code TelegramRoundTripIT}); the only processing is the manual {@code pollAndProcess()}.
  */
+@TestPropertySource(properties = {
+        "cauce.orchestration.worker.enabled=true",
+        "cauce.orchestration.worker.poll-interval-ms=3600000",
+        "cauce.orchestration.worker.reaper.enabled=false",
+})
+@Import(MessagingApiIT.FakeLlmConfig.class)
 class WhatsAppApiIT extends AbstractApiIntegrationTest {
 
     static final String APP_SECRET = "meta-app-secret-for-tests";
+    private static final String BSUID = "ES.13491208655302741918";
+    private static final String SEND_PATH = "/v24.0/1111111111/messages";
+
+    /** Class-managed (not @WireMockTest) so its URL can feed @DynamicPropertySource. */
+    private static final WireMockServer GRAPH = new WireMockServer(WireMockConfiguration.options().dynamicPort());
+
+    static {
+        GRAPH.start();
+    }
+
+    @DynamicPropertySource
+    static void graphBaseUrl(DynamicPropertyRegistry registry) {
+        registry.add("cauce.channels.whatsapp.base-url", GRAPH::baseUrl);
+    }
+
+    @AfterAll
+    static void stopGraphStub() {
+        GRAPH.stop();
+    }
+
+    @Autowired
+    private PendingInvocationWorker worker;
+
+    @Autowired
+    private FakeLlmProvider fakeLlmProvider;
 
     @Autowired
     private MockMvc mockMvc;
@@ -67,6 +126,84 @@ class WhatsAppApiIT extends AbstractApiIntegrationTest {
                         new CreateClientRequest("Client", partnerId)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
         clientAuth = bearerFor(clientId);
+        GRAPH.resetAll();
+        GRAPH.stubFor(WireMock.post(SEND_PATH).willReturn(okJson("{\"messages\":[{\"id\":\"wamid.OUT\"}]}")));
+        fakeLlmProvider.reset();
+    }
+
+    // --- the webhook, end to end ---
+
+    @Test
+    void subscriptionCheck_echoesTheChallenge_onlyForTheAppsVerifyToken() throws Exception {
+        JsonNode app = registerAppJson();
+        String appId = app.get("id").asText();
+        String verifyToken = app.get("verify_token").asText();
+
+        mockMvc.perform(get("/webhooks/whatsapp/" + appId).param("hub.mode", "subscribe")
+                        .param("hub.verify_token", verifyToken).param("hub.challenge", "1158201444"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("1158201444"));
+        mockMvc.perform(get("/webhooks/whatsapp/" + appId).param("hub.mode", "subscribe")
+                        .param("hub.verify_token", "wrong").param("hub.challenge", "1158201444"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void aSignedTextMessage_opensAThreadByBsuid_andTheReplyGoesBackToTheBsuid() throws Exception {
+        String appId = registerApp(partnerAuth, partnerId);
+        UUID agentId = createAgent();
+        UUID numberId = bindNumber(appId, agentId);
+
+        postSigned(appId, textMessage("wamid.IN1", "Hola, quiero una cita")).andExpect(status().isOk());
+        postSigned(appId, textMessage("wamid.IN1", "Hola, quiero una cita")).andExpect(status().isOk()); // redelivery
+
+        UUID conversationId = jdbc().queryForObject("SELECT c.id FROM conversations c JOIN identities i "
+                + "ON i.id = c.identity_id WHERE i.value = ? AND i.kind = 'PROVIDER_USER_ID'", UUID.class, BSUID);
+        assertThat(jdbc().queryForObject("SELECT channel_config_id FROM conversations WHERE id = ?", UUID.class,
+                conversationId)).isEqualTo(numberId);
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM messages WHERE conversation_id = ? AND role = 'USER'",
+                Integer.class, conversationId)).isEqualTo(1);
+
+        worker.pollAndProcess();
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> GRAPH.verify(1, postRequestedFor(urlEqualTo(SEND_PATH))
+                .withHeader("Authorization", equalTo("Bearer EAAG-access-token"))
+                .withRequestBody(matchingJsonPath("$.recipient", equalTo(BSUID)))
+                .withRequestBody(matchingJsonPath("$.text.body", equalTo(FakeLlmProvider.REPLY)))));
+        // No phone number is stored anywhere (W1).
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM identities WHERE value LIKE '%600111222%'",
+                Integer.class)).isZero();
+    }
+
+    @Test
+    void aBadSignature_is401_andNothingIsIngested() throws Exception {
+        String appId = registerApp(partnerAuth, partnerId);
+        bindNumber(appId, createAgent());
+        byte[] body = textMessage("wamid.IN2", "Hola").getBytes(StandardCharsets.UTF_8);
+
+        mockMvc.perform(post("/webhooks/whatsapp/" + appId).contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Hub-Signature-256", sign(body, "not-the-app-secret")).content(body))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM conversations", Integer.class)).isZero();
+    }
+
+    @Test
+    void anImage_isAcknowledged_audited_andAnsweredWithTheTextOnlyReply() throws Exception {
+        String appId = registerApp(partnerAuth, partnerId);
+        bindNumber(appId, createAgent());
+
+        postSigned(appId, envelope("""
+                {"from_user_id":"%s","id":"wamid.IMG","type":"image","image":{"id":"media-1"}}""".formatted(BSUID)))
+                .andExpect(status().isOk());
+
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM conversations", Integer.class)).isZero();
+        assertThat(jdbc().queryForObject("SELECT count(*) FROM audit_outbox WHERE event_type = "
+                + "'conduct.message.unsupported'", Integer.class)).isEqualTo(1);
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> GRAPH.verify(1, postRequestedFor(urlEqualTo(SEND_PATH))
+                .withRequestBody(matchingJsonPath("$.recipient", equalTo(BSUID)))
+                .withRequestBody(matchingJsonPath("$.text.body",
+                        equalTo(new WhatsAppProperties().getUnsupportedMessageReply())))));
     }
 
     @Test
@@ -131,6 +268,49 @@ class WhatsAppApiIT extends AbstractApiIntegrationTest {
     }
 
     // --- helpers ---
+
+    private JsonNode registerAppJson() throws Exception {
+        return objectMapper.readTree(mockMvc.perform(postAs(partnerAuth, "/v1/tenants/" + partnerId + "/whatsapp-apps",
+                        new RegisterWhatsAppAppRequest("1234567890", APP_SECRET)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+    }
+
+    private UUID bindNumber(String appId, UUID agentId) throws Exception {
+        return idFrom(mockMvc.perform(postAs(partnerAuth, "/v1/agents/" + agentId + "/channels",
+                        new CreateChannelConfigRequest("whatsapp", "EAAG-access-token", UUID.fromString(appId),
+                                "1111111111")))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+    }
+
+    private ResultActions postSigned(String appId, String body) throws Exception {
+        byte[] raw = body.getBytes(StandardCharsets.UTF_8);
+        return mockMvc.perform(post("/webhooks/whatsapp/" + appId).contentType(MediaType.APPLICATION_JSON)
+                .header("X-Hub-Signature-256", sign(raw, APP_SECRET)).content(raw));
+    }
+
+    private static String textMessage(String wamid, String text) {
+        return envelope("""
+                {"from":"34600111222","from_user_id":"%s","id":"%s","timestamp":"1761048000",
+                 "type":"text","text":{"body":"%s"}}""".formatted(BSUID, wamid, text));
+    }
+
+    private static String envelope(String message) {
+        return """
+                {"object":"whatsapp_business_account","entry":[{"id":"waba-1","changes":[{"field":"messages",
+                 "value":{"messaging_product":"whatsapp","metadata":{"display_phone_number":"34911111111",
+                 "phone_number_id":"1111111111"},"messages":[%s]}}]}]}""".formatted(message);
+    }
+
+    /** Meta's X-Hub-Signature-256, computed independently of the production class. */
+    private static String sign(byte[] body, String secret) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        return "sha256=" + HexFormat.of().formatHex(mac.doFinal(body));
+    }
+
+    private JdbcTemplate jdbc() {
+        return new JdbcTemplate(adminDataSource);
+    }
 
     UUID createAgent() throws Exception {
         return idFrom(mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",

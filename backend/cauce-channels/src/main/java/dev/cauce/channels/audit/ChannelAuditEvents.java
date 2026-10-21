@@ -22,6 +22,7 @@ public final class ChannelAuditEvents {
 
     public static final String CHANNEL_CONFIGURED = "admin.channel.configured";
     public static final String WHATSAPP_APP_REGISTERED = "admin.whatsapp_app.registered";
+    public static final String UNSUPPORTED_MESSAGE = "conduct.message.unsupported";
 
     private ChannelAuditEvents() {
     }
@@ -50,5 +51,21 @@ public final class ChannelAuditEvents {
                 "tenant_id", app.tenantId().toString(),
                 "meta_app_id", app.metaAppId(),
                 "actor_tenant_id", actorTenantId.toString()));
+    }
+
+    /**
+     * An inbound message of a type Cauce does not read yet arrived and was answered with the
+     * fixed text-only reply (ADR 0006, W5). Recorded in the number's tenant chain: the message
+     * type and ids only — never its content, its media or the sender's identifier.
+     */
+    public static AuditEvent unsupportedMessage(ChannelConfig number, String messageType, String providerMessageId) {
+        Objects.requireNonNull(number, "number must not be null");
+        Objects.requireNonNull(messageType, "messageType must not be null");
+        return new AuditEvent(number.tenantId(), UNSUPPORTED_MESSAGE, Map.of(
+                "channel_config_id", number.id().toString(),
+                "agent_id", number.agentId().toString(),
+                "channel_type", number.channelType(),
+                "message_type", messageType,
+                "provider_message_id", providerMessageId == null ? "" : providerMessageId));
     }
 }

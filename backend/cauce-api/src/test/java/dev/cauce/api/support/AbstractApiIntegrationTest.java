@@ -46,7 +46,11 @@ public abstract class AbstractApiIntegrationTest {
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>(DockerImageName.parse("pgvector/pgvector:pg16")
                     .asCompatibleSubstituteFor("postgres"))
-                    .withInitScript("testcontainers/cauce-app-role.sql");
+                    .withInitScript("testcontainers/cauce-app-role.sql")
+                    // One container serves every API IT, and Spring keeps each distinct test
+                    // context cached with its own pools (runtime + admin): the default 100
+                    // connections run out once a few contexts coexist ("too many clients").
+                    .withCommand("postgres", "-c", "max_connections=400");
 
     static {
         POSTGRES.start();
