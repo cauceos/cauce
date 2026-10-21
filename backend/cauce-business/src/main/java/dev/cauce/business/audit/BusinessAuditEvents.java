@@ -3,6 +3,7 @@ package dev.cauce.business.audit;
 import dev.cauce.core.audit.AuditContentHash;
 import dev.cauce.core.audit.AuditEvent;
 import dev.cauce.core.audit.CanonicalJson;
+import dev.cauce.core.business.booking.Agenda;
 import dev.cauce.core.business.catalog.Catalog;
 import dev.cauce.core.business.profile.BusinessProfile;
 import java.util.Map;
@@ -23,6 +24,7 @@ public final class BusinessAuditEvents {
 
     public static final String PROFILE_UPDATED = "admin.business_profile.updated";
     public static final String CATALOG_UPDATED = "admin.catalog.updated";
+    public static final String AGENDA_UPDATED = "admin.agenda.updated";
 
     private BusinessAuditEvents() {
     }
@@ -50,6 +52,18 @@ public final class BusinessAuditEvents {
                 "content_hash", AuditContentHash.of(catalog.tenantId(), CanonicalJson.serialize(document)),
                 "item_count", catalog.items().size(),
                 "declared_attributes", catalog.declaredAttributes(),
+                "actor_tenant_id", actorTenantId.toString()));
+    }
+
+    /** The agenda was loaded or replaced: its settings by hash, the shift count. */
+    public static AuditEvent agendaUpdated(Agenda agenda, Map<String, Object> document, UUID actorTenantId) {
+        Objects.requireNonNull(agenda, "agenda must not be null");
+        Objects.requireNonNull(actorTenantId, "actorTenantId must not be null");
+        return new AuditEvent(agenda.tenantId(), AGENDA_UPDATED, Map.of(
+                "agenda_id", agenda.id().toString(),
+                "tenant_id", agenda.tenantId().toString(),
+                "content_hash", AuditContentHash.of(agenda.tenantId(), CanonicalJson.serialize(document)),
+                "shift_count", agenda.shifts().size(),
                 "actor_tenant_id", actorTenantId.toString()));
     }
 }
