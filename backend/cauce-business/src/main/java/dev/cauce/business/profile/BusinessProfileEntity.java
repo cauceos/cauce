@@ -36,6 +36,10 @@ public class BusinessProfileEntity {
     @Column(name = "facts", nullable = false)
     private List<Map<String, String>> facts;
 
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "handoff_categories", nullable = false, columnDefinition = "text[]")
+    private String[] handoffCategories = new String[0];
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -47,13 +51,15 @@ public class BusinessProfileEntity {
     }
 
     public BusinessProfileEntity(UUID id, UUID tenantId, String name, String timeZone, String locale,
-                                 List<Map<String, String>> facts, Instant createdAt, Instant updatedAt) {
+                                 List<Map<String, String>> facts, String[] handoffCategories, Instant createdAt,
+                                 Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
         this.timeZone = timeZone;
         this.locale = locale;
         this.facts = facts;
+        this.handoffCategories = handoffCategories;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -80,6 +86,10 @@ public class BusinessProfileEntity {
 
     public List<Map<String, String>> getFacts() {
         return facts;
+    }
+
+    public String[] getHandoffCategories() {
+        return handoffCategories;
     }
 
     public Instant getCreatedAt() {

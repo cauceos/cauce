@@ -15,7 +15,8 @@ public class BusinessProfileMapper {
                 .map(fact -> Map.of("key", fact.key(), "value", fact.value()))
                 .toList();
         return new BusinessProfileEntity(profile.id(), profile.tenantId(), profile.name(),
-                profile.timeZone().getId(), profile.locale(), facts, profile.createdAt(), profile.updatedAt());
+                profile.timeZone().getId(), profile.locale(), facts, profile.handoffCategories().toArray(String[]::new),
+                profile.createdAt(), profile.updatedAt());
     }
 
     public BusinessProfile toDomain(BusinessProfileEntity entity) {
@@ -23,6 +24,7 @@ public class BusinessProfileMapper {
                 .map(fact -> new Fact(fact.get("key"), fact.get("value")))
                 .toList();
         return BusinessProfile.rehydrate(entity.getId(), entity.getTenantId(), entity.getName(),
-                entity.getTimeZone(), entity.getLocale(), facts, entity.getCreatedAt(), entity.getUpdatedAt());
+                entity.getTimeZone(), entity.getLocale(), facts, List.of(entity.getHandoffCategories()),
+                entity.getCreatedAt(), entity.getUpdatedAt());
     }
 }

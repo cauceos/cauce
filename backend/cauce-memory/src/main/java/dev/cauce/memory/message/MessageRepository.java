@@ -1,11 +1,14 @@
 package dev.cauce.memory.message;
 
 import dev.cauce.core.message.MessageRole;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Spring Data repository for {@link MessageEntity}. Derived queries only for now.
@@ -52,4 +55,15 @@ public interface MessageRepository extends JpaRepository<MessageEntity, UUID> {
     /** The newest message of one role in a conversation (e.g. the interlocutor's last USER message). */
     Optional<MessageEntity> findFirstByConversationIdAndRoleOrderByCreatedAtDesc(UUID conversationId,
                                                                                 MessageRole role);
+
+    /**
+     * When {@code identityId} last wrote through channel instance {@code channelConfigId}, across
+     * its conversations there: what a channel with a reply window measures a proactive message
+     * against (ADR 0007, B9). Empty when it never wrote there.
+     */
+    @Query("SELECT max(m.createdAt) FROM MessageEntity m WHERE m.role = dev.cauce.core.message.MessageRole.USER "
+            + "AND m.conversationId IN (SELECT c.id FROM ConversationEntity c "
+            + "WHERE c.identityId = :identityId AND c.channelConfigId = :channelConfigId)")
+    Optional<Instant> findLastUserMessageAt(@Param("identityId") UUID identityId,
+                                            @Param("channelConfigId") UUID channelConfigId);
 }

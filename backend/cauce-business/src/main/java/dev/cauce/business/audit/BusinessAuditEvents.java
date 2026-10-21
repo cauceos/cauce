@@ -5,7 +5,9 @@ import dev.cauce.core.audit.AuditEvent;
 import dev.cauce.core.audit.CanonicalJson;
 import dev.cauce.core.business.booking.Agenda;
 import dev.cauce.core.business.catalog.Catalog;
+import dev.cauce.core.business.handoff.Handoff;
 import dev.cauce.core.business.profile.BusinessProfile;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -25,6 +27,10 @@ public final class BusinessAuditEvents {
     public static final String PROFILE_UPDATED = "admin.business_profile.updated";
     public static final String CATALOG_UPDATED = "admin.catalog.updated";
     public static final String AGENDA_UPDATED = "admin.agenda.updated";
+    public static final String OWNER_LINKED = "admin.owner.linked";
+    /** The hook reserved since the audit unit, emitted now that handoffs have a caller (ADR 0007, B7). */
+    public static final String HUMAN_ESCALATION = "conduct.human.escalation";
+    public static final String OWNER_NOTIFIED = "conduct.owner.notified";
 
     private BusinessAuditEvents() {
     }
@@ -65,5 +71,41 @@ public final class BusinessAuditEvents {
                 "content_hash", AuditContentHash.of(agenda.tenantId(), CanonicalJson.serialize(document)),
                 "shift_count", agenda.shifts().size(),
                 "actor_tenant_id", actorTenantId.toString()));
+    }
+
+    /**
+     * An agent handed a case to the owner: ids and the category only — never the summary or the
+     * person's contact data. The actor is the agent's own tenant: the agent acted, not an admin.
+     */
+    public static AuditEvent humanEscalation(Handoff handoff, boolean ownerNotified) {
+        Objects.requireNonNull(handoff, "handoff must not be null");
+        return new AuditEvent(handoff.tenantId(), HUMAN_ESCALATION, Map.of(
+                "handoff_id", handoff.id().toString(),
+                "tenant_id", handoff.tenantId().toString(),
+                "agent_id", handoff.agentId().toString(),
+                "conversation_id", handoff.conversationId().toString(),
+                "category", handoff.category(),
+                "owner_notified", ownerNotified));
+    }
+
+    /** An owner linked their chat on the owner bot to the business: ids only. */
+    public static AuditEvent ownerLinked(UUID tenantId, UUID ownerRecipientId, UUID channelConfigId, UUID identityId) {
+        return new AuditEvent(tenantId, OWNER_LINKED, Map.of(
+                "owner_recipient_id", ownerRecipientId.toString(),
+                "tenant_id", tenantId.toString(),
+                "channel_config_id", channelConfigId.toString(),
+                "identity_id", identityId.toString()));
+    }
+
+    /** A notice to the owner reached a final state: ids, kind, status and the reason — never its text. */
+    public static AuditEvent ownerNotified(UUID tenantId, UUID notificationId, String kind, String status,
+                                           String reason) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("notification_id", notificationId.toString());
+        payload.put("tenant_id", tenantId.toString());
+        payload.put("kind", kind);
+        payload.put("status", status);
+        payload.put("reason", reason == null ? "" : reason);
+        return new AuditEvent(tenantId, OWNER_NOTIFIED, payload);
     }
 }

@@ -46,11 +46,22 @@ public class BusinessProfileService implements BusinessProfileSource {
      */
     @Transactional
     public BusinessProfile putProfile(UUID tenantId, String name, String timeZone, String locale, List<Fact> facts) {
+        return putProfile(tenantId, name, timeZone, locale, facts, List.of());
+    }
+
+    /**
+     * {@link #putProfile(UUID, String, String, String, List)} with the categories the business's
+     * agents may hand cases over under (ADR 0007, B7); empty means any.
+     */
+    @Transactional
+    public BusinessProfile putProfile(UUID tenantId, String name, String timeZone, String locale, List<Fact> facts,
+                                      List<String> handoffCategories) {
         businessTenants.requireBusiness(tenantId);
         BusinessProfile profile = repository.findByTenantId(tenantId)
                 .map(mapper::toDomain)
                 .map(existing -> existing.replacedBy(name, timeZone, locale, facts))
-                .orElseGet(() -> BusinessProfile.create(tenantId, name, timeZone, locale, facts));
+                .orElseGet(() -> BusinessProfile.create(tenantId, name, timeZone, locale, facts))
+                .withHandoffCategories(handoffCategories);
         BusinessProfile saved = mapper.toDomain(repository.save(mapper.toEntity(profile)));
         auditRecorder.record(BusinessAuditEvents.profileUpdated(saved, document(saved),
                 TenantContext.getCurrentTenantId().orElseThrow()));
@@ -71,6 +82,7 @@ public class BusinessProfileService implements BusinessProfileSource {
                 "time_zone", profile.timeZone().getId(),
                 "locale", profile.locale(),
                 "facts", profile.facts().stream().map(fact -> Map.of("key", fact.key(), "value", fact.value()))
-                        .toList());
+                        .toList(),
+                "handoff_categories", profile.handoffCategories());
     }
 }

@@ -82,9 +82,8 @@ class ConductAuditEventsTest {
         // to a live chain later means re-doing it) and nothing in production emits them —
         // the conduct IT asserts the chain contains only emitted types.
         assertThat(java.util.Set.of(ConductAuditEvents.EXTERNAL_ACTION,
-                ConductAuditEvents.DATA_ACCESS, ConductAuditEvents.HUMAN_ESCALATION,
-                ConductAuditEvents.REPLY_DELIVERED))
-                .hasSize(4)
+                ConductAuditEvents.DATA_ACCESS, ConductAuditEvents.REPLY_DELIVERED))
+                .hasSize(3)
                 .allSatisfy(type -> assertThat(type).startsWith("conduct."))
                 .doesNotContain(ConductAuditEvents.MESSAGE_RECEIVED,
                         ConductAuditEvents.AGENT_RESPONDED,

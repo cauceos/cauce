@@ -34,9 +34,10 @@ import java.util.UUID;
  * {@link #EXTERNAL_ACTION} (no built-in tool has side effects — the only tool is the
  * read-only clock), {@link #DATA_ACCESS} (no tool reaches external data; context assembly
  * is mechanics and belongs to the observational event stream, not the chain),
- * {@link #HUMAN_ESCALATION} ({@code escalateConversation} has no production caller), and
- * {@link #REPLY_DELIVERED} (outbound delivery is best-effort fire-and-forget today; the
- * hook activates when transactional delivery lands).
+ * and {@link #REPLY_DELIVERED} (outbound delivery is best-effort fire-and-forget today; the
+ * hook activates when transactional delivery lands). {@code conduct.human.escalation}, reserved
+ * here first, is emitted by cauce-business since handoffs exist (ADR 0007, B7); its constant
+ * lives with that emitter.
  */
 public final class ConductAuditEvents {
 
@@ -50,7 +51,6 @@ public final class ConductAuditEvents {
     // Reserved hook types — defined, never emitted until a transactional trigger exists.
     public static final String EXTERNAL_ACTION = "conduct.external.action";
     public static final String DATA_ACCESS = "conduct.data.access";
-    public static final String HUMAN_ESCALATION = "conduct.human.escalation";
     public static final String REPLY_DELIVERED = "conduct.reply.delivered";
 
     private ConductAuditEvents() {
