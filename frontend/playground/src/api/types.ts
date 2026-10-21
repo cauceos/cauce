@@ -49,6 +49,7 @@ export type FailureReason =
   | 'PROVIDER_ERROR'
   | 'PROVIDER_UNAVAILABLE'
   | 'AGENT_LOOP_LIMIT'
+  | 'EMPTY_REPLY'
   | 'INTERNAL_ERROR'
   | 'TIMEOUT'
 

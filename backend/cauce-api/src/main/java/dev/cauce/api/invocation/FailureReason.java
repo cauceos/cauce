@@ -16,6 +16,8 @@ public enum FailureReason {
     PROVIDER_UNAVAILABLE,
     /** The agentic loop hit its hard tool-iteration cap. */
     AGENT_LOOP_LIMIT,
+    /** The model ended its turn without any text (ADR 0005, C1). */
+    EMPTY_REPLY,
     /** A non-provider setup error (missing conversation/agent, misconfiguration, ...). */
     INTERNAL_ERROR,
     /** Processing stalled and the claim timed out. */
@@ -27,6 +29,7 @@ public enum FailureReason {
             case LLM_ERROR -> PROVIDER_ERROR;
             case LLM_RETRIES_EXHAUSTED -> PROVIDER_UNAVAILABLE;
             case MAX_TOOL_ITERATIONS -> AGENT_LOOP_LIMIT;
+            case EMPTY_REPLY -> EMPTY_REPLY;
             case SETUP_ERROR -> INTERNAL_ERROR;
             case REAPER_ABANDONED -> TIMEOUT;
         };
