@@ -20,10 +20,12 @@ import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolExecutionContext;
 import dev.cauce.tools.spi.Tool;
 import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,8 @@ import org.mockito.ArgumentCaptor;
 
 class BookingToolsTest {
 
+    private static final Instant NOW = Instant.parse("2026-11-01T18:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final Shift CENA = new Shift("cena", EnumSet.allOf(DayOfWeek.class), LocalTime.of(20, 30),
             LocalTime.of(23, 0), 50);
 
@@ -54,9 +58,9 @@ class BookingToolsTest {
     void proposeBooking_actsForTheContextsPerson_andTellsTheModelToAskFirst() {
         ArgumentCaptor<Booking.Requester> requester = ArgumentCaptor.forClass(Booking.Requester.class);
         when(provider.propose(requester.capture(), any())).thenAnswer(call -> Booking.propose(call.getArgument(0),
-                call.getArgument(1), Instant.now().plusSeconds(600), null));
+                call.getArgument(1), NOW.plusSeconds(600), null));
 
-        String output = run(BookingTools.proposeBooking(() -> provider), Map.of("date", "2026-11-03", "shift", "cena",
+        String output = run(BookingTools.proposeBooking(() -> provider, CLOCK), Map.of("date", "2026-11-03", "shift", "cena",
                 "party_size", "4", "contact_name", "Ana", "identity_id", UUID.randomUUID().toString()));
 
         assertThat(requester.getValue()).isEqualTo(new Booking.Requester(context.tenantId(), context.agentId(),
@@ -67,11 +71,27 @@ class BookingToolsTest {
     }
 
     @Test
+    void aHeldBooking_waitsForConfirmationOnlyUntilItsHoldEnds_onTheInjectedClock() {
+        Booking held = Booking.propose(new Booking.Requester(context.tenantId(), context.agentId(),
+                context.conversationId(), context.identityId(), context.triggerMessageId()),
+                new Booking.Details(date, "cena", 2, "Ana", null, null), NOW.plusSeconds(600), null);
+        when(provider.upcomingFor(context.tenantId(), context.identityId())).thenReturn(List.of(held));
+
+        // The clock is the database's (ADR 0008), the one the hold was stamped with: not the JVM's.
+        String open = run(BookingTools.listMyBookings(() -> provider, CLOCK), Map.of());
+        String lapsed = run(BookingTools.listMyBookings(() -> provider,
+                Clock.fixed(NOW.plusSeconds(601), ZoneOffset.UTC)), Map.of());
+
+        assertThat(open).contains("\"waiting_for\":\"confirmation\"");
+        assertThat(lapsed).doesNotContain("waiting_for");
+    }
+
+    @Test
     void aRefusal_isAnAnswerWithItsReason_notAnError() {
         when(provider.confirm(any(), eq("ABC234"))).thenThrow(new BookingRefusal(Reason.SAME_TURN, "ask first")
                 .toException());
 
-        String output = run(BookingTools.confirmBooking(() -> provider), Map.of("code", "ABC234"));
+        String output = run(BookingTools.confirmBooking(() -> provider, CLOCK), Map.of("code", "ABC234"));
 
         assertThat(output).isEqualTo("{\"message\":\"ask first\",\"ok\":false,\"reason\":\"SAME_TURN\"}");
     }
@@ -91,7 +111,7 @@ class BookingToolsTest {
     void aMalformedDate_andABlankName_areArgumentsTheModelMustFix() {
         assertThatThrownBy(() -> run(BookingTools.checkAvailability(() -> provider), Map.of("date", "martes")))
                 .isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("YYYY-MM-DD");
-        assertThatThrownBy(() -> run(BookingTools.proposeBooking(() -> provider), Map.of("date", "2026-11-03",
+        assertThatThrownBy(() -> run(BookingTools.proposeBooking(() -> provider, CLOCK), Map.of("date", "2026-11-03",
                 "shift", "cena", "party_size", 2, "contact_name", " ")))
                 .isInstanceOf(InvalidToolArgumentException.class);
     }
@@ -103,7 +123,7 @@ class BookingToolsTest {
 
         assertThat(run(BookingTools.checkAvailability(() -> empty), Map.of("date", "2026-11-03")))
                 .contains("\"available\":false");
-        assertThat(run(BookingTools.listMyBookings(() -> null), Map.of())).contains("\"available\":false");
+        assertThat(run(BookingTools.listMyBookings(() -> null, CLOCK), Map.of())).contains("\"available\":false");
     }
 
     private String run(Tool tool, Map<String, Object> input) {

@@ -29,10 +29,14 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ToolsConfiguration {
 
-    /** The built-in clock tool, driven by the system UTC clock; local time when the business has a profile. */
+    /**
+     * The built-in clock tool, driven by the application's clock — the database's (ADR 0008), so the
+     * agent's "today" is the one bookings are validated against; local time when the business has a
+     * profile.
+     */
     @Bean
-    public ClockTool clockTool(ObjectProvider<BusinessProfileSource> profiles) {
-        return new ClockTool(Clock.systemUTC(), profiles::getIfAvailable);
+    public ClockTool clockTool(ObjectProvider<BusinessProfileSource> profiles, Clock clock) {
+        return new ClockTool(clock, profiles::getIfAvailable);
     }
 
     @Bean
@@ -56,28 +60,28 @@ public class ToolsConfiguration {
     }
 
     @Bean
-    public Tool proposeBookingTool(ObjectProvider<BookingProvider> bookings) {
-        return BookingTools.proposeBooking(bookings::getIfAvailable);
+    public Tool proposeBookingTool(ObjectProvider<BookingProvider> bookings, Clock clock) {
+        return BookingTools.proposeBooking(bookings::getIfAvailable, clock);
     }
 
     @Bean
-    public Tool proposeBookingChangeTool(ObjectProvider<BookingProvider> bookings) {
-        return BookingTools.proposeBookingChange(bookings::getIfAvailable);
+    public Tool proposeBookingChangeTool(ObjectProvider<BookingProvider> bookings, Clock clock) {
+        return BookingTools.proposeBookingChange(bookings::getIfAvailable, clock);
     }
 
     @Bean
-    public Tool proposeCancellationTool(ObjectProvider<BookingProvider> bookings) {
-        return BookingTools.proposeCancellation(bookings::getIfAvailable);
+    public Tool proposeCancellationTool(ObjectProvider<BookingProvider> bookings, Clock clock) {
+        return BookingTools.proposeCancellation(bookings::getIfAvailable, clock);
     }
 
     @Bean
-    public Tool confirmBookingTool(ObjectProvider<BookingProvider> bookings) {
-        return BookingTools.confirmBooking(bookings::getIfAvailable);
+    public Tool confirmBookingTool(ObjectProvider<BookingProvider> bookings, Clock clock) {
+        return BookingTools.confirmBooking(bookings::getIfAvailable, clock);
     }
 
     @Bean
-    public Tool listMyBookingsTool(ObjectProvider<BookingProvider> bookings) {
-        return BookingTools.listMyBookings(bookings::getIfAvailable);
+    public Tool listMyBookingsTool(ObjectProvider<BookingProvider> bookings, Clock clock) {
+        return BookingTools.listMyBookings(bookings::getIfAvailable, clock);
     }
 
     @Bean

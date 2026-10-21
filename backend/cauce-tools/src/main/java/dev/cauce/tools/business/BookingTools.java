@@ -15,6 +15,7 @@ import dev.cauce.core.tool.ToolResult;
 import dev.cauce.tools.spi.Tool;
 import dev.cauce.tools.spi.ToolArguments;
 import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -70,7 +71,7 @@ public final class BookingTools {
     }
 
     /** {@code propose_booking}: holds a new booking until the person confirms it. */
-    public static Tool proposeBooking(Supplier<BookingProvider> provider) {
+    public static Tool proposeBooking(Supplier<BookingProvider> provider, Clock clock) {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("date", dateProperty());
         properties.put("shift", text("The shift, as check_availability names it."));
@@ -88,13 +89,13 @@ public final class BookingTools {
             Map<String, Object> run(BookingProvider bookings, ToolArguments args, ToolExecutionContext context) {
                 Booking.Details details = details(args);
                 Booking booking = bookings.propose(requester(context), details);
-                return proposed(bookings, context, booking);
+                return proposed(bookings, context, booking, clock.instant());
             }
         };
     }
 
     /** {@code propose_booking_change}: proposes a change of one of the person's confirmed bookings. */
-    public static Tool proposeBookingChange(Supplier<BookingProvider> provider) {
+    public static Tool proposeBookingChange(Supplier<BookingProvider> provider, Clock clock) {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("code", text("The code of the booking to change."));
         properties.put("date", dateProperty());
@@ -113,13 +114,13 @@ public final class BookingTools {
                 Change change = new Change(date, args.text("shift").orElse(null), args.integer("party_size").orElse(null),
                         args.text("notes").orElse(null));
                 Booking booking = bookings.proposeChange(requester(context), args.requiredText("code"), change);
-                return proposed(bookings, context, booking);
+                return proposed(bookings, context, booking, clock.instant());
             }
         };
     }
 
     /** {@code propose_cancellation}: requests the cancellation of one of the person's bookings. */
-    public static Tool proposeCancellation(Supplier<BookingProvider> provider) {
+    public static Tool proposeCancellation(Supplier<BookingProvider> provider, Clock clock) {
         return new BookingTool(provider, new ToolDefinition("propose_cancellation",
                 "Requests the cancellation of one of this person's confirmed bookings. It is NOT cancelled yet: "
                         + "ask the person to confirm and call confirm_booking with the code in a later turn.",
@@ -128,7 +129,7 @@ public final class BookingTools {
             Map<String, Object> run(BookingProvider bookings, ToolArguments args, ToolExecutionContext context) {
                 Booking booking = bookings.proposeCancellation(requester(context), args.requiredText("code"));
                 Map<String, Object> out = ok();
-                out.put("booking", view(bookings, context, booking));
+                out.put("booking", view(bookings, context, booking, clock.instant()));
                 out.put("next_step", "Ask the person to confirm the cancellation. Call confirm_booking with the code "
                         + "only after they reply that they agree, never in this same turn.");
                 return out;
@@ -137,7 +138,7 @@ public final class BookingTools {
     }
 
     /** {@code confirm_booking}: applies what a booking waits for, after the person agreed. */
-    public static Tool confirmBooking(Supplier<BookingProvider> provider) {
+    public static Tool confirmBooking(Supplier<BookingProvider> provider, Clock clock) {
         return new BookingTool(provider, new ToolDefinition("confirm_booking",
                 "Confirms what a booking of this person is waiting for (a new booking, a change or a cancellation). "
                         + "Call it only after the person has replied that they agree with the details you read "
@@ -147,14 +148,14 @@ public final class BookingTools {
             Map<String, Object> run(BookingProvider bookings, ToolArguments args, ToolExecutionContext context) {
                 Booking booking = bookings.confirm(requester(context), args.requiredText("code"));
                 Map<String, Object> out = ok();
-                out.put("booking", view(bookings, context, booking));
+                out.put("booking", view(bookings, context, booking, clock.instant()));
                 return out;
             }
         };
     }
 
     /** {@code list_my_bookings}: the person's upcoming bookings. */
-    public static Tool listMyBookings(Supplier<BookingProvider> provider) {
+    public static Tool listMyBookings(Supplier<BookingProvider> provider, Clock clock) {
         return new BookingTool(provider, new ToolDefinition("list_my_bookings",
                 "Lists the upcoming bookings of the person you are talking to, with their codes: the confirmed "
                         + "ones and those still waiting for confirmation. Takes no arguments.",
@@ -162,8 +163,9 @@ public final class BookingTools {
             @Override
             Map<String, Object> run(BookingProvider bookings, ToolArguments args, ToolExecutionContext context) {
                 Map<String, Object> out = ok();
+                Instant now = clock.instant();
                 out.put("bookings", bookings.upcomingFor(context.tenantId(), context.identityId()).stream()
-                        .map(booking -> view(bookings, context, booking)).toList());
+                        .map(booking -> view(bookings, context, booking, now)).toList());
                 return out;
             }
         };
@@ -223,15 +225,20 @@ public final class BookingTools {
     }
 
     private static Map<String, Object> proposed(BookingProvider bookings, ToolExecutionContext context,
-                                                Booking booking) {
+                                                Booking booking, Instant now) {
         Map<String, Object> out = ok();
-        out.put("booking", view(bookings, context, booking));
+        out.put("booking", view(bookings, context, booking, now));
         out.put("confirm_within_minutes", agenda(bookings, context).holdMinutes());
         out.put("next_step", NEXT_STEP);
         return out;
     }
 
-    private static Map<String, Object> view(BookingProvider bookings, ToolExecutionContext context, Booking booking) {
+    /**
+     * The booking as the agent reads it; what it still waits for is judged at {@code now}, a reading
+     * of the database clock its hold was stamped with (ADR 0008).
+     */
+    private static Map<String, Object> view(BookingProvider bookings, ToolExecutionContext context, Booking booking,
+                                            Instant now) {
         Optional<Agenda.Shift> shift = bookings.findAgenda(context.tenantId()).flatMap(a -> a.shift(booking.shiftId()));
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("code", booking.code());
@@ -244,7 +251,7 @@ public final class BookingTools {
         booking.contactPhone().ifPresent(phone -> view.put("contact_phone", phone));
         booking.notes().ifPresent(notes -> view.put("notes", notes));
         view.put("status", booking.status().name());
-        booking.pendingAt(Instant.now())
+        booking.pendingAt(now)
                 .ifPresent(pending -> view.put("waiting_for", pending.name().toLowerCase(Locale.ROOT)));
         return view;
     }
