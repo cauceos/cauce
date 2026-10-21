@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 /**
- * Single source for the navigation: 4 groups, 7 entries. The icons are the
+ * Single source for the navigation: 4 groups, 8 entries. The icons are the
  * exact inline stroke SVGs from the mockup. Everything except Session
  * requires an active session.
  */
@@ -62,6 +62,16 @@ export const NAV_GROUPS: NavGroup[] = [
           <svg className="ico" viewBox="0 0 24 24" {...stroke}>
             <rect x="4" y="6" width="16" height="12" rx="2" />
             <path d="M9 11h.01M15 11h.01M9 15h6" />
+          </svg>
+        ),
+      },
+      {
+        label: 'Business',
+        path: '/business',
+        requiresSession: true,
+        icon: (
+          <svg className="ico" viewBox="0 0 24 24" {...stroke}>
+            <path d="M4 10h16l-1.5-5h-13zM5 10v9h14v-9M10 19v-5h4v5" />
           </svg>
         ),
       },

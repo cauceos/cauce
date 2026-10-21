@@ -6,6 +6,7 @@ import { SessionProvider } from './session/SessionContext'
 import { AgentsView } from './views/agents/AgentsView'
 import { ApiKeysView } from './views/api-keys/ApiKeysView'
 import { AuditChainView } from './views/audit/AuditChainView'
+import { BusinessView } from './views/business/BusinessView'
 import { ConversationView } from './views/conversation/ConversationView'
 import { InvocationsView } from './views/invocations/InvocationsView'
 import { SessionView } from './views/session/SessionView'
@@ -32,6 +33,14 @@ export function App() {
               element={
                 <RequireSession>
                   <AgentsView />
+                </RequireSession>
+              }
+            />
+            <Route
+              path="/business"
+              element={
+                <RequireSession>
+                  <BusinessView />
                 </RequireSession>
               }
             />

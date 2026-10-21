@@ -1,21 +1,34 @@
 import { ApiError, NetworkError } from './errors'
 import type {
+  AgendaResponse,
   AgentResponse,
   ApiKeyCreatedResponse,
   ApiKeyResponse,
+  BookingResponse,
+  BusinessProfileResponse,
+  CatalogResponse,
   ChainVerificationResponse,
   ConversationResponse,
   CreateApiKeyBody,
   CreateAgentBody,
   CursorPage,
+  DailyDigestResponse,
   ErrorEnvelope,
+  HandoffResponse,
   HealthResponse,
   InvocationResponse,
   MeResponse,
   MessageResponse,
+  OwnerLinkCodeResponse,
+  OwnerNotificationResponse,
+  OwnerResponse,
   SendMessageAccepted,
   TenantResponse,
+  UnansweredQuestionResponse,
 } from './types'
+
+/** The three business documents, each loaded and replaced whole. */
+export type BusinessDocumentKind = 'business-profile' | 'catalog' | 'agenda'
 
 /** Header naming the real instance for the dev proxy (see vite.config.ts). */
 const TARGET_HEADER = 'X-Cauce-Target'
@@ -198,6 +211,91 @@ export class ApiClient {
   /** GET /v1/invocations/{id} — processing status, for polling after a 202. */
   getInvocation(invocationId: string, signal?: AbortSignal): Promise<InvocationResponse> {
     return this.request<InvocationResponse>(`/v1/invocations/${invocationId}`, { signal })
+  }
+
+  // ── Business capabilities (ADR 0007): what a business tells its agents, and its owner ──
+
+  /**
+   * GET one of the business documents. `kind` names the path segment; the
+   * three are loaded and replaced whole, so the playground edits them as JSON.
+   */
+  getBusinessDocument<T extends BusinessProfileResponse | CatalogResponse | AgendaResponse>(
+    tenantId: string,
+    kind: BusinessDocumentKind,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    return this.request<T>(`/v1/tenants/${tenantId}/${kind}`, { signal })
+  }
+
+  /** PUT a whole business document (the raw JSON the person edited) → 200 with the stored one. */
+  putBusinessDocument<T extends BusinessProfileResponse | CatalogResponse | AgendaResponse>(
+    tenantId: string,
+    kind: BusinessDocumentKind,
+    json: string,
+  ): Promise<T> {
+    return this.request<T>(`/v1/tenants/${tenantId}/${kind}`, { method: 'PUT', body: json })
+  }
+
+  /** GET /v1/tenants/{id}/bookings — every status; one keyset page. */
+  listBookings(tenantId: string, signal?: AbortSignal): Promise<CursorPage<BookingResponse>> {
+    return this.request<CursorPage<BookingResponse>>(`/v1/tenants/${tenantId}/bookings?limit=200`, { signal })
+  }
+
+  /** GET /v1/tenants/{id}/handoffs — the cases agents handed to the owner; one keyset page. */
+  listHandoffs(tenantId: string, signal?: AbortSignal): Promise<CursorPage<HandoffResponse>> {
+    return this.request<CursorPage<HandoffResponse>>(`/v1/tenants/${tenantId}/handoffs?limit=200`, { signal })
+  }
+
+  /** POST /v1/handoffs/{id}/resolve — idempotent. */
+  resolveHandoff(handoffId: string): Promise<HandoffResponse> {
+    return this.request<HandoffResponse>(`/v1/handoffs/${handoffId}/resolve`, { method: 'POST' })
+  }
+
+  /** GET /v1/tenants/{id}/unanswered-questions — one keyset page. */
+  listUnansweredQuestions(
+    tenantId: string,
+    signal?: AbortSignal,
+  ): Promise<CursorPage<UnansweredQuestionResponse>> {
+    return this.request<CursorPage<UnansweredQuestionResponse>>(
+      `/v1/tenants/${tenantId}/unanswered-questions?limit=200`,
+      { signal },
+    )
+  }
+
+  /** GET /v1/tenants/{id}/owner — 404 `owner_not_linked` until the owner sends a code. */
+  getOwner(tenantId: string, signal?: AbortSignal): Promise<OwnerResponse> {
+    return this.request<OwnerResponse>(`/v1/tenants/${tenantId}/owner`, { signal })
+  }
+
+  /** POST /v1/tenants/{id}/owner-link-codes → 201 with the code, exactly once. */
+  issueOwnerLinkCode(tenantId: string, channelConfigId: string): Promise<OwnerLinkCodeResponse> {
+    return this.request<OwnerLinkCodeResponse>(`/v1/tenants/${tenantId}/owner-link-codes`, {
+      method: 'POST',
+      body: JSON.stringify({ channel_config_id: channelConfigId }),
+    })
+  }
+
+  /** GET /v1/tenants/{id}/owner-notifications — sent, not sent and why; one keyset page. */
+  listOwnerNotifications(
+    tenantId: string,
+    signal?: AbortSignal,
+  ): Promise<CursorPage<OwnerNotificationResponse>> {
+    return this.request<CursorPage<OwnerNotificationResponse>>(
+      `/v1/tenants/${tenantId}/owner-notifications?limit=200`,
+      { signal },
+    )
+  }
+
+  /** GET /v1/tenants/{id}/daily-digests — one keyset page. */
+  listDailyDigests(tenantId: string, signal?: AbortSignal): Promise<CursorPage<DailyDigestResponse>> {
+    return this.request<CursorPage<DailyDigestResponse>>(`/v1/tenants/${tenantId}/daily-digests?limit=200`, {
+      signal,
+    })
+  }
+
+  /** POST /v1/tenants/{id}/daily-digests — today's summary, made now if missing; idempotent. */
+  runDailyDigest(tenantId: string): Promise<DailyDigestResponse> {
+    return this.request<DailyDigestResponse>(`/v1/tenants/${tenantId}/daily-digests`, { method: 'POST' })
   }
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {

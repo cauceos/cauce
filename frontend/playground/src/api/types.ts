@@ -357,3 +357,150 @@ export interface SendMessageAccepted {
   message_id: string
   invocation_id: string
 }
+
+// ── Business capabilities (ADR 0007) ──────────────────────────────────────
+
+/** GET/PUT /v1/tenants/{tenantId}/business-profile. `facts` keeps the business's order. */
+export interface BusinessProfileResponse {
+  id: string
+  tenant_id: string
+  name: string
+  time_zone: string
+  locale: string
+  facts: Record<string, string>
+  handoff_categories: string[]
+  /** `HH:mm:ss` local time of the owner's nightly summary, or null when off. */
+  daily_digest_time: string | null
+  daily_digest_skip_when_empty: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** An attribute value as the business stated it: text, number, flag or list of texts. */
+export type CatalogAttribute = string | number | boolean | string[]
+
+export interface CatalogItem {
+  ref: string
+  section: string
+  name: string
+  description: string | null
+  price: number | null
+  /** An attribute named in `declared_attributes` and absent here is NOT declared, never "none". */
+  attributes: Record<string, CatalogAttribute>
+}
+
+/** GET/PUT /v1/tenants/{tenantId}/catalog. */
+export interface CatalogResponse {
+  id: string
+  tenant_id: string
+  declared_attributes: string[]
+  items: CatalogItem[]
+  created_at: string
+  updated_at: string
+}
+
+export interface AgendaShift {
+  id: string
+  days: string[]
+  start: string
+  end: string
+  capacity: number
+}
+
+/** GET/PUT /v1/tenants/{tenantId}/agenda. */
+export interface AgendaResponse {
+  id: string
+  tenant_id: string
+  unit: string
+  max_party_size: number
+  hold_minutes: number
+  horizon_days: number
+  require_phone: boolean
+  shifts: AgendaShift[]
+  closed_dates: string[]
+  created_at: string
+  updated_at: string
+}
+
+export type BookingStatus = 'HELD' | 'CONFIRMED' | 'CANCELLED'
+
+/** One entry of GET /v1/tenants/{tenantId}/bookings. A HELD past its hold holds nothing. */
+export interface BookingResponse {
+  id: string
+  code: string
+  date: string
+  shift: string
+  party_size: number
+  contact_name: string
+  contact_phone: string | null
+  notes: string | null
+  status: BookingStatus
+  hold_expires_at: string
+  created_at: string
+}
+
+/** One entry of GET /v1/tenants/{tenantId}/handoffs. */
+export interface HandoffResponse {
+  id: string
+  tenant_id: string
+  code: string
+  conversation_id: string
+  category: string
+  summary: string
+  contact_name: string
+  contact_phone: string | null
+  status: 'OPEN' | 'RESOLVED'
+  created_at: string
+  resolved_at: string | null
+}
+
+/** One entry of GET /v1/tenants/{tenantId}/unanswered-questions. */
+export interface UnansweredQuestionResponse {
+  id: string
+  conversation_id: string
+  question: string
+  created_at: string
+}
+
+/** GET /v1/tenants/{tenantId}/owner — where the owner reads; 404 `owner_not_linked` otherwise. */
+export interface OwnerResponse {
+  tenant_id: string
+  channel_config_id: string
+  identity_id: string
+  linked_at: string
+}
+
+/** 201 of POST /v1/tenants/{tenantId}/owner-link-codes — the code exists only in this body. */
+export interface OwnerLinkCodeResponse {
+  code: string
+  channel_config_id: string
+  expires_at: string
+}
+
+export type OwnerNotificationStatus = 'PENDING' | 'SENT' | 'NOT_SENT' | 'FAILED'
+
+/** One entry of GET /v1/tenants/{tenantId}/owner-notifications. */
+export interface OwnerNotificationResponse {
+  id: string
+  kind: 'HANDOFF' | 'DAILY_DIGEST'
+  subject_id: string
+  content: string
+  status: OwnerNotificationStatus
+  /** Why it was not sent: outside_reply_window, no_owner_recipient, channel_unavailable, or the failure. */
+  reason: string | null
+  attempts: number
+  sent_at: string | null
+  created_at: string
+}
+
+/** GET/POST /v1/tenants/{tenantId}/daily-digests. */
+export interface DailyDigestResponse {
+  id: string
+  local_date: string
+  booking_count: number
+  handoff_count: number
+  question_count: number
+  content: string
+  notified: boolean
+  created_at: string
+}

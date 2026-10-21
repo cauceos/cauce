@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SCREEN_SHEETS = ['session', 'conversation', 'workspace', 'invocations', 'audit']
+const SCREEN_SHEETS = ['session', 'conversation', 'workspace', 'invocations', 'audit', 'business']
 
 const BARE_RULE = /^[ \t]*(\.[A-Za-z][\w-]*(?:[ \t]*,[ \t]*\.[A-Za-z][\w-]*)*)[ \t]*\{/gm
 const BARE_SELECTOR = /^\.[A-Za-z][\w-]*$/

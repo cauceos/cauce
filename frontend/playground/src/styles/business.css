@@ -1,0 +1,63 @@
+/* Cauce Playground — Business (ADR 0007): what a business tells its agents
+   (profile, catalog, agenda) and what reaches its owner (cases, questions,
+   notices, nightly summaries). Every rule is scoped under `.business`; the
+   split, the panel, the action row and the chips are the shared ones. */
+
+.business .action-row, .business .biz-tabs, .business .biz-body { max-width: 1120px; margin-left: auto; margin-right: auto; }
+
+/* ══════════ Tabs — one native button each ══════════ */
+.business .biz-tabs {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px;
+  border-bottom: 1px solid var(--color-border); padding-bottom: 10px;
+}
+.business .biz-tab {
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 500;
+  color: var(--color-subtle); background: none; border: 1px solid transparent;
+  border-radius: var(--radius-full); padding: 6px 14px; cursor: pointer;
+  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.business .biz-tab:hover { color: var(--color-text); }
+.business .biz-tab[aria-selected="true"] { color: var(--color-teal-500); border-color: rgba(45, 212, 192, 0.35); }
+
+/* ══════════ Split: the JSON on the left, how agents read it on the right ══════════ */
+.business .biz-split { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.business .biz-editor textarea.input {
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.55;
+  min-height: 420px; background: var(--color-surface);
+}
+.business .biz-editor .biz-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.business .biz-editor .biz-saved { font-family: var(--font-mono); font-size: 10.5px; color: var(--color-moss-400); }
+.business .biz-editor .error-note { margin-top: 12px; margin-bottom: 0; }
+
+/* ══════════ Previews and lists ══════════ */
+.business .biz-sec {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 2.2px; text-transform: uppercase;
+  color: var(--color-muted); margin: 18px 0 8px;
+}
+.business .biz-sec:first-child { margin-top: 0; }
+.business .biz-kv { display: grid; grid-template-columns: minmax(90px, 0.4fr) 1fr; gap: 6px 14px; font-size: 12.5px; }
+.business .biz-kv .k { color: var(--color-subtle); font-family: var(--font-mono); font-size: 11px; padding-top: 1px; }
+.business .biz-kv .v { color: var(--color-text-2); line-height: 1.55; }
+.business .biz-list { display: grid; gap: 8px; }
+.business .biz-row {
+  border: 1px solid var(--color-border-soft); border-radius: var(--radius-sm);
+  padding: 10px 12px; display: grid; gap: 5px;
+}
+.business .biz-row .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.business .biz-row .name { font-size: 13px; font-weight: 500; color: var(--color-text); }
+.business .biz-row .price { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--color-text-2); }
+.business .biz-row .meta { font-family: var(--font-mono); font-size: 10px; color: var(--color-muted); }
+.business .biz-row .body { font-size: 12px; color: var(--color-text-2); line-height: 1.55; white-space: pre-wrap; }
+.business .biz-row .chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.business .biz-row .btn-ghost { justify-self: start; }
+.business .biz-empty { font-size: 12.5px; color: var(--color-subtle); line-height: 1.6; }
+.business .biz-code {
+  font-family: var(--font-mono); font-size: 20px; letter-spacing: 3px; color: var(--color-teal-500);
+  margin: 6px 0 4px;
+}
+.business .biz-cols3 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+
+@media (max-width: 1024px) {
+  .business .biz-split, .business .biz-cols3 { grid-template-columns: 1fr; }
+  .business .biz-editor textarea.input { min-height: 280px; }
+}
