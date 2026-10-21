@@ -200,4 +200,6 @@ built here.
 - `docs/adr/0001-rls-escape-hatches.md` — the cross-tenant scans
 - `docs/adr/0005-agentic-loop-hardening.md` — C4 and C5
 - `docs/adr/0006-whatsapp-cloud-api-channel.md` — W3 and the design note on the window
+- `docs/adr/0008-one-time-source-the-database-clock.md` — the clock holds, link codes, notices and
+  digests are measured on
 - `examples/hosteleria/` — the sector pack, the reference bar and the scenarios

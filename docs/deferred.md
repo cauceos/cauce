@@ -18,7 +18,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 ## Ingest and idempotency
 
 - **No body fingerprint on `Idempotency-Key`.** Replay matches by key only; the threat model is byte-identical webhook redelivery, not a client reusing a key with a different body.
-- **No retention purge for `ingest_idempotency_records` and `channel_inbound_receipts`.** Both tables have `created_at` and an index, so a scheduled `DELETE WHERE created_at < …` is a pure add. The retention must outlast the providers' redelivery horizon (Telegram and Meta retry for hours, not days), or a late redelivery would be handled twice.
+- **No retention purge for `ingest_idempotency_records` and `channel_inbound_receipts`.** Both tables have `created_at` (stamped by the database's default) and an index, so a scheduled `DELETE WHERE created_at < now() - interval '…'` is a pure add; the cutoff is computed in SQL (ADR 0008). The retention must outlast the providers' redelivery horizon (Telegram and Meta retry for hours, not days), or a late redelivery would be handled twice.
 - **The `AFTER_COMMIT`/outbox question for `OrchestrationEvent` consumers is parked.** `InvocationRequested` is published inside the ingest transaction (TODO in `InboundMessageService`). The in-memory metrics listener is exempt; the first persisting consumer must resolve it.
 
 ## Credentials
@@ -37,7 +37,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **The eval harness.** The scenarios of the hospitality pack (`examples/hosteleria/evals`) are data; `cauce-evals` does not run them yet. The guarantees the code enforces have their ITs.
 - **Owner-side booking actions.** The owner reads bookings over the API but cannot cancel or move one there; changes go through the customer's conversation.
 - **A summary missed across midnight.** A nightly summary whose local day ends while the instance is down is not sent late (the scheduler only runs today's).
-- **Retention of business rows.** Bookings, handoffs, unanswered questions, owner notifications, digests and used link codes have no purge; they hold personal data, so a retention policy per business is the follow-up.
+- **Retention of business rows.** Bookings, handoffs, unanswered questions, owner notifications, digests and used link codes have no purge; they hold personal data, so a retention policy per business is the follow-up. The purge's cutoff is SQL `now()` (ADR 0008), so the `created_at` it compares must be stamped by the database clock first: bookings and handoffs still take theirs from the JVM.
 
 ## Usage and cost
 
@@ -51,7 +51,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Per-tenant signing keys.** Additive thanks to `key_id`.
 - **Four reserved audit hooks, unemitted**: `conduct.external.action` (when a tool acts on an external system — the native business tools act on Cauce's own tables), `conduct.data.access` (when a tool reaches external data), `conduct.reply.delivered` (when delivery becomes transactional), `admin.credential.changed` (when per-tenant credentials land).
 - **Actor attribution by API-key id.** Audit records carry the acting tenant, not the key; needs the principal plumbed from the auth filter. Goes with fine-grained authorization.
-- **Retention purge of DRAINED outbox rows.** Raw payloads also live in `audit_outbox` until purged.
+- **Retention purge of DRAINED outbox rows.** Raw payloads also live in `audit_outbox` until purged. Its `created_at` is JVM-stamped; the purge needs a database-clock cutoff (ADR 0008).
 
 ## Channels
 

@@ -124,6 +124,11 @@ Decisions recorded in earlier units that constrain later ones. Each is enforced 
 - **Audit records go into the subject tenant's chain, with the acting tenant as `actor_tenant_id`** (ADR 0002). The operator bootstrap is the one documented genesis exception: no transaction, no context, no actor — unaudited.
 - **The outbound reply trigger is an explicit port, not an event consumer.** The orchestrator invokes `AgentReplyDispatcher` after the final AGENT append commits. The `OrchestrationEvent` stream stays purely observational; a consumer that persists must use `AFTER_COMMIT` or an outbox, because `InvocationRequested` is published inside the ingest transaction.
 - **Cost is never a stored column.** Token usage is captured as facts; price will be a versioned table plus a view, so cost is always derivable and never a stale number.
+- **One time source: the database clock** (ADR 0008). Every date written to be compared later,
+  and every comparison against "now", uses the database's clock: `now()` in SQL, and in Java the
+  application's single `Clock` bean (`DatabaseClock`, a `clock_timestamp()` reading). The domain
+  takes `now` as an argument; nothing compares a stored date with the JVM's `Instant.now()`, tests
+  included. Local monotonic durations (timeouts, a cache entry's remaining lifetime) are allowed.
 - **Micrometer now, OTLP later, is a bridge, not a migration.**
 - **Verification of the audit chain is on demand only.** Each call records itself in the chain it verified; nothing may attach it to a scheduler or to a write path.
 
