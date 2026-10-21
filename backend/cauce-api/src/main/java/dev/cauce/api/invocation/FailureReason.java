@@ -12,6 +12,11 @@ public enum FailureReason {
 
     /** The LLM provider rejected the request with a non-retryable error. */
     PROVIDER_ERROR,
+    /**
+     * The model rejected a parameter the agent configures (e.g. a sampling temperature): fix the
+     * agent's configuration.
+     */
+    AGENT_MISCONFIGURED,
     /** The LLM provider kept failing transiently until the retry budget ran out. */
     PROVIDER_UNAVAILABLE,
     /** The agentic loop hit its hard tool-iteration cap. */
@@ -27,6 +32,7 @@ public enum FailureReason {
     public static FailureReason from(InvocationFailureType type) {
         return switch (type) {
             case LLM_ERROR -> PROVIDER_ERROR;
+            case AGENT_CONFIGURATION -> AGENT_MISCONFIGURED;
             case LLM_RETRIES_EXHAUSTED -> PROVIDER_UNAVAILABLE;
             case MAX_TOOL_ITERATIONS -> AGENT_LOOP_LIMIT;
             case EMPTY_REPLY -> EMPTY_REPLY;

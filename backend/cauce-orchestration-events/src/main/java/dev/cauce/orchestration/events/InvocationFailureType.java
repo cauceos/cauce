@@ -10,6 +10,12 @@ public enum InvocationFailureType {
     /** A non-retryable LLM provider error (e.g. HTTP 400/401) — row FAILED. */
     LLM_ERROR,
 
+    /**
+     * The model rejected a parameter the agent configures (e.g. a sampling temperature it no
+     * longer accepts): the agent must be reconfigured; retrying would never help — row FAILED.
+     */
+    AGENT_CONFIGURATION,
+
     /** A retryable LLM provider error after the attempt budget ran out — row ABANDONED. */
     LLM_RETRIES_EXHAUSTED,
 

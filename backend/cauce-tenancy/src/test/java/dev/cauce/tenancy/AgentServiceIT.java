@@ -116,7 +116,7 @@ class AgentServiceIT {
             TenantContext.clear();
         }
 
-        assertThat(agent.temperature()).isEqualTo(0.25);
+        assertThat(agent.temperature()).contains(0.25);
         assertThat(agent.maxResponseTokens()).isEqualTo(16000);
         Double temperature = jdbc.queryForObject(
                 "SELECT temperature FROM agents WHERE id = ?", Double.class, agent.id());

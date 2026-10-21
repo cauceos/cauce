@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.llm.exception.LlmAuthenticationException;
+import dev.cauce.llm.exception.LlmParameterRejectedException;
 import dev.cauce.llm.exception.LlmRateLimitException;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
@@ -111,6 +112,20 @@ class PendingInvocationWorkerTest {
         worker.pollAndProcess();
 
         verify(orchestratorService, never()).respondToMessage(any(), any(), any());
+    }
+
+    @Test
+    void processInvocation_whenTheModelRejectsTheAgentsParameter_failsAsAConfigurationError_withoutRetry() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new LlmParameterRejectedException("anthropic", "claude-sonnet-5-5", "temperature",
+                        "HTTP 400: temperature is deprecated for this model"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markFailed(eq(claimed.id()), anyString(),
+                eq(InvocationFailureType.AGENT_CONFIGURATION));
+        verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
     }
 
     @Test

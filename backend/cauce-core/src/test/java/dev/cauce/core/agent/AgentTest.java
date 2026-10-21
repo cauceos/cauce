@@ -66,20 +66,21 @@ class AgentTest {
     }
 
     @Test
-    void create_withoutLlmConfig_appliesDefaults() {
+    void create_withoutLlmConfig_leavesTheTemperatureUnset_andBoundsTheReply() {
         Agent agent = Agent.create(TENANT, "Bot", "p", "anthropic", "claude-sonnet-4-7");
 
-        assertThat(agent.temperature()).isEqualTo(Agent.DEFAULT_TEMPERATURE);
+        // Regression: a default temperature was sent to every model, and models that no longer
+        // accept the parameter rejected every call. Unset means not sent.
+        assertThat(agent.temperature()).isEmpty();
         assertThat(agent.maxResponseTokens()).isEqualTo(Agent.DEFAULT_MAX_RESPONSE_TOKENS);
-        assertThat(agent.temperature()).isEqualTo(0.7);
         assertThat(agent.maxResponseTokens()).isEqualTo(4096);
     }
 
     @Test
-    void create_withNullLlmConfig_appliesDefaults() {
+    void create_withNullLlmConfig_leavesTheTemperatureUnset() {
         Agent agent = Agent.create(TENANT, "Bot", "p", "anthropic", "claude-sonnet-4-7", null, null);
 
-        assertThat(agent.temperature()).isEqualTo(0.7);
+        assertThat(agent.temperature()).isEmpty();
         assertThat(agent.maxResponseTokens()).isEqualTo(4096);
     }
 
@@ -87,15 +88,14 @@ class AgentTest {
     void create_withExplicitLlmConfig_respectsValues() {
         Agent agent = Agent.create(TENANT, "Bot", "p", "anthropic", "claude-sonnet-4-7", 0.5, 8000);
 
-        assertThat(agent.temperature()).isEqualTo(0.5);
+        assertThat(agent.temperature()).contains(0.5);
         assertThat(agent.maxResponseTokens()).isEqualTo(8000);
     }
 
     @Test
     void create_acceptsTemperatureAtBounds() {
-        assertThat(Agent.create(TENANT, "Bot", "p", "anthropic", "m", 0.0, 1).temperature()).isZero();
-        assertThat(Agent.create(TENANT, "Bot", "p", "anthropic", "m", 1.0, 1).temperature())
-                .isEqualTo(1.0);
+        assertThat(Agent.create(TENANT, "Bot", "p", "anthropic", "m", 0.0, 1).temperature()).contains(0.0);
+        assertThat(Agent.create(TENANT, "Bot", "p", "anthropic", "m", 1.0, 1).temperature()).contains(1.0);
     }
 
     @Test

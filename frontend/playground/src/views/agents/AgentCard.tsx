@@ -38,7 +38,7 @@ export function AgentCard({
       {/* Whatever the server returned — the defaults it applied included. */}
       <div className="a-params">
         <span>
-          <span className="k">temp</span> {agent.temperature}
+          <span className="k">temp</span> {agent.temperature ?? 'model default'}
         </span>
         <span>
           <span className="k">max</span> {agent.max_response_tokens}

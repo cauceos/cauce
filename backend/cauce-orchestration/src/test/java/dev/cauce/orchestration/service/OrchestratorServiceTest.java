@@ -136,7 +136,8 @@ class OrchestratorServiceTest {
         LlmInvocation invocation = captor.getValue();
         assertThat(invocation.modelName()).isEqualTo(MODEL);
         assertThat(invocation.systemPrompt()).isEqualTo("You are helpful.");
-        assertThat(invocation.temperature()).isEqualTo(0.7);
+        // Regression: an agent that configures no temperature sends none (the model's default).
+        assertThat(invocation.temperature()).isNull();
         assertThat(invocation.maxTokens()).isEqualTo(4096);
     }
 

@@ -180,7 +180,7 @@ public class OrchestratorService {
                     .systemPrompt(agent.systemPrompt())
                     .tools(toolDefinitions)
                     .maxTokens(agent.maxResponseTokens())
-                    .temperature(agent.temperature())
+                    .temperature(agent.temperature().orElse(null))
                     .credential(credential)
                     .build();
 

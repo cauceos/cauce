@@ -1,6 +1,7 @@
 package dev.cauce.orchestration.worker;
 
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.llm.exception.LlmParameterRejectedException;
 import dev.cauce.llm.exception.LlmProviderException;
 import dev.cauce.orchestration.OrchestrationConfig;
 import dev.cauce.orchestration.PendingInvocation;
@@ -153,10 +154,13 @@ public class PendingInvocationWorker {
         if (!LlmErrorClassifier.isRetryable(error)) {
             log.warn("Worker {} failing invocation {} due to non-retryable LLM error: {}",
                     workerIdentity.getId(), invocation.id(), errorSummary);
+            // A model rejecting what the agent configures is the agent's configuration to fix.
+            InvocationFailureType type = error instanceof LlmParameterRejectedException
+                    ? InvocationFailureType.AGENT_CONFIGURATION
+                    : InvocationFailureType.LLM_ERROR;
             safeMark(() -> {
-                pendingInvocationService.markFailed(invocation.id(), errorSummary,
-                        InvocationFailureType.LLM_ERROR);
-                publishFailed(invocation, InvocationFailureType.LLM_ERROR, errorSummary);
+                pendingInvocationService.markFailed(invocation.id(), errorSummary, type);
+                publishFailed(invocation, type, errorSummary);
             }, invocation, "FAILED");
             return;
         }

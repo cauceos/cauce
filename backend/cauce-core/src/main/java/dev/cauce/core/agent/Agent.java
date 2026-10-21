@@ -24,15 +24,13 @@ import java.util.UUID;
  * Until the SPI exists, the application service validates against a temporary set.
  *
  * <p>{@code temperature} and {@code maxResponseTokens} are the per-agent LLM call
- * configuration used when building invocations. They are always non-null on the domain
- * object: the factories apply {@link #DEFAULT_TEMPERATURE} / {@link #DEFAULT_MAX_RESPONSE_TOKENS}
- * when a null is supplied (e.g. a pre-V7 row read back from the database). The domain is
- * the single owner of the "null means default" policy.
+ * configuration used when building invocations. {@code temperature} is a sampling parameter:
+ * it is sent to the provider only when the agent configures it — unset, the model's own
+ * default applies, and a model that does not accept the parameter at all keeps working.
+ * {@code maxResponseTokens} is always set ({@link #DEFAULT_MAX_RESPONSE_TOKENS} when null):
+ * providers require a bound on the reply.
  */
 public final class Agent {
-
-    /** Default sampling temperature applied when none is configured. */
-    public static final double DEFAULT_TEMPERATURE = 0.7;
 
     /** Default maximum response tokens applied when none is configured. */
     public static final int DEFAULT_MAX_RESPONSE_TOKENS = 4096;
@@ -46,7 +44,7 @@ public final class Agent {
     private final String systemPrompt;
     private final String modelProvider;
     private final String modelName;
-    private final double temperature;
+    private final Double temperature; // null: not configured, the model's default
     private final int maxResponseTokens;
     private final AgentStatus status;
     private final String fallbackReply; // null: the platform default (ADR 0005, C3)
@@ -55,7 +53,7 @@ public final class Agent {
     private final Instant updatedAt;
 
     private Agent(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
-                  String modelName, double temperature, int maxResponseTokens, AgentStatus status,
+                  String modelName, Double temperature, int maxResponseTokens, AgentStatus status,
                   String fallbackReply, List<String> toolNames, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
@@ -79,8 +77,9 @@ public final class Agent {
     }
 
     /**
-     * Creates a new DRAFT agent owned by {@code tenantId}. A null {@code temperature} or
-     * {@code maxResponseTokens} falls back to the default; non-null values are validated
+     * Creates a new DRAFT agent owned by {@code tenantId}. A null {@code temperature} leaves it
+     * unconfigured (never sent); a null {@code maxResponseTokens} falls back to the default;
+     * non-null values are validated
      * ({@code temperature} within [0.0, 1.0], {@code maxResponseTokens} positive).
      */
     public static Agent create(UUID tenantId, String name, String systemPrompt,
@@ -94,7 +93,7 @@ public final class Agent {
                 Objects.requireNonNull(systemPrompt, "systemPrompt"), // may be empty for a draft
                 requireText(modelProvider, "modelProvider"),
                 requireText(modelName, "modelName"),
-                validatedTemperature(resolveTemperature(temperature)),
+                validatedTemperature(temperature),
                 validatedMaxResponseTokens(resolveMaxResponseTokens(maxResponseTokens)),
                 AgentStatus.DRAFT,
                 null,
@@ -149,7 +148,7 @@ public final class Agent {
 
     /**
      * Rebuilds an agent from already-persisted state. For the persistence layer only. A null
-     * {@code temperature} or {@code maxResponseTokens} (a pre-V7 row) is coalesced to the
+     * {@code maxResponseTokens} (a pre-V7 row) is coalesced to the
      * default; values are not range-checked here since the database CHECK constraints already
      * guarantee them.
      */
@@ -176,7 +175,7 @@ public final class Agent {
                 Objects.requireNonNull(systemPrompt, "systemPrompt"),
                 Objects.requireNonNull(modelProvider, "modelProvider"),
                 Objects.requireNonNull(modelName, "modelName"),
-                resolveTemperature(temperature),
+                temperature,
                 resolveMaxResponseTokens(maxResponseTokens),
                 Objects.requireNonNull(status, "status"),
                 fallbackReply, // nullable; the V28 CHECK guarantees its shape
@@ -221,16 +220,13 @@ public final class Agent {
         return List.copyOf(seen);
     }
 
-    private static double resolveTemperature(Double temperature) {
-        return temperature == null ? DEFAULT_TEMPERATURE : temperature;
-    }
 
     private static int resolveMaxResponseTokens(Integer maxResponseTokens) {
         return maxResponseTokens == null ? DEFAULT_MAX_RESPONSE_TOKENS : maxResponseTokens;
     }
 
-    private static double validatedTemperature(double temperature) {
-        if (temperature < 0.0 || temperature > 1.0) {
+    private static Double validatedTemperature(Double temperature) {
+        if (temperature != null && (temperature < 0.0 || temperature > 1.0)) {
             throw new IllegalArgumentException(
                     "temperature must be within [0.0, 1.0] but was " + temperature);
         }
@@ -269,8 +265,9 @@ public final class Agent {
         return modelName;
     }
 
-    public double temperature() {
-        return temperature;
+    /** The configured sampling temperature; empty means not configured: the model's default. */
+    public Optional<Double> temperature() {
+        return Optional.ofNullable(temperature);
     }
 
     public int maxResponseTokens() {

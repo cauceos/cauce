@@ -5,6 +5,7 @@ import dev.cauce.llm.exception.LlmProviderException;
 import dev.cauce.llm.exception.LlmTimeoutException;
 import dev.cauce.llm.model.LlmInvocation;
 import dev.cauce.llm.model.LlmResponse;
+import dev.cauce.llm.model.SamplingParameters;
 import dev.cauce.llm.spi.LlmCredential;
 import dev.cauce.llm.spi.LlmProvider;
 import java.io.IOException;
@@ -120,7 +121,8 @@ public final class OpenAiCompatibleLlmProvider implements LlmProvider {
                 throw new LlmProviderException(providerId, model, "Failed to parse response", e);
             }
         }
-        throw errorMapper.toException(status, response.body(), providerId, model);
+        throw errorMapper.toException(status, response.body(), providerId, model,
+                SamplingParameters.sentBy(invocation));
     }
 
     private static String stripTrailingSlash(String url) {

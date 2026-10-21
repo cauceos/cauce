@@ -19,7 +19,7 @@ public final class AgentMapper {
                 agent.systemPrompt(),
                 agent.modelProvider(),
                 agent.modelName(),
-                agent.temperature(),
+                agent.temperature().orElse(null),
                 agent.maxResponseTokens(),
                 agent.status(),
                 agent.fallbackReply().orElse(null),

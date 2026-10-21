@@ -6,6 +6,7 @@ import dev.cauce.llm.exception.LlmProviderException;
 import dev.cauce.llm.exception.LlmTimeoutException;
 import dev.cauce.llm.model.LlmInvocation;
 import dev.cauce.llm.model.LlmResponse;
+import dev.cauce.llm.model.SamplingParameters;
 import dev.cauce.llm.spi.LlmProvider;
 import java.io.IOException;
 import java.net.URI;
@@ -110,6 +111,7 @@ public final class AnthropicLlmProvider implements LlmProvider {
                 throw new LlmProviderException(PROVIDER_ID, model, "Failed to parse Anthropic response", e);
             }
         }
-        throw errorMapper.toException(status, response.body(), PROVIDER_ID, model);
+        throw errorMapper.toException(status, response.body(), PROVIDER_ID, model,
+                SamplingParameters.sentBy(invocation));
     }
 }

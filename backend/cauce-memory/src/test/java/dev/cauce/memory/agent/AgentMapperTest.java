@@ -51,12 +51,12 @@ class AgentMapperTest {
 
         Agent roundTripped = mapper.toDomain(mapper.toEntity(original));
 
-        assertThat(roundTripped.temperature()).isEqualTo(0.3);
+        assertThat(roundTripped.temperature()).contains(0.3);
         assertThat(roundTripped.maxResponseTokens()).isEqualTo(8000);
     }
 
     @Test
-    void toDomain_whenEntityLlmConfigIsNull_appliesDefaults() {
+    void toDomain_whenEntityLlmConfigIsNull_leavesTemperatureUnset_andDefaultsTheReplyBound() {
         // A pre-V7 row: temperature and max_response_tokens are NULL in the database.
         Instant now = Instant.now();
         AgentEntity legacy = new AgentEntity(UUID.randomUUID(), UUID.randomUUID(), "Bot", "prompt",
@@ -64,7 +64,7 @@ class AgentMapperTest {
 
         Agent domain = mapper.toDomain(legacy);
 
-        assertThat(domain.temperature()).isEqualTo(Agent.DEFAULT_TEMPERATURE);
+        assertThat(domain.temperature()).isEmpty();
         assertThat(domain.maxResponseTokens()).isEqualTo(Agent.DEFAULT_MAX_RESPONSE_TOKENS);
     }
 }

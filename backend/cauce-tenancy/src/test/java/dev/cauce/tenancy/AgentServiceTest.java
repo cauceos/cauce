@@ -147,7 +147,7 @@ class AgentServiceTest {
 
         Agent agent = service.createAgent(tenantId, "Bot", "p", "anthropic", "claude-sonnet-4-7");
 
-        assertThat(agent.temperature()).isEqualTo(Agent.DEFAULT_TEMPERATURE);
+        assertThat(agent.temperature()).isEmpty();
         assertThat(agent.maxResponseTokens()).isEqualTo(Agent.DEFAULT_MAX_RESPONSE_TOKENS);
     }
 
@@ -159,7 +159,7 @@ class AgentServiceTest {
         Agent agent = service.createAgent(tenantId, "Bot", "p", "anthropic", "claude-sonnet-4-7",
                 0.2, 12000);
 
-        assertThat(agent.temperature()).isEqualTo(0.2);
+        assertThat(agent.temperature()).contains(0.2);
         assertThat(agent.maxResponseTokens()).isEqualTo(12000);
     }
 

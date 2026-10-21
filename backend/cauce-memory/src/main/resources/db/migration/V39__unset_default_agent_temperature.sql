@@ -1,0 +1,11 @@
+-- V39: a sampling temperature is sent only when an agent configures one.
+--
+-- Until now the domain filled a missing temperature with 0.7 and stored it, so every agent sent
+-- temperature = 0.7 to its model; models that no longer accept sampling parameters rejected every
+-- call ("temperature is deprecated for this model"). NULL now means not configured: the
+-- provider's own default applies and the parameter is not sent.
+--
+-- The stored 0.7 rows are the injected default. An agent created with an explicit 0.7 cannot be
+-- told apart from them and loses it too: the deliberate trade-off, since the default was applied
+-- to every agent that did not choose. Such an agent can set it again.
+UPDATE agents SET temperature = NULL WHERE temperature = 0.7;

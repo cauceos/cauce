@@ -4,8 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cauce.llm.exception.LlmAuthenticationException;
 import dev.cauce.llm.exception.LlmInvalidRequestException;
+import dev.cauce.llm.exception.LlmParameterRejectedException;
 import dev.cauce.llm.exception.LlmProviderException;
 import dev.cauce.llm.exception.LlmRateLimitException;
+import dev.cauce.llm.model.SamplingParameters;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Maps an OpenAI-compatible error response (HTTP status + body) to the matching SPI exception.
@@ -23,7 +27,23 @@ final class OpenAiErrorMapper {
     }
 
     LlmProviderException toException(int status, String body, String providerId, String modelName) {
+        return toException(status, body, providerId, modelName, Set.of());
+    }
+
+    /**
+     * As {@link #toException(int, String, String, String)}, knowing which sampling parameters the
+     * request sent: a 4xx that names one of them is the model rejecting the agent's configuration.
+     */
+    LlmProviderException toException(int status, String body, String providerId, String modelName,
+                                      Set<String> sentSamplingParameters) {
         String detail = extractMessage(body);
+        if (status == 400 || status == 422) {
+            Optional<String> rejected = SamplingParameters.rejectedIn(detail, sentSamplingParameters);
+            if (rejected.isPresent()) {
+                return new LlmParameterRejectedException(providerId, modelName, rejected.get(),
+                        "HTTP " + status + ": " + detail);
+            }
+        }
         String message = detail == null ? "HTTP " + status : "HTTP " + status + ": " + detail;
 
         return switch (status) {

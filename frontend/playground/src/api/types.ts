@@ -47,6 +47,7 @@ export type Tier = 'OPERATOR' | 'PARTNER' | 'CLIENT'
 export type InvocationStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
 export type FailureReason =
   | 'PROVIDER_ERROR'
+  | 'AGENT_MISCONFIGURED'
   | 'PROVIDER_UNAVAILABLE'
   | 'AGENT_LOOP_LIMIT'
   | 'EMPTY_REPLY'
@@ -73,7 +74,8 @@ export interface AgentResponse {
   system_prompt: string
   model_provider: string
   model_name: string
-  temperature: number
+  /** Null when the agent configures none: the model's default applies and none is sent. */
+  temperature: number | null
   max_response_tokens: number
   status: AgentStatus
   created_at: string
