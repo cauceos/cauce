@@ -48,7 +48,8 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **`SUPPORTED_CHANNELS` by SPI.** `ConversationService` validates `channel_type` against a hardcoded set; replacing it with the adapter registry needs a port, since a direct dependency would be a cycle.
 - **WhatsApp adapter.** The SPI was designed against it (HMAC over the raw body in `verify`); no adapter exists.
 - **Outbound delivery metrics.** Log-only; an outbound event would let observability count it.
-- **Typed channel identity, message types beyond text, and per-channel capabilities** are open decisions, not deferred implementation — recorded with their cost in the private ADR-006.
+- **Message parts and per-channel capabilities** are ADR 0004's second and third units: decided, not yet implemented. Typed identity (the first unit) has landed.
+- **Telegram groups.** A group `chat.id` is not a person and there is no `GROUP` identity kind (ADR 0004, conscious limitation): the adapter accepts private chats only and refuses the rest with a WARN.
 
 ## API
 

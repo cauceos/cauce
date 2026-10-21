@@ -1,6 +1,6 @@
 # ADR 0004: Interlocutor identity, message parts, and channel capabilities
 
-Status: Accepted (not yet implemented)
+Status: Accepted. Unit 1 (identity) implemented; units 2 and 3 not yet.
 
 ## Context
 

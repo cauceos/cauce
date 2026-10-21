@@ -380,12 +380,15 @@ what the cauce-api integration tests assert. The rules every endpoint follows:
   compares `uuid` bytewise), so a full walk never skips or duplicates rows and rows appended
   mid-walk show up at the end. The `id > cursor` comparison always runs in Postgres (Java's
   `UUID.compareTo` is signed and disagrees).
-- **The messaging endpoint stamps the reserved channel type `api` server-side**; the request body
-  carries only `external_identity_ref` and `content`, so the client cannot choose the channel.
-  Ingest is one transaction (`InboundMessageService`): resolve-or-start the OPEN conversation —
-  race-safe via `INSERT ... ON CONFLICT DO NOTHING` + re-`SELECT` on the partial unique index over
-  `(agent_id, channel_type, external_identity_ref) WHERE status = 'OPEN'` — then append the USER
-  message and enqueue the async invocation. The agent reply arrives asynchronously; clients poll.
+- **The messaging endpoint stamps the reserved channel type `api` server-side**, and the identity
+  kind `CLIENT_REFERENCE` with it; the request body carries only `external_identity_ref` and
+  `content`, so the client chooses neither. Ingest is one transaction (`InboundMessageService`):
+  agent → identity → conversation (ADR 0004). The identity belongs to the agent's tenant, never the
+  acting one. Identity and OPEN conversation are each race-safe via `INSERT ... ON CONFLICT DO
+  NOTHING` + re-`SELECT`: the identity on `(tenant_id, channel_type, kind, value)`, the conversation
+  on the partial unique index over `(agent_id, identity_id, channel_config_id) WHERE status =
+  'OPEN'`, `NULLS NOT DISTINCT` because `api` has no channel config. Then the USER message is
+  appended and the async invocation enqueued. The agent reply arrives asynchronously; clients poll.
 - **`Idempotency-Key`** (optional header, opaque, ≤255 chars): a repeated POST with the same key for
   the same agent replays the original 202 ids and ingests nothing new. Deduplication is insert-first
   inside the same ingest transaction on the `(agent_id, idempotency_key)` unique constraint;
