@@ -278,9 +278,11 @@ class AuditConductIT extends AbstractOrchestrationIntegrationTest {
         assertThat(payloadField(clientA.id(), 2, "invocation_id"))
                 .isEqualTo(result.invocationId().toString());
         assertThat(payloadField(clientA.id(), 2, "failure_type")).isEqualTo("LLM_ERROR");
-        // The raw provider error never enters the chain (it can echo content).
+        // The raw provider error never enters the chain (it can echo content). Matched on its
+        // words, not a bare "401": payloads carry random UUIDs and hex hashes that can hold it.
         Integer rawError = jdbc.queryForObject(
-                "SELECT count(*) FROM audit_log_entries WHERE payload::text LIKE '%401%'",
+                "SELECT count(*) FROM audit_log_entries WHERE payload::text LIKE '%invalid api key%' "
+                        + "OR payload::text LIKE '%LlmAuthenticationException%'",
                 Integer.class);
         assertThat(rawError).isZero();
         assertThat(verifyAs(clientA).valid()).isTrue();
