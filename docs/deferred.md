@@ -27,6 +27,18 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Rotation of the secrets encryption key.** Channel credentials are sealed with AES-GCM under `cauce.security.secrets-encryption-key` (ADR 0006, W3). There is one key and no rotation: changing it makes every sealed value unreadable. The `v1:` prefix leaves room for a key id and a re-sealing pass. Per-tenant LLM credentials, when they land, should reuse the same `SecretCipher` port.
 - **The plaintext read path of channel credentials.** `ChannelConfigMapper` still reads an unsealed credential as-is (every write is sealed; the startup runner seals old rows). Once every deployment has run the runner, the read path and the runner go, and an unsealed value becomes an error.
 
+## Business capabilities (ADR 0007)
+
+- **Choosing an adapter per business.** Each business port (`BookingProvider`, `CatalogSource`, `BusinessProfileSource`, `HandoffSink`, `KnowledgeGapSink`) has one adapter, the native one. Selecting an external one per tenant (a String id validated by the service, like `model_provider`) arrives with the second adapter of a port (ADR 0007, B2).
+- **An MCP client.** Where it fits is recorded in ADR 0007, B11; nothing is built.
+- **Several venues of one business with a unified view.** One profile, catalog and agenda per CLIENT tenant; two venues are two tenants (B5).
+- **The owner agent (phase 2).** Suppliers, accounts and staff. In phase 1 the owner bot only receives notices; its agent says so.
+- **Templates for proactive messages on WhatsApp.** An owner notice outside the 24-hour window is recorded `NOT_SENT` with `outside_reply_window` (B9), the same rule as W4.
+- **The eval harness.** The scenarios of the hospitality pack (`examples/hosteleria/evals`) are data; `cauce-evals` does not run them yet. The guarantees the code enforces have their ITs.
+- **Owner-side booking actions.** The owner reads bookings over the API but cannot cancel or move one there; changes go through the customer's conversation.
+- **A summary missed across midnight.** A nightly summary whose local day ends while the instance is down is not sent late (the scheduler only runs today's).
+- **Retention of business rows.** Bookings, handoffs, unanswered questions, owner notifications, digests and used link codes have no purge; they hold personal data, so a retention policy per business is the follow-up.
+
 ## Usage and cost
 
 - **No usage aggregation by tenant.** Per-invocation usage is exposed on the invocation endpoint; there is no query across invocations.
@@ -37,7 +49,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Export artefact and independent-verifier input.** A self-contained document with entries, signatures, the public keys needed and the `prev_hash` anchoring the start of a range. The reference verifier under `tools/audit-chain-verifier/` reads its own SQL-produced dump format until this lands, and the export may choose a different shape.
 - **External time anchoring.** Publishing the chain head to an external medium (an open timestamping protocol, a qualified timestamping authority, or both) — the only thing that would make a `TRUNCATED` verdict issuable, which is why that verdict was withdrawn (`be5c178`).
 - **Per-tenant signing keys.** Additive thanks to `key_id`.
-- **Five reserved audit hooks, unemitted**: `conduct.external.action` (when a side-effect tool exists), `conduct.data.access` (when a tool reaches external data), `conduct.human.escalation` (when `escalateConversation` gets a caller), `conduct.reply.delivered` (when delivery becomes transactional), `admin.credential.changed` (when per-tenant credentials land).
+- **Four reserved audit hooks, unemitted**: `conduct.external.action` (when a tool acts on an external system — the native business tools act on Cauce's own tables), `conduct.data.access` (when a tool reaches external data), `conduct.reply.delivered` (when delivery becomes transactional), `admin.credential.changed` (when per-tenant credentials land).
 - **Actor attribution by API-key id.** Audit records carry the acting tenant, not the key; needs the principal plumbed from the auth filter. Goes with fine-grained authorization.
 - **Retention purge of DRAINED outbox rows.** Raw payloads also live in `audit_outbox` until purged.
 
@@ -76,6 +88,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 ## Modules not started
 
-- `cauce-evals` and `cauce-enterprise` contain only a `package-info.java`.
+- `cauce-evals` and `cauce-enterprise` contain only a `package-info.java`. The first scenarios to run are the hospitality pack's (`examples/hosteleria/evals`).
 - Vector retrieval in `cauce-memory`: pgvector is enabled; no code uses it.
 - Helm chart for Kubernetes deployments: not in the repo.

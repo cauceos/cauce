@@ -1,6 +1,6 @@
 # ADR 0007: Business capabilities and sector agents
 
-Status: Accepted.
+Status: Accepted and implemented (B1–B12).
 
 ## Context
 

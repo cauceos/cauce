@@ -53,6 +53,7 @@ What each module is *for* and which dependency rules it must respect. What each 
 - `cauce-llm` — the provider-neutral LLM SPI and its invocation/response model, which carries the core tool model. Depends on `cauce-core`. **Adapters live in separate modules**: `cauce-llm-anthropic` (native Messages API) and `cauce-llm-openai` (one OpenAI-compatible adapter registered as several conditional providers).
 - `cauce-tools` — the executable tool SPI and the built-in tools. Depends only on `cauce-core` (plus spring-context); the neutral tool model itself lives in core.
 - `cauce-evals` — evaluation framework, conversation testing, regression detection.
+- `cauce-business` — the native adapters of the sector-neutral business ports defined in `cauce-core` (profile, catalog, bookings, handoffs, unanswered questions), plus the owner-notification outbox and the nightly digest (ADR 0007). Depends on core, memory and tenancy. **No sector knowledge in code**: what makes an agent a bar's is data and instructions (`examples/`). The tools that expose these capabilities live in `cauce-tools` and depend only on the core ports.
 - `cauce-observability` — consumers of the orchestration event stream that turn it into metrics and traces. Pure consumer: a failure here must never break the synchronous publication path. Depends only on `cauce-orchestration-events`, spring-context and micrometer-core; the `MeterRegistry` is wired by cauce-api's Actuator.
 - `cauce-governance` — immutable audit log, RGPD endpoints, policy engine, AI Act compliance. The audit sink (`dev.cauce.governance.audit` + `persistence` + `audit.signing`) is the adapter of the core `AuditEventRecorder` port. **Depends on `cauce-core` + `cauce-memory` only**; `cauce-tenancy` and `cauce-orchestration` never appear in its graph, and emitters never depend on governance — the adapter is wired by cauce-api, and governance is test-scope in the emitting modules.
 - `cauce-tenancy` — application services for tenants, agents, conversations, messages and API keys; operator bootstrap; API-key hashing. Emits the administration (`admin.*`) audit events.
@@ -71,7 +72,8 @@ What each module is *for* and which dependency rules it must respect. What each 
 - `.github/` — GitHub workflows (CI), Dependabot config, repo assets
 - `docs/` — public documentation: decisions as ADRs under `docs/adr/`, normative format specifications under `docs/spec/`, and the deferred-work register `docs/deferred.md`
 - `tools/` — standalone published artefacts, outside every build; each has its own README (`audit-chain-verifier/`)
-- `scripts/` — operational scripts (the quickstart)
+- `examples/` — sector packs: prompts, tool grants, reference data and eval scenarios, loaded through the API (`hosteleria/`). `ReferenceBarPackIT` keeps them loadable
+- `scripts/` — operational scripts (the quickstart, the demo bar)
 - `docker/` — the local stack's init scripts
 
 ## Architectural invariants
