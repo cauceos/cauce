@@ -1,4 +1,4 @@
-package dev.cauce.governance.audit;
+package dev.cauce.core.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

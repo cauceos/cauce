@@ -1,4 +1,4 @@
-package dev.cauce.governance.audit;
+package dev.cauce.core.audit;
 
 import java.math.BigDecimal;
 import java.text.Normalizer;
@@ -28,20 +28,20 @@ import java.util.TreeMap;
  * to every key and string value: v2 normalizes to Unicode NFC before escaping, v1 does not.
  * It is a parameter rather than a constant because the two must coexist — normalizing
  * unconditionally would change the hash of already-written v1 entries whose text is not in
- * NFC, which is a history rewrite (see {@link AuditChainHasher}).
+ * NFC, which is a history rewrite (see {@code AuditChainHasher} in cauce-governance).
  */
-final class CanonicalJson {
+public final class CanonicalJson {
 
     private CanonicalJson() {
     }
 
     /** Serializes {@code value} to its canonical JSON form, without Unicode normalization. */
-    static String serialize(Object value) {
+    public static String serialize(Object value) {
         return serialize(value, false);
     }
 
     /** Serializes {@code value} to its canonical JSON form, NFC-normalizing strings if asked. */
-    static String serialize(Object value, boolean normalizeUnicode) {
+    public static String serialize(Object value, boolean normalizeUnicode) {
         StringBuilder out = new StringBuilder();
         write(value, out, normalizeUnicode);
         return out.toString();
