@@ -26,6 +26,12 @@ public class ConversationEntity {
     @Column(name = "agent_id", nullable = false, updatable = false)
     private UUID agentId;
 
+    @Column(name = "identity_id", nullable = false, updatable = false)
+    private UUID identityId;
+
+    @Column(name = "channel_config_id", updatable = false)
+    private UUID channelConfigId;
+
     @Column(name = "channel_type", nullable = false, length = 20)
     private String channelType;
 
@@ -55,11 +61,13 @@ public class ConversationEntity {
         // for JPA
     }
 
-    public ConversationEntity(UUID id, UUID agentId, String channelType, String externalIdentityRef,
-                              ConversationStatus status, Instant startedAt, Instant lastMessageAt,
+    public ConversationEntity(UUID id, UUID agentId, UUID identityId, UUID channelConfigId,
+                              String channelType, String externalIdentityRef, ConversationStatus status, Instant startedAt, Instant lastMessageAt,
                               Instant closedAt, Instant escalatedAt, Instant archivedAt) {
         this.id = id;
         this.agentId = agentId;
+        this.identityId = identityId;
+        this.channelConfigId = channelConfigId;
         this.channelType = channelType;
         this.externalIdentityRef = externalIdentityRef;
         this.status = status;
@@ -76,6 +84,14 @@ public class ConversationEntity {
 
     public UUID getAgentId() {
         return agentId;
+    }
+
+    public UUID getIdentityId() {
+        return identityId;
+    }
+
+    public UUID getChannelConfigId() {
+        return channelConfigId;
     }
 
     public String getChannelType() {

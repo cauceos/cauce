@@ -14,6 +14,8 @@ public final class ConversationMapper {
         return new ConversationEntity(
                 conversation.id(),
                 conversation.agentId(),
+                conversation.identityId(),
+                conversation.channelConfigId().orElse(null),
                 conversation.channelType(),
                 conversation.externalIdentityRef(),
                 conversation.status(),
@@ -28,6 +30,8 @@ public final class ConversationMapper {
         return Conversation.rehydrate(
                 entity.getId(),
                 entity.getAgentId(),
+                entity.getIdentityId(),
+                entity.getChannelConfigId(),
                 entity.getChannelType(),
                 entity.getExternalIdentityRef(),
                 entity.getStatus(),

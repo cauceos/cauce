@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.conversation.Conversation;
+import dev.cauce.core.identity.Identity;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.Tenant;
@@ -13,6 +15,8 @@ import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationMapper;
 import dev.cauce.memory.conversation.ConversationRepository;
+import dev.cauce.memory.identity.IdentityMapper;
+import dev.cauce.memory.identity.IdentityRepository;
 import dev.cauce.memory.tenant.TenantMapper;
 import dev.cauce.memory.tenant.TenantRepository;
 import java.sql.Connection;
@@ -62,6 +66,9 @@ class MessageToolContentPersistenceIT {
     private AgentRepository agentRepository;
 
     @Autowired
+    private IdentityRepository identityRepository;
+
+    @Autowired
     private ConversationRepository conversationRepository;
 
     @Autowired
@@ -69,6 +76,7 @@ class MessageToolContentPersistenceIT {
 
     private final TenantMapper tenantMapper = new TenantMapper();
     private final AgentMapper agentMapper = new AgentMapper();
+    private final IdentityMapper identityMapper = new IdentityMapper();
     private final ConversationMapper conversationMapper = new ConversationMapper();
     private final MessageMapper messageMapper = new MessageMapper();
 
@@ -100,7 +108,9 @@ class MessageToolContentPersistenceIT {
         Agent agent = Agent.create(clientA.id(), "Agent", "", "ollama", "llama3");
         agentRepository.save(agentMapper.toEntity(agent));
 
-        conversation = Conversation.start(agent.id(), "api", "user-1");
+        Identity identity = Identity.create(clientA.id(), "api", IdentityKind.CLIENT_REFERENCE, "user-1");
+        identityRepository.save(identityMapper.toEntity(identity));
+        conversation = Conversation.start(agent.id(), identity, null);
         conversationRepository.save(conversationMapper.toEntity(conversation));
     }
 

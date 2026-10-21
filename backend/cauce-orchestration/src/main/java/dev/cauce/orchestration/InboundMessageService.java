@@ -3,6 +3,7 @@ package dev.cauce.orchestration;
 import dev.cauce.core.UuidGenerator;
 import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.Conversation;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.orchestration.audit.ConductAuditEvents;
@@ -22,9 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * The inbound ingest unit: the single, channel-agnostic entry point that turns an incoming
  * USER message into queued work for the asynchronous orchestrator. The REST messaging endpoint
- * and future cauce-channels adapters all call {@link #ingest}; an adapter passes its own
- * {@code channelType} (e.g. {@code "whatsapp"}), the REST endpoint passes the reserved
- * built-in {@code "api"}.
+ * and the cauce-channels adapters all call {@link #ingest}; an adapter passes its own
+ * {@code channelType} (e.g. {@code "telegram"}) and the id of the channel config the message
+ * came in through, the REST endpoint passes the reserved built-in {@code "api"} and no config.
+ * The interlocutor arrives as a typed {@code (kind, value)} pair that the caller named
+ * (ADR 0004): the adapter that produced the value knows what it is, the REST endpoint stamps
+ * {@link IdentityKind#CLIENT_REFERENCE}.
  *
  * <p>{@link #ingest} runs in one transaction. It calls three tenant-scoped services
  * ({@link ConversationService#resolveOrStartConversation}, {@link MessageService#appendMessage},
@@ -83,18 +87,21 @@ public class InboundMessageService {
 
     /**
      * Ingests an inbound USER message without deduplication; equivalent to
-     * {@link #ingest(UUID, String, String, String, String)} with a {@code null} key.
+     * {@link #ingest(UUID, String, UUID, IdentityKind, String, String, String)} with a
+     * {@code null} key.
      */
     @Transactional
-    public InboundMessageResult ingest(UUID agentId, String channelType, String externalIdentityRef,
-                                       String content) {
-        return ingest(agentId, channelType, externalIdentityRef, content, null);
+    public InboundMessageResult ingest(UUID agentId, String channelType, UUID channelConfigId,
+                                       IdentityKind identityKind, String identityValue, String content) {
+        return ingest(agentId, channelType, channelConfigId, identityKind, identityValue, content, null);
     }
 
     /**
-     * Ingests an inbound USER message for {@code agentId} from the external user
-     * {@code externalIdentityRef} on {@code channelType}: resolves (or starts) the conversation,
-     * appends the USER message, and enqueues the invocation that will produce the agent's reply.
+     * Ingests an inbound USER message for {@code agentId} from the interlocutor
+     * {@code (identityKind, identityValue)} on {@code channelType}, entered through
+     * {@code channelConfigId} ({@code null} for {@code api}): resolves (or creates) the identity
+     * and the conversation, appends the USER message, and enqueues the invocation that will
+     * produce the agent's reply.
      *
      * <p>With a non-null {@code idempotencyKey}, a request whose {@code (agentId, key)} was
      * already accepted returns the original result and performs no work (see the class javadoc);
@@ -108,7 +115,8 @@ public class InboundMessageService {
      *     longer than {@value #IDEMPOTENCY_KEY_MAX_LENGTH} characters
      */
     @Transactional
-    public InboundMessageResult ingest(UUID agentId, String channelType, String externalIdentityRef,
+    public InboundMessageResult ingest(UUID agentId, String channelType, UUID channelConfigId,
+                                       IdentityKind identityKind, String identityValue,
                                        String content, String idempotencyKey) {
         if (idempotencyKey != null) {
             requireValidKey(idempotencyKey);
@@ -121,8 +129,8 @@ public class InboundMessageService {
             }
         }
 
-        Conversation conversation =
-                conversationService.resolveOrStartConversation(agentId, channelType, externalIdentityRef);
+        Conversation conversation = conversationService.resolveOrStartConversation(
+                agentId, channelType, identityKind, identityValue, channelConfigId);
 
         UUID lockId = null;
         if (idempotencyKey != null) {
@@ -157,7 +165,7 @@ public class InboundMessageService {
         // record. Only the winning path records: an idempotent replay is audit-silent, like
         // it is event-silent.
         auditRecorder.record(ConductAuditEvents.messageReceived(invocation.tenantId(),
-                invocation.id(), agentId, channelType, userMessage));
+                invocation.id(), agentId, channelType, conversation.identityId(), userMessage));
         // Published synchronously INSIDE the ingest transaction: if it rolls back, the event
         // will have fired for work that never existed. Harmless with no consumers; TODO when a
         // persisting consumer lands, it must listen with

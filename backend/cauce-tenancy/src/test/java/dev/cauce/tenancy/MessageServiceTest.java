@@ -102,7 +102,7 @@ class MessageServiceTest {
 
     private static ConversationEntity conversation(UUID id) {
         Instant now = Instant.now();
-        return new ConversationEntity(id, UUID.randomUUID(), "whatsapp", "+34612345678",
+        return new ConversationEntity(id, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "whatsapp", "+34612345678",
                 ConversationStatus.OPEN, now, now, null, null, null);
     }
 }

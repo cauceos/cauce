@@ -16,6 +16,8 @@ import dev.cauce.core.audit.AuditContentHash;
 import dev.cauce.core.audit.AuditEvent;
 import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.Conversation;
+import dev.cauce.core.identity.Identity;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.orchestration.audit.ConductAuditEvents;
@@ -45,6 +47,9 @@ class InboundMessageServiceTest {
     private AuditEventRecorder auditRecorder;
     private InboundMessageService service;
 
+    private static final Identity API_IDENTITY =
+            Identity.create(UUID.randomUUID(), "api", IdentityKind.CLIENT_REFERENCE, "user-1");
+
     @BeforeEach
     void setUp() {
         conversationService = mock(ConversationService.class);
@@ -61,26 +66,26 @@ class InboundMessageServiceTest {
     @Test
     void ingest_resolvesAppendsAndEnqueuesInOrder_returningTheThreeIds() {
         UUID agentId = UUID.randomUUID();
-        Conversation conversation = Conversation.start(agentId, "api", "user-1");
+        Conversation conversation = Conversation.start(agentId, API_IDENTITY, null);
         Message userMessage = Message.from(conversation.id(), MessageRole.USER, "Hola");
         PendingInvocation invocation =
                 PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id());
 
-        when(conversationService.resolveOrStartConversation(agentId, "api", "user-1"))
+        when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
                 .thenReturn(invocation);
 
-        InboundMessageResult result = service.ingest(agentId, "api", "user-1", "Hola");
+        InboundMessageResult result = service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
 
         assertThat(result.conversationId()).isEqualTo(conversation.id());
         assertThat(result.messageId()).isEqualTo(userMessage.id());
         assertThat(result.invocationId()).isEqualTo(invocation.id());
 
         InOrder inOrder = inOrder(conversationService, messageService, pendingInvocationService);
-        inOrder.verify(conversationService).resolveOrStartConversation(agentId, "api", "user-1");
+        inOrder.verify(conversationService).resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null);
         inOrder.verify(messageService).appendMessage(conversation.id(), MessageRole.USER, "Hola");
         inOrder.verify(pendingInvocationService).enqueueInvocation(conversation.id(), userMessage.id());
     }
@@ -89,19 +94,19 @@ class InboundMessageServiceTest {
     void ingest_validMessage_publishesInvocationRequested() {
         UUID agentId = UUID.randomUUID();
         UUID owningTenantId = UUID.randomUUID();
-        Conversation conversation = Conversation.start(agentId, "api", "user-1");
+        Conversation conversation = Conversation.start(agentId, API_IDENTITY, null);
         Message userMessage = Message.from(conversation.id(), MessageRole.USER, "Hola");
         PendingInvocation invocation =
                 PendingInvocation.create(owningTenantId, conversation.id(), userMessage.id());
 
-        when(conversationService.resolveOrStartConversation(agentId, "api", "user-1"))
+        when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
                 .thenReturn(invocation);
 
-        service.ingest(agentId, "api", "user-1", "Hola");
+        service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
 
         ArgumentCaptor<InvocationRequested> captor =
                 ArgumentCaptor.forClass(InvocationRequested.class);
@@ -116,21 +121,25 @@ class InboundMessageServiceTest {
     }
 
     @Test
-    void ingest_forwardsTheCallerChannelType_soAdaptersAreNotTiedToApi() {
+    void ingest_forwardsTheCallersChannelConfigAndTypedIdentity_soAdaptersAreNotTiedToApi() {
         UUID agentId = UUID.randomUUID();
-        Conversation conversation = Conversation.start(agentId, "whatsapp", "+34600111222");
+        UUID configId = UUID.randomUUID();
+        Identity identity = Identity.create(UUID.randomUUID(), "telegram", IdentityKind.PROVIDER_USER_ID, "42");
+        Conversation conversation = Conversation.start(agentId, identity, configId);
         Message userMessage = Message.from(conversation.id(), MessageRole.USER, "Hi");
 
-        when(conversationService.resolveOrStartConversation(agentId, "whatsapp", "+34600111222"))
+        when(conversationService.resolveOrStartConversation(agentId, "telegram", IdentityKind.PROVIDER_USER_ID,
+                "42", configId))
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hi"))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
                 .thenReturn(PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id()));
 
-        service.ingest(agentId, "whatsapp", "+34600111222", "Hi");
+        service.ingest(agentId, "telegram", configId, IdentityKind.PROVIDER_USER_ID, "42", "Hi");
 
-        verify(conversationService).resolveOrStartConversation(agentId, "whatsapp", "+34600111222");
+        verify(conversationService).resolveOrStartConversation(agentId, "telegram",
+                IdentityKind.PROVIDER_USER_ID, "42", configId);
     }
 
     // === AUDIT CAPTURE ===
@@ -139,19 +148,19 @@ class InboundMessageServiceTest {
     void ingest_validMessage_recordsConductAuditEventWithContentHashNotContent() {
         UUID agentId = UUID.randomUUID();
         UUID owningTenantId = UUID.randomUUID();
-        Conversation conversation = Conversation.start(agentId, "api", "user-1");
+        Conversation conversation = Conversation.start(agentId, API_IDENTITY, null);
         Message userMessage = Message.from(conversation.id(), MessageRole.USER, "Hola");
         PendingInvocation invocation =
                 PendingInvocation.create(owningTenantId, conversation.id(), userMessage.id());
 
-        when(conversationService.resolveOrStartConversation(agentId, "api", "user-1"))
+        when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
                 .thenReturn(invocation);
 
-        service.ingest(agentId, "api", "user-1", "Hola");
+        service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
 
         ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
         verify(auditRecorder).record(captor.capture());
@@ -164,10 +173,12 @@ class InboundMessageServiceTest {
                 .containsEntry("message_id", userMessage.id().toString())
                 .containsEntry("agent_id", agentId.toString())
                 .containsEntry("channel_type", "api")
+                .containsEntry("identity_id", conversation.identityId().toString())
                 .containsEntry("content_hash", AuditContentHash.of(owningTenantId, "Hola"))
                 .containsEntry("content_length", 4);
-        // The binding is by hash: the raw text never enters the audit payload.
-        assertThat(event.payload().values()).doesNotContain("Hola");
+        // The binding is by hash: the raw text never enters the audit payload, and the
+        // interlocutor enters as its opaque id only, never its value (PC-3).
+        assertThat(event.payload().values()).doesNotContain("Hola", "user-1");
     }
 
     // === IDEMPOTENCY ===
@@ -175,17 +186,17 @@ class InboundMessageServiceTest {
     @Test
     void ingest_withoutKey_neverTouchesIdempotencyStorage() {
         UUID agentId = UUID.randomUUID();
-        Conversation conversation = Conversation.start(agentId, "api", "user-1");
+        Conversation conversation = Conversation.start(agentId, API_IDENTITY, null);
         Message userMessage = Message.from(conversation.id(), MessageRole.USER, "Hola");
 
-        when(conversationService.resolveOrStartConversation(agentId, "api", "user-1"))
+        when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
                 .thenReturn(PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id()));
 
-        service.ingest(agentId, "api", "user-1", "Hola", null);
+        service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola", null);
 
         verifyNoInteractions(idempotencyRecordRepository);
         verify(eventPublisher).publishEvent(any(InvocationRequested.class));
@@ -198,7 +209,7 @@ class InboundMessageServiceTest {
         when(idempotencyRecordRepository.findByAgentIdAndIdempotencyKey(agentId, "wamid-1"))
                 .thenReturn(Optional.of(stored));
 
-        InboundMessageResult result = service.ingest(agentId, "api", "user-1", "Hola", "wamid-1");
+        InboundMessageResult result = service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola", "wamid-1");
 
         assertThat(result.conversationId()).isEqualTo(stored.getConversationId());
         assertThat(result.messageId()).isEqualTo(stored.getMessageId());
@@ -211,18 +222,18 @@ class InboundMessageServiceTest {
     @Test
     void ingest_lostInsertRace_returnsWinnersResultWithoutSideEffects() {
         UUID agentId = UUID.randomUUID();
-        Conversation conversation = Conversation.start(agentId, "api", "user-1");
+        Conversation conversation = Conversation.start(agentId, API_IDENTITY, null);
         IngestIdempotencyRecordEntity winner = storedRecord(agentId, "wamid-1");
 
         when(idempotencyRecordRepository.findByAgentIdAndIdempotencyKey(agentId, "wamid-1"))
                 .thenReturn(Optional.empty())   // fast-path miss: the winner had not committed yet
                 .thenReturn(Optional.of(winner)); // re-read after losing the lock insert
-        when(conversationService.resolveOrStartConversation(agentId, "api", "user-1"))
+        when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
         when(idempotencyRecordRepository.insertLockIfAbsent(any(), eq(agentId), eq("wamid-1")))
                 .thenReturn(0);
 
-        InboundMessageResult result = service.ingest(agentId, "api", "user-1", "Hola", "wamid-1");
+        InboundMessageResult result = service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola", "wamid-1");
 
         assertThat(result.conversationId()).isEqualTo(winner.getConversationId());
         assertThat(result.messageId()).isEqualTo(winner.getMessageId());
@@ -234,14 +245,14 @@ class InboundMessageServiceTest {
     @Test
     void ingest_freshKey_recordsResultAndPublishesOnce() {
         UUID agentId = UUID.randomUUID();
-        Conversation conversation = Conversation.start(agentId, "api", "user-1");
+        Conversation conversation = Conversation.start(agentId, API_IDENTITY, null);
         Message userMessage = Message.from(conversation.id(), MessageRole.USER, "Hola");
         PendingInvocation invocation =
                 PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id());
 
         when(idempotencyRecordRepository.findByAgentIdAndIdempotencyKey(agentId, "wamid-1"))
                 .thenReturn(Optional.empty());
-        when(conversationService.resolveOrStartConversation(agentId, "api", "user-1"))
+        when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
         when(idempotencyRecordRepository.insertLockIfAbsent(any(), eq(agentId), eq("wamid-1")))
                 .thenReturn(1);
@@ -250,7 +261,7 @@ class InboundMessageServiceTest {
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
                 .thenReturn(invocation);
 
-        InboundMessageResult result = service.ingest(agentId, "api", "user-1", "Hola", "wamid-1");
+        InboundMessageResult result = service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola", "wamid-1");
 
         assertThat(result.invocationId()).isEqualTo(invocation.id());
         ArgumentCaptor<UUID> lockId = ArgumentCaptor.forClass(UUID.class);
@@ -263,7 +274,7 @@ class InboundMessageServiceTest {
     @Test
     void ingest_blankKey_throwsInvalidIdempotencyKey() {
         assertThatThrownBy(() ->
-                service.ingest(UUID.randomUUID(), "api", "user-1", "Hola", "   "))
+                service.ingest(UUID.randomUUID(), "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola", "   "))
                 .isInstanceOf(InvalidIdempotencyKeyException.class)
                 .hasMessageContaining("blank");
         verifyNoInteractions(conversationService, messageService, pendingInvocationService,
@@ -273,7 +284,7 @@ class InboundMessageServiceTest {
     @Test
     void ingest_oversizedKey_throwsInvalidIdempotencyKey() {
         assertThatThrownBy(() ->
-                service.ingest(UUID.randomUUID(), "api", "user-1", "Hola", "k".repeat(256)))
+                service.ingest(UUID.randomUUID(), "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola", "k".repeat(256)))
                 .isInstanceOf(InvalidIdempotencyKeyException.class)
                 .hasMessageContaining("255");
         verifyNoInteractions(conversationService, messageService, pendingInvocationService,

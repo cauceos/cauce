@@ -18,8 +18,11 @@ import java.util.Set;
  */
 final class SupportedChannels {
 
+    /** The built-in REST channel: handled in-process, never through a channel config. */
+    static final String API = "api";
+
     private static final Set<String> SUPPORTED =
-            Set.of("api", "telegram", "whatsapp", "voice", "email", "web_chat");
+            Set.of(API, "telegram", "whatsapp", "voice", "email", "web_chat");
 
     private SupportedChannels() {
     }

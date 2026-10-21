@@ -8,6 +8,7 @@ import dev.cauce.core.agent.Agent;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationStatus;
 import dev.cauce.core.conversation.InvalidConversationTransitionException;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.tenant.MissingTenantContextException;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
@@ -30,6 +31,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -115,7 +117,7 @@ class ConversationServiceIT {
 
     @Test
     void startConversation_forVisibleAgent_persistsOpenConversation() {
-        Conversation conversation = startForClientA("whatsapp", "+34612345678");
+        Conversation conversation = startForClientA("user-1");
 
         assertThat(conversation.status()).isEqualTo(ConversationStatus.OPEN);
         assertThat(conversation.agentId()).isEqualTo(agent.id());
@@ -129,28 +131,33 @@ class ConversationServiceIT {
     void startConversation_withoutContext_throwsMissingTenantContext() {
         TenantContext.clear();
 
-        assertThatThrownBy(() ->
-                conversationService.startConversation(agent.id(), "whatsapp", "+34612345678"))
+        assertThatThrownBy(() -> conversationService.startConversation(agent.id(), "api",
+                IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .isInstanceOf(MissingTenantContextException.class);
     }
 
     @Test
-    void startConversation_underPartnerContext_succeeds() {
-        // B2B2B: the partner operates on behalf of its client (e.g. an inbound webhook),
-        // so RLS makes the client's agent visible and the conversation is created.
+    void startConversation_underPartnerContext_mintsTheIdentityInTheAgentsTenant() {
+        // B2B2B: the partner operates on behalf of its client (e.g. an inbound webhook), so RLS
+        // makes the client's agent visible; the identity belongs to the agent's tenant (the
+        // client), never to the acting partner.
         TenantContext.setCurrentTenantId(partner.id());
+        Conversation conversation;
         try {
-            Conversation conversation =
-                    conversationService.startConversation(agent.id(), "whatsapp", "+34612345678");
+            conversation = conversationService.startConversation(agent.id(), "api",
+                    IdentityKind.CLIENT_REFERENCE, "user-1", null);
             assertThat(conversation.agentId()).isEqualTo(agent.id());
         } finally {
             TenantContext.clear();
         }
+        UUID identityTenant = jdbc.queryForObject("SELECT tenant_id FROM identities WHERE id = ?",
+                UUID.class, conversation.identityId());
+        assertThat(identityTenant).isEqualTo(clientA.id());
     }
 
     @Test
     void conversationsCreatedViaService_areFilteredByRlsHierarchy() throws SQLException {
-        startForClientA("whatsapp", "+34612345678");
+        startForClientA("user-1");
 
         assertThat(countConversationsVisibleAs(clientA.id())).isEqualTo(1);  // owner sees it
         assertThat(countConversationsVisibleAs(partner.id())).isEqualTo(1);  // its partner sees it
@@ -161,40 +168,44 @@ class ConversationServiceIT {
 
     @Test
     void getConversation_returnsConversationVisibleToContext() {
-        Conversation created = startForClientA("web_chat", "session-xyz");
+        UUID configId = seedChannelConfig("telegram");
+        Conversation created = asClientA(() -> conversationService.startConversation(agent.id(), "telegram",
+                IdentityKind.PROVIDER_USER_ID, "987654321", configId));
 
         TenantContext.setCurrentTenantId(clientA.id());
         try {
             Optional<Conversation> found = conversationService.getConversation(created.id());
             assertThat(found).isPresent();
             assertThat(found.get().id()).isEqualTo(created.id());
-            assertThat(found.get().channelType()).isEqualTo("web_chat");
-            assertThat(found.get().externalIdentityRef()).isEqualTo("session-xyz");
+            assertThat(found.get().identityId()).isEqualTo(created.identityId());
+            assertThat(found.get().channelConfigId()).contains(configId);
+            assertThat(found.get().channelType()).isEqualTo("telegram");
+            assertThat(found.get().externalIdentityRef()).isEqualTo("987654321");
         } finally {
             TenantContext.clear();
         }
     }
 
     @Test
-    void findActiveConversation_returnsOnlyTheOpenConversationForTheTuple() {
-        Conversation open = startForClientA("whatsapp", "+34600111222");
-        // A CLOSED thread for a different user on the same channel; not yet reachable via
-        // domain transitions, so it is seeded directly.
-        seedConversation("whatsapp", "+34699888777", ConversationStatus.CLOSED);
+    void findActiveConversation_returnsOnlyTheOpenConversationForTheKey() {
+        Conversation open = startForClientA("user-1");
+        Conversation closed = startForClientA("user-2");
+        asClientA(() -> conversationService.closeConversation(closed.id()));
 
         TenantContext.setCurrentTenantId(clientA.id());
         try {
-            assertThat(conversationService.findActiveConversation(agent.id(), "whatsapp", "+34600111222"))
+            assertThat(conversationService.findActiveConversation(agent.id(), open.identityId(), null))
                     .get()
                     .satisfies(c -> {
                         assertThat(c.id()).isEqualTo(open.id());
                         assertThat(c.status()).isEqualTo(ConversationStatus.OPEN);
                     });
-            // Only a CLOSED conversation exists for this user => no active one.
-            assertThat(conversationService.findActiveConversation(agent.id(), "whatsapp", "+34699888777"))
+            // Only a CLOSED conversation exists for this identity => no active one.
+            assertThat(conversationService.findActiveConversation(agent.id(), closed.identityId(), null))
                     .isEmpty();
-            // No conversation at all on this channel for this user.
-            assertThat(conversationService.findActiveConversation(agent.id(), "voice", "+34600111222"))
+            // The same identity through a channel config it never used => no active one.
+            assertThat(conversationService.findActiveConversation(agent.id(), open.identityId(),
+                    UUID.randomUUID()))
                     .isEmpty();
         } finally {
             TenantContext.clear();
@@ -205,81 +216,88 @@ class ConversationServiceIT {
     void resolveOrStartConversation_reusesOpenThreadAndCreatesOnePerIdentity() {
         TenantContext.setCurrentTenantId(clientA.id());
         try {
-            Conversation first = conversationService
-                    .resolveOrStartConversation(agent.id(), "api", "user-1");
-            // Same (agent, channel, identity) => the same open conversation is reused.
-            Conversation again = conversationService
-                    .resolveOrStartConversation(agent.id(), "api", "user-1");
+            Conversation first = resolveApi("user-1");
+            // Same (agent, identity, no config) => the same open conversation is reused.
+            Conversation again = resolveApi("user-1");
             assertThat(again.id()).isEqualTo(first.id());
-            // A different external identity => a distinct conversation.
-            Conversation other = conversationService
-                    .resolveOrStartConversation(agent.id(), "api", "user-2");
+            // A different identity => a distinct conversation.
+            Conversation other = resolveApi("user-2");
             assertThat(other.id()).isNotEqualTo(first.id());
+            assertThat(other.identityId()).isNotEqualTo(first.identityId());
         } finally {
             TenantContext.clear();
         }
 
-        Integer apiConversations = jdbc.queryForObject(
-                "SELECT count(*) FROM conversations WHERE channel_type = 'api'", Integer.class);
-        assertThat(apiConversations).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM conversations", Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM identities", Integer.class)).isEqualTo(2);
     }
 
     @Test
-    void insertOpenConversationIfAbsent_secondInsertForSameOpenTupleIsSkipped() {
+    void resolveOrStartConversation_sameIdentityThroughTwoConfigs_opensTwoThreads() {
+        // PC-1: the config is the door, the identity is the person. One person reaching the same
+        // agent through two bots is one identity and two threads.
+        UUID botA = seedChannelConfig("telegram");
+        UUID botB = seedChannelConfig("telegram");
+
+        TenantContext.setCurrentTenantId(clientA.id());
+        try {
+            Conversation viaA = resolveTelegram("987654321", botA);
+            Conversation viaB = resolveTelegram("987654321", botB);
+            Conversation viaAAgain = resolveTelegram("987654321", botA);
+
+            assertThat(viaB.identityId()).isEqualTo(viaA.identityId());
+            assertThat(viaB.id()).isNotEqualTo(viaA.id());
+            assertThat(viaAAgain.id()).isEqualTo(viaA.id());
+            assertThat(viaA.channelConfigId()).contains(botA);
+            assertThat(viaB.channelConfigId()).contains(botB);
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @Test
+    void insertOpenConversationIfAbsent_secondInsertForSameOpenKeyIsSkipped_evenWithANullConfig() {
         // Two sequential committed transactions: the first creates the OPEN thread; the second
-        // attempt for the same (agent, channel, identity) is refused by the V13 partial unique
-        // index and returns 0 (ON CONFLICT DO NOTHING) rather than duplicating the thread.
+        // attempt for the same (agent, identity, NULL config) is refused by the V26 partial unique
+        // index, which is NULLS NOT DISTINCT, and returns 0 (ON CONFLICT DO NOTHING).
+        UUID identityId = asClientA(() -> resolveApi("seed")).identityId();
+        jdbc.update("UPDATE conversations SET status = 'CLOSED', closed_at = now()");
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         Integer first = tx.execute(status -> conversationRepository.insertOpenConversationIfAbsent(
-                UuidGenerator.newV7(), agent.id(), "api", "user-1"));
+                UuidGenerator.newV7(), agent.id(), identityId, null, "api", "seed"));
         Integer second = tx.execute(status -> conversationRepository.insertOpenConversationIfAbsent(
-                UuidGenerator.newV7(), agent.id(), "api", "user-1"));
+                UuidGenerator.newV7(), agent.id(), identityId, null, "api", "seed"));
 
         assertThat(first).isEqualTo(1);
         assertThat(second).isZero();
-        Integer openRows = jdbc.queryForObject(
-                "SELECT count(*) FROM conversations WHERE agent_id = ? AND channel_type = 'api' "
-                        + "AND external_identity_ref = 'user-1' AND status = 'OPEN'",
-                Integer.class, agent.id());
-        assertThat(openRows).isEqualTo(1);
+        assertThat(countOpen(identityId)).isEqualTo(1);
     }
 
     @Test
-    void resolveOrStartConversation_underConcurrency_yieldsExactlyOneOpenThread() throws Exception {
-        int parallel = 8;
-        ExecutorService pool = Executors.newFixedThreadPool(parallel);
-        CyclicBarrier barrier = new CyclicBarrier(parallel);
-        List<Callable<UUID>> tasks = new ArrayList<>();
-        for (int i = 0; i < parallel; i++) {
-            tasks.add(() -> {
-                TenantContext.setCurrentTenantId(clientA.id());
-                try {
-                    barrier.await(5, TimeUnit.SECONDS); // release all callers together to force the race
-                    return conversationService
-                            .resolveOrStartConversation(agent.id(), "api", "user-shared").id();
-                } finally {
-                    TenantContext.clear();
-                }
-            });
-        }
+    void resolveOrStartConversation_underConcurrency_yieldsExactlyOneOpenThread_forTheApiChannel()
+            throws Exception {
+        Set<UUID> returnedIds = race(() -> resolveApi("user-shared").id());
 
-        Set<UUID> returnedIds = new HashSet<>();
-        try {
-            for (Future<UUID> future : pool.invokeAll(tasks)) {
-                returnedIds.add(future.get(10, TimeUnit.SECONDS));
-            }
-        } finally {
-            pool.shutdownNow();
-        }
-
-        // All concurrent callers converge on a single conversation, and the DB holds exactly one
-        // OPEN row for the tuple — the partial unique index prevents the split.
+        // All concurrent callers converge on one identity and one conversation: the identities
+        // key and the NULLS NOT DISTINCT open-thread index both arbitrate, so a NULL config
+        // cannot split the thread.
         assertThat(returnedIds).as("concurrent callers converge on one conversation").hasSize(1);
-        Integer openRows = jdbc.queryForObject(
-                "SELECT count(*) FROM conversations WHERE agent_id = ? AND channel_type = 'api' "
-                        + "AND external_identity_ref = 'user-shared' AND status = 'OPEN'",
-                Integer.class, agent.id());
-        assertThat(openRows).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM identities", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM conversations WHERE status = 'OPEN'",
+                Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void resolveOrStartConversation_underConcurrency_yieldsExactlyOneOpenThread_throughAConfig()
+            throws Exception {
+        UUID bot = seedChannelConfig("telegram");
+
+        Set<UUID> returnedIds = race(() -> resolveTelegram("987654321", bot).id());
+
+        assertThat(returnedIds).as("concurrent callers converge on one conversation").hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM identities", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM conversations WHERE status = 'OPEN'",
+                Integer.class)).isEqualTo(1);
     }
 
     @Test
@@ -288,8 +306,8 @@ class ConversationServiceIT {
         TenantContext.setCurrentTenantId(clientA.id());
         List<UUID> creationOrder = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
-            creationOrder.add(conversationService
-                    .startConversation(agent.id(), "whatsapp", "+3460000000" + i).id());
+            creationOrder.add(conversationService.startConversation(agent.id(), "api",
+                    IdentityKind.CLIENT_REFERENCE, "user-" + i, null).id());
             Thread.sleep(2);
         }
         TenantContext.clear();
@@ -301,7 +319,7 @@ class ConversationServiceIT {
 
     @Test
     void lifecycle_startEscalateCloseArchive_persistsEachStateInDb() {
-        Conversation conv = startForClientA("whatsapp", "+34612345678");
+        Conversation conv = startForClientA("user-1");
 
         asClientA(() -> conversationService.escalateConversation(conv.id()));
         assertThat(readStatus(conv.id())).isEqualTo("ESCALATED");
@@ -321,7 +339,7 @@ class ConversationServiceIT {
     @Test
     void closeConversation_underPartnerContext_succeeds() {
         // B2B2B: a partner may close a conversation belonging to one of its clients.
-        Conversation conv = startForClientA("whatsapp", "+34612345678");
+        Conversation conv = startForClientA("user-1");
 
         TenantContext.setCurrentTenantId(partner.id());
         try {
@@ -335,7 +353,7 @@ class ConversationServiceIT {
 
     @Test
     void closeConversation_whenAlreadyClosed_throwsAndLeavesRowUnchanged() {
-        Conversation conv = startForClientA("whatsapp", "+34612345678");
+        Conversation conv = startForClientA("user-1");
         asClientA(() -> conversationService.closeConversation(conv.id()));
         Instant closedAt = readTimestamp(conv.id(), "closed_at");
 
@@ -352,32 +370,75 @@ class ConversationServiceIT {
         assertThat(readTimestamp(conv.id(), "closed_at")).isEqualTo(closedAt); // unchanged
     }
 
-    private Conversation startForClientA(String channelType, String externalIdentityRef) {
+    private Conversation startForClientA(String clientReference) {
+        return asClientA(() -> conversationService.startConversation(agent.id(), "api",
+                IdentityKind.CLIENT_REFERENCE, clientReference, null));
+    }
+
+    /** Must run under a tenant context. */
+    private Conversation resolveApi(String clientReference) {
+        return conversationService.resolveOrStartConversation(agent.id(), "api",
+                IdentityKind.CLIENT_REFERENCE, clientReference, null);
+    }
+
+    /** Must run under a tenant context. */
+    private Conversation resolveTelegram(String chatId, UUID configId) {
+        return conversationService.resolveOrStartConversation(agent.id(), "telegram",
+                IdentityKind.PROVIDER_USER_ID, chatId, configId);
+    }
+
+    /**
+     * Releases {@code parallel} first messages for the same key at once, each in its own
+     * transaction under client A's context, and returns the distinct conversation ids they got.
+     */
+    private Set<UUID> race(Callable<UUID> resolve) throws Exception {
+        int parallel = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(parallel);
+        CyclicBarrier barrier = new CyclicBarrier(parallel);
+        List<Callable<UUID>> tasks = new ArrayList<>();
+        for (int i = 0; i < parallel; i++) {
+            tasks.add(() -> {
+                TenantContext.setCurrentTenantId(clientA.id());
+                try {
+                    barrier.await(5, TimeUnit.SECONDS); // release all callers together to force the race
+                    return resolve.call();
+                } finally {
+                    TenantContext.clear();
+                }
+            });
+        }
+        Set<UUID> returnedIds = new HashSet<>();
+        try {
+            for (Future<UUID> future : pool.invokeAll(tasks)) {
+                returnedIds.add(future.get(10, TimeUnit.SECONDS));
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        return returnedIds;
+    }
+
+    /** Seeds a channel config for the agent directly: cauce-channels owns its service. */
+    private UUID seedChannelConfig(String channelType) {
+        UUID id = UuidGenerator.newV7();
+        jdbc.update("INSERT INTO channel_configs (id, tenant_id, agent_id, channel_type, credential, "
+                        + "webhook_secret_hash, status) VALUES (?, ?, ?, ?, 'token', 'hash', 'ACTIVE')",
+                id, clientA.id(), agent.id(), channelType);
+        return id;
+    }
+
+    private <T> T asClientA(Supplier<T> action) {
         TenantContext.setCurrentTenantId(clientA.id());
         try {
-            return conversationService.startConversation(agent.id(), channelType, externalIdentityRef);
+            return action.get();
         } finally {
             TenantContext.clear();
         }
     }
 
-    private void seedConversation(String channelType, String externalIdentityRef,
-                                  ConversationStatus status) {
-        Instant now = Instant.now();
-        jdbc.update("INSERT INTO conversations (id, agent_id, channel_type, external_identity_ref, "
-                + "status, started_at, last_message_at, closed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                UuidGenerator.newV7(), agent.id(), channelType, externalIdentityRef,
-                status.name(), Timestamp.from(now), Timestamp.from(now),
-                status == ConversationStatus.CLOSED ? Timestamp.from(now) : null);
-    }
-
-    private void asClientA(Runnable action) {
-        TenantContext.setCurrentTenantId(clientA.id());
-        try {
-            action.run();
-        } finally {
-            TenantContext.clear();
-        }
+    private int countOpen(UUID identityId) {
+        return jdbc.queryForObject("SELECT count(*) FROM conversations WHERE agent_id = ? AND identity_id = ? "
+                + "AND status = 'OPEN'", Integer.class, agent.id(), identityId);
     }
 
     private String readStatus(UUID conversationId) {

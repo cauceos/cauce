@@ -3,6 +3,7 @@ package dev.cauce.orchestration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.cauce.core.agent.Agent;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.events.InvocationRequested;
@@ -106,7 +107,7 @@ class IngestIdempotencyIT extends AbstractOrchestrationIntegrationTest {
                 TenantContext.setCurrentTenantId(clientA.id());
                 try {
                     barrier.await(5, TimeUnit.SECONDS); // release all callers together to force the race
-                    return inboundMessageService.ingest(agent.id(), "api", "user-shared", "Hola",
+                    return inboundMessageService.ingest(agent.id(), "api", null, IdentityKind.CLIENT_REFERENCE, "user-shared", "Hola",
                             "wamid-shared");
                 } finally {
                     TenantContext.clear();
@@ -174,7 +175,7 @@ class IngestIdempotencyIT extends AbstractOrchestrationIntegrationTest {
                                           String idempotencyKey) {
         TenantContext.setCurrentTenantId(context);
         try {
-            return inboundMessageService.ingest(agent.id(), "api", externalIdentityRef, content,
+            return inboundMessageService.ingest(agent.id(), "api", null, IdentityKind.CLIENT_REFERENCE, externalIdentityRef, content,
                     idempotencyKey);
         } finally {
             TenantContext.clear();

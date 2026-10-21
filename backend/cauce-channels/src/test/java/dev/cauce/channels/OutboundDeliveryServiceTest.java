@@ -16,6 +16,8 @@ import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.core.conversation.Conversation;
+import dev.cauce.core.identity.Identity;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.TenantContext;
@@ -52,7 +54,8 @@ class OutboundDeliveryServiceTest {
         service = new OutboundDeliveryService(
                 new ChannelAdapterRegistry(List.of(), List.of(telegramOutbound)),
                 channelConfigService, new SyncTaskExecutor());
-        conversation = Conversation.start(AGENT_ID, "telegram", "987654321");
+        conversation = Conversation.start(AGENT_ID,
+                Identity.create(TENANT_ID, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321"), UUID.randomUUID());
         reply = Message.from(conversation.id(), MessageRole.AGENT, "Hola, soy un agente");
         config = ChannelConfig.create(TENANT_ID, AGENT_ID, "telegram", "12345:token", "hash");
         TenantContext.setCurrentTenantId(TENANT_ID);
@@ -65,7 +68,8 @@ class OutboundDeliveryServiceTest {
 
     @Test
     void dispatchAgentReply_channelWithoutOutboundAdapter_isNoOp() {
-        Conversation apiConversation = Conversation.start(AGENT_ID, "api", "user-1");
+        Conversation apiConversation = Conversation.start(AGENT_ID,
+                Identity.create(TENANT_ID, "api", IdentityKind.CLIENT_REFERENCE, "user-1"), null);
 
         service.dispatchAgentReply(apiConversation, reply);
 

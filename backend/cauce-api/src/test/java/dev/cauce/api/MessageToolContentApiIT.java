@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import dev.cauce.api.support.AbstractApiIntegrationTest;
 import dev.cauce.core.conversation.Conversation;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.TenantContext;
@@ -69,7 +70,7 @@ class MessageToolContentApiIT extends AbstractApiIntegrationTest {
             UUID agentId = agentService
                     .createAgent(clientId, "Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null)
                     .id();
-            Conversation conversation = conversationService.startConversation(agentId, "api", "user-1");
+            Conversation conversation = conversationService.startConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null);
             UUID convId = conversation.id();
             // A full tool round: user asks, agent calls a tool, the tool answers.
             conversationGateway.append(Message.from(convId, MessageRole.USER, "What time is it?"));

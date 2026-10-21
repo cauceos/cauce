@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.conversation.Conversation;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.Tenant;
@@ -136,14 +137,14 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
         TenantContext.setCurrentTenantId(clientA.id());
         agent = agentService.createAgent(clientA.id(), "DentalBot",
                 "You are a dentist receptionist.", "anthropic", "claude-sonnet-4-7");
-        conversation = conversationService.startConversation(agent.id(), "whatsapp", "+34612345678");
+        conversation = conversationService.startConversation(agent.id(), "api", IdentityKind.CLIENT_REFERENCE, "+34612345678", null);
         triggerMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola");
 
         // A second client under the same partner, for cross-tenant claim/RLS assertions.
         TenantContext.setCurrentTenantId(clientB.id());
         Agent agentB = agentService.createAgent(clientB.id(), "ClinicBot",
                 "You are a clinic receptionist.", "anthropic", "claude-sonnet-4-7");
-        conversationB = conversationService.startConversation(agentB.id(), "whatsapp", "+34655555555");
+        conversationB = conversationService.startConversation(agentB.id(), "api", IdentityKind.CLIENT_REFERENCE, "+34655555555", null);
         triggerMessageB = messageService.appendMessage(conversationB.id(), MessageRole.USER, "Hi");
         TenantContext.clear();
     }
@@ -185,8 +186,7 @@ class PendingInvocationWorkerIT extends AbstractOrchestrationIntegrationTest {
             // A model absent from ModelContextWindow (still claude-* so the mock supports it).
             Agent unregistered = agentService.createAgent(clientA.id(), "FutureBot",
                     "You are helpful.", "anthropic", "claude-opus-4-99");
-            Conversation conv = conversationService.startConversation(
-                    unregistered.id(), "whatsapp", "+34611112222");
+            Conversation conv = conversationService.startConversation(unregistered.id(), "api", IdentityKind.CLIENT_REFERENCE, "+34611112222", null);
             Message trigger = messageService.appendMessage(conv.id(), MessageRole.USER, "Hola");
             enqueued = pendingInvocationService.enqueueInvocation(conv.id(), trigger.id());
         } finally {

@@ -153,7 +153,7 @@ class ConversationGatewayTest {
 
     private void stubConversation() {
         when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(
-                new ConversationEntity(conversationId, agentId, "whatsapp", "+34600000000",
+                new ConversationEntity(conversationId, agentId, UUID.randomUUID(), UUID.randomUUID(), "whatsapp", "+34600000000",
                         ConversationStatus.OPEN, now, now, null, null, null)));
     }
 

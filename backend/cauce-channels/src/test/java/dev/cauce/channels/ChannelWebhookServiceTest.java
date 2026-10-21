@@ -102,8 +102,8 @@ class ChannelWebhookServiceTest {
         when(adapter.verify(REQUEST, config)).thenReturn(true);
         when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.of(message));
         AtomicReference<UUID> contextDuringIngest = new AtomicReference<>();
-        when(inboundMessageService.ingest(config.agentId(), "telegram", "987654321", "Hola",
-                config.id() + ":1"))
+        when(inboundMessageService.ingest(config.agentId(), "telegram", config.id(),
+                IdentityKind.PROVIDER_USER_ID, "987654321", "Hola", config.id() + ":1"))
                 .thenAnswer(invocation -> {
                     contextDuringIngest.set(TenantContext.getCurrentTenantId().orElse(null));
                     return new InboundMessageResult(UUID.randomUUID(), UUID.randomUUID(),

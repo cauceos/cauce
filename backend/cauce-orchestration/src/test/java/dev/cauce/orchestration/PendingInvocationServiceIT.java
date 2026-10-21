@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.conversation.Conversation;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageNotFoundException;
 import dev.cauce.core.message.MessageRole;
@@ -85,7 +86,7 @@ class PendingInvocationServiceIT extends AbstractOrchestrationIntegrationTest {
         TenantContext.setCurrentTenantId(clientA.id());
         agent = agentService.createAgent(clientA.id(), "DentalBot",
                 "You are a dentist receptionist.", "anthropic", "claude-sonnet-4-7");
-        conversation = conversationService.startConversation(agent.id(), "whatsapp", "+34612345678");
+        conversation = conversationService.startConversation(agent.id(), "api", IdentityKind.CLIENT_REFERENCE, "+34612345678", null);
         triggerMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, "I need help");
         TenantContext.clear();
     }

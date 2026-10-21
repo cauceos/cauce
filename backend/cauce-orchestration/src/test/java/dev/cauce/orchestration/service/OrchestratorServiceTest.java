@@ -16,6 +16,8 @@ import dev.cauce.core.audit.AuditEvent;
 import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
+import dev.cauce.core.identity.Identity;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
@@ -529,7 +531,8 @@ class OrchestratorServiceTest {
 
     private void stubLoadAndEchoAppend() {
         agent = Agent.create(tenantId, "DentalBot", "You are helpful.", PROVIDER, MODEL);
-        conversation = Conversation.start(agent.id(), "telegram", "987654321");
+        conversation = Conversation.start(agent.id(),
+                Identity.create(tenantId, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321"), UUID.randomUUID());
         Message user = Message.from(conversationId, MessageRole.USER, "Hola");
         when(gateway.load(conversationId, triggerId))
                 .thenReturn(new LoadedConversation(conversation, agent, List.of(user)));

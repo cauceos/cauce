@@ -1,13 +1,16 @@
 package dev.cauce.tenancy;
 
 import dev.cauce.core.identity.Identity;
+import dev.cauce.core.identity.IdentityCreated;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.memory.identity.IdentityMapper;
 import dev.cauce.memory.identity.IdentityRepository;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,10 +31,13 @@ public class IdentityService {
 
     private final IdentityRepository identityRepository;
     private final IdentityMapper identityMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public IdentityService(IdentityRepository identityRepository, IdentityMapper identityMapper) {
+    public IdentityService(IdentityRepository identityRepository, IdentityMapper identityMapper,
+                           ApplicationEventPublisher eventPublisher) {
         this.identityRepository = identityRepository;
         this.identityMapper = identityMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -54,6 +60,10 @@ public class IdentityService {
      * it simply skips, and the winner is re-read. Joins the caller's transaction with the
      * default {@code REQUIRED} propagation.
      *
+     * <p>Only the call that actually inserts publishes {@link IdentityCreated} (PC-3: ids and
+     * kind only, never the value; outside the audit chain), synchronously inside the
+     * transaction; a hit or a lost race publishes nothing.
+     *
      * @throws dev.cauce.core.conversation.InvalidChannelTypeException if {@code channelType} is
      *     not supported
      * @throws IllegalArgumentException if {@code channelType} or {@code value} is blank
@@ -73,6 +83,9 @@ public class IdentityService {
         if (inserted == 0) {
             log.debug("Concurrent identity for tenant {} on channel {} ({}); reusing the existing row",
                     candidate.tenantId(), candidate.channelType(), candidate.kind());
+        } else {
+            eventPublisher.publishEvent(new IdentityCreated(candidate.id(), candidate.tenantId(),
+                    candidate.channelType(), candidate.kind(), Instant.now()));
         }
         return find(candidate).orElseThrow(() -> new IllegalStateException(
                 "Expected an identity after insert-or-skip for tenant " + candidate.tenantId()

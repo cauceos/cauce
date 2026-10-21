@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.audit.AuditContentHash;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.governance.audit.AuditOutboxDrainService;
@@ -290,8 +291,7 @@ class AuditConductIT extends AbstractOrchestrationIntegrationTest {
      */
     private InboundMessageResult ingestAndProcess(Tenant tenant, Agent agent, String content) {
         TenantContext.setCurrentTenantId(tenant.id());
-        InboundMessageResult result = inboundMessageService.ingest(
-                agent.id(), "api", "user-" + UUID.randomUUID(), content);
+        InboundMessageResult result = inboundMessageService.ingest(agent.id(), "api", null, IdentityKind.CLIENT_REFERENCE, "user-" + UUID.randomUUID(), content);
         TenantContext.clear(); // the claim is cross-tenant; the worker sets the row's tenant
         List<PendingInvocation> claimed =
                 pendingInvocationService.claimNextBatch(workerIdentity.getId(), 10);

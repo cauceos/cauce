@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationStatus;
+import dev.cauce.core.identity.Identity;
+import dev.cauce.core.identity.IdentityKind;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -14,12 +16,15 @@ class ConversationMapperTest {
 
     @Test
     void roundTrip_domainToEntityToDomain_preservesAllFields_withNullClosedAt() {
-        Conversation original = Conversation.start(UUID.randomUUID(), "whatsapp", "+34612345678");
+        Conversation original = Conversation.start(UUID.randomUUID(),
+                identity("whatsapp", IdentityKind.PHONE_NUMBER, "+34612345678"), UUID.randomUUID());
 
         Conversation roundTripped = mapper.toDomain(mapper.toEntity(original));
 
         assertThat(roundTripped.id()).isEqualTo(original.id());
         assertThat(roundTripped.agentId()).isEqualTo(original.agentId());
+        assertThat(roundTripped.identityId()).isEqualTo(original.identityId());
+        assertThat(roundTripped.channelConfigId()).isEqualTo(original.channelConfigId());
         assertThat(roundTripped.channelType()).isEqualTo(original.channelType());
         assertThat(roundTripped.externalIdentityRef()).isEqualTo(original.externalIdentityRef());
         assertThat(roundTripped.status()).isEqualTo(ConversationStatus.OPEN);
@@ -35,7 +40,7 @@ class ConversationMapperTest {
     void roundTrip_preservesNonNullClosedAt() {
         Instant now = Instant.now();
         Conversation closed = Conversation.rehydrate(UUID.randomUUID(), UUID.randomUUID(),
-                "email", "patient@example.com", ConversationStatus.CLOSED, now, now, now, null, null);
+                UUID.randomUUID(), UUID.randomUUID(), "email", "patient@example.com", ConversationStatus.CLOSED, now, now, now, null, null);
 
         Conversation roundTripped = mapper.toDomain(mapper.toEntity(closed));
 
@@ -49,7 +54,7 @@ class ConversationMapperTest {
         Instant archivedAt = Instant.now();
         // An archived conversation that had been escalated earlier.
         Conversation archived = Conversation.rehydrate(UUID.randomUUID(), UUID.randomUUID(),
-                "voice", "+34600111222", ConversationStatus.ARCHIVED,
+                UUID.randomUUID(), UUID.randomUUID(), "voice", "+34600111222", ConversationStatus.ARCHIVED,
                 escalatedAt.minusSeconds(60), escalatedAt, null, escalatedAt, archivedAt);
 
         Conversation roundTripped = mapper.toDomain(mapper.toEntity(archived));
@@ -62,17 +67,24 @@ class ConversationMapperTest {
 
     @Test
     void toEntity_copiesAllFields() {
-        Conversation conversation = Conversation.start(UUID.randomUUID(), "web_chat", "session-abc");
+        Conversation conversation = Conversation.start(UUID.randomUUID(),
+                identity("api", IdentityKind.CLIENT_REFERENCE, "session-abc"), null);
 
         ConversationEntity entity = mapper.toEntity(conversation);
 
         assertThat(entity.getId()).isEqualTo(conversation.id());
         assertThat(entity.getAgentId()).isEqualTo(conversation.agentId());
-        assertThat(entity.getChannelType()).isEqualTo("web_chat");
+        assertThat(entity.getIdentityId()).isEqualTo(conversation.identityId());
+        assertThat(entity.getChannelConfigId()).isNull();
+        assertThat(entity.getChannelType()).isEqualTo("api");
         assertThat(entity.getExternalIdentityRef()).isEqualTo("session-abc");
         assertThat(entity.getStatus()).isEqualTo(ConversationStatus.OPEN);
         assertThat(entity.getClosedAt()).isNull();
         assertThat(entity.getEscalatedAt()).isNull();
         assertThat(entity.getArchivedAt()).isNull();
+    }
+
+    private static Identity identity(String channelType, IdentityKind kind, String value) {
+        return Identity.create(UUID.randomUUID(), channelType, kind, value);
     }
 }

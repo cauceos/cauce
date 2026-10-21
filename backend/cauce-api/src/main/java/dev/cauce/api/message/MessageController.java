@@ -3,6 +3,7 @@ package dev.cauce.api.message;
 import dev.cauce.api.web.PageParams;
 import dev.cauce.api.web.PageResponse;
 import dev.cauce.core.conversation.ConversationNotFoundException;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.orchestration.InboundMessageResult;
 import dev.cauce.orchestration.InboundMessageService;
 import dev.cauce.tenancy.ConversationService;
@@ -34,7 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class MessageController {
 
-    /** Reserved built-in channel for the REST messaging endpoint (see ConversationService). */
+    /**
+     * Reserved built-in channel for the REST messaging endpoint (see ConversationService). It has
+     * no channel config, and the caller's {@code external_identity_ref} is stamped
+     * {@link IdentityKind#CLIENT_REFERENCE} server-side, the way the channel itself is.
+     */
     private static final String API_CHANNEL = "api";
 
     private final InboundMessageService inboundMessageService;
@@ -59,8 +64,9 @@ public class MessageController {
                                                     @Valid @RequestBody PostMessageRequest request,
                                                     @RequestHeader(value = "Idempotency-Key", required = false)
                                                     String idempotencyKey) {
-        InboundMessageResult result = inboundMessageService.ingest(
-                agentId, API_CHANNEL, request.externalIdentityRef(), request.content(), idempotencyKey);
+        InboundMessageResult result = inboundMessageService.ingest(agentId, API_CHANNEL, null,
+                IdentityKind.CLIENT_REFERENCE, request.externalIdentityRef(), request.content(),
+                idempotencyKey);
         return ResponseEntity.accepted().body(PostMessageResponse.from(result));
     }
 

@@ -1,5 +1,6 @@
 package dev.cauce.orchestration.support;
 
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.orchestration.InboundMessageService;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -25,7 +26,9 @@ public class FailingIngestFixture {
     @Transactional
     public void ingestThenFail(UUID agentId, String channelType, String externalIdentityRef,
                                String content) {
-        inboundMessageService.ingest(agentId, channelType, externalIdentityRef, content);
+        // Callers ingest on the api channel: no config, a client reference.
+        inboundMessageService.ingest(agentId, channelType, null, IdentityKind.CLIENT_REFERENCE,
+                externalIdentityRef, content);
         throw new IllegalStateException("simulated business failure after ingest");
     }
 }

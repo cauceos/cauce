@@ -3,6 +3,8 @@ package dev.cauce.core.conversation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.cauce.core.identity.Identity;
+import dev.cauce.core.identity.IdentityKind;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -10,6 +12,8 @@ import org.junit.jupiter.api.Test;
 class ConversationTest {
 
     private static final UUID AGENT = UUID.randomUUID();
+    private static final Identity IDENTITY =
+            Identity.create(UUID.randomUUID(), "whatsapp", IdentityKind.PHONE_NUMBER, "+34612345678");
 
     @Test
     void start_generatesUuidV7() {
@@ -35,42 +39,47 @@ class ConversationTest {
     }
 
     @Test
-    void start_assignsFields() {
-        Conversation conversation = Conversation.start(AGENT, "whatsapp", "+34612345678");
+    void start_assignsFieldsFromTheIdentityAndTheConfig() {
+        UUID configId = UUID.randomUUID();
+        Conversation conversation = Conversation.start(AGENT, IDENTITY, configId);
 
         assertThat(conversation.agentId()).isEqualTo(AGENT);
+        assertThat(conversation.identityId()).isEqualTo(IDENTITY.id());
+        assertThat(conversation.channelConfigId()).contains(configId);
         assertThat(conversation.channelType()).isEqualTo("whatsapp");
         assertThat(conversation.externalIdentityRef()).isEqualTo("+34612345678");
     }
 
     @Test
+    void start_withoutConfig_leavesChannelConfigIdEmpty() {
+        assertThat(Conversation.start(AGENT, IDENTITY, null).channelConfigId()).isEmpty();
+    }
+
+    @Test
     void start_rejectsNullAgentId() {
-        assertThatThrownBy(() -> Conversation.start(null, "whatsapp", "+34612345678"))
+        assertThatThrownBy(() -> Conversation.start(null, IDENTITY, null))
                 .isInstanceOf(NullPointerException.class);
     }
 
     @Test
-    void start_rejectsBlankChannelType() {
-        assertThatThrownBy(() -> Conversation.start(AGENT, "  ", "+34612345678"))
-                .isInstanceOf(IllegalArgumentException.class);
+    void start_rejectsNullIdentity() {
+        assertThatThrownBy(() -> Conversation.start(AGENT, null, null))
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test
-    void start_rejectsNullExternalIdentityRef() {
-        assertThatThrownBy(() -> Conversation.start(AGENT, "whatsapp", null))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void start_rejectsBlankExternalIdentityRef() {
-        assertThatThrownBy(() -> Conversation.start(AGENT, "whatsapp", "   "))
-                .isInstanceOf(IllegalArgumentException.class);
+    void rehydrate_rejectsNullIdentityId() {
+        Instant now = Instant.now();
+        assertThatThrownBy(() -> Conversation.rehydrate(UUID.randomUUID(), AGENT, null, null,
+                "whatsapp", "+34612345678", ConversationStatus.OPEN, now, now, null, null, null))
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void equalsAndHashCode_areBasedOnId() {
         Conversation a = newConversation();
-        Conversation sameId = Conversation.rehydrate(a.id(), UUID.randomUUID(), "voice", "+34999",
+        Conversation sameId = Conversation.rehydrate(a.id(), UUID.randomUUID(), UUID.randomUUID(),
+                null, "voice", "+34999",
                 ConversationStatus.CLOSED, a.startedAt(), a.lastMessageAt(), a.startedAt(), null, null);
         Conversation different = newConversation();
 
@@ -191,13 +200,14 @@ class ConversationTest {
     }
 
     private static Conversation newConversation() {
-        return Conversation.start(AGENT, "whatsapp", "+34612345678");
+        return Conversation.start(AGENT, IDENTITY, UUID.randomUUID());
     }
 
     /** Builds a conversation in the given status with consistent lifecycle timestamps. */
     private static Conversation conversationIn(ConversationStatus status) {
         Instant now = Instant.now();
-        return Conversation.rehydrate(UUID.randomUUID(), AGENT, "whatsapp", "+34612345678",
+        return Conversation.rehydrate(UUID.randomUUID(), AGENT, IDENTITY.id(), null,
+                "whatsapp", "+34612345678",
                 status, now, now,
                 status == ConversationStatus.CLOSED ? now : null,
                 status == ConversationStatus.ESCALATED ? now : null,

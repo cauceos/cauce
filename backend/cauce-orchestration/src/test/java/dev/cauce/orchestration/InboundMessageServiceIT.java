@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentNotFoundException;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.support.AbstractOrchestrationIntegrationTest;
@@ -126,7 +127,7 @@ class InboundMessageServiceIT extends AbstractOrchestrationIntegrationTest {
         TenantContext.setCurrentTenantId(clientB.id());
         try {
             assertThatThrownBy(() ->
-                    inboundMessageService.ingest(agent.id(), "api", "intruder", "Hola"))
+                    inboundMessageService.ingest(agent.id(), "api", null, IdentityKind.CLIENT_REFERENCE, "intruder", "Hola"))
                     .isInstanceOf(AgentNotFoundException.class);
         } finally {
             TenantContext.clear();
@@ -144,7 +145,9 @@ class InboundMessageServiceIT extends AbstractOrchestrationIntegrationTest {
                                           String externalIdentityRef, String content) {
         TenantContext.setCurrentTenantId(context);
         try {
-            return inboundMessageService.ingest(agentId, channelType, externalIdentityRef, content);
+            // Every caller ingests on the api channel: no config, a client reference.
+            return inboundMessageService.ingest(agentId, channelType, null, IdentityKind.CLIENT_REFERENCE,
+                    externalIdentityRef, content);
         } finally {
             TenantContext.clear();
         }

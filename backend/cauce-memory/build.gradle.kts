@@ -20,6 +20,8 @@ dependencies {
     runtimeOnly("org.flywaydb:flyway-core")
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
 
+    // Migration tests drive Flyway directly to stop at an intermediate version.
+    testImplementation("org.flywaydb:flyway-core")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:junit-jupiter")

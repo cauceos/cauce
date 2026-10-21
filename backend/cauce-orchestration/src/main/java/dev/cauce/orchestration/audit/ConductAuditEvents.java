@@ -12,8 +12,9 @@ import java.util.UUID;
  * the previously semantics-free {@code event_type} its first real meaning and builds each
  * event's payload — NON-SENSITIVE metadata plus a {@link AuditContentHash content hash} that
  * binds the record to the exact message content WITHOUT storing it. Never in a payload: raw
- * message text, {@code external_identity_ref} (erasable personal data), or raw provider
- * error detail (it can echo content). Erasable content lives in the mutable business tables,
+ * message text, an identity's value (erasable personal data), or raw provider error detail
+ * (it can echo content). The interlocutor enters only as the opaque {@code identity_id}
+ * (ADR 0004, PC-3), so erasing the identity row never touches the chain. Erasable content lives in the mutable business tables,
  * where deletion operates; the append-only chain keeps only its hash.
  *
  * <p><b>Emitted</b> — each inside the transaction of the business fact it audits:
@@ -50,8 +51,9 @@ public final class ConductAuditEvents {
 
     /** An inbound USER message was accepted and its invocation enqueued (the ingest tx). */
     public static AuditEvent messageReceived(UUID tenantId, UUID invocationId, UUID agentId,
-                                             String channelType, Message userMessage) {
+                                             String channelType, UUID identityId, Message userMessage) {
         Objects.requireNonNull(channelType, "channelType must not be null");
+        Objects.requireNonNull(identityId, "identityId must not be null");
         Objects.requireNonNull(userMessage, "userMessage must not be null");
         return new AuditEvent(tenantId, MESSAGE_RECEIVED, Map.of(
                 "invocation_id", invocationId.toString(),
@@ -59,6 +61,7 @@ public final class ConductAuditEvents {
                 "message_id", userMessage.id().toString(),
                 "agent_id", agentId.toString(),
                 "channel_type", channelType,
+                "identity_id", identityId.toString(),
                 "content_hash", AuditContentHash.of(tenantId, userMessage.content()),
                 "content_length", userMessage.content().length()));
     }

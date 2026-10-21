@@ -22,32 +22,40 @@ public interface ConversationRepository extends JpaRepository<ConversationEntity
     List<ConversationEntity> findByAgentIdAndStatus(UUID agentId, ConversationStatus status);
 
     /**
-     * Finds a single conversation for a given (agent, channel, external user, status)
-     * tuple. Used to locate the active (OPEN) conversation when routing an incoming
-     * message to the right thread.
+     * Finds the conversation with the given status for an {@code (agent, identity, channel
+     * config)} key; {@code status = OPEN} locates the live thread an inbound message is routed
+     * to. A {@code null} {@code channelConfigId} matches only rows whose config is NULL (the
+     * {@code api} channel): Spring Data derives {@code IS NULL} for a null argument, which is
+     * the same equality the V26 {@code NULLS NOT DISTINCT} index enforces.
      */
-    Optional<ConversationEntity> findByAgentIdAndChannelTypeAndExternalIdentityRefAndStatus(
-            UUID agentId, String channelType, String externalIdentityRef, ConversationStatus status);
+    Optional<ConversationEntity> findByAgentIdAndIdentityIdAndChannelConfigIdAndStatus(
+            UUID agentId, UUID identityId, UUID channelConfigId, ConversationStatus status);
 
     /**
-     * Inserts a new OPEN conversation for the {@code (agent, channel, external user)} tuple
+     * Inserts a new OPEN conversation for the {@code (agent, identity, channel config)} key
      * unless one already exists, in a single race-free statement. Returns {@code 1} when this
      * call created the row, {@code 0} when a concurrent caller already had — the
-     * {@code idx_conversations_one_open_per_identity} partial unique index (V13) is the conflict
-     * arbiter. The caller then re-reads the OPEN row to obtain the winner. {@code started_at}
-     * and {@code last_message_at} default to {@code now()}; the conversation starts OPEN with no
-     * lifecycle timestamps. Runs in the caller's transaction with the tenant RLS context applied,
-     * so the insert is subject to the conversations {@code WITH CHECK} visibility policy.
+     * {@code idx_conversations_one_open_thread} partial unique index (V26, {@code NULLS NOT
+     * DISTINCT}, so a NULL api config deduplicates too) is the conflict arbiter. The caller then
+     * re-reads the OPEN row to obtain the winner. {@code channel_type} and
+     * {@code external_identity_ref} are still written until V27 drops them. {@code started_at}
+     * and {@code last_message_at} default to {@code now()}. Runs in the caller's transaction
+     * with the tenant RLS context applied, so the insert is subject to the conversations
+     * {@code WITH CHECK} visibility policy.
      */
     @Modifying
     @Query(value = """
-            INSERT INTO conversations (id, agent_id, channel_type, external_identity_ref, status)
-            VALUES (:id, :agentId, :channelType, :externalIdentityRef, 'OPEN')
-            ON CONFLICT (agent_id, channel_type, external_identity_ref) WHERE status = 'OPEN'
+            INSERT INTO conversations (id, agent_id, identity_id, channel_config_id,
+                                       channel_type, external_identity_ref, status)
+            VALUES (:id, :agentId, :identityId, CAST(:channelConfigId AS uuid),
+                    :channelType, :externalIdentityRef, 'OPEN')
+            ON CONFLICT (agent_id, identity_id, channel_config_id) WHERE status = 'OPEN'
             DO NOTHING
             """, nativeQuery = true)
     int insertOpenConversationIfAbsent(@Param("id") UUID id,
                                        @Param("agentId") UUID agentId,
+                                       @Param("identityId") UUID identityId,
+                                       @Param("channelConfigId") UUID channelConfigId,
                                        @Param("channelType") String channelType,
                                        @Param("externalIdentityRef") String externalIdentityRef);
 

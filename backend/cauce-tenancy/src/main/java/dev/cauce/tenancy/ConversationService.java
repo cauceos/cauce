@@ -4,6 +4,8 @@ import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.conversation.ConversationStatus;
+import dev.cauce.core.identity.Identity;
+import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
@@ -29,6 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
  * of its clients — e.g. routing an inbound webhook to a client's agent under the
  * partner's context. A lookup that RLS filters out is reported as not-found, so the
  * API does not reveal entities outside the caller's scope.
+ *
+ * <p>A conversation is keyed by {@code (agent, identity, channel config)} (ADR 0004, PC-1):
+ * the identity is the person, the config the door they came in through. Resolution runs agent
+ * &rarr; identity &rarr; conversation in the caller's transaction; the identity is owned by the
+ * agent's tenant, never by the acting tenant of the request.
  */
 @Service
 public class ConversationService {
@@ -38,23 +45,34 @@ public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final AgentRepository agentRepository;
     private final ConversationMapper conversationMapper;
+    private final IdentityService identityService;
 
     public ConversationService(ConversationRepository conversationRepository,
                                AgentRepository agentRepository,
-                               ConversationMapper conversationMapper) {
+                               ConversationMapper conversationMapper,
+                               IdentityService identityService) {
         this.conversationRepository = conversationRepository;
         this.agentRepository = agentRepository;
         this.conversationMapper = conversationMapper;
+        this.identityService = identityService;
     }
 
     /**
-     * Opens a conversation for {@code agentId}. The agent must be visible under the
-     * current tenant context (RLS); otherwise it is reported as not found.
+     * Opens a conversation of {@code agentId} with the interlocutor {@code (kind, identityValue)}
+     * on {@code channelType}, resolving (or creating) the identity first. The agent must be
+     * visible under the current tenant context (RLS); otherwise it is reported as not found.
+     * Unlike {@link #resolveOrStartConversation} it does not reuse an open thread, so a second
+     * call for the same key violates the open-thread index.
+     *
+     * @param channelConfigId the channel instance the thread came in through; {@code null}
+     *     exactly when {@code channelType} is the built-in {@code api} channel
      */
     @Transactional
-    public Conversation startConversation(UUID agentId, String channelType, String externalIdentityRef) {
-        AgentEntity agent = requireVisibleAgentForSupportedChannel(agentId, channelType);
-        Conversation conversation = Conversation.start(agent.getId(), channelType, externalIdentityRef);
+    public Conversation startConversation(UUID agentId, String channelType, IdentityKind kind,
+                                          String identityValue, UUID channelConfigId) {
+        AgentEntity agent = requireVisibleAgentForSupportedChannel(agentId, channelType, channelConfigId);
+        Identity identity = identityService.resolveOrCreate(agent.getTenantId(), channelType, kind, identityValue);
+        Conversation conversation = Conversation.start(agent.getId(), identity, channelConfigId);
         return conversationMapper.toDomain(conversationRepository.save(conversationMapper.toEntity(conversation)));
     }
 
@@ -65,57 +83,56 @@ public class ConversationService {
     }
 
     /**
-     * Finds the active (OPEN) conversation of an external user with an agent on a given
-     * channel, if one exists. Used to decide whether an inbound message continues an
-     * existing thread or should start a new one.
+     * Finds the active (OPEN) conversation of {@code identityId} with an agent through a channel
+     * instance ({@code null} config for the {@code api} channel), if one exists.
      */
     @Transactional
-    public Optional<Conversation> findActiveConversation(UUID agentId, String channelType,
-                                                         String externalIdentityRef) {
+    public Optional<Conversation> findActiveConversation(UUID agentId, UUID identityId,
+                                                         UUID channelConfigId) {
         return conversationRepository
-                .findByAgentIdAndChannelTypeAndExternalIdentityRefAndStatus(
-                        agentId, channelType, externalIdentityRef, ConversationStatus.OPEN)
+                .findByAgentIdAndIdentityIdAndChannelConfigIdAndStatus(
+                        agentId, identityId, channelConfigId, ConversationStatus.OPEN)
                 .map(conversationMapper::toDomain);
     }
 
     /**
-     * Resolves the active conversation for the {@code (agent, channel, external identity)} tuple,
-     * starting a new one when none is open. This is the channel-agnostic entry point an inbound
-     * message uses to continue an existing thread or begin a new one; the REST messaging endpoint
-     * and future cauce-channels adapters share it. The find and the conditional create run in one
-     * transaction under the same tenant RLS context; a non-visible agent surfaces as not-found via
-     * {@link #startConversation}.
+     * Resolves the live thread of an inbound message: the agent (visible under RLS), then the
+     * interlocutor's identity (owned by the agent's tenant), then the OPEN conversation for
+     * {@code (agent, identity, channel config)}, starting one when none is open. This is the
+     * channel-agnostic entry point shared by the REST messaging endpoint and the channel
+     * adapters; every step joins the caller's transaction.
      *
-     * <p>There is no database uniqueness on an open thread, so two concurrent first messages for
-     * the same tuple could each open a conversation. Accepted for now (no schema change).
+     * <p>Both creations are race-free insert-first upserts: the identity on the V25
+     * {@code identities_key} constraint (inside {@link IdentityService#resolveOrCreate}), the
+     * conversation on the V26 open-thread index, which is {@code NULLS NOT DISTINCT} so that
+     * the {@code api} channel's NULL config deduplicates as well. A concurrent first message
+     * skips instead of throwing (which would poison the transaction) and re-reads the winner,
+     * so duplicate webhook deliveries cannot split a thread.
      *
+     * @param channelConfigId the channel instance the message came in through; {@code null}
+     *     exactly when {@code channelType} is the built-in {@code api} channel
      * @throws dev.cauce.core.agent.AgentNotFoundException if the agent is not visible
      * @throws dev.cauce.core.conversation.InvalidChannelTypeException if the channel type is not supported
+     * @throws IllegalArgumentException if {@code channelConfigId} breaks the api/adapter invariant
      */
     @Transactional
-    public Conversation resolveOrStartConversation(UUID agentId, String channelType,
-                                                   String externalIdentityRef) {
-        Optional<Conversation> active = findActiveConversation(agentId, channelType, externalIdentityRef);
+    public Conversation resolveOrStartConversation(UUID agentId, String channelType, IdentityKind kind,
+                                                   String identityValue, UUID channelConfigId) {
+        AgentEntity agent = requireVisibleAgentForSupportedChannel(agentId, channelType, channelConfigId);
+        Identity identity = identityService.resolveOrCreate(agent.getTenantId(), channelType, kind, identityValue);
+        Optional<Conversation> active = findActiveConversation(agent.getId(), identity.id(), channelConfigId);
         if (active.isPresent()) {
             return active.get();
         }
-        AgentEntity agent = requireVisibleAgentForSupportedChannel(agentId, channelType);
-        Conversation candidate = Conversation.start(agent.getId(), channelType, externalIdentityRef);
-        // Race-free create: at most one OPEN row per tuple is guaranteed by the V13 partial
-        // unique index; ON CONFLICT DO NOTHING means a concurrent first message does not throw
-        // (which would poison this transaction) — it simply skips, and we re-read the winner.
+        Conversation candidate = Conversation.start(agent.getId(), identity, channelConfigId);
         int inserted = conversationRepository.insertOpenConversationIfAbsent(
-                candidate.id(), candidate.agentId(), candidate.channelType(),
-                candidate.externalIdentityRef());
+                candidate.id(), candidate.agentId(), candidate.identityId(),
+                channelConfigId, candidate.channelType(), candidate.externalIdentityRef());
         if (inserted == 0) {
-            log.debug("Concurrent OPEN conversation for agent {} on channel {}; reusing the existing thread",
-                    candidate.agentId(), candidate.channelType());
+            log.debug("Concurrent OPEN conversation for agent {} and identity {}; reusing the existing thread",
+                    candidate.agentId(), candidate.identityId());
         }
-        return conversationRepository
-                .findByAgentIdAndChannelTypeAndExternalIdentityRefAndStatus(
-                        candidate.agentId(), candidate.channelType(),
-                        candidate.externalIdentityRef(), ConversationStatus.OPEN)
-                .map(conversationMapper::toDomain)
+        return findActiveConversation(candidate.agentId(), candidate.identityId(), channelConfigId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Expected an OPEN conversation after insert-or-skip for agent " + candidate.agentId()));
     }
@@ -166,13 +183,22 @@ public class ConversationService {
 
     /**
      * Loads the agent for a new conversation, enforcing that it is visible under the current
-     * tenant context (RLS) and that the channel type is supported. Shared by
-     * {@link #startConversation} and {@link #resolveOrStartConversation}.
+     * tenant context (RLS), that the channel type is supported, and the channel-config invariant
+     * of PC-1: an adapter-ingested thread names its config, an {@code api} thread has none. The
+     * invariant lives here, not in a CHECK, because the database does not know the channel list.
      */
-    private AgentEntity requireVisibleAgentForSupportedChannel(UUID agentId, String channelType) {
+    private AgentEntity requireVisibleAgentForSupportedChannel(UUID agentId, String channelType,
+                                                               UUID channelConfigId) {
         AgentEntity agent = agentRepository.findById(agentId).orElseThrow(() ->
                 new AgentNotFoundException("No agent found for id " + agentId));
         SupportedChannels.requireSupported(channelType);
+        boolean api = SupportedChannels.API.equals(channelType);
+        if (api && channelConfigId != null) {
+            throw new IllegalArgumentException("The api channel has no channel config");
+        }
+        if (!api && channelConfigId == null) {
+            throw new IllegalArgumentException("Channel '" + channelType + "' requires its channel config");
+        }
         return agent;
     }
 

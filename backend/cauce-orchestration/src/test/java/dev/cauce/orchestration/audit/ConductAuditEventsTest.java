@@ -15,13 +15,14 @@ class ConductAuditEventsTest {
     private final UUID invocationId = UUID.randomUUID();
     private final UUID agentId = UUID.randomUUID();
     private final UUID conversationId = UUID.randomUUID();
+    private final UUID identityId = UUID.randomUUID();
 
     @Test
     void messageReceived_buildsPayloadWithContentHashNeverRawContentOrIdentity() {
         Message userMessage = Message.from(conversationId, MessageRole.USER, "Necesito ayuda");
 
         AuditEvent event = ConductAuditEvents.messageReceived(tenantId, invocationId, agentId,
-                "telegram", userMessage);
+                "telegram", identityId, userMessage);
 
         assertThat(event.tenantId()).isEqualTo(tenantId);
         assertThat(event.eventType()).isEqualTo("conduct.message.received");
@@ -31,11 +32,13 @@ class ConductAuditEventsTest {
                 .containsEntry("message_id", userMessage.id().toString())
                 .containsEntry("agent_id", agentId.toString())
                 .containsEntry("channel_type", "telegram")
+                .containsEntry("identity_id", identityId.toString())
                 .containsEntry("content_hash", AuditContentHash.of(tenantId, "Necesito ayuda"))
                 .containsEntry("content_length", 14);
-        // Forbidden fields: raw text and the (erasable) external identity never enter.
+        // Forbidden fields: raw text and the (erasable) identity value never enter; the
+        // interlocutor is the opaque identity_id only (PC-3).
         assertThat(event.payload().values()).doesNotContain("Necesito ayuda");
-        assertThat(event.payload()).doesNotContainKeys("content", "external_identity_ref");
+        assertThat(event.payload()).doesNotContainKeys("content", "external_identity_ref", "identity_value");
     }
 
     @Test

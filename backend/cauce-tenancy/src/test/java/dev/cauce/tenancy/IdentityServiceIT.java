@@ -13,7 +13,17 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -104,6 +114,39 @@ class IdentityServiceIT {
         Identity again = identityService.resolveOrCreate(clientA.id(), "api", IdentityKind.CLIENT_REFERENCE, " user-1 ");
 
         assertThat(again).isEqualTo(first);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM identities", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void resolveOrCreate_underConcurrency_mintsExactlyOneIdentity() throws Exception {
+        int parallel = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(parallel);
+        CyclicBarrier barrier = new CyclicBarrier(parallel);
+        List<Callable<UUID>> tasks = new ArrayList<>();
+        for (int i = 0; i < parallel; i++) {
+            tasks.add(() -> {
+                TenantContext.setCurrentTenantId(clientA.id());
+                try {
+                    barrier.await(5, TimeUnit.SECONDS); // release all callers together to force the race
+                    return identityService.resolveOrCreate(clientA.id(), "telegram",
+                            IdentityKind.PROVIDER_USER_ID, "987654321").id();
+                } finally {
+                    TenantContext.clear();
+                }
+            });
+        }
+
+        Set<UUID> returnedIds = new HashSet<>();
+        try {
+            for (Future<UUID> future : pool.invokeAll(tasks)) {
+                returnedIds.add(future.get(10, TimeUnit.SECONDS));
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // The losers' inserts skip on the identities_key arbiter and re-read the winner.
+        assertThat(returnedIds).as("concurrent callers converge on one identity").hasSize(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM identities", Integer.class)).isEqualTo(1);
     }
 
