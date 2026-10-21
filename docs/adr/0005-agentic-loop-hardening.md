@@ -56,6 +56,22 @@ On any terminal failure (LLM, empty reply, cap) the person who wrote receives a 
 text, configurable per agent, with a platform default. It never carries internal detail.
 Internally the SYSTEM error message is recorded as today.
 
+Settled when implementation reached it, because the SYSTEM message was already visible to the
+writer on the `api` channel (the messages endpoint returned every role, and the SYSTEM text
+carries provider detail):
+
+- **The fallback is a message of its own role, `FALLBACK`.** It is persisted, delivered to the
+  channel like a reply, and readable over the API. It never enters the model's context and is
+  not the agent's conduct (no `conduct.agent.responded`). It carries the public failure reason
+  — the codes of the invocation endpoint, never the internal detail.
+- **SYSTEM messages leave the public messages endpoint.** They stay in the conversation for
+  the orchestrator; the provider detail stays internal (the SYSTEM text and the invocation's
+  last error). Operator access to that diagnostic belongs to the invocation status endpoint
+  and is registered as deferred work, not built here.
+- **Only a terminal failure sends a fallback** (FAILED or ABANDONED, the reaper included). A
+  failure that will be retried sends nothing, so the person never receives an apology followed
+  by the answer.
+
 ### C4 — Tools are granted per agent, empty by default
 
 Each agent has an explicit list of the tools it may use. The list is empty by default, not
