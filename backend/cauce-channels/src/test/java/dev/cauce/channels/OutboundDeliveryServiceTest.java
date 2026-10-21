@@ -104,6 +104,18 @@ class OutboundDeliveryServiceTest {
     }
 
     @Test
+    void dispatchAgentReply_tellsTheAdapterWhenTheInterlocutorLastWrote() {
+        java.time.Instant lastWrote = java.time.Instant.parse("2026-10-21T11:59:00Z");
+        when(channelConfigService.findActiveConfig(config.id())).thenReturn(Optional.of(config));
+        when(interlocutorLookup.lastMessageAt(conversation.id())).thenReturn(Optional.of(lastWrote));
+
+        service.dispatchAgentReply(conversation, reply);
+
+        verify(telegramOutbound).deliver(new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                "Hola, soy un agente", lastWrote), config);
+    }
+
+    @Test
     void dispatchAgentReply_configNoLongerActive_skipsDelivery() {
         when(channelConfigService.findActiveConfig(config.id())).thenReturn(Optional.empty());
 

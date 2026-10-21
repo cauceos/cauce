@@ -111,7 +111,8 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
             }
             // The destination is the typed pair the inbound adapter produced (ADR 0004).
             adapter.get().deliver(new ChannelOutboundMessage(interlocutor.get().kind(),
-                    interlocutor.get().value(), agentReply.content()), config.get());
+                    interlocutor.get().value(), agentReply.content(),
+                    interlocutorLookup.lastMessageAt(conversation.id()).orElse(null)), config.get());
             log.debug("Delivered reply {} through channel '{}' for conversation {}",
                     agentReply.id(), channelType, conversation.id());
         } catch (RuntimeException e) {

@@ -1,8 +1,12 @@
 package dev.cauce.channels;
 
 import dev.cauce.core.identity.Identity;
+import dev.cauce.core.message.MessageRole;
 import dev.cauce.memory.identity.IdentityMapper;
 import dev.cauce.memory.identity.IdentityRepository;
+import dev.cauce.memory.message.MessageEntity;
+import dev.cauce.memory.message.MessageRepository;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -21,10 +25,23 @@ public class InterlocutorLookup {
 
     private final IdentityRepository identityRepository;
     private final IdentityMapper identityMapper;
+    private final MessageRepository messageRepository;
 
-    public InterlocutorLookup(IdentityRepository identityRepository, IdentityMapper identityMapper) {
+    public InterlocutorLookup(IdentityRepository identityRepository, IdentityMapper identityMapper,
+                              MessageRepository messageRepository) {
         this.identityRepository = identityRepository;
         this.identityMapper = identityMapper;
+        this.messageRepository = messageRepository;
+    }
+
+    /**
+     * When the interlocutor last wrote in {@code conversationId} (its newest USER message), under
+     * RLS — what a channel with a reply window checks (ADR 0006, W4).
+     */
+    @Transactional(readOnly = true)
+    public Optional<Instant> lastMessageAt(UUID conversationId) {
+        return messageRepository.findFirstByConversationIdAndRoleOrderByCreatedAtDesc(conversationId, MessageRole.USER)
+                .map(MessageEntity::getCreatedAt);
     }
 
     /** The identity, if it is visible under the current tenant context (RLS). */

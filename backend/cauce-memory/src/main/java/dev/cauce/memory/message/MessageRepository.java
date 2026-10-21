@@ -48,4 +48,8 @@ public interface MessageRepository extends JpaRepository<MessageEntity, UUID> {
      * message both exists and belongs to the expected conversation before acting on it.
      */
     Optional<MessageEntity> findByIdAndConversationId(UUID id, UUID conversationId);
+
+    /** The newest message of one role in a conversation (e.g. the interlocutor's last USER message). */
+    Optional<MessageEntity> findFirstByConversationIdAndRoleOrderByCreatedAtDesc(UUID conversationId,
+                                                                                MessageRole role);
 }

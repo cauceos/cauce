@@ -4,9 +4,12 @@ import dev.cauce.channels.secret.AesGcmSecretCipher;
 import dev.cauce.channels.secret.SecretEncryptionProperties;
 import dev.cauce.channels.telegram.TelegramChannelAdapter;
 import dev.cauce.channels.telegram.TelegramProperties;
+import dev.cauce.channels.whatsapp.WhatsAppChannelAdapter;
+import dev.cauce.channels.whatsapp.WhatsAppProperties;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.secret.SecretCipher;
 import java.net.http.HttpClient;
+import java.time.Clock;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,8 +22,18 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  * outbound deliveries.
  */
 @Configuration
-@EnableConfigurationProperties({TelegramProperties.class, SecretEncryptionProperties.class})
+@EnableConfigurationProperties({TelegramProperties.class, SecretEncryptionProperties.class,
+        WhatsAppProperties.class})
 public class ChannelsConfig {
+
+    /** Outbound half of the WhatsApp Cloud API channel (ADR 0006). */
+    @Bean
+    public WhatsAppChannelAdapter whatsAppChannelAdapter(WhatsAppProperties properties) {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(properties.getTimeout())
+                .build();
+        return new WhatsAppChannelAdapter(httpClient, properties, Clock.systemUTC());
+    }
 
     /** Seals provider secrets at rest (ADR 0006, W3); fails startup on a missing or malformed key. */
     @Bean
