@@ -24,7 +24,10 @@ import { dirname, join, relative } from 'node:path'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 // src/api/types.ts carries the wire contract's doc comments for the same screen: the
 // words a developer reads next to the type are as much surface as the rendered copy.
-const TARGETS = ['src/views/audit', 'src/styles/audit.css', 'src/api/types.ts']
+// src/i18n holds the copy itself once it leaves the components; the whole catalogue is
+// scanned, since a key cannot tell which screen renders it. If that brings back the false
+// positives described above, narrow it to the audit screen's own catalogue file.
+const TARGETS = ['src/views/audit', 'src/styles/audit.css', 'src/api/types.ts', 'src/i18n']
 
 const FORBIDDEN = [
   'compliant',
