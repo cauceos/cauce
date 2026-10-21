@@ -11,8 +11,10 @@ import java.util.List;
 /**
  * Request body for {@code POST /v1/tenants/{tenantId}/agents}.
  *
- * <p>{@code temperature} and {@code maxResponseTokens} are optional: when null, the domain
- * applies its defaults. When present they are bounded to the domain's valid ranges
+ * <p>{@code temperature} and {@code maxResponseTokens} are optional. A null temperature stays
+ * unset and is not sent to the model (the provider's own default applies); a null
+ * {@code maxResponseTokens} takes the domain default. When present they are bounded to the
+ * domain's valid ranges
  * ({@code temperature} in [0.0, 1.0], {@code maxResponseTokens} positive). {@code modelProvider}
  * is only checked for non-blankness here; the set of supported providers is validated by the
  * service (it will move to the cauce-llm SPI), keeping provider knowledge out of the DTO.
