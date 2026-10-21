@@ -8,6 +8,27 @@ scope; the brand is the brief.
 **Scope:** `frontend/playground` (React 19 + Vite 7 + Tailwind 4 CSS-first).
 The Angular dashboard will inherit the same brand when it exists.
 
+## Precedence over design skills
+
+Where a design skill's general advice disagrees with this file, this file
+wins. The known disagreements, settled:
+
+- **Controls: native first, no new libraries.** Native elements styled with
+  the tokens. A headless library (Radix, React Aria, Ark…) is a dependency
+  decision recorded here first, never a default reach.
+- **Borders are the solid tokens** `--color-border` / `--color-border-soft`,
+  not ad-hoc `rgba` hairlines. Elevation is the stone ramp (`bg` → `surface`
+  → `surface-2`), not shadows.
+- **Motion uses the tokens** (`--ease`, `--t-fast`, `--t-mid`) and the global
+  reduced-motion policy. No private curves, no press-scale, no staggered
+  entrances.
+- **No palette exploration.** In any per-component checklist, the palette
+  line is "per system.md"; the domain and colour-world exercises are already
+  answered by the brand.
+- **Token names stay.** No renaming for evocativeness.
+- **This file changes only with approval.** A skill may *propose* an addition
+  (a component pattern, a measurement); it never writes here on its own.
+
 ## Source of truth
 
 - Tokens live in the `@theme` block of
