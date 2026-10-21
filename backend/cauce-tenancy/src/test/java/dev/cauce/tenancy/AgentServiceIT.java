@@ -94,14 +94,15 @@ class AgentServiceIT {
     }
 
     @Test
-    void createAgent_withoutLlmConfig_persistsDefaultsInDatabase() {
+    void createAgent_withoutLlmConfig_leavesTemperatureUnsetAndPersistsDefaultMaxTokens() {
         Agent agent = createAgentForClientA();
 
         Double temperature = jdbc.queryForObject(
                 "SELECT temperature FROM agents WHERE id = ?", Double.class, agent.id());
         Integer maxTokens = jdbc.queryForObject(
                 "SELECT max_response_tokens FROM agents WHERE id = ?", Integer.class, agent.id());
-        assertThat(temperature).isEqualTo(0.7);
+        assertThat(agent.temperature()).isEmpty();
+        assertThat(temperature).isNull();
         assertThat(maxTokens).isEqualTo(4096);
     }
 
