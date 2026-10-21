@@ -34,7 +34,7 @@ public class WebhookController {
     @PostMapping("/webhooks/channels/{configId}")
     public ResponseEntity<Void> receive(@PathVariable UUID configId,
                                         @RequestHeader HttpHeaders headers,
-                                        @RequestBody String body) {
+                                        @RequestBody byte[] body) {
         channelWebhookService.handle(configId, new WebhookRequest(headers.toSingleValueMap(), body));
         return ResponseEntity.ok().build();
     }
