@@ -3,6 +3,7 @@ package dev.cauce.core.agent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -162,5 +163,22 @@ class AgentTest {
         assertThatThrownBy(() -> agent.withFallbackReply("x".repeat(Agent.MAX_FALLBACK_REPLY_LENGTH + 1)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(agent.withFallbackReply(null).fallbackReply()).isEmpty();
+    }
+
+    @Test
+    void edited_replacesThePresentFields_keepsTheRest_andMovesUpdatedAt() throws InterruptedException {
+        Agent agent = Agent.create(UUID.randomUUID(), "Bot", "p", "anthropic", "m")
+                .withTools(List.of("get_current_time"));
+        Thread.sleep(2);
+
+        Agent edited = agent.edited(" Bar ", null, "Sorry.");
+
+        assertThat(edited.id()).isEqualTo(agent.id());
+        assertThat(edited.name()).isEqualTo("Bar");
+        assertThat(edited.systemPrompt()).isEqualTo("p");
+        assertThat(edited.fallbackReply()).contains("Sorry.");
+        assertThat(edited.toolNames()).containsExactly("get_current_time");
+        assertThat(edited.updatedAt()).isAfter(agent.updatedAt());
+        assertThatThrownBy(() -> agent.edited(" ", null, null)).isInstanceOf(IllegalArgumentException.class);
     }
 }

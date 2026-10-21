@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cauce.api.security.ApiKeyAuthenticationFilter;
 import dev.cauce.api.web.RequestIdFilter;
 import dev.cauce.core.agent.Agent;
+import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.TenantNotFoundException;
 import dev.cauce.tenancy.AgentService;
@@ -105,6 +107,36 @@ class AgentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(validBody()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("tenant_not_found"));
+    }
+
+    @Test
+    void updateAgent_passesOnlyThePresentFields_andReturnsTheEditedAgent() throws Exception {
+        UUID id = UUID.randomUUID();
+        Agent agent = Agent.create(UUID.randomUUID(), "Bot", "Be brief.", "anthropic", "claude-opus-4-8");
+        given(agentService.updateAgent(id, null, "Be brief.", null)).willReturn(agent);
+
+        mockMvc.perform(patch("/v1/agents/" + id)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"system_prompt\":\"Be brief.\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.system_prompt").value("Be brief."));
+    }
+
+    @Test
+    void updateAgent_blankName_returns400() throws Exception {
+        mockMvc.perform(patch("/v1/agents/" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"  \"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateAgent_notVisible_returns404() throws Exception {
+        UUID id = UUID.randomUUID();
+        given(agentService.updateAgent(eq(id), any(), any(), any()))
+                .willThrow(new AgentNotFoundException("No agent found for id " + id));
+
+        mockMvc.perform(patch("/v1/agents/" + id)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Bar\"}"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

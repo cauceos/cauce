@@ -130,6 +130,25 @@ public class AgentService {
         return saved;
     }
 
+    /**
+     * Edits the agent's name, system prompt and fallback reply: each non-null argument replaces
+     * the current value, a null one keeps it. The agent must be visible under the current context
+     * (RLS). Recorded as {@code admin.agent.updated} in the agent's tenant chain, the prompt by
+     * hash only.
+     *
+     * @throws AgentNotFoundException if the agent is not visible
+     */
+    @Transactional
+    public Agent updateAgent(UUID agentId, String name, String systemPrompt, String fallbackReply) {
+        Agent current = agentRepository.findById(agentId).map(agentMapper::toDomain).orElseThrow(() ->
+                new AgentNotFoundException("No agent found for id " + agentId));
+        Agent edited = current.edited(name, systemPrompt, fallbackReply);
+        Agent saved = agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(edited)));
+        auditRecorder.record(AdminAuditEvents.agentConfigurationUpdated(
+                saved, TenantContext.getCurrentTenantId().orElseThrow()));
+        return saved;
+    }
+
     private void requireRegistered(List<String> toolNames) {
         if (toolNames.isEmpty()) {
             return;

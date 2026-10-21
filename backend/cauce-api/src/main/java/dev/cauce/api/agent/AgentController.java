@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -49,6 +50,16 @@ public class AgentController {
     @PutMapping("/v1/agents/{id}/tools")
     public AgentResponse setTools(@PathVariable UUID id, @Valid @RequestBody UpdateAgentToolsRequest request) {
         return AgentResponse.from(agentService.setTools(id, request.tools()));
+    }
+
+    /**
+     * Edits the agent's name, system prompt and fallback reply; an absent field is unchanged. An
+     * agent outside the caller's scope is a 404.
+     */
+    @PatchMapping("/v1/agents/{id}")
+    public AgentResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateAgentRequest request) {
+        return AgentResponse.from(agentService.updateAgent(id, request.name(), request.systemPrompt(),
+                request.fallbackReply()));
     }
 
     @GetMapping("/v1/agents/{id}")

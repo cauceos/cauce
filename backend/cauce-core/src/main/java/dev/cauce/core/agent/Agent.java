@@ -133,6 +133,21 @@ public final class Agent {
     }
 
     /**
+     * Returns a copy of this agent with its configuration edited: each non-null argument replaces
+     * the current value, a null one keeps it; {@code updatedAt} moves to now. {@code name} must be
+     * non-blank; {@code systemPrompt} may be empty, as at creation; {@code fallbackReply} follows
+     * {@link #withFallbackReply}.
+     */
+    public Agent edited(String name, String systemPrompt, String fallbackReply) {
+        return new Agent(id, tenantId,
+                name == null ? this.name : requireText(name, "name"),
+                systemPrompt == null ? this.systemPrompt : systemPrompt,
+                modelProvider, modelName, temperature, maxResponseTokens, status,
+                fallbackReply == null ? this.fallbackReply : validatedFallbackReply(fallbackReply),
+                toolNames, createdAt, Instant.now());
+    }
+
+    /**
      * Rebuilds an agent from already-persisted state. For the persistence layer only. A null
      * {@code temperature} or {@code maxResponseTokens} (a pre-V7 row) is coalesced to the
      * default; values are not range-checked here since the database CHECK constraints already

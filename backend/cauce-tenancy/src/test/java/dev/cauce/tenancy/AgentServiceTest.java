@@ -242,6 +242,37 @@ class AgentServiceTest {
     }
 
     @Test
+    void updateAgent_editsThePresentFields_andAuditsThePromptByHash() {
+        Agent existing = Agent.create(UUID.randomUUID(), "Bot", "Old prompt.", "anthropic", "m")
+                .withTools(List.of("get_current_time"));
+        when(agentRepository.findById(existing.id()))
+                .thenReturn(Optional.of(new AgentMapper().toEntity(existing)));
+
+        Agent updated = service.updateAgent(existing.id(), null, "New prompt.", null);
+
+        assertThat(updated.name()).isEqualTo("Bot");
+        assertThat(updated.systemPrompt()).isEqualTo("New prompt.");
+        assertThat(updated.toolNames()).containsExactly("get_current_time");
+        ArgumentCaptor<AuditEvent> audit = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditRecorder).record(audit.capture());
+        assertThat(audit.getValue().eventType()).isEqualTo("admin.agent.updated");
+        assertThat(audit.getValue().payload())
+                .containsEntry("change", "configuration")
+                .containsEntry("prompt_length", "New prompt.".length())
+                .doesNotContainValue("New prompt.");
+    }
+
+    @Test
+    void updateAgent_whenTheAgentIsNotVisible_throwsAgentNotFound() {
+        UUID agentId = UUID.randomUUID();
+        when(agentRepository.findById(agentId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateAgent(agentId, "Bar", null, null))
+                .isInstanceOf(AgentNotFoundException.class);
+        verify(auditRecorder, never()).record(any());
+    }
+
+    @Test
     void setTools_whenTheAgentIsNotVisible_throwsAgentNotFound() {
         UUID agentId = UUID.randomUUID();
         when(agentRepository.findById(agentId)).thenReturn(Optional.empty());

@@ -28,8 +28,8 @@ import java.util.UUID;
  * <p><b>Emitted</b> — each inside the transaction of the admin operation it audits:
  * {@link #TENANT_CREATED} (createPartner/createClient; the operator bootstrap is the
  * documented exception — it runs without a transaction, tenant context, or actor, on the
- * privileged genesis path), {@link #AGENT_CREATED}, {@link #AGENT_UPDATED} (today only for a
- * change of the agent's tools), {@link #APIKEY_ISSUED}, {@link #APIKEY_REVOKED}.
+ * privileged genesis path), {@link #AGENT_CREATED}, {@link #AGENT_UPDATED} (a change of the agent's
+ * tools or of its configuration), {@link #APIKEY_ISSUED}, {@link #APIKEY_REVOKED}.
  * {@code admin.channel.configured} is emitted by cauce-channels (its constant lives with that
  * emitter).
  *
@@ -77,6 +77,22 @@ public final class AdminAuditEvents {
                 "tenant_id", agent.tenantId().toString(),
                 "change", "tools",
                 "tool_names", agent.toolNames(),
+                "actor_tenant_id", actorTenantId.toString()));
+    }
+
+    /**
+     * The agent's name, prompt or fallback reply was edited. Recorded in the agent's tenant chain;
+     * the prompt enters only as a hash, like at creation, and the fallback text not at all.
+     */
+    public static AuditEvent agentConfigurationUpdated(Agent agent, UUID actorTenantId) {
+        Objects.requireNonNull(agent, "agent must not be null");
+        Objects.requireNonNull(actorTenantId, "actorTenantId must not be null");
+        return new AuditEvent(agent.tenantId(), AGENT_UPDATED, Map.of(
+                "agent_id", agent.id().toString(),
+                "tenant_id", agent.tenantId().toString(),
+                "change", "configuration",
+                "prompt_hash", AuditContentHash.of(agent.tenantId(), agent.systemPrompt()),
+                "prompt_length", agent.systemPrompt().length(),
                 "actor_tenant_id", actorTenantId.toString()));
     }
 
