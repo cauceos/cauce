@@ -127,15 +127,20 @@ class OwnerIT extends AbstractBusinessIntegrationTest {
 
         // On another business's bot the code means nothing: the text goes on to that bot's agent.
         assertThat(intercept(f.clientB().id(), otherBotId, "999", "/start " + issued.code())).isEmpty();
-        // Not a code: it goes on to the owner agent.
-        assertThat(intercept(f.clientA().id(), ownerBotId, "777", "hola")).isEmpty();
+        // On the owner bot, a chat that is not the owner never reaches the owner agent.
+        assertThat(intercept(f.clientA().id(), ownerBotId, "777", "hola"))
+                .contains("Este es el canal del dueño de Bar La Esquina. Para vincular este chat, envía aquí el "
+                        + "código de vinculación.");
 
         assertThat(intercept(f.clientA().id(), ownerBotId, "777", "/start " + issued.code().toLowerCase()))
                 .contains("Listo: este chat recibirá los avisos de Bar La Esquina.");
         // A redelivery by the same chat is answered again and binds nothing new; another chat is refused.
         assertThat(intercept(f.clientA().id(), ownerBotId, "777", issued.code())).isPresent();
         assertThat(intercept(f.clientA().id(), ownerBotId, "888", issued.code()))
-                .contains("Ese código de vinculación ha caducado o ya se usó. Pide uno nuevo.");
+                .contains("Ese código de vinculación no es válido, ha caducado o ya se usó. Pide uno nuevo.");
+        // Linked: the owner's own messages go on to the owner agent; a stranger's still do not.
+        assertThat(intercept(f.clientA().id(), ownerBotId, "777", "hola")).isEmpty();
+        assertThat(intercept(f.clientA().id(), ownerBotId, "888", "hola")).isPresent();
 
         OwnerRecipient owner = as(f.clientA(), () -> ownerService.findOwner(f.clientA().id())).orElseThrow();
         assertThat(owner.channelConfigId()).isEqualTo(ownerBotId);
@@ -143,6 +148,19 @@ class OwnerIT extends AbstractBusinessIntegrationTest {
                 "SELECT count(*) FROM audit_outbox WHERE event_type = 'admin.owner.linked'", Long.class)).isEqualTo(1);
         assertThat(new JdbcTemplate(adminDataSource).queryForObject(
                 "SELECT count(*) FROM owner_link_codes WHERE code_hash = ?", Long.class, issued.code())).isZero();
+    }
+
+    @Test
+    void aBareStart_onTheOwnerBot_isAskedForTheCode_andAWrongCodeIsRefused_withoutReachingTheAgent() {
+        // Regression: Telegram sends a bare /start when a chat that already exists opens the deep
+        // link, dropping the code; that /start reached the owner agent and its model.
+        as(f.clientA(), () -> ownerService.issueLinkCode(f.clientA().id(), ownerBotId));
+
+        assertThat(intercept(f.clientA().id(), ownerBotId, "777", "/start"))
+                .hasValueSatisfying(reply -> assertThat(reply).contains("envía aquí el código de vinculación"));
+        assertThat(intercept(f.clientA().id(), ownerBotId, "777", "/start ABCDEFGHJK"))
+                .hasValueSatisfying(reply -> assertThat(reply).contains("no es válido"));
+        assertThat(as(f.clientA(), () -> ownerService.findOwner(f.clientA().id()))).isEmpty();
     }
 
     @Test

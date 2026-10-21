@@ -31,11 +31,14 @@ import org.springframework.transaction.annotation.Transactional;
  * The owner of a business (ADR 0007, B8): issues single-use link codes for the owner bot, binds the
  * owner's chat when a code arrives on that bot, and says where the owner reads.
  *
- * <p>As an {@link InboundMessageInterceptor} it looks at every inbound text, but only one shaped
- * like a code ({@code CODE} or Telegram's {@code /start CODE}) reaches the database. A code binds
- * only on the bot it was issued for, under that bot's own tenant. A code used again by the same
- * chat is answered again and changes nothing (a webhook redelivery); expired, or used by someone
- * else, it is answered as not valid. A text that matches no code goes on to the agent.
+ * <p>As an {@link InboundMessageInterceptor} it guards the owner bot — a channel config a link
+ * code was issued for. There, only the linked owner's chat reaches the owner agent; any other chat
+ * is answered here, without a model: a valid code ({@code CODE} or Telegram's {@code /start CODE})
+ * binds it; anything else, Telegram's bare {@code /start} included (sent when a chat that already
+ * exists opens the deep link, which then drops the code), is asked for the code. A code binds only
+ * on the bot it was issued for, under that bot's own tenant. A code used again by the same chat is
+ * answered again and changes nothing (a webhook redelivery); expired, or used by someone else, it
+ * is answered as not valid. On any other bot nothing is intercepted.
  */
 @Service
 public class OwnerService implements InboundMessageInterceptor {
@@ -107,21 +110,30 @@ public class OwnerService implements InboundMessageInterceptor {
     @Override
     @Transactional
     public Optional<String> intercept(InboundText text) {
+        if (!codeRepository.existsByChannelConfigIdAndTenantId(text.channelConfigId(), text.tenantId())) {
+            return Optional.empty(); // not an owner bot: nothing to guard
+        }
+        Identity identity = identityService.resolveOrCreate(text.tenantId(), text.channelType(),
+                text.identityKind(), text.identityValue());
+        boolean isLinkedOwner = recipientRepository.findByTenantId(text.tenantId())
+                .filter(owner -> owner.getChannelConfigId().equals(text.channelConfigId())
+                        && owner.getIdentityId().equals(identity.id()))
+                .isPresent();
+        String locale = profileRepository.findByTenantId(text.tenantId()).map(BusinessProfileEntity::getLocale)
+                .orElse(null);
         Matcher matcher = CODE_TEXT.matcher(text.content().strip().toUpperCase(Locale.ROOT));
         if (!matcher.matches()) {
-            return Optional.empty();
+            // The owner talks to the owner agent; nobody else reaches it.
+            return isLinkedOwner ? Optional.empty()
+                    : Optional.of(OwnerMessages.sendCode(locale, businessName(text.tenantId())));
         }
         Optional<OwnerLinkCodeEntity> found = codeRepository.findByCodeHash(hash(matcher.group(1)))
                 .filter(code -> code.getChannelConfigId().equals(text.channelConfigId())
                         && code.getTenantId().equals(text.tenantId()));
         if (found.isEmpty()) {
-            return Optional.empty();
+            return Optional.of(OwnerMessages.codeNotValid(locale));
         }
         OwnerLinkCodeEntity code = found.get();
-        String locale = profileRepository.findByTenantId(code.getTenantId()).map(BusinessProfileEntity::getLocale)
-                .orElse(null);
-        Identity identity = identityService.resolveOrCreate(code.getTenantId(), text.channelType(),
-                text.identityKind(), text.identityValue());
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         if (code.getUsedAt() != null) {
             return Optional.of(identity.id().equals(code.getUsedByIdentityId())

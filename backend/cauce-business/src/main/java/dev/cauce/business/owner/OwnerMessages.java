@@ -37,10 +37,19 @@ public final class OwnerMessages {
                 : "Done: this chat will receive the notices of " + businessName + ".";
     }
 
-    /** The reply to a link code that expired or was already used by someone else. */
+    /** The reply to any other message on the owner bot from a chat that is not the linked owner. */
+    public static String sendCode(String locale, String businessName) {
+        return spanish(locale)
+                ? "Este es el canal del dueño de " + businessName + ". Para vincular este chat, envía aquí el "
+                        + "código de vinculación."
+                : "This is the owner channel of " + businessName + ". To link this chat, send the link code "
+                        + "here.";
+    }
+
+    /** The reply to a code that matches no link code of this bot, expired, or was used by someone else. */
     public static String codeNotValid(String locale) {
         return spanish(locale)
-                ? "Ese código de vinculación ha caducado o ya se usó. Pide uno nuevo."
-                : "That link code has expired or was already used. Ask for a new one.";
+                ? "Ese código de vinculación no es válido, ha caducado o ya se usó. Pide uno nuevo."
+                : "That link code is not valid, has expired or was already used. Ask for a new one.";
     }
 }

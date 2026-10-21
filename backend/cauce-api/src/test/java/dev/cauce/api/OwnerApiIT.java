@@ -86,6 +86,13 @@ class OwnerApiIT extends AbstractBusinessApiIT {
         getAs(clientAuth, "/v1/tenants/" + clientId + "/owner").andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("owner_not_linked"));
 
+        // Regression: the bare /start Telegram sends when the chat already exists reaches no agent.
+        postToOwnerBot(0, "/start").andExpect(status().isOk());
+        TELEGRAM.verify(1, postRequestedFor(urlEqualTo(OWNER_BOT_SEND))
+                .withRequestBody(containing("envía aquí el código de vinculación")));
+        assertThat(new org.springframework.jdbc.core.JdbcTemplate(adminDataSource)
+                .queryForObject("SELECT count(*) FROM pending_invocations", Long.class)).isZero();
+
         postToOwnerBot(1, "/start " + code).andExpect(status().isOk());
 
         TELEGRAM.verify(1, postRequestedFor(urlEqualTo(OWNER_BOT_SEND))
