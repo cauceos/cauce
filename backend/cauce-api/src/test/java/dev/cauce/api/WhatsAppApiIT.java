@@ -70,6 +70,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
         "cauce.orchestration.worker.enabled=true",
         "cauce.orchestration.worker.poll-interval-ms=3600000",
         "cauce.orchestration.worker.reaper.enabled=false",
+        // The fake provider registers as "anthropic": the real one must not, even when the
+        // environment running the build has an ANTHROPIC_API_KEY.
+        "cauce.llm.anthropic.enabled=false"
 })
 @Import(MessagingApiIT.FakeLlmConfig.class)
 class WhatsAppApiIT extends AbstractApiIntegrationTest {
