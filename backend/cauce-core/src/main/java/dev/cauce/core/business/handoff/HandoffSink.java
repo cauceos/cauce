@@ -13,6 +13,8 @@ public interface HandoffSink {
      * Opens a handoff for the conversation of {@code requester} and queues the owner's notice.
      *
      * @throws InvalidHandoffCategoryException if the business lists its categories and this is not one
+     * @throws UnquotedCustomerMessageException if the request's customer message is not the words of
+     *         the person in this conversation
      */
     HandoffReceipt open(Booking.Requester requester, Handoff.Request request);
 

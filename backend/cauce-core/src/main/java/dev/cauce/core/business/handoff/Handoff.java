@@ -8,11 +8,13 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * A case an agent handed to the owner (ADR 0007, B7): a group, an event, a complaint, a question
  * it cannot answer. It carries what the agent collected — the category, a summary and how to reach
- * the person — and stays OPEN until the owner resolves it. The conversation it came from stays
+ * the person — and, apart from the agent's summary, the person's own words when the agent quoted
+ * them ({@link #customerMessage()}); it stays OPEN until the owner resolves it. The conversation it came from stays
  * OPEN: the agent keeps talking to the person.
  *
  * <p>Pure domain type, immutable. The summary and the contact data are personal business content:
@@ -23,6 +25,10 @@ public final class Handoff {
 
     public static final int MAX_CATEGORY_LENGTH = 40;
     public static final int MAX_SUMMARY_LENGTH = 2000;
+    public static final int MAX_CUSTOMER_MESSAGE_LENGTH = 1000;
+
+    /** Quotation marks around a quote: the agent's, not the person's words. */
+    private static final Pattern QUOTES = Pattern.compile("^[\\s\"'«»“”„]+|[\\s\"'«»“”„]+$");
 
     /** The lifecycle of a handoff. */
     public enum Status {
@@ -40,13 +46,14 @@ public final class Handoff {
     private final String summary;
     private final String contactName;
     private final String contactPhone;
+    private final String customerMessage;
     private final Status status;
     private final Instant createdAt;
     private final Instant resolvedAt;
 
     private Handoff(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId, UUID identityId,
-                    String category, String summary, String contactName, String contactPhone, Status status,
-                    Instant createdAt, Instant resolvedAt) {
+                    String category, String summary, String contactName, String contactPhone,
+                    String customerMessage, Status status, Instant createdAt, Instant resolvedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.code = code;
@@ -57,13 +64,20 @@ public final class Handoff {
         this.summary = summary;
         this.contactName = contactName;
         this.contactPhone = contactPhone;
+        this.customerMessage = customerMessage;
         this.status = status;
         this.createdAt = createdAt;
         this.resolvedAt = resolvedAt;
     }
 
-    /** What the agent hands over. The phone is optional. */
-    public record Request(String category, String summary, String contactName, String contactPhone) {
+    /**
+     * What the agent hands over. The phone is optional, and so is {@code customerMessage}: the
+     * person's request in their own words, quoted from one of their messages — the adapter checks
+     * it is theirs — kept apart from the agent's summary, without the quotation marks it may have
+     * been wrapped in.
+     */
+    public record Request(String category, String summary, String contactName, String contactPhone,
+                          String customerMessage) {
 
         public Request {
             category = required(category, "category", MAX_CATEGORY_LENGTH).toLowerCase(Locale.ROOT);
@@ -71,6 +85,14 @@ public final class Handoff {
             contactName = required(contactName, "contact name", Booking.MAX_CONTACT_NAME_LENGTH);
             contactPhone = contactPhone == null || contactPhone.isBlank() ? null
                     : required(contactPhone, "contact phone", Booking.MAX_CONTACT_PHONE_LENGTH);
+            customerMessage = customerMessage == null ? null : QUOTES.matcher(customerMessage).replaceAll("");
+            customerMessage = customerMessage == null || customerMessage.isBlank() ? null
+                    : required(customerMessage, "customer message", MAX_CUSTOMER_MESSAGE_LENGTH);
+        }
+
+        /** A request without the person's own words. */
+        public Request(String category, String summary, String contactName, String contactPhone) {
+            this(category, summary, contactName, contactPhone, null);
         }
     }
 
@@ -80,16 +102,17 @@ public final class Handoff {
         Objects.requireNonNull(request, "request");
         return new Handoff(UuidGenerator.newV7(), requester.tenantId(), Booking.newCode(), requester.agentId(),
                 requester.conversationId(), requester.identityId(), request.category(), request.summary(),
-                request.contactName(), request.contactPhone(), Status.OPEN,
+                request.contactName(), request.contactPhone(), request.customerMessage(), Status.OPEN,
                 Instant.now().truncatedTo(ChronoUnit.MICROS), null);
     }
 
     /** Rebuilds a persisted handoff. For the persistence layer only. */
     public static Handoff rehydrate(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId,
                                     UUID identityId, String category, String summary, String contactName,
-                                    String contactPhone, Status status, Instant createdAt, Instant resolvedAt) {
+                                    String contactPhone, String customerMessage, Status status, Instant createdAt,
+                                    Instant resolvedAt) {
         return new Handoff(id, tenantId, code, agentId, conversationId, identityId, category, summary, contactName,
-                contactPhone, status, createdAt, resolvedAt);
+                contactPhone, customerMessage, status, createdAt, resolvedAt);
     }
 
     /** This handoff resolved now; resolving a resolved one keeps its first resolution. */
@@ -98,7 +121,8 @@ public final class Handoff {
             return this;
         }
         return new Handoff(id, tenantId, code, agentId, conversationId, identityId, category, summary, contactName,
-                contactPhone, Status.RESOLVED, createdAt, Instant.now().truncatedTo(ChronoUnit.MICROS));
+                contactPhone, customerMessage, Status.RESOLVED, createdAt,
+                Instant.now().truncatedTo(ChronoUnit.MICROS));
     }
 
     private static String required(String value, String field, int max) {
@@ -150,6 +174,11 @@ public final class Handoff {
 
     public Optional<String> contactPhone() {
         return Optional.ofNullable(contactPhone);
+    }
+
+    /** The person's request in their own words, if the agent quoted them; never the agent's text. */
+    public Optional<String> customerMessage() {
+        return Optional.ofNullable(customerMessage);
     }
 
     public Status status() {

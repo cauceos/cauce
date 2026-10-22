@@ -19,13 +19,16 @@ import dev.cauce.core.business.booking.Booking;
 import dev.cauce.core.business.handoff.Handoff;
 import dev.cauce.core.business.handoff.HandoffSink.HandoffReceipt;
 import dev.cauce.core.business.handoff.InvalidHandoffCategoryException;
+import dev.cauce.core.business.handoff.UnquotedCustomerMessageException;
 import dev.cauce.core.business.owner.OwnerNotifier;
 import dev.cauce.core.business.owner.OwnerNotifier.Delivery;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.inbound.InboundMessageInterceptor.InboundText;
+import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.tenancy.AgentService;
 import dev.cauce.tenancy.ConversationService;
+import dev.cauce.tenancy.MessageService;
 import dev.cauce.tenancy.TenantService;
 import java.util.ArrayList;
 import java.util.List;
@@ -77,6 +80,9 @@ class OwnerIT extends AbstractBusinessIntegrationTest {
 
     @Autowired
     private ConversationService conversationService;
+
+    @Autowired
+    private MessageService messageService;
 
     @Autowired
     private BusinessProfileService profileService;
@@ -224,6 +230,26 @@ class OwnerIT extends AbstractBusinessIntegrationTest {
         assertThat(only().status()).isEqualTo(OwnerNotification.Status.FAILED);
         assertThat(only().attempts()).isEqualTo(5);
         assertThat(notifier.sent).hasSize(5);
+    }
+
+    @Test
+    void theNotice_showsTheCustomersOwnWordsApartAndLabelled_andRefusesWordsThatAreNotTheirs() {
+        linkOwner();
+        as(f.clientA(), () -> messageService.appendMessage(f.conversation().id(), MessageRole.USER,
+                "Pero dime más o menos,   aunque sea aproximado. ¿30 € por persona?"));
+
+        HandoffReceipt receipt = as(f.clientA(), () -> handoffService.open(requester(), new Handoff.Request("evento",
+                "Cumpleaños de 25 personas mañana; pregunta el precio.", "Ana", null,
+                "«aunque sea aproximado. ¿30 € por persona?»")));
+        dispatcher.dispatchDue();
+
+        assertThat(receipt.handoff().customerMessage()).contains("aunque sea aproximado. ¿30 € por persona?");
+        assertThat(notifier.sent).singleElement().asString()
+                .contains("\n\nResumen: Cumpleaños de 25 personas mañana; pregunta el precio.\n\n"
+                        + "Mensaje del cliente: «aunque sea aproximado. ¿30 € por persona?»");
+        assertThatThrownBy(() -> as(f.clientA(), () -> handoffService.open(requester(), new Handoff.Request("evento",
+                "s", "Ana", null, "Quiere un presupuesto para 25"))))
+                .isInstanceOf(UnquotedCustomerMessageException.class);
     }
 
     @Test

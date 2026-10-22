@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,7 @@ import dev.cauce.core.business.gap.KnowledgeGapSink;
 import dev.cauce.core.business.handoff.Handoff;
 import dev.cauce.core.business.handoff.HandoffSink;
 import dev.cauce.core.business.handoff.InvalidHandoffCategoryException;
+import dev.cauce.core.business.handoff.UnquotedCustomerMessageException;
 import dev.cauce.core.business.profile.BusinessProfile;
 import dev.cauce.core.business.profile.BusinessProfile.Fact;
 import dev.cauce.core.business.profile.BusinessProfileSource;
@@ -144,6 +146,23 @@ class BusinessToolsTest {
         assertThatThrownBy(() -> new EscalateToOwnerTool(() -> sink).execute(call("escalate_to_owner", Map.of(
                 "category", "boda", "summary", "s", "contact_name", "Marta")), context))
                 .isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("evento");
+    }
+
+    @Test
+    void escalateToOwner_passesTheCustomersWords_andAQuoteThatIsNotTheirsIsForTheModelToFix() {
+        HandoffSink sink = mock(HandoffSink.class);
+        ArgumentCaptor<Handoff.Request> request = ArgumentCaptor.forClass(Handoff.Request.class);
+        when(sink.open(any(), request.capture())).thenAnswer(call -> new HandoffSink.HandoffReceipt(
+                Handoff.open(call.getArgument(0), call.getArgument(1)), true));
+
+        new EscalateToOwnerTool(() -> sink).execute(call("escalate_to_owner", Map.of("category", "evento",
+                "summary", "Cumpleaños de 25", "contact_name", "Ana", "customer_message", "¿Cuánto costaría?")), context);
+
+        assertThat(request.getValue().customerMessage()).isEqualTo("¿Cuánto costaría?");
+        doThrow(new UnquotedCustomerMessageException("copy it word for word")).when(sink).open(any(), any());
+        assertThatThrownBy(() -> new EscalateToOwnerTool(() -> sink).execute(call("escalate_to_owner", Map.of(
+                "category", "evento", "summary", "s", "contact_name", "Ana", "customer_message", "x")), context))
+                .isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("word for word");
     }
 
     private static ToolCall call(String name, Map<String, Object> input) {

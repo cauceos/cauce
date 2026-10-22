@@ -6,6 +6,7 @@ import dev.cauce.core.business.handoff.Handoff;
 import dev.cauce.core.business.handoff.HandoffSink;
 import dev.cauce.core.business.handoff.HandoffSink.HandoffReceipt;
 import dev.cauce.core.business.handoff.InvalidHandoffCategoryException;
+import dev.cauce.core.business.handoff.UnquotedCustomerMessageException;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolDefinition;
 import dev.cauce.core.tool.ToolExecutionContext;
@@ -38,8 +39,13 @@ public final class EscalateToOwnerTool implements Tool {
                             "category", Map.of("type", "string",
                                     "description", "The kind of case, one of the business's categories."),
                             "summary", Map.of("type", "string",
-                                    "description", "What the person wants, with every detail they gave: dates, "
-                                            + "number of people, what happened."),
+                                    "description", "Your account of what the person wants, with every detail they "
+                                            + "gave: dates, number of people, what happened. Do not paste their "
+                                            + "messages into it: quote them in customer_message."),
+                            "customer_message", Map.of("type", "string",
+                                    "description", "Optional: the person's request in their own words, copied "
+                                            + "word for word from one of their messages (the one that best states "
+                                            + "it). Never paraphrase: a quote that is not theirs is refused."),
                             "contact_name", Map.of("type", "string", "description", "The person's name."),
                             "contact_phone", Map.of("type", "string",
                                     "description", "A phone number to reach them, if they gave one.")),
@@ -67,7 +73,8 @@ public final class EscalateToOwnerTool implements Tool {
         Handoff.Request request;
         try {
             request = new Handoff.Request(args.requiredText("category"), args.requiredText("summary"),
-                    args.requiredText("contact_name"), args.text("contact_phone").orElse(null));
+                    args.requiredText("contact_name"), args.text("contact_phone").orElse(null),
+                    args.text("customer_message").orElse(null));
         } catch (IllegalArgumentException e) {
             throw new InvalidToolArgumentException(e.getMessage());
         }
@@ -75,7 +82,7 @@ public final class EscalateToOwnerTool implements Tool {
         try {
             receipt = sink.open(new Booking.Requester(context.tenantId(), context.agentId(), context.conversationId(),
                     context.identityId(), context.triggerMessageId()), request);
-        } catch (InvalidHandoffCategoryException e) {
+        } catch (InvalidHandoffCategoryException | UnquotedCustomerMessageException e) {
             throw new InvalidToolArgumentException(e.getMessage());
         }
         Map<String, Object> out = new LinkedHashMap<>();

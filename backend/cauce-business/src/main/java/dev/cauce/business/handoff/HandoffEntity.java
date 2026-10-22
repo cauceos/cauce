@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** JPA mapping of a {@code handoffs} row (V37). */
+/** JPA mapping of a {@code handoffs} row (V37, V42). */
 @Entity
 @Table(name = "handoffs")
 public class HandoffEntity {
@@ -46,6 +46,9 @@ public class HandoffEntity {
     @Column(name = "contact_phone", updatable = false, length = 40)
     private String contactPhone;
 
+    @Column(name = "customer_message", updatable = false, length = 1000)
+    private String customerMessage;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private Handoff.Status status;
@@ -62,7 +65,7 @@ public class HandoffEntity {
 
     public HandoffEntity(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId, UUID identityId,
                          String category, String summary, String contactName, String contactPhone,
-                         Handoff.Status status, Instant createdAt, Instant resolvedAt) {
+                         String customerMessage, Handoff.Status status, Instant createdAt, Instant resolvedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.code = code;
@@ -73,6 +76,7 @@ public class HandoffEntity {
         this.summary = summary;
         this.contactName = contactName;
         this.contactPhone = contactPhone;
+        this.customerMessage = customerMessage;
         this.status = status;
         this.createdAt = createdAt;
         this.resolvedAt = resolvedAt;
@@ -116,6 +120,10 @@ public class HandoffEntity {
 
     public String getContactPhone() {
         return contactPhone;
+    }
+
+    public String getCustomerMessage() {
+        return customerMessage;
     }
 
     public Handoff.Status getStatus() {

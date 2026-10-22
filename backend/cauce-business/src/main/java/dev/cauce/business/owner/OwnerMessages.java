@@ -19,15 +19,22 @@ public final class OwnerMessages {
         return locale == null || Locale.forLanguageTag(locale).getLanguage().equals("es");
     }
 
-    /** The notice of a new handoff. */
+    /**
+     * The notice of a new handoff: who, the agent's summary, and — apart, labelled and quoted — the
+     * person's own words when the agent quoted them, so the owner never mistakes one for the other.
+     */
     public static String handoff(String locale, Handoff handoff) {
+        boolean es = spanish(locale);
         String phone = handoff.contactPhone().map(p -> " · " + p).orElse("");
-        if (spanish(locale)) {
-            return "Nuevo caso para ti [" + handoff.category() + "] · ref " + handoff.code() + "\n"
-                    + handoff.contactName() + phone + "\n" + handoff.summary();
-        }
-        return "New case for you [" + handoff.category() + "] · ref " + handoff.code() + "\n"
-                + handoff.contactName() + phone + "\n" + handoff.summary();
+        String words = handoff.customerMessage()
+                .map(quote -> es
+                        ? "\n\nMensaje del cliente: «" + quote + "»"
+                        : "\n\nCustomer's message: “" + quote + "”")
+                .orElse("");
+        return (es ? "Nuevo caso para ti [" : "New case for you [") + handoff.category() + "] · ref " + handoff.code()
+                + "\n" + handoff.contactName() + phone
+                + "\n\n" + (es ? "Resumen: " : "Summary: ") + handoff.summary()
+                + words;
     }
 
     /** The reply to an owner who just linked this chat to {@code businessName}. */

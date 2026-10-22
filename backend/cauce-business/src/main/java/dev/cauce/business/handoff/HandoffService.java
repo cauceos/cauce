@@ -12,10 +12,15 @@ import dev.cauce.core.business.handoff.Handoff;
 import dev.cauce.core.business.handoff.HandoffNotFoundException;
 import dev.cauce.core.business.handoff.HandoffSink;
 import dev.cauce.core.business.handoff.InvalidHandoffCategoryException;
+import dev.cauce.core.business.handoff.UnquotedCustomerMessageException;
 import dev.cauce.core.business.profile.BusinessProfile;
+import dev.cauce.core.message.MessageRole;
+import dev.cauce.memory.message.MessageRepository;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,9 +30,15 @@ import org.springframework.transaction.annotation.Transactional;
  * owner's list and resolution. Opening a handoff records it, queues the owner's notice and audits
  * {@code conduct.human.escalation}, all in one transaction. The conversation is not touched: it
  * stays OPEN and the agent keeps talking to the person. Tenant-scoped under RLS.
+ *
+ * <p>A customer message is accepted only if it is the person's own words: it must appear, ignoring
+ * case and spacing, in one of their messages in the conversation. The owner
+ * reads it labelled as the customer's, so it is never the agent's paraphrase.
  */
 @Service
 public class HandoffService implements HandoffSink {
+
+    private static final Pattern SPACES = Pattern.compile("\\s+");
 
     private final HandoffRepository repository;
     private final HandoffMapper mapper;
@@ -35,16 +46,19 @@ public class HandoffService implements HandoffSink {
     private final BusinessProfileMapper profileMapper;
     private final OwnerNotificationService notifications;
     private final AuditEventRecorder auditRecorder;
+    private final MessageRepository messageRepository;
 
     public HandoffService(HandoffRepository repository, HandoffMapper mapper,
                           BusinessProfileRepository profileRepository, BusinessProfileMapper profileMapper,
-                          OwnerNotificationService notifications, AuditEventRecorder auditRecorder) {
+                          OwnerNotificationService notifications, AuditEventRecorder auditRecorder,
+                          MessageRepository messageRepository) {
         this.repository = repository;
         this.mapper = mapper;
         this.profileRepository = profileRepository;
         this.profileMapper = profileMapper;
         this.notifications = notifications;
         this.auditRecorder = auditRecorder;
+        this.messageRepository = messageRepository;
     }
 
     @Override
@@ -55,6 +69,9 @@ public class HandoffService implements HandoffSink {
         if (profile.isPresent() && !profile.get().acceptsHandoffCategory(request.category())) {
             throw new InvalidHandoffCategoryException("'" + request.category() + "' is not a category of this "
                     + "business; use one of " + String.join(", ", profile.get().handoffCategories()));
+        }
+        if (request.customerMessage() != null) {
+            requireQuoted(requester.conversationId(), request.customerMessage());
         }
         Handoff handoff = Handoff.open(requester, request);
         while (repository.existsByTenantIdAndCode(handoff.tenantId(), handoff.code())) {
@@ -67,6 +84,22 @@ public class HandoffService implements HandoffSink {
         boolean ownerNotified = notice.status() == OwnerNotification.Status.PENDING;
         auditRecorder.record(BusinessAuditEvents.humanEscalation(saved, ownerNotified));
         return new HandoffReceipt(saved, ownerNotified);
+    }
+
+    private void requireQuoted(UUID conversationId, String quote) {
+        String words = normalized(quote);
+        boolean theirs = !words.isEmpty() && messageRepository
+                .findByConversationIdOrderByCreatedAtAsc(conversationId).stream()
+                .filter(message -> message.getRole() == MessageRole.USER)
+                .anyMatch(message -> normalized(message.getContent()).contains(words));
+        if (!theirs) {
+            throw new UnquotedCustomerMessageException("customer_message must be copied word for word from one of "
+                    + "the person's messages in this conversation; otherwise leave it out");
+        }
+    }
+
+    private static String normalized(String text) {
+        return SPACES.matcher(text).replaceAll(" ").strip().toLowerCase(Locale.ROOT);
     }
 
     /**

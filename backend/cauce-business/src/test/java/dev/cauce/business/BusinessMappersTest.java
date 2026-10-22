@@ -6,6 +6,7 @@ import dev.cauce.business.booking.AgendaMapper;
 import dev.cauce.business.booking.BookingMapper;
 import dev.cauce.business.catalog.CatalogMapper;
 import dev.cauce.business.gap.KnowledgeGapMapper;
+import dev.cauce.business.handoff.HandoffMapper;
 import dev.cauce.business.profile.BusinessProfileMapper;
 import dev.cauce.core.business.booking.Agenda;
 import dev.cauce.core.business.booking.Agenda.Settings;
@@ -14,6 +15,7 @@ import dev.cauce.core.business.booking.Booking;
 import dev.cauce.core.business.catalog.Catalog;
 import dev.cauce.core.business.catalog.CatalogItem;
 import dev.cauce.core.business.gap.KnowledgeGap;
+import dev.cauce.core.business.handoff.Handoff;
 import dev.cauce.core.business.profile.BusinessProfile;
 import dev.cauce.core.business.profile.BusinessProfile.Fact;
 import java.math.BigDecimal;
@@ -103,6 +105,20 @@ class BusinessMappersTest {
         for (Booking booking : List.of(held, requested)) {
             Booking back = mapper.toDomain(mapper.toEntity(booking));
             assertThat(back).usingRecursiveComparison().isEqualTo(booking);
+        }
+    }
+
+    @Test
+    void handoffMapper_roundTripsEveryField_withAndWithoutTheCustomersWords() {
+        HandoffMapper mapper = new HandoffMapper();
+        Booking.Requester requester = new Booking.Requester(tenantId, UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), UUID.randomUUID());
+        Handoff quoted = Handoff.open(requester, new Handoff.Request("evento", "25 personas", "Ana", "+34 600",
+                "Cuanto costaria"));
+        Handoff plain = Handoff.open(requester, new Handoff.Request("queja", "Fria", "Luis", null)).resolved();
+
+        for (Handoff handoff : List.of(quoted, plain)) {
+            assertThat(mapper.toDomain(mapper.toEntity(handoff))).usingRecursiveComparison().isEqualTo(handoff);
         }
     }
 }
