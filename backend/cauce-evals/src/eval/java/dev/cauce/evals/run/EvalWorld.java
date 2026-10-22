@@ -264,14 +264,16 @@ final class EvalWorld {
                 Scenario.SetupBooking b = setup.booking();
                 Conversation owner = Boolean.FALSE.equals(b.sameCustomer()) ? other : person;
                 String code = Booking.newCode();
+                // With a phone, as a booking made through the agent has: an agenda that requires one
+                // refuses to change a booking without it.
                 admin.update("INSERT INTO bookings (id, tenant_id, code, agent_id, conversation_id, identity_id, "
-                                + "service_date, shift_id, requested_time, party_size, contact_name, status, "
-                                + "proposed_in_message_id, hold_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+                                + "service_date, shift_id, requested_time, party_size, contact_name, contact_phone, status, "
+                                + "proposed_in_message_id, hold_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
                                 + "now() + interval '10 minutes')",
                         UuidGenerator.newV7(), tenantId, code, customerAgentId, owner.id(), owner.identityId(),
                         Date.valueOf(resolveDate(b.date())), b.shift(), b.time() == null ? null
                                 : Time.valueOf(LocalTime.parse(b.time())), b.partySize(),
-                        b.contactName() == null ? "Ana" : b.contactName(), b.status(), UUID.randomUUID());
+                        b.contactName() == null ? "Ana" : b.contactName(), "600 123 456", b.status(), UUID.randomUUID());
                 if (b.alias() != null) {
                     codes.put(b.alias(), code);
                 }
