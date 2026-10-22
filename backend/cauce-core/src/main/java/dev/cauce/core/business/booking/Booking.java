@@ -25,7 +25,9 @@ import java.util.UUID;
  *       in ({@link BookingRefusal.Reason#SAME_TURN}) and after it expired.</li>
  * </ul>
  * A change is a new booking that {@link #replacesBookingId() replaces} a confirmed one; confirming
- * it cancels the one it replaces. {@link #code()} is the short reference people use.
+ * it cancels the one it replaces. {@link #code()} is the short reference people use, and it names
+ * the booking as the person sees it: a change carries the code of the booking it changes, so the
+ * code a person was given stays theirs through every change.
  *
  * <p>Pure domain type, immutable. The name, phone and notes are personal data: they live in the
  * bookings table, where deletion operates, and never enter the audit chain in clear.
@@ -144,19 +146,34 @@ public final class Booking {
         }
     }
 
+    /** A new booking proposed, HELD until {@code holdExpiresAt}, with a fresh code. */
+    public static Booking propose(Requester requester, Details details, Instant holdExpiresAt) {
+        return held(newCode(), requester, details, holdExpiresAt, null);
+    }
+
     /**
-     * A new proposal, HELD until {@code holdExpiresAt}. {@code replacesBookingId} is the confirmed
-     * booking this one changes, or null for a new booking.
+     * A change of the confirmed booking {@code original} proposed, HELD until {@code holdExpiresAt}:
+     * it keeps the original's code and, once confirmed, replaces it.
      */
-    public static Booking propose(Requester requester, Details details, Instant holdExpiresAt, UUID replacesBookingId) {
+    public static Booking proposeChange(Booking original, Requester requester, Details details,
+                                        Instant holdExpiresAt) {
+        Objects.requireNonNull(original, "original");
+        if (original.status != Status.CONFIRMED) {
+            throw new IllegalStateException("only a confirmed booking can be changed");
+        }
+        return held(original.code, requester, details, holdExpiresAt, original.id);
+    }
+
+    private static Booking held(String code, Requester requester, Details details, Instant holdExpiresAt,
+                                UUID replacesBookingId) {
         Objects.requireNonNull(requester, "requester");
         Objects.requireNonNull(details, "details");
+        Objects.requireNonNull(holdExpiresAt, "holdExpiresAt");
         Instant now = now();
-        return new Booking(UuidGenerator.newV7(), requester.tenantId(), newCode(), requester.agentId(),
+        return new Booking(UuidGenerator.newV7(), requester.tenantId(), code, requester.agentId(),
                 requester.conversationId(), requester.identityId(), details.date(), details.shiftId(),
                 details.time(), details.partySize(), details.contactName(), details.contactPhone(), details.notes(),
-                Status.HELD, replacesBookingId, requester.messageId(), Objects.requireNonNull(holdExpiresAt, "holdExpiresAt"),
-                null, null, now, now);
+                Status.HELD, replacesBookingId, requester.messageId(), holdExpiresAt, null, null, now, now);
     }
 
     /** Rebuilds a persisted booking. For the persistence layer only. */
@@ -178,6 +195,11 @@ public final class Booking {
             throw new IllegalStateException("only a confirmed booking can be cancelled");
         }
         return copy(status, Objects.requireNonNull(messageId, "messageId"), Objects.requireNonNull(expiresAt));
+    }
+
+    /** This booking with no cancellation requested: a later proposal withdrew the request. */
+    public Booking withoutCancellationRequest() {
+        return cancellationRequestedInMessageId == null ? this : copy(status, null, null);
     }
 
     /** This booking confirmed. */

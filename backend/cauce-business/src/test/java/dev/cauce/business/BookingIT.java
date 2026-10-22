@@ -189,7 +189,40 @@ class BookingIT extends AbstractBusinessIntegrationTest {
         assertThat(confirmed.notes()).contains("Trona");
         assertThat(confirmed.replacesBookingId()).contains(original.id());
         assertThat(asA(() -> bookings.confirmedOn(f.clientA().id(), nextTuesday)))
-                .extracting(Booking::code).containsExactly(change.code());
+                .extracting(Booking::id).containsExactly(confirmed.id());
+    }
+
+    @Test
+    void aBooking_keepsItsCodeThroughEveryChange_andWaitsForOneConfirmationAtATime() {
+        Booking original = confirm(f.conversation(), details(2));
+        String code = original.code();
+
+        // A change keeps the code, and is still refused from the turn it was proposed in.
+        Requester turn = requester(f.conversation(), UUID.randomUUID());
+        Booking first = asA(() -> bookings.proposeChange(turn, code, new Change(null, null, null, 4, null)));
+        assertThat(first.code()).isEqualTo(code);
+        assertRefused(() -> bookings.confirm(turn, code), Reason.SAME_TURN);
+
+        // A newer proposal withdraws the pending one: confirming applies the newest, 5, not 4.
+        Booking second = asA(() -> bookings.proposeChange(requester(f.conversation(), UUID.randomUUID()), code,
+                new Change(null, null, null, 5, null)));
+        Booking confirmed = asA(() -> bookings.confirm(requester(f.conversation(), UUID.randomUUID()), code));
+        assertThat(confirmed.id()).isEqualTo(second.id());
+        assertThat(confirmed.code()).isEqualTo(code);
+        assertThat(confirmed.partySize()).isEqualTo(5);
+        assertThat(asA(() -> bookings.availability(f.clientA().id(), nextTuesday)).shifts().get(0).remaining())
+                .isEqualTo(5);
+
+        // A change of the change keeps it too; a cancellation request withdraws the pending change.
+        asA(() -> bookings.proposeChange(requester(f.conversation(), UUID.randomUUID()), code,
+                new Change(null, null, null, 6, null)));
+        asA(() -> bookings.proposeCancellation(requester(f.conversation(), UUID.randomUUID()), code));
+        Booking cancelled = asA(() -> bookings.confirm(requester(f.conversation(), UUID.randomUUID()), code));
+        assertThat(cancelled.id()).isEqualTo(confirmed.id());
+        assertThat(cancelled.status()).isEqualTo(Booking.Status.CANCELLED);
+        assertThat(asA(() -> bookings.upcomingFor(f.clientA().id(), f.conversation().identityId()))).isEmpty();
+        assertThat(asA(() -> bookings.listForTenant(f.clientA().id(), nextTuesday, null, 10)))
+                .extracting(Booking::code).containsOnly(code);
     }
 
     @Test

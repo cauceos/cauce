@@ -33,7 +33,7 @@ class DigestComposerTest {
     @Test
     void compose_listsTomorrowsBookingsTheOpenCasesAndTheQuestions_inTheBusinessLanguage() {
         Booking booking = Booking.propose(requester, new Booking.Details(TOMORROW, "cena", null, 4, "Ana López",
-                "+34 600 000 000", "Trona"), Instant.now().plusSeconds(60), null).confirmed();
+                "+34 600 000 000", "Trona"), Instant.now().plusSeconds(60)).confirmed();
         Handoff handoff = Handoff.open(requester, new Handoff.Request("evento", "Cumpleaños de 25 personas",
                 "Marta", null));
         KnowledgeGap question = KnowledgeGap.record(tenantId, requester.agentId(), requester.conversationId(),
@@ -52,7 +52,7 @@ class DigestComposerTest {
     @Test
     void compose_listsTheTimeThePersonAskedFor_insteadOfTheShiftStart() {
         Booking at = Booking.propose(requester, new Booking.Details(TOMORROW, "cena", LocalTime.of(21, 30), 2, "Luis",
-                null, null), Instant.now().plusSeconds(60), null).confirmed();
+                null, null), Instant.now().plusSeconds(60)).confirmed();
 
         String text = DigestComposer.compose(new Contents("Bar", "es", TOMORROW, Optional.of(agenda), List.of(at),
                 List.of(), List.of()));

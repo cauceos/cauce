@@ -4,7 +4,6 @@ import dev.cauce.core.business.booking.Booking;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,7 +11,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 /** Spring Data repository for bookings; RLS-filtered like every other. */
 public interface BookingRepository extends JpaRepository<BookingEntity, UUID> {
 
-    Optional<BookingEntity> findByTenantIdAndCode(UUID tenantId, String code);
+    /** Every row of the booking {@code code} — the original and its changes — newest first. */
+    List<BookingEntity> findByTenantIdAndCodeOrderByIdDesc(UUID tenantId, String code);
 
     boolean existsByTenantIdAndCode(UUID tenantId, String code);
 

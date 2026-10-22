@@ -89,11 +89,14 @@ class BusinessMappersTest {
     @Test
     void bookingMapper_roundTripsEveryField_withAndWithoutTheOptionalOnes() {
         BookingMapper mapper = new BookingMapper();
-        Booking held = Booking.propose(new Booking.Requester(tenantId, UUID.randomUUID(), UUID.randomUUID(),
-                        UUID.randomUUID(), UUID.randomUUID()),
+        Booking.Requester requester = new Booking.Requester(tenantId, UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), UUID.randomUUID());
+        Booking original = Booking.propose(requester, new Booking.Details(LocalDate.of(2026, 11, 3), "cena", null, 2,
+                "Ana", null, null), Instant.now().truncatedTo(ChronoUnit.MICROS)).confirmed();
+        Booking held = Booking.proposeChange(original, requester,
                 new Booking.Details(LocalDate.of(2026, 11, 3), "cena", LocalTime.of(21, 30), 4, "Ana", "+34 600",
                         "Terraza"),
-                Instant.now().truncatedTo(ChronoUnit.MICROS), UUID.randomUUID());
+                Instant.now().truncatedTo(ChronoUnit.MICROS));
         Booking requested = held.confirmed().withCancellationRequested(UUID.randomUUID(),
                 Instant.now().truncatedTo(ChronoUnit.MICROS));
 

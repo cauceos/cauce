@@ -109,9 +109,10 @@ public final class BookingTools {
                 "description", "The new party size, if it changes."));
         properties.put("notes", text("The new notes, if they change."));
         return new BookingTool(provider, new ToolDefinition("propose_booking_change",
-                "Proposes a change to one of this person's confirmed bookings (date, shift, party size or notes; "
-                        + "leave out what does not change). The change is held, not applied: ask the person to "
-                        + "confirm and call confirm_booking with the NEW code in a later turn.",
+                "Proposes a change to one of this person's confirmed bookings (date, shift, time, party size or "
+                        + "notes; leave out what does not change). The change is held, not applied: ask the person "
+                        + "to confirm and call confirm_booking with the same code in a later turn. The booking keeps "
+                        + "its code: never tell the person it changed. A new proposal withdraws the previous one.",
                 schema(properties, List.of("code")))) {
             @Override
             Map<String, Object> run(BookingProvider bookings, ToolArguments args, ToolExecutionContext context) {
@@ -257,6 +258,9 @@ public final class BookingTools {
         booking.contactPhone().ifPresent(phone -> view.put("contact_phone", phone));
         booking.notes().ifPresent(notes -> view.put("notes", notes));
         view.put("status", booking.status().name());
+        if (booking.status() == Booking.Status.HELD && booking.replacesBookingId().isPresent()) {
+            view.put("pending_change", true); // a proposed change of the confirmed booking with this same code
+        }
         booking.pendingAt(now)
                 .ifPresent(pending -> view.put("waiting_for", pending.name().toLowerCase(Locale.ROOT)));
         return view;

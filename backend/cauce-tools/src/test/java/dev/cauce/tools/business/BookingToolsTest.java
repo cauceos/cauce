@@ -58,7 +58,7 @@ class BookingToolsTest {
     void proposeBooking_actsForTheContextsPerson_andTellsTheModelToAskFirst() {
         ArgumentCaptor<Booking.Requester> requester = ArgumentCaptor.forClass(Booking.Requester.class);
         when(provider.propose(requester.capture(), any())).thenAnswer(call -> Booking.propose(call.getArgument(0),
-                call.getArgument(1), NOW.plusSeconds(600), null));
+                call.getArgument(1), NOW.plusSeconds(600)));
 
         String output = run(BookingTools.proposeBooking(() -> provider, CLOCK), Map.of("date", "2026-11-03", "shift", "cena",
                 "party_size", "4", "contact_name", "Ana", "identity_id", UUID.randomUUID().toString()));
@@ -73,7 +73,7 @@ class BookingToolsTest {
     @Test
     void proposeBooking_passesTheRequestedTime_andReadsItBack() {
         when(provider.propose(any(), any())).thenAnswer(call -> Booking.propose(call.getArgument(0),
-                call.getArgument(1), NOW.plusSeconds(600), null));
+                call.getArgument(1), NOW.plusSeconds(600)));
 
         String output = run(BookingTools.proposeBooking(() -> provider, CLOCK), Map.of("date", "2026-11-03",
                 "shift", "cena", "time", "21:30", "party_size", 4, "contact_name", "Ana"));
@@ -85,10 +85,26 @@ class BookingToolsTest {
     }
 
     @Test
+    void aProposedChange_keepsTheCode_andIsMarkedAsAPendingChange() {
+        Booking.Requester requester = new Booking.Requester(context.tenantId(), context.agentId(),
+                context.conversationId(), context.identityId(), context.triggerMessageId());
+        Booking confirmed = Booking.propose(requester, new Booking.Details(date, "cena", null, 2, "Ana", null, null),
+                NOW.plusSeconds(600)).confirmed();
+        when(provider.proposeChange(any(), eq(confirmed.code()), any())).thenAnswer(call -> Booking.proposeChange(
+                confirmed, call.getArgument(0), new Booking.Details(date, "cena", null, 4, "Ana", null, null),
+                NOW.plusSeconds(600)));
+
+        String output = run(BookingTools.proposeBookingChange(() -> provider, CLOCK), Map.of("code", confirmed.code(),
+                "party_size", 4));
+
+        assertThat(output).contains("\"code\":\"" + confirmed.code() + "\"").contains("\"pending_change\":true");
+    }
+
+    @Test
     void aHeldBooking_waitsForConfirmationOnlyUntilItsHoldEnds_onTheInjectedClock() {
         Booking held = Booking.propose(new Booking.Requester(context.tenantId(), context.agentId(),
                 context.conversationId(), context.identityId(), context.triggerMessageId()),
-                new Booking.Details(date, "cena", null, 2, "Ana", null, null), NOW.plusSeconds(600), null);
+                new Booking.Details(date, "cena", null, 2, "Ana", null, null), NOW.plusSeconds(600));
         when(provider.upcomingFor(context.tenantId(), context.identityId())).thenReturn(List.of(held));
 
         // The clock is the database's (ADR 0008), the one the hold was stamped with: not the JVM's.

@@ -24,7 +24,7 @@ class BookingTest {
 
     @Test
     void propose_holdsUntilTheExpiry_withAReadableCode() {
-        Booking booking = Booking.propose(requester, details, now.plus(Duration.ofMinutes(10)), null);
+        Booking booking = Booking.propose(requester, details, now.plus(Duration.ofMinutes(10)));
 
         assertThat(booking.status()).isEqualTo(Booking.Status.HELD);
         assertThat(booking.contactName()).isEqualTo("Ana López");
@@ -38,7 +38,7 @@ class BookingTest {
 
     @Test
     void confirmationRefusal_refusesTheSameTurn_anExpiredHold_andNothingPending() {
-        Booking held = Booking.propose(requester, details, now.plus(Duration.ofMinutes(10)), null);
+        Booking held = Booking.propose(requester, details, now.plus(Duration.ofMinutes(10)));
 
         assertThat(held.confirmationRefusal(proposalMessage, now).map(BookingRefusal::reason)).contains(Reason.SAME_TURN);
         assertThat(held.confirmationRefusal(UUID.randomUUID(), now)).isEmpty();
@@ -50,7 +50,7 @@ class BookingTest {
 
     @Test
     void aCancellationRequest_isPendingOnTheConfirmedBooking_withItsOwnTurn() {
-        Booking confirmed = Booking.propose(requester, details, now.plus(Duration.ofMinutes(10)), null).confirmed();
+        Booking confirmed = Booking.propose(requester, details, now.plus(Duration.ofMinutes(10))).confirmed();
         UUID cancelMessage = UUID.randomUUID();
 
         Booking requested = confirmed.withCancellationRequested(cancelMessage, now.plus(Duration.ofMinutes(10)));
@@ -62,6 +62,22 @@ class BookingTest {
         assertThat(requested.cancelled().status()).isEqualTo(Booking.Status.CANCELLED);
         assertThatThrownBy(() -> requested.cancelled().withCancellationRequested(cancelMessage, now))
                 .isInstanceOf(IllegalStateException.class);
+        assertThat(requested.withoutCancellationRequest().pendingAt(now)).isEmpty();
+        assertThat(confirmed.withoutCancellationRequest()).isSameAs(confirmed);
+    }
+
+    @Test
+    void proposeChange_keepsTheCodeOfTheConfirmedBookingItReplaces() {
+        Booking confirmed = Booking.propose(requester, details, now.plus(Duration.ofMinutes(10))).confirmed();
+
+        Booking change = Booking.proposeChange(confirmed, requester, details, now.plus(Duration.ofMinutes(10)));
+
+        assertThat(change.code()).isEqualTo(confirmed.code());
+        assertThat(change.id()).isNotEqualTo(confirmed.id());
+        assertThat(change.replacesBookingId()).contains(confirmed.id());
+        assertThat(change.status()).isEqualTo(Booking.Status.HELD);
+        assertThatThrownBy(() -> Booking.proposeChange(change, requester, details, now))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -69,9 +85,9 @@ class BookingTest {
         Details at = new Details(LocalDate.of(2026, 10, 24), "cena", LocalTime.of(21, 30, 15), 4, "Ana", null, null);
 
         assertThat(at.time()).isEqualTo(LocalTime.of(21, 30));
-        assertThat(Booking.propose(requester, at, now.plus(Duration.ofMinutes(10)), null).time())
+        assertThat(Booking.propose(requester, at, now.plus(Duration.ofMinutes(10))).time())
                 .contains(LocalTime.of(21, 30));
-        assertThat(Booking.propose(requester, details, now.plus(Duration.ofMinutes(10)), null).time()).isEmpty();
+        assertThat(Booking.propose(requester, details, now.plus(Duration.ofMinutes(10))).time()).isEmpty();
     }
 
     @Test

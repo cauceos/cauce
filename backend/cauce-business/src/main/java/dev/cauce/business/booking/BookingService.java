@@ -98,7 +98,7 @@ public class BookingService implements BookingProvider {
         Details canonical = new Details(details.date(), shift.id(), details.time(), details.partySize(),
                 details.contactName(), details.contactPhone(), details.notes());
         requireBookable(agenda, requester.tenantId(), canonical, shift, now, Set.of());
-        return save(Booking.propose(requester, canonical, holdUntil(agenda, now), null));
+        return save(Booking.propose(requester, canonical, holdUntil(agenda, now)));
     }
 
     @Override
@@ -106,11 +106,8 @@ public class BookingService implements BookingProvider {
     public Booking proposeChange(Requester requester, String code, Change change) {
         Agenda agenda = lockAgenda(requester.tenantId());
         Instant now = clock.instant();
-        Booking original = requireOwn(requester, code);
-        if (original.status() != Booking.Status.CONFIRMED) {
-            throw refusal(Reason.NOT_PENDING, "only a confirmed booking can be changed; " + original.code()
-                    + " is " + original.status());
-        }
+        List<Booking> rows = requireOwn(requester, code);
+        Booking original = confirmedOf(rows, "changed");
         Shift shift = requireShift(agenda, change.shiftId() == null ? original.shiftId() : change.shiftId());
         // A time belongs to its shift: kept while the shift stays, dropped when it moves without a new one.
         LocalTime time = change.time() != null ? change.time()
@@ -119,8 +116,9 @@ public class BookingService implements BookingProvider {
                 change.partySize() == null ? original.partySize() : change.partySize(), original.contactName(),
                 original.contactPhone().orElse(null),
                 change.notes() == null ? original.notes().orElse(null) : change.notes());
+        Booking current = withdrawPending(rows, original);
         requireBookable(agenda, requester.tenantId(), details, shift, now, Set.of(original.id()));
-        return save(Booking.propose(requester, details, holdUntil(agenda, now), original.id()));
+        return save(Booking.proposeChange(current, requester, details, holdUntil(agenda, now)));
     }
 
     @Override
@@ -128,16 +126,14 @@ public class BookingService implements BookingProvider {
     public Booking proposeCancellation(Requester requester, String code) {
         Agenda agenda = lockAgenda(requester.tenantId());
         Instant now = clock.instant();
-        Booking booking = requireOwn(requester, code);
-        if (booking.status() != Booking.Status.CONFIRMED) {
-            throw refusal(Reason.NOT_PENDING, "only a confirmed booking can be cancelled; " + booking.code()
-                    + " is " + booking.status());
-        }
+        List<Booking> rows = requireOwn(requester, code);
+        Booking booking = confirmedOf(rows, "cancelled");
         Shift shift = agenda.shift(booking.shiftId()).orElse(null);
         if (shift != null && !Agenda.startOf(booking.date(), shift, zoneOf(requester.tenantId())).isAfter(now)) {
             throw refusal(Reason.PAST, booking.code() + " has already started");
         }
-        return save(booking.withCancellationRequested(requester.messageId(), holdUntil(agenda, now)));
+        return save(withdrawPending(rows, booking).withCancellationRequested(requester.messageId(),
+                holdUntil(agenda, now)));
     }
 
     @Override
@@ -145,7 +141,7 @@ public class BookingService implements BookingProvider {
     public Booking confirm(Requester requester, String code) {
         Agenda agenda = lockAgenda(requester.tenantId());
         Instant now = clock.instant();
-        Booking booking = requireOwn(requester, code);
+        Booking booking = awaitingConfirmation(requireOwn(requester, code), now);
         Optional<BookingRefusal> refused = booking.confirmationRefusal(requester.messageId(), now);
         if (refused.isPresent()) {
             throw refused.get().toException();
@@ -261,19 +257,64 @@ public class BookingService implements BookingProvider {
                 + "'; the shifts are " + agenda.shifts().stream().map(Shift::id).collect(Collectors.joining(", "))));
     }
 
-    /** The requester's own booking {@code code}: someone else's is, to them, a booking that does not exist. */
-    private Booking requireOwn(Requester requester, String code) {
+    /**
+     * The rows of the requester's own booking {@code code}, newest first: the booking as first made
+     * and every change of it, which share its code. Someone else's is, to them, a booking that does
+     * not exist.
+     */
+    private List<Booking> requireOwn(Requester requester, String code) {
         String normalized = code == null ? "" : code.strip().toUpperCase(Locale.ROOT);
-        return bookingRepository.findByTenantIdAndCode(requester.tenantId(), normalized)
+        List<Booking> rows = bookingRepository.findByTenantIdAndCodeOrderByIdDesc(requester.tenantId(), normalized)
+                .stream()
                 .map(bookingMapper::toDomain)
                 .filter(booking -> booking.identityId().equals(requester.identityId()))
-                .orElseThrow(() -> refusal(Reason.NOT_FOUND, "this person has no booking " + normalized));
+                .toList();
+        if (rows.isEmpty()) {
+            throw refusal(Reason.NOT_FOUND, "this person has no booking " + normalized);
+        }
+        return rows;
     }
 
-    /** Saves a new or changed booking; a new one gets a fresh code on the rare collision. */
+    /** The confirmed row of a booking — at most one, the version in force — or why it cannot be {@code done}. */
+    private static Booking confirmedOf(List<Booking> rows, String done) {
+        return rows.stream().filter(row -> row.status() == Booking.Status.CONFIRMED).findFirst()
+                .orElseThrow(() -> refusal(Reason.NOT_PENDING, "only a confirmed booking can be " + done + "; "
+                        + rows.get(0).code() + " is " + rows.get(0).status()));
+    }
+
+    /**
+     * The row whose pending change a confirmation applies: the one still waiting, else the latest
+     * proposal (whose refusal says it expired), else the version in force (nothing waiting).
+     */
+    private static Booking awaitingConfirmation(List<Booking> rows, Instant now) {
+        return rows.stream().filter(row -> row.pendingAt(now).isPresent()).findFirst()
+                .or(() -> rows.stream().filter(row -> row.status() == Booking.Status.HELD).findFirst())
+                .or(() -> rows.stream().filter(row -> row.status() == Booking.Status.CONFIRMED).findFirst())
+                .orElse(rows.get(0));
+    }
+
+    /**
+     * Withdraws what the confirmed booking {@code current} was waiting for — proposed changes, a
+     * requested cancellation — because a newer proposal replaces it: one booking waits for one
+     * confirmation at a time. Returns {@code current} as saved.
+     */
+    private Booking withdrawPending(List<Booking> rows, Booking current) {
+        rows.stream()
+                .filter(row -> row.status() == Booking.Status.HELD && row.replacesBookingId().isPresent())
+                .forEach(row -> save(row.cancelled()));
+        return current.cancellationRequestedInMessageId().isPresent()
+                ? save(current.withoutCancellationRequest())
+                : current;
+    }
+
+    /**
+     * Saves a new or changed booking. A new booking gets a fresh code on the rare collision; a
+     * change keeps the code of the booking it changes.
+     */
     private Booking save(Booking booking) {
         Booking toSave = booking;
-        while (toSave.status() == Booking.Status.HELD && bookingRepository.findById(toSave.id()).isEmpty()
+        while (toSave.status() == Booking.Status.HELD && toSave.replacesBookingId().isEmpty()
+                && bookingRepository.findById(toSave.id()).isEmpty()
                 && bookingRepository.existsByTenantIdAndCode(toSave.tenantId(), toSave.code())) {
             toSave = Booking.rehydrate(toSave.id(), toSave.tenantId(), Booking.newCode(), toSave.agentId(),
                     toSave.conversationId(), toSave.identityId(), toSave.date(), toSave.shiftId(),
