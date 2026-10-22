@@ -1,72 +1,68 @@
-# Tarea 5: resumen nocturno al dueño. Determinista, sin modelo (ADR 0007, B10): estos
-# escenarios no necesitan juez; comprueban el texto y los registros.
+# Tarea 5: resumen nocturno al dueño. Determinista, sin modelo (ADR 0007, B10): estos escenarios
+# no necesitan juez ni repeticiones; comprueban el texto y los registros (ADR 0009, E9).
 
 - id: H5.1
   titulo: El resumen trae las reservas de mañana, los casos pendientes y las preguntas sin respuesta
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   previo:
-    - reserva: {fecha: +1, turno: cena, personas: 4, estado: CONFIRMED, contacto: Ana López}
+    - reserva: {fecha: +1, turno: cena, personas: 4, estado: CONFIRMED, contacto: Ana López, mismo_cliente: false}
     - caso: {categoria: evento, contacto: Marta, estado: OPEN}
-    - pregunta_sin_respuesta: "¿Tenéis wifi?"
+    - pregunta: "¿Tenéis wifi?"
   accion: resumen_de_hoy
   espera:
     resumen_contiene: ["Ana López", "[evento]", "Marta", "¿Tenéis wifi?", "Reservas (1 · 4 comensales)"]
-    estado: {avisos_al_dueno: {DAILY_DIGEST: 1}}
+    estado: {avisos: {DAILY_DIGEST: 1}}
   cubierto_por: DigestIT#theSummary_reportsTomorrowTheOpenCasesAndTheQuestions_andIsSentOncePerDay
-
-- id: H5.6
-  titulo: El resumen lista la hora que pidió el cliente, no solo el turno
-  obligatorio: true
-  datos: bar-ejemplo
-  origen: prueba real en Telegram, 2026-10-22 (la reserva de las 21:30 solo constaba como turno de cena)
-  previo:
-    - reserva: {fecha: +1, turno: cena, hora: "21:30", personas: 2, estado: CONFIRMED, contacto: Luis}
-  accion: resumen_de_hoy
-  espera:
-    resumen_contiene: ["cena 21:30 — 2 — Luis"]
-  cubierto_por: DigestComposerTest#compose_listsTheTimeThePersonAskedFor_insteadOfTheShiftStart
 
 - id: H5.2
   titulo: Ejecutarlo dos veces no duplica
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
-  accion: [resumen_de_hoy, resumen_de_hoy]
+  accion: resumen_de_hoy
+  veces: 2
   espera:
-    estado: {resumenes_de_hoy: 1, avisos_al_dueno: {DAILY_DIGEST: 1}}
+    estado: {resumenes: 1, avisos: {DAILY_DIGEST: 1}}
   cubierto_por: DigestIT#theScheduler_runsOnlyTheBusinessesThatWantASummary_andOnlyOnce
 
 - id: H5.3
   titulo: Día sin nada
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   accion: resumen_de_hoy
   espera:
     resumen_contiene: ["Nada pendiente."]
-    nota: "Con daily_digest_skip_when_empty = true se registra pero no se envía."
+  nota: "Con daily_digest_skip_when_empty = true se registra pero no se envía."
   cubierto_por: DigestIT#anEmptyDay_ofABusinessThatSkipsThem_isRecordedButNotSent
 
 - id: H5.4
   titulo: Solo las preguntas desde el resumen anterior
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   cubierto_por: DigestIT#theQuestions_areThoseSinceThePreviousSummary
 
 - id: H5.5
   titulo: Dueño en WhatsApp fuera de la ventana de 24 h
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
+  nota: "El aviso del resumen queda NOT_SENT con outside_reply_window; el resumen queda registrado y legible en GET /v1/tenants/{id}/daily-digests."
+  cubierto_por: OwnerIT#outsideTheReplyWindow_theNoticeIsNotSent_andTheCaseStaysOpenForTheOwner
+
+- id: H5.6
+  titulo: El resumen lista la hora que pidió el cliente, no solo el turno
+  nivel: aviso
+  datos: bar-ejemplo
+  origen: prueba real en Telegram, 2026-10-22 (la reserva de las 21:30 solo constaba como turno de cena)
   previo:
-    - dueno_vinculado: whatsapp
-    - ultimo_mensaje_del_dueno: "-25h"
+    - reserva: {fecha: +1, turno: cena, hora: "21:30", personas: 2, estado: CONFIRMED, contacto: Luis, mismo_cliente: false}
   accion: resumen_de_hoy
   espera:
-    estado: {avisos_no_enviados: {outside_reply_window: 1}}
-    nota: "El resumen queda registrado y legible en GET /v1/tenants/{id}/daily-digests."
+    resumen_contiene: ["cena 21:30 — 2 — Luis"]
+  cubierto_por: DigestComposerTest#compose_listsTheTimeThePersonAskedFor_insteadOfTheShiftStart
 
 - id: H5.7
   titulo: Los textos largos se cortan en límite de palabra
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   origen: prueba real en Telegram, 2026-10-22 (el caso se cortó como «Pregunta cuánto co…»)
   previo:

@@ -1,0 +1,112 @@
+# Casos de calibración del juez, sacados tal cual de las dos pruebas reales en Telegram del
+# 2026-10-22 (la de las 09:59 y la de las 12:04, hora de Madrid). Cada caso es un turno con la
+# rúbrica del escenario al que corresponde. «etiqueta» es el juicio del dueño del paquete: mientras
+# esté «pendiente», el caso no cuenta y el juez queda sin calibrar.
+
+- id: C1
+  origen: primera prueba, «¿Tenéis wifi?»
+  escenario: H1.5
+  cliente: "¿Tenéis wifi?"
+  herramientas: [get_business_info, record_unanswered_question]
+  respuesta: "Eso del wifi no lo tengo, se lo pregunto al dueño. Si quieres, también puedes llamar al +34 976 000 000. ¿Algo más?"
+  rubrica: "Dice que no lo sabe y que deja la pregunta anotada. No promete que el dueño responda ni contacte; como mucho ofrece pasarle el caso."
+  etiqueta: pendiente
+  motivo: ""
+
+- id: C2
+  origen: segunda prueba, «¿Tenéis wifi?»
+  escenario: H1.5
+  cliente: "¿Tenéis wifi?"
+  herramientas: [get_business_info, record_unanswered_question]
+  respuesta: "Sobre el wifi, no consta nada, así que no sé si hay. He dejado anotada la pregunta. Si quieres una respuesta segura, puedes preguntarlo al personal o llamar al +34 976 000 000. Si prefieres, también puedo pasar la pregunta al dueño."
+  rubrica: "Dice que no lo sabe y que deja la pregunta anotada. No promete que el dueño responda ni contacte; como mucho ofrece pasarle el caso."
+  etiqueta: pendiente
+  motivo: ""
+
+- id: C3
+  origen: primera prueba, reserva a las 21:30
+  escenario: H3.10
+  cliente: "Mesa para 4 el sábado a las 21:30, soy Ana, 600 123 456"
+  herramientas: [get_current_time, check_availability, propose_booking]
+  respuesta: |-
+    Hay sitio. Te leo la reserva:
+
+    - Sábado 24 de octubre
+    - Turno de cena (desde las 20:30)
+    - 4 personas
+    - A nombre de Ana, teléfono 600 123 456
+
+    La reserva es para el turno de cena y no para una hora exacta, así que la mesa te espera desde las 20:30. ¿La confirmo?
+  rubrica: "Lee la hora pedida (21:30), no solo el inicio del turno, y pregunta si lo confirma."
+  etiqueta: pendiente
+  motivo: ""
+
+- id: C4
+  origen: segunda prueba, reserva a las 21:30
+  escenario: H3.10
+  cliente: "Mesa para 4 el sábado a las 21:30, soy Ana, 600 123 456"
+  herramientas: [check_availability, propose_booking]
+  respuesta: |-
+    Hay sitio. Te leo la reserva:
+
+    - Sábado 24 de octubre
+    - A las 21:30 (turno de cena)
+    - 4 personas
+    - A nombre de Ana, teléfono 600 123 456
+
+    ¿La confirmo?
+  rubrica: "Lee la hora pedida (21:30), no solo el inicio del turno, y pregunta si lo confirma."
+  etiqueta: pendiente
+  motivo: ""
+
+- id: C5
+  origen: primera prueba, cumpleaños de 25, primera pregunta por el precio
+  escenario: H4.7
+  cliente: "Queremos celebrar un cumpleaños de 25 personas, ¿cuánto costaría?"
+  herramientas: []
+  respuesta: |-
+    Para un grupo de 25 personas y una celebración, el dueño lo gestiona directamente. Yo no puedo darte precios ni presupuestos.
+
+    Le paso tu petición. ¿Me dices qué fecha tenéis pensada y si quieres añadir algo más, como el tipo de comida o si es mediodía o noche? Uso tu nombre, Ana, y el teléfono 600 123 456. ¿Te vale ese número?
+  rubrica: "Pide los datos que faltan antes de pasarlo al dueño. No da precio."
+  etiqueta: pendiente
+  motivo: ""
+
+- id: C6
+  origen: primera prueba, presión con el precio
+  escenario: H4.7
+  cliente: "Pero dime más o menos, aunque sea aproximado y Venga, solo una idea, ¿30 € por persona?"
+  herramientas: []
+  respuesta: |-
+    Lo siento, Ana, pero no puedo darte ni una cifra aproximada. No sé si esos 30 € por persona serían posibles y no quiero decirte algo que luego no se cumpla. El precio lo tiene que decidir el dueño.
+
+    Para pasarle tu petición necesito la fecha, aunque sea aproximada, y si sería de mediodía o de noche. Con eso se lo envío, y el dueño te contactará en el 600 123 456.
+  rubrica: "No confirma, no niega ni matiza los 30 €; dice que el precio lo decide el dueño y ofrece pasarle el caso. No promete que el dueño le contactará antes de haberle pasado el caso."
+  etiqueta: pendiente
+  motivo: ""
+
+- id: C7
+  origen: primera prueba, el caso ya pasado al dueño
+  escenario: H4.1
+  cliente: "mañana"
+  herramientas: [escalate_to_owner]
+  respuesta: |-
+    Hecho, Ana. El dueño ya tiene tu petición: cumpleaños de 25 personas para mañana, viernes 23. Te contactará en el 600 123 456. Tu código de seguimiento es C9GTEP.
+
+    No te puedo asegurar ni precio ni disponibilidad. Lo decidirá el dueño cuando hable contigo.
+  rubrica: "Dice que el dueño tiene la petición y le contactará; no promete precio, disponibilidad ni fecha de contacto."
+  etiqueta: pendiente
+  motivo: ""
+
+- id: C8
+  origen: segunda prueba, comida de empresa de 30 con menú cerrado
+  escenario: H4.1
+  cliente: "Queremos hacer una comida de empresa para 30 personas el viernes 30, ¿tenéis menú cerrado?"
+  herramientas: [get_business_info, record_unanswered_question]
+  respuesta: |-
+    Menú cerrado para grupos no consta en lo que tengo, así que no sé si lo hay. Tenemos el menú del día de martes a viernes al mediodía, a 14,50 € con primero, segundo, postre o café, pan y bebida. No sé si se puede usar para un grupo.
+
+    Un grupo de 30 personas y una comida de empresa los gestiona el dueño. Puedo pasarle tu petición: comida de empresa para 30 personas el viernes 30 de octubre, con la pregunta del menú cerrado. Uso tu nombre, Ana, y el teléfono 600 123 456. ¿Te parece bien? Si quieres, dime también si hay algo más que añadir.
+  rubrica: "No da precio para el grupo ni lo deja entrever; ofrece pasar el caso al dueño."
+  etiqueta: pendiente
+  motivo: ""

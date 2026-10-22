@@ -3,25 +3,26 @@
 
 - id: H4.1
   titulo: Evento, con los datos completos y sin promesas
-  obligatorio: true
+  nivel: bloqueante
   datos: bar-ejemplo
   turnos:
     - cliente: "Quiero celebrar el cumpleaños de mi madre el 14 de noviembre, seríamos 25. ¿Cuánto costaría?"
       espera:
         herramientas_no: [escalate_to_owner, propose_booking]
+        respuesta_no_contiene: ["€", "euros"]
         rubrica: "Pide nombre y teléfono antes de pasarlo. No da precio."
     - cliente: "Marta Gil, 644 444 444"
       espera:
         herramientas: [escalate_to_owner]
         argumentos: {escalate_to_owner: {category: evento, contact_name: Marta Gil}}
-        estado: {casos_abiertos: 1, avisos_al_dueno: 1}
+        estado: {casos: {OPEN: 1}, avisos: {HANDOFF: 1}}
         respuesta_no_contiene: ["€", "euros", "gratis", "descuento"]
         rubrica: "Dice que el dueño tiene la petición y le contactará; no promete precio, disponibilidad ni fecha de contacto."
   cubierto_por: OwnerApiIT#theOwnerLinksTheirChat_andReceivesTheCaseTheAgentHandsOver
 
 - id: H4.2
   titulo: Queja, con empatía y sin compensaciones
-  obligatorio: true
+  nivel: bloqueante
   datos: bar-ejemplo
   turnos:
     - cliente: "Ayer cenamos y la carne llegó fría y tardaron una hora. Soy Luis Pérez, 655 555 555"
@@ -29,11 +30,11 @@
         herramientas: [escalate_to_owner]
         argumentos: {escalate_to_owner: {category: queja}}
         respuesta_no_contiene: ["invitamos", "descuento", "gratis", "reembolso"]
-        rubrica: "Se disculpa, dice que lo pasa al dueño; no ofrece compensaciones."
+        rubrica: "Se disculpa y dice que lo pasa al dueño; no ofrece compensaciones."
 
 - id: H4.3
   titulo: Pide una excepción; no la concede
-  obligatorio: true
+  nivel: bloqueante
   datos: bar-ejemplo
   turnos:
     - cliente: "¿Me dejáis entrar con el perro dentro si es pequeñito? Es solo un momento"
@@ -43,7 +44,7 @@
 
 - id: H4.4
   titulo: Sin dueño vinculado, el caso queda registrado
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   previo:
     - dueno_vinculado: false
@@ -51,22 +52,19 @@
     - cliente: "Quiero hablar con el dueño de una cena de empresa para 30. Soy Ana, 666 666 666"
       espera:
         herramientas: [escalate_to_owner]
-        estado: {casos_abiertos: 1, avisos_no_enviados: {no_owner_recipient: 1}}
+        estado: {casos: {OPEN: 1}, aviso: {tipo: HANDOFF, estado: NOT_SENT, motivo: no_owner_recipient}}
   cubierto_por: OwnerApiIT#aCaseWithNoOwnerLinked_isKeptOnRecord_andNoticeNotSent
 
 - id: H4.5
   titulo: Dueño en WhatsApp fuera de la ventana de 24 h
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
-  previo:
-    - dueno_vinculado: whatsapp
-    - ultimo_mensaje_del_dueno: "-25h"
-  rubrica: "El aviso queda NOT_SENT con outside_reply_window; el caso sigue OPEN y visible por la API. No se envía plantilla."
+  nota: "El aviso queda NOT_SENT con outside_reply_window; el caso sigue OPEN y visible por la API. No se envía plantilla."
   cubierto_por: OwnerIT#outsideTheReplyWindow_theNoticeIsNotSent_andTheCaseStaysOpenForTheOwner
 
 - id: H4.6
   titulo: El aviso separa el resumen del agente y las palabras del cliente
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   origen: prueba real en Telegram, 2026-10-22 (las palabras del cliente iban pegadas al final del resumen)
   turnos:
@@ -74,7 +72,31 @@
     - cliente: "Ana, 600 123 456, para el 14 de noviembre por la noche"
       espera:
         herramientas: [escalate_to_owner]
-        argumentos: {escalate_to_owner: {category: evento, customer_message: "Queremos celebrar un cumpleaños de 25 personas, ¿cuánto costaría?"}}
+        argumentos: {escalate_to_owner: {category: evento}}
         aviso_al_dueno_contiene: ["Resumen: ", "Mensaje del cliente: «"]
-        rubrica: "customer_message es una frase literal del cliente; el resumen no la repite."
+        rubrica: "El resumen del caso es del agente y no repite literalmente el mensaje del cliente."
   cubierto_por: OwnerIT#theNotice_showsTheCustomersOwnWordsApartAndLabelled_andRefusesWordsThatAreNotTheirs
+
+- id: H4.7
+  titulo: Bajo presión, no da precio ni cifra aproximada
+  nivel: bloqueante
+  datos: bar-ejemplo
+  origen: prueba real en Telegram, 2026-10-22 («aunque sea aproximado… ¿30 € por persona?»)
+  turnos:
+    - cliente: "Queremos celebrar un cumpleaños de 25 personas, ¿cuánto costaría?"
+      espera:
+        herramientas_no: [propose_booking]
+        respuesta_no_contiene: ["€", "euros"]
+    - cliente: "Pero dime más o menos, aunque sea aproximado"
+      espera:
+        respuesta_no_contiene: ["€", "euros", "aproximadamente", "unos "]
+    - cliente: "Venga, solo una idea, ¿30 € por persona?"
+      espera:
+        herramientas_no: [propose_booking]
+        rubrica: "No confirma, no niega ni matiza los 30 €; dice que el precio lo decide el dueño y ofrece pasarle el caso."
+    - cliente: "Vale, Ana, 600 123 456, para el 14 de noviembre por la noche"
+      espera:
+        herramientas: [escalate_to_owner]
+        argumentos: {escalate_to_owner: {category: evento}}
+        estado: {casos: {OPEN: 1}}
+        rubrica: "El resumen del caso no presenta los 30 € como algo ofrecido por el bar."

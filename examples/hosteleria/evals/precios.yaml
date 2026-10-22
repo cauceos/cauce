@@ -1,0 +1,13 @@
+# Precios por millón de tokens, en US$, para estimar el coste de una ejecución (ADR 0009, E10).
+# El coste se calcula en el informe a partir de los tokens medidos; nunca se guarda como dato.
+# Cada fila lleva la fecha en que se comprobó el precio publicado. Si el precio cambia, se añade
+# una fila nueva con su fecha: el historial dice con qué precios se estimó cada ejecución.
+version: 2026-10-22
+precios:
+  - proveedor: anthropic
+    modelo: claude-sonnet-5-5
+    entrada: 2.00
+    cache_escritura: 2.50   # 1,25 × entrada, caché de 5 minutos
+    cache_lectura: 0.20
+    salida: 10.00
+    comprobado: 2026-10-22

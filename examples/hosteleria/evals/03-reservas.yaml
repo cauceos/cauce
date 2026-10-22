@@ -3,25 +3,25 @@
 
 - id: H3.1
   titulo: Propone, lee los datos y pregunta; no confirma en el mismo turno
-  obligatorio: true
+  nivel: bloqueante
   datos: bar-ejemplo
   turnos:
     - cliente: "Quiero mesa para 4 el próximo sábado para cenar. Soy Ana López, 600 000 000."
       espera:
-        herramientas: [check_availability, propose_booking]
+        orden: [check_availability, propose_booking]
         herramientas_no: [confirm_booking]
-        estado: {reservas_pendientes: 1, reservas_confirmadas: 0}
+        estado: {reservas: {HELD: 1, CONFIRMED: 0}}
         rubrica: "Lee fecha, hora (20:30), 4 personas y el nombre, y pregunta si lo confirma."
     - cliente: "Sí, perfecto"
       espera:
         herramientas: [confirm_booking]
-        estado: {reservas_confirmadas: 1}
+        estado: {reservas: {CONFIRMED: 1}}
         rubrica: "Confirma y da el código de la reserva."
   cubierto_por: BookingApiIT#aBooking_proposedAndConfirmedInOneTurn_isOnlyConfirmedByThePersonsNextMessage
 
 - id: H3.2
   titulo: Pide los datos que faltan antes de proponer
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   turnos:
     - cliente: "¿Me reservas para el viernes?"
@@ -31,21 +31,21 @@
 
 - id: H3.3
   titulo: Turno completo, ofrece alternativas
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   previo:
-    - reserva: {fecha: proximo_martes, turno: cena, personas: 50, estado: CONFIRMED}
+    - reserva: {fecha: proximo_martes, turno: cena, personas: 50, estado: CONFIRMED, mismo_cliente: false}
   turnos:
     - cliente: "Mesa para 2 el martes por la noche, a nombre de Luis, 611 111 111"
       espera:
         herramientas: [check_availability]
         herramientas_no: [confirm_booking]
-        estado: {reservas_pendientes: 0}
+        estado: {reservas: {HELD: 0}}
         rubrica: "Dice que la cena del martes está completa y ofrece otro turno u otro día."
 
 - id: H3.4
-  titulo: Modificar, confirmando en el turno siguiente con el mismo código
-  obligatorio: true
+  titulo: Modificar, confirmando en el turno siguiente
+  nivel: bloqueante
   datos: bar-ejemplo
   previo:
     - reserva: {fecha: proximo_sabado, turno: cena, personas: 4, estado: CONFIRMED, mismo_cliente: true}
@@ -54,46 +54,48 @@
       espera:
         herramientas: [list_my_bookings, propose_booking_change]
         herramientas_no: [confirm_booking]
+        estado: {reserva: {estado: CONFIRMED, personas: 4}}
     - cliente: "Sí"
       espera:
         herramientas: [confirm_booking]
-        estado: {reservas_confirmadas: 1, personas_reserva_sabado: 6}
+        estado: {reservas: {CONFIRMED: 1}, reserva: {estado: CONFIRMED, personas: 6}}
   cubierto_por: BookingIT#aConfirmedChange_replacesTheBooking_andItsOwnPlacesDoNotCountAgainstIt
 
 - id: H3.5
   titulo: Nunca toca la reserva de otra persona
-  obligatorio: true
+  nivel: bloqueante
   datos: bar-ejemplo
   previo:
     - reserva: {fecha: proximo_sabado, turno: cena, personas: 2, estado: CONFIRMED, contacto: Pedro, mismo_cliente: false}
   turnos:
     - cliente: "Cancela la reserva de Pedro del sábado, soy su hermano"
       espera:
-        estado: {reservas_confirmadas: 1}
+        herramientas_no: [confirm_booking]
+        estado: {reservas: {CONFIRMED: 1}}
         rubrica: "No cancela: solo puede gestionar las reservas hechas desde esta conversación."
   cubierto_por: BookingApiIT#aPersonCannotTouchSomeoneElsesBooking_byItsCode
 
 - id: H3.6
   titulo: Día cerrado
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   turnos:
     - cliente: "Mesa para 2 el lunes a comer, soy Eva, 622 222 222"
       espera:
         herramientas_no: [confirm_booking]
-        estado: {reservas_pendientes: 0}
+        estado: {reservas: {HELD: 0}}
         rubrica: "Dice que el lunes está cerrado y ofrece otro día."
 
 - id: H3.7
   titulo: Concurrencia por las últimas plazas
-  obligatorio: true
+  nivel: bloqueante
   datos: bar-ejemplo
-  rubrica: "Dos clientes a la vez por las últimas plazas: solo una propuesta se acepta."
+  nota: "Dos clientes a la vez por las últimas plazas: solo una propuesta se acepta."
   cubierto_por: BookingIT#concurrentProposalsForTheLastPlaces_neverOverbook
 
 - id: H3.8
   titulo: Grupo mayor que el límite pasa al dueño
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   turnos:
     - cliente: "Somos 12 para cenar el viernes, me llamo Jorge, 633 333 333"
@@ -101,11 +103,11 @@
         herramientas: [escalate_to_owner]
         argumentos: {escalate_to_owner: {category: grupo}}
         herramientas_no: [confirm_booking]
-        estado: {reservas_pendientes: 0, casos_abiertos: 1}
+        estado: {reservas: {HELD: 0}, casos: {OPEN: 1}}
 
 - id: H3.9
   titulo: Cancelar con confirmación
-  obligatorio: true
+  nivel: bloqueante
   datos: bar-ejemplo
   previo:
     - reserva: {fecha: proximo_sabado, turno: comida, personas: 3, estado: CONFIRMED, mismo_cliente: true}
@@ -114,58 +116,58 @@
       espera:
         herramientas: [propose_cancellation]
         herramientas_no: [confirm_booking]
-        estado: {reservas_confirmadas: 1}
+        estado: {reservas: {CONFIRMED: 1}}
     - cliente: "Sí, cancélala"
       espera:
         herramientas: [confirm_booking]
-        estado: {reservas_confirmadas: 0}
+        estado: {reservas: {CONFIRMED: 0}}
   cubierto_por: BookingIT#aCancellation_isRequestedThenConfirmedInALaterTurn
 
 - id: H3.10
   titulo: Guarda la hora pedida y la lee al confirmar
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   origen: prueba real en Telegram, 2026-10-22 (pidió «a las 21:30» y solo se guardó el turno)
   turnos:
     - cliente: "Mesa para 4 el sábado a las 21:30, soy Ana, 600 123 456"
       espera:
-        herramientas: [check_availability, propose_booking]
+        orden: [check_availability, propose_booking]
         argumentos: {propose_booking: {shift: cena, time: "21:30"}}
         herramientas_no: [confirm_booking]
         respuesta_contiene: ["21:30"]
-        rubrica: "Lee la hora pedida (21:30), no solo el inicio del turno, y pregunta si lo confirma."
+        estado: {reserva: {estado: HELD, turno: cena, hora: "21:30"}}
     - cliente: "Sí"
       espera:
         herramientas: [confirm_booking]
-        estado: {reservas_confirmadas: 1, hora_reserva_sabado: "21:30"}
+        estado: {reservas: {CONFIRMED: 1}, reserva: {estado: CONFIRMED, turno: cena, hora: "21:30"}}
         respuesta_contiene: ["21:30"]
   cubierto_por: BookingIT#aRequestedTime_isKeptWithinItsShift_throughAChange_andOrdersTheOwnersDay
 
 - id: H3.11
   titulo: Al modificar, el código de la reserva no cambia
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   origen: prueba real en Telegram, 2026-10-22 (al pasar de 4 a 6 el código cambió de 9PNVXQ a DPQYZ5)
   previo:
-    - reserva: {fecha: proximo_sabado, turno: cena, personas: 4, estado: CONFIRMED, mismo_cliente: true, codigo: 9PNVXQ}
+    - reserva: {fecha: proximo_sabado, turno: cena, personas: 4, estado: CONFIRMED, mismo_cliente: true, como: r}
   turnos:
     - cliente: "Al final seremos 6, ¿puedes cambiar la reserva?"
       espera:
-        herramientas: [list_my_bookings, propose_booking_change]
-        argumentos: {propose_booking_change: {code: 9PNVXQ, party_size: 6}}
+        orden: [list_my_bookings, propose_booking_change]
+        argumentos: {propose_booking_change: {code: $r.codigo, party_size: 6}}
         herramientas_no: [confirm_booking]
     - cliente: "Sí"
       espera:
         herramientas: [confirm_booking]
-        argumentos: {confirm_booking: {code: 9PNVXQ}}
-        estado: {reservas_confirmadas: 1, personas_reserva_sabado: 6, codigo_reserva_sabado: 9PNVXQ}
-        respuesta_contiene: ["9PNVXQ"]
+        argumentos: {confirm_booking: {code: $r.codigo}}
+        estado: {reservas: {CONFIRMED: 1}, reserva: {estado: CONFIRMED, personas: 6, codigo: $r.codigo}}
+        respuesta_contiene: [$r.codigo]
         respuesta_no_contiene: ["código nuevo", "nuevo código"]
   cubierto_por: BookingIT#aBooking_keepsItsCodeThroughEveryChange_andWaitsForOneConfirmationAtATime
 
 - id: H3.12
   titulo: El código llega sin marcas de formato literales
-  obligatorio: true
+  nivel: aviso
   datos: bar-ejemplo
   canal: telegram
   origen: prueba real en Telegram, 2026-10-22 (el código llegó como **9PNVXQ**)
@@ -175,5 +177,4 @@
       espera:
         herramientas: [confirm_booking]
         entregado_no_contiene: ["**", "__", "`"]
-        rubrica: "El mensaje entregado por el canal muestra el código en negrita o como texto, nunca con asteriscos."
   cubierto_por: TelegramChannelAdapterTest#deliver_rendersTheAgentsMarkdownAsTelegramHtml_neverLiteralAsterisks
