@@ -63,3 +63,16 @@
   espera:
     estado: {avisos_no_enviados: {outside_reply_window: 1}}
     nota: "El resumen queda registrado y legible en GET /v1/tenants/{id}/daily-digests."
+
+- id: H5.7
+  titulo: Los textos largos se cortan en límite de palabra
+  obligatorio: true
+  datos: bar-ejemplo
+  origen: prueba real en Telegram, 2026-10-22 (el caso se cortó como «Pregunta cuánto co…»)
+  previo:
+    - caso: {categoria: evento, contacto: Ana, estado: OPEN, resumen: "Celebración de cumpleaños para 25 personas, para mañana viernes 23 de octubre de 2026 (no ha indicado mediodía o noche). Pregunta cuánto costaría; propone orientativamente 30 € por persona."}
+  accion: resumen_de_hoy
+  espera:
+    resumen_contiene: ["Pregunta cuánto…"]
+    resumen_no_contiene: ["cuánto co…"]
+  cubierto_por: DigestComposerTest#shorten_cutsALongTextAtAWordBoundary_neverInTheMiddleOfAWord
