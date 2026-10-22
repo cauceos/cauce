@@ -3,7 +3,7 @@
 Turnos reales con el juicio del dueño del paquete sobre una rúbrica, como etiqueta (ADR 0009, E6).
 Antes de juzgar nada, el arnés le pasa al juez cada caso tres veces, y su veredicto mayoritario
 tiene que coincidir con la etiqueta en **todos** los casos. Si no coincide en alguno, el juez no se
-usa: sus rúbricas se informan «sin juez», nunca como aprobadas.
+usa: sus rúbricas se informan «pendiente de juez», nunca como aprobadas.
 
 Cada fichero `*.yaml` es una lista de casos:
 
@@ -19,4 +19,4 @@ Cada fichero `*.yaml` es una lista de casos:
 ```
 
 Los casos salen de las dos pruebas reales del 2026-10-22, con los juicios del dueño del paquete.
-Hasta que estén, el juez no está calibrado y las rúbricas se informan «sin juez».
+Hasta que estén, el juez no está calibrado y las rúbricas se informan «pendiente de juez».

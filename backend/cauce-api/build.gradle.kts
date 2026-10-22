@@ -14,7 +14,6 @@ dependencies {
     implementation(project(":cauce-memory"))
     implementation(project(":cauce-channels"))
     implementation(project(":cauce-llm"))
-    implementation(project(":cauce-evals"))
     implementation(project(":cauce-observability"))
     implementation(project(":cauce-governance"))
     implementation(project(":cauce-tenancy"))

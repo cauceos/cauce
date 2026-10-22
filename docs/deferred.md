@@ -36,7 +36,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Several venues of one business with a unified view.** One profile, catalog and agenda per CLIENT tenant; two venues are two tenants (B5).
 - **The owner agent (phase 2).** Suppliers, accounts and staff. In phase 1 the owner bot only receives notices; its agent says so.
 - **Templates for proactive messages on WhatsApp.** An owner notice outside the 24-hour window is recorded `NOT_SENT` with `outside_reply_window` (B9), the same rule as W4.
-- **The eval harness.** The scenarios of the hospitality pack (`examples/hosteleria/evals`) are data; `cauce-evals` does not run them yet. The guarantees the code enforces have their ITs.
 - **Owner-side booking actions.** The owner reads bookings over the API but cannot cancel or move one there; changes go through the customer's conversation.
 - **A summary missed across midnight.** A nightly summary whose local day ends while the instance is down is not sent late (the scheduler only runs today's).
 - **Retention of business rows.** Bookings, handoffs, unanswered questions, owner notifications, digests and used link codes have no purge; they hold personal data, so a retention policy per business is the follow-up. The purge's cutoff is SQL `now()` (ADR 0008), so the `created_at` it compares must be stamped by the database clock first: bookings and handoffs still take theirs from the JVM.
@@ -90,6 +89,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 ## Modules not started
 
-- `cauce-evals` and `cauce-enterprise` contain only a `package-info.java`. The first scenarios to run are the hospitality pack's (`examples/hosteleria/evals`).
+- `cauce-enterprise` contains only a `package-info.java`.
 - Vector retrieval in `cauce-memory`: pgvector is enabled; no code uses it.
 - Helm chart for Kubernetes deployments: not in the repo.

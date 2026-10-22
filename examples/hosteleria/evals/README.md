@@ -11,10 +11,18 @@ cd backend
 ./gradlew :cauce-evals:eval -Pevals.tarea=03 -Pevals.n=3     # una tarea (el prefijo del fichero)
 ./gradlew :cauce-evals:eval -Pevals.escenarios=H3.10,H3.11   # escenarios sueltos
 ./gradlew :cauce-evals:eval -Pevals.confirmar=true           # acepta una estimación sobre el límite
+./gradlew :cauce-evals:eval -Pevals.juez.proveedor=openai -Pevals.juez.modelo=<modelo>   # el juez
+./gradlew :cauce-evals:eval -Pevals.simulacro=true -Pevals.n=1   # sin modelo ni coste: prueba la fontanería
 ```
 
-Necesita la clave del modelo del agente (`ANTHROPIC_API_KEY`) y la del juez (E6). No forma parte de
-`./gradlew build` ni de CI.
+Necesita la clave del modelo del agente (`ANTHROPIC_API_KEY`). El juez (E6) es opcional: sin él, o
+sin calibrar, la ejecución es solo de las comprobaciones deterministas y cada rúbrica se informa
+«pendiente de juez», nunca como aprobada ni en ninguna tasa. Antes de empezar
+estima el coste y, si supera `-Pevals.limite` (10 US$ por defecto), se para hasta que se confirme.
+El informe queda en `backend/cauce-evals/build/evals/` (con las trazas completas, fuera de git), y el
+resumen de cada ejecución en `historial/`, para commitearlo. No forma parte de `./gradlew build` ni
+de CI. El simulacro sustituye el modelo por uno de guion: sus tasas no dicen nada del agente y no
+escribe en el historial.
 
 ## Formato (v2)
 
@@ -74,7 +82,7 @@ Por orden de fiabilidad:
    auditoría (`conduct.tool.called`). Si no cuadran, es un error del arnés, no del escenario.
 2. **Texto**, determinista.
 3. **Rúbrica**: la juzga un modelo de otro proveedor, calibrado antes con los juicios de
-   `calibracion/`. Si no está calibrado o no coincide con ellos, la rúbrica se informa «sin juez».
+   `calibracion/`. Si no está calibrado o no coincide con ellos, la rúbrica se informa «pendiente de juez».
 
 Dos reglas valen para **todos los turnos de todos los escenarios**, sin escribirlas en cada uno:
 

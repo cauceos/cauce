@@ -1,0 +1,71 @@
+package dev.cauce.evals.run;
+
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * What one run is asked to do, from the {@code -Pevals.*} properties the Gradle task passes as
+ * system properties (ADR 0009, E7, E10).
+ *
+ * @param pack the sector pack under {@code examples/} ({@code evals.paquete}, default hosteleria)
+ * @param task only the scenarios of the task file with this prefix ({@code evals.tarea=03})
+ * @param scenarioIds only these scenarios ({@code evals.escenarios=H3.10,H3.11})
+ * @param repetitions N ({@code evals.n}, default 5)
+ * @param limitUsd the estimate that needs confirmation ({@code evals.limite}, default 10 US$)
+ * @param confirmed the estimate over the limit is accepted ({@code evals.confirmar=true})
+ * @param warningThreshold the rate under which a warning scenario warns ({@code evals.umbral}, 0.9)
+ * @param agentProvider and {@code agentModel}: the customer agent's model ({@code evals.proveedor},
+ *        {@code evals.modelo}, default anthropic / claude-sonnet-5-5, as the pack's demo)
+ * @param judgeProvider the judge's provider ({@code evals.juez.proveedor}); by default the first
+ *        registered one that is not the agent's
+ * @param judgeModel the judge's model ({@code evals.juez.modelo}); without it there is no judge
+ * @param rehearsal a run against {@link RehearsalProvider} instead of the model ({@code evals.simulacro}):
+ *        no tokens, nothing written to the history
+ */
+public record EvalSettings(Path repoRoot, String pack, Optional<String> task, List<String> scenarioIds,
+                           int repetitions, double limitUsd, boolean confirmed, double warningThreshold,
+                           String agentProvider, String agentModel, Optional<String> judgeProvider,
+                           Optional<String> judgeModel, boolean rehearsal) {
+
+    public static EvalSettings fromSystemProperties() {
+        String root = System.getProperty("evals.raiz");
+        if (root == null) {
+            throw new IllegalStateException("Run the evals through ./gradlew :cauce-evals:eval (evals.raiz is unset)");
+        }
+        return new EvalSettings(Path.of(root), property("evals.paquete").orElse("hosteleria"),
+                property("evals.tarea"),
+                property("evals.escenarios").map(ids -> Arrays.stream(ids.split(",")).map(String::strip).toList())
+                        .orElse(List.of()),
+                property("evals.n").map(Integer::parseInt).orElse(5),
+                property("evals.limite").map(Double::parseDouble).orElse(10.0),
+                property("evals.confirmar").map(Boolean::parseBoolean).orElse(false),
+                property("evals.umbral").map(Double::parseDouble).orElse(0.9),
+                property("evals.proveedor").orElse("anthropic"),
+                property("evals.modelo").orElse("claude-sonnet-5-5"),
+                property("evals.juez.proveedor"),
+                property("evals.juez.modelo"),
+                property("evals.simulacro").map(Boolean::parseBoolean).orElse(false));
+    }
+
+    public Path packDir() {
+        return repoRoot.resolve("examples").resolve(pack);
+    }
+
+    public Path evalsDir() {
+        return packDir().resolve("evals");
+    }
+
+    /** How the scenarios were selected, for the report. */
+    public String selection() {
+        if (!scenarioIds.isEmpty()) {
+            return String.join(",", scenarioIds);
+        }
+        return task.map(t -> "tarea " + t).orElse("batería completa");
+    }
+
+    private static Optional<String> property(String name) {
+        return Optional.ofNullable(System.getProperty(name)).filter(value -> !value.isBlank());
+    }
+}

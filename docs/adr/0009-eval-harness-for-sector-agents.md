@@ -1,6 +1,8 @@
 # ADR 0009: The eval harness for sector agents
 
-Status: Accepted. Not implemented yet.
+Status: Accepted and implemented. Until a judge from another provider is available (no key before
+November 2026) and calibrated, runs are of the deterministic checks only, and every rubric is
+reported "pendiente de juez".
 
 ## Context
 
@@ -97,7 +99,7 @@ scenario failure.
 - **Calibration before use.** `examples/hosteleria/evals/calibracion/` holds turns from the real
   tests with the owner of the pack's verdict on each rubric, as labels. A run calibrates the judge
   first: each item three times, and its majority verdict must match the label on every item. A judge
-  that disagrees with any label is not used: its rubrics are reported "sin juez", never as passed.
+  that disagrees with any label is not used: its rubrics are reported "pendiente de juez", never as passed.
 
 ### E7 — Repetitions, rates, and what blocks
 
@@ -169,7 +171,7 @@ failing check one example excerpt of the transcript.
 - Blocking is narrow on purpose: with 36 of 37 scenarios mandatory, a 100 % gate on all of them
   would fail on any single rubric and stop meaning anything.
 - The judge is a dependency on a second provider's key. Without one, the rubric checks are reported
-  "sin juez" and the deterministic checks still run.
+  "pendiente de juez" and the deterministic checks still run.
 - The harness reads `messages` and the business tables directly. A change to their shape breaks it
   loudly: its own tests run in the normal build.
 
