@@ -87,17 +87,30 @@ public final class DigestComposer {
         return fit(text.toString(), es);
     }
 
-    private static String shorten(String text) {
+    /** One line of at most {@link #MAX_SUMMARY_CHARS}, cut at a word boundary: never "cuánto co…". */
+    static String shorten(String text) {
         String oneLine = text.replaceAll("\\s+", " ").strip();
-        return oneLine.length() <= MAX_SUMMARY_CHARS ? oneLine : oneLine.substring(0, MAX_SUMMARY_CHARS - 1) + "…";
+        if (oneLine.length() <= MAX_SUMMARY_CHARS) {
+            return oneLine;
+        }
+        // The last space that leaves room for the ellipsis.
+        int space = oneLine.lastIndexOf(' ', MAX_SUMMARY_CHARS - 1);
+        // A single word longer than the line is cut where it must be.
+        String cut = oneLine.substring(0, space > 0 ? space : MAX_SUMMARY_CHARS - 1);
+        return cut.replaceAll("[\\s,;:.\\-–—]+$", "") + "…";
     }
 
-    /** Keeps the summary within one channel message; the full lists stay readable over the API. */
+    /**
+     * Keeps the summary within one channel message, cut at the end of a line so no entry is left
+     * half-written; the full lists stay readable over the API.
+     */
     private static String fit(String text, boolean es) {
         if (text.length() <= MAX_LENGTH) {
             return text;
         }
         String more = es ? "\n… (el resto, en la API)" : "\n… (the rest, over the API)";
-        return text.substring(0, MAX_LENGTH - more.length()) + more;
+        String head = text.substring(0, MAX_LENGTH - more.length() + 1);
+        int lineEnd = head.lastIndexOf('\n');
+        return (lineEnd > 0 ? head.substring(0, lineEnd) : head.substring(0, head.length() - 1)) + more;
     }
 }

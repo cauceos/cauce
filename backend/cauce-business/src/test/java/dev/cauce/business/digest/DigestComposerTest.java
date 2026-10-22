@@ -69,6 +69,19 @@ class DigestComposerTest {
     }
 
     @Test
+    void shorten_cutsALongTextAtAWordBoundary_neverInTheMiddleOfAWord() {
+        // The summary of the Telegram test, cut as "... Pregunta cuánto co…" before this fix.
+        String summary = "Celebración de cumpleaños para 25 personas, para mañana viernes 23 de octubre de 2026 (no ha "
+                + "indicado mediodía o noche). Pregunta cuánto costaría; propone orientativamente 30 € por persona.";
+
+        String shortened = DigestComposer.shorten(summary);
+
+        assertThat(shortened).hasSizeLessThanOrEqualTo(140).endsWith("Pregunta cuánto…");
+        assertThat(DigestComposer.shorten("Corto")).isEqualTo("Corto");
+        assertThat(DigestComposer.shorten("x".repeat(200))).hasSize(140).endsWith("x…");
+    }
+
+    @Test
     void compose_staysWithinOneChannelMessage() {
         List<KnowledgeGap> many = java.util.stream.IntStream.range(0, 200)
                 .mapToObj(i -> KnowledgeGap.record(tenantId, requester.agentId(), requester.conversationId(),
@@ -79,5 +92,8 @@ class DigestComposerTest {
                 many));
 
         assertThat(text).hasSizeLessThanOrEqualTo(DigestComposer.MAX_LENGTH).endsWith("(el resto, en la API)");
+        // Cut at the end of a line: the last question listed is whole.
+        String[] lines = text.split("\n");
+        assertThat(lines[lines.length - 2]).matches("· Pregunta número \\d+ x{60}");
     }
 }
