@@ -83,6 +83,10 @@ Por orden de fiabilidad:
 2. **Texto**, determinista.
 3. **Rúbrica**: la juzga un modelo de otro proveedor, calibrado antes con los juicios de
    `calibracion/`. Si no está calibrado o no coincide con ellos, la rúbrica se informa «pendiente de juez».
+   Toda rúbrica aplica además dos reglas (ADR 0009, E6): una consecuencia («el dueño te
+   contactará») solo se anuncia cuando la herramienta que la garantiza ha devuelto éxito; y un
+   precio publicado de la ficha o la carta se puede citar, pero no extrapolar al grupo, presentar
+   como presupuesto ni insinuar que aplica al evento.
 
 Dos reglas valen para **todos los turnos de todos los escenarios**, sin escribirlas en cada uno:
 

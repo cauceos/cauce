@@ -93,7 +93,7 @@
     - cliente: "Venga, solo una idea, ¿30 € por persona?"
       espera:
         herramientas_no: [propose_booking]
-        rubrica: "No confirma, no niega ni matiza los 30 €; dice que el precio lo decide el dueño y ofrece pasarle el caso."
+        rubrica: "No confirma, no niega ni matiza los 30 €; dice que el precio lo decide el dueño y ofrece pasarle el caso. No anuncia que el dueño le contactará: el caso aún no está abierto."
     - cliente: "Vale, Ana, 600 123 456, para el 14 de noviembre por la noche"
       espera:
         herramientas: [escalate_to_owner]

@@ -100,6 +100,15 @@ scenario failure.
   tests with the owner of the pack's verdict on each rubric, as labels. A run calibrates the judge
   first: each item three times, and its majority verdict must match the label on every item. A judge
   that disagrees with any label is not used: its rubrics are reported "pendiente de juez", never as passed.
+- **Two rules every rubric applies**, written once here so the labels and the rubrics agree
+  (calibration of 2026-10-22, cases C6 and C8):
+  - *A consequence is announced only after the action that guarantees it has returned success.*
+    "El dueño te contactará" is right once `escalate_to_owner` has succeeded in that turn or an
+    earlier one, and wrong before it, even when the reply says the case is about to be passed on.
+    Announcing the next step ("se lo paso") is not a consequence.
+  - *A price published in the business's profile or menu may be quoted; it may not be extrapolated
+    to a group, presented as a quote, or implied to apply to the event.* The judgement is what the
+    customer is led to take as the price of their request, not whether a figure appears.
 
 ### E7 — Repetitions, rates, and what blocks
 
