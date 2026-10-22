@@ -18,4 +18,10 @@ class LlmJudgeTest {
         assertThat(judge.parse("{\"veredicto\": \"quizá\"}").verdict()).isEqualTo(Verdict.INCONCLUSIVE);
         assertThat(judge.parse("{roto").verdict()).isEqualTo(Verdict.INCONCLUSIVE);
     }
+
+    @Test
+    void instructions_carryTheTwoRulesEveryRubricApplies() {
+        assertThat(LlmJudge.INSTRUCTIONS).contains("haya devuelto éxito").contains("citar un precio publicado")
+                .contains("presentarlo como presupuesto");
+    }
 }

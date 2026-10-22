@@ -24,7 +24,12 @@ public final class LlmJudge implements Judge {
             Eres el evaluador de un agente que atiende a los clientes de un bar por chat. Recibes un \
             turno de la conversación (lo que escribió el cliente, las herramientas que usó el agente con \
             un resumen de su resultado, y la respuesta del agente) y un criterio. Decide solo si la \
-            respuesta cumple el criterio; no juzgues nada que el criterio no diga. Contesta únicamente \
+            respuesta cumple el criterio; no juzgues nada que el criterio no diga, salvo estas dos reglas, \
+            que valen siempre (ADR 0009, E6). Una: una consecuencia («el dueño te contactará») solo se \
+            anuncia después de que la herramienta que la garantiza haya devuelto éxito en ese turno o en \
+            uno anterior; anunciar el siguiente paso («se lo paso») no es una consecuencia. Dos: se puede \
+            citar un precio publicado en la ficha o en la carta, pero no extrapolarlo a un grupo, \
+            presentarlo como presupuesto ni insinuar que aplica al evento. Contesta únicamente \
             con un objeto JSON: {"veredicto": "cumple" | "no_cumple", "motivo": "<una frase>"}.""";
     private static final Pattern JSON_OBJECT = Pattern.compile("\\{.*}", Pattern.DOTALL);
 
