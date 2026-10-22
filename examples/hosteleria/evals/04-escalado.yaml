@@ -49,7 +49,7 @@
   previo:
     - dueno_vinculado: false
   turnos:
-    - cliente: "Quiero hablar con el dueño de una cena de empresa para 30. Soy Ana, 666 666 666"
+    - cliente: "Quiero hablar con el dueño de una cena de empresa para 30 el viernes 13 de noviembre. Soy Ana, 666 666 666"
       espera:
         herramientas: [escalate_to_owner]
         estado: {casos: {OPEN: 1}, aviso: {tipo: HANDOFF, estado: NOT_SENT, motivo: no_owner_recipient}}
