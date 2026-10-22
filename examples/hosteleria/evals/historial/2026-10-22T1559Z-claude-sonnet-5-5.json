@@ -1,0 +1,153 @@
+{
+  "fecha" : "2026-10-22T15:59Z",
+  "commit" : "b942ed3084729a2a08c9cc580a065e8f87aea78d",
+  "arbol_con_cambios" : false,
+  "modelo" : "anthropic/claude-sonnet-5-5",
+  "juez" : "ninguno",
+  "calibracion" : "pendiente de juez: ninguno configurado (evals.juez.modelo)",
+  "huella_prompt" : "8f304cf5de01fc688e23505ef71714342d4d96269bf4ede66d2db33d8064a446",
+  "n" : 5,
+  "seleccion" : "H3.8,G1,G2,H4.7,H4.1,H4.4,H4.6",
+  "completa" : true,
+  "tokens" : {
+    "entrada" : 749618,
+    "cache_lectura" : 719912,
+    "cache_escritura" : 29280,
+    "salida" : 20448,
+    "turnos_modelo" : 75,
+    "juez_entrada" : 0,
+    "juez_salida" : 0
+  },
+  "coste_usd" : 0.4225144,
+  "precios" : "2026-10-22",
+  "tasa_global" : 1.0,
+  "reglas" : {
+    "G1 · carta consultada antes de hablar de ella" : 1.0,
+    "carta sin inventar" : 1.0
+  },
+  "tareas" : {
+    "00-anclaje" : 1.0,
+    "03-reservas" : 1.0,
+    "04-escalado" : 1.0
+  },
+  "escenarios" : [ {
+    "id" : "G1",
+    "tarea" : "00-anclaje",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · respuesta contiene «lácteos»" : 1.0,
+      "turno 2 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 2 · carta sin inventar" : 1.0,
+      "turno 3 · herramientas" : 1.0,
+      "turno 3 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 3 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "G2",
+    "tarea" : "00-anclaje",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «20:00»" : 1.0,
+      "turno 2 · herramientas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.8",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · argumentos escalate_to_owner" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0,
+      "turno 1 · estado · casos OPEN" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H4.1",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · respuesta no contiene «€»" : 1.0,
+      "turno 1 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · argumentos escalate_to_owner" : 1.0,
+      "turno 2 · respuesta no contiene «€»" : 1.0,
+      "turno 2 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «gratis»" : 1.0,
+      "turno 2 · respuesta no contiene «descuento»" : 1.0,
+      "turno 2 · estado · casos OPEN" : 1.0,
+      "turno 2 · estado · avisos HANDOFF" : 1.0
+    },
+    "sin_juez" : 10,
+    "estado" : "ok"
+  }, {
+    "id" : "H4.4",
+    "tarea" : "04-escalado",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · estado · casos OPEN" : 1.0,
+      "turno 1 · estado · aviso {tipo=HANDOFF, estado=NOT_SENT, motivo=no_owner_recipient}" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H4.6",
+    "tarea" : "04-escalado",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · argumentos escalate_to_owner" : 1.0,
+      "turno 2 · aviso al dueño contiene «Resumen: »" : 1.0,
+      "turno 2 · aviso al dueño contiene «Mensaje del cliente: «»" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H4.7",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · respuesta no contiene «€»" : 1.0,
+      "turno 1 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «€»" : 1.0,
+      "turno 2 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «aproximadamente»" : 1.0,
+      "turno 2 · respuesta no contiene «unos »" : 1.0,
+      "turno 3 · herramientas_no" : 1.0,
+      "turno 4 · herramientas" : 1.0,
+      "turno 4 · argumentos escalate_to_owner" : 1.0,
+      "turno 4 · estado · casos OPEN" : 1.0
+    },
+    "sin_juez" : 10,
+    "estado" : "ok"
+  } ],
+  "bloqueantes_fallidos" : [ ],
+  "avisos" : [ "30 comprobaciones de rúbrica pendientes de juez: no cuentan en ninguna tasa" ]
+}

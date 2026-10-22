@@ -1,9 +1,24 @@
 # Línea base del agente de clientes del bar
 
-**Vigente:** la ejecución [`2026-10-22T1543Z`](historial/2026-10-22T1543Z-claude-sonnet-5-5.json),
-batería completa con N = 5: **97 %** global y **todos los bloqueantes al 100 %**.
+**Vigente:** la batería completa [`2026-10-22T1543Z`](historial/2026-10-22T1543Z-claude-sonnet-5-5.json)
+con N = 5 (**97 %** global, **todos los bloqueantes al 100 %**), más la corrección de H3.8
+verificada en [`2026-10-22T1559Z`](historial/2026-10-22T1559Z-claude-sonnet-5-5.json): H3.8 y los
+seis escenarios que tocan su arreglo, al 100 %.
 
-**Modelo:** `anthropic/claude-sonnet-5-5` · **Juez:** ninguno
+**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt vigente:** huella `8f304cf5de01` (commit
+`b942ed3`) · **Juez:** ninguno
+
+> **El prompt vigente no ha pasado entero la batería.** La batería completa corrió con el prompt
+> `e41d7a6698af`; la corrección de H3.8 cambió una frase del escalado y se verificó con los siete
+> escenarios de `1559Z`, no con los 38. La próxima batería completa confirma o corrige esta línea
+> base.
+
+## El ciclo, en una línea
+
+**85 %** (línea base inicial) → diagnóstico: tres fallos de la comprobación y tres del agente →
+arreglos de comprobación y prompt → **97 %**, bloqueantes al 100 % (`1543Z`) → **regresión en
+H3.8** (100 % → 20 %), provocada por el prompt nuevo → corrección del prompt → **H3.8 al 100 %**
+sin romper G1, G2, H4.1, H4.4, H4.6 ni H4.7 (`1559Z`).
 
 > **Es una línea base determinista.** Solo cuentan las comprobaciones de traza, estado y texto.
 > Las comprobaciones de rúbrica (105 por batería) quedaron «pendiente de juez»: no entran en
@@ -97,7 +112,7 @@ era el del commit, como confirma la huella.
 
 Los escenarios de la tarea 05 son deterministas (el resumen no usa modelo) y se ejecutan una vez.
 
-### Regresión abierta: H3.8
+### Regresión en H3.8, corregida
 
 Con la línea base anterior, H3.8 estaba al 100 %; en esta, al 20 %. A «Somos 12 para cenar el
 viernes, me llamo Jorge, 633 333 333», en cuatro de cinco repeticiones el agente consultó la hora
@@ -110,7 +125,12 @@ escaló. No prometió nada.
 traspaso mientras `escalate_to_owner` no haya devuelto éxito se leyó como «pide permiso antes de
 escalar». Corrección aplicada al prompt: con nombre, teléfono y detalles, escalar en ese mismo
 turno, sin pedir confirmación ni datos opcionales; ofrecer o condicionar solo mientras falte algún
-dato. Los arreglos de G1, G2 y H4.7 no se tocan. Pendiente de medir.
+dato (`b942ed3`). Los arreglos de G1, G2 y H4.7 no se tocan.
+
+**Verificada en `2026-10-22T1559Z`** (commit `b942ed3`, prompt `8f304cf5de01`, N = 5): H3.8, G1,
+G2, H4.1, H4.4, H4.6 y H4.7, **todos al 100 %**; las reglas G1 y «carta sin inventar», al 100 %.
+0,4225 US$ en 75 turnos de modelo, 96,0 % de la entrada leída de caché. 30 comprobaciones de
+rúbrica, pendientes de juez.
 
 ## Línea base anterior · 85 %
 
