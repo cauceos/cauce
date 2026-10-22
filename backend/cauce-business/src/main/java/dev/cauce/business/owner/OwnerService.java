@@ -23,6 +23,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,10 @@ import org.springframework.transaction.annotation.Transactional;
  * on the bot it was issued for, under that bot's own tenant. A code used again by the same chat is
  * answered again and changes nothing (a webhook redelivery); expired, or used by someone else, it
  * is answered as not valid. On any other bot nothing is intercepted.
+ *
+ * <p>Each answer to a chat that is not the linked owner is logged at INFO with the bot's channel
+ * config and the outcome — never the text, the chat or the code — so a failed link can be told
+ * apart in the log: a bare {@code /start} (Telegram dropped the code), a code not valid, a link.
  */
 @Service
 public class OwnerService implements InboundMessageInterceptor {
@@ -48,7 +54,9 @@ public class OwnerService implements InboundMessageInterceptor {
 
     private static final char[] ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789".toCharArray();
     private static final Pattern CODE_TEXT = Pattern.compile("^(?:/START\\s+)?([A-Z2-9]{" + CODE_LENGTH + "})$");
+    private static final Pattern BARE_START = Pattern.compile("^\\s*/start(?:@\\w+)?\\s*$", Pattern.CASE_INSENSITIVE);
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final Logger log = LoggerFactory.getLogger(OwnerService.class);
 
     private final OwnerLinkCodeRepository codeRepository;
     private final OwnerRecipientRepository recipientRepository;
@@ -123,13 +131,20 @@ public class OwnerService implements InboundMessageInterceptor {
         Matcher matcher = CODE_TEXT.matcher(text.content().strip().toUpperCase(Locale.ROOT));
         if (!matcher.matches()) {
             // The owner talks to the owner agent; nobody else reaches it.
-            return isLinkedOwner ? Optional.empty()
-                    : Optional.of(OwnerMessages.sendCode(locale, businessName(text.tenantId())));
+            if (isLinkedOwner) {
+                return Optional.empty();
+            }
+            log.info("Owner bot {}: a chat that is not linked sent {}; asked for the link code",
+                    text.channelConfigId(), BARE_START.matcher(text.content()).matches()
+                            ? "a bare /start, with no link code (Telegram dropped the deep link's payload)"
+                            : "a message that is not a link code");
+            return Optional.of(OwnerMessages.sendCode(locale, businessName(text.tenantId())));
         }
         Optional<OwnerLinkCodeEntity> found = codeRepository.findByCodeHash(hash(matcher.group(1)))
                 .filter(code -> code.getChannelConfigId().equals(text.channelConfigId())
                         && code.getTenantId().equals(text.tenantId()));
         if (found.isEmpty()) {
+            log.info("Owner bot {}: a link code that matches no code of this bot", text.channelConfigId());
             return Optional.of(OwnerMessages.codeNotValid(locale));
         }
         OwnerLinkCodeEntity code = found.get();
@@ -150,6 +165,7 @@ public class OwnerService implements InboundMessageInterceptor {
                 .orElseGet(() -> new OwnerRecipientEntity(UuidGenerator.newV7(), code.getTenantId(),
                         code.getChannelConfigId(), identity.id(), now));
         recipientRepository.save(recipient);
+        log.info("Owner bot {}: an owner chat linked", code.getChannelConfigId());
         auditRecorder.record(BusinessAuditEvents.ownerLinked(code.getTenantId(), recipient.getId(),
                 code.getChannelConfigId(), identity.id()));
         return Optional.of(OwnerMessages.linked(locale, businessName(code.getTenantId())));
