@@ -8,16 +8,20 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * The fixture's menu ({@code carta.json}), as the general rules read a reply (ADR 0009, E5). A
- * reply names an item when it holds the item's keyword — the first word of its {@code ref}
- * ({@code bravas}, {@code tarta}, {@code cana}) — as a whole word, ignoring case and accents; it
+ * reply names an item when it holds the item's keyword — the words of its {@code ref}, in order and
+ * with up to two words between them ({@code bravas}, {@code tarta de queso} for {@code tarta-queso},
+ * {@code cana}) — as whole words, ignoring case and accents, so a birthday «tarta» alone is not the
+ * menu's cheesecake; it
  * names a price when an amount it writes ({@code 5,50}, {@code 8 €}) equals an item's price; it
  * names an allergen when it holds the stem of one the menu declares, or the word itself.
  */
@@ -60,7 +64,7 @@ public final class Menu {
         Set<String> allergens = new LinkedHashSet<>();
         for (JsonNode item : carta.path("items")) {
             String ref = item.path("ref").asText();
-            items.add(new Item(ref, item.path("name").asText(), Text.folded(ref.split("-")[0]),
+            items.add(new Item(ref, item.path("name").asText(), Text.folded(String.join(" ", ref.split("-"))),
                     item.path("price").decimalValue().setScale(2, RoundingMode.HALF_UP)));
             JsonNode declared = item.path("attributes").path("alergenos");
             if (declared.isArray()) {
@@ -74,8 +78,14 @@ public final class Menu {
     public List<Item> itemsNamedIn(String text) {
         String folded = Text.folded(text);
         return items.stream()
-                .filter(item -> Pattern.compile("\\b" + Pattern.quote(item.keyword()) + "\\b").matcher(folded).find())
+                .filter(item -> keywordPattern(item.keyword()).matcher(folded).find())
                 .toList();
+    }
+
+    /** The keyword's words in order, whole, with up to two words between them («tarta de queso»). */
+    private static Pattern keywordPattern(String keyword) {
+        return Pattern.compile("\\b" + Arrays.stream(keyword.split(" ")).map(Pattern::quote)
+                .collect(Collectors.joining("(?:\\W+\\w+){0,2}?\\W+")) + "\\b");
     }
 
     /** The menu prices {@code text} writes. */

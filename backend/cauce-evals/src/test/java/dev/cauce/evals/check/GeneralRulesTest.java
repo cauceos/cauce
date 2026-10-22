@@ -33,6 +33,15 @@ class GeneralRulesTest {
     }
 
     @Test
+    void anItemOfSeveralWords_isNamedByAllOfThem_soABirthdayCakeIsNotTheCheesecake() {
+        // H4.6 and H4.7 of the 2026-10-22 baseline: «tarta, decoración, menú…» for a birthday.
+        assertThat(MENU.talksAbout("Cualquier detalle que quieras añadir (tarta, decoración, menú…)")).isFalse();
+        assertThat(MENU.itemsNamedIn("La tarta de queso casera, 5,00 €")).extracting(Menu.Item::ref)
+                .containsExactly("tarta-queso");
+        assertThat(MENU.itemsNamedIn("Una copa de vino tinto")).extracting(Menu.Item::ref).containsExactly("vino-tinto");
+    }
+
+    @Test
     void g1_passesAfterAMenuSearch_failsWithout_andDoesNotApplyToOtherTurns() {
         TurnTrace searched = turn(CELIAC, new ToolUse("search_catalog", Map.of(), CATALOG_OUTPUT));
         TurnTrace unsearched = turn(CELIAC, new ToolUse("get_business_info", Map.of(), "{}"));
