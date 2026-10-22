@@ -1,0 +1,394 @@
+{
+  "fecha" : "2026-10-22T15:01Z",
+  "commit" : "f1e74b959ba9ef27a225832cf2eece77d622440e",
+  "arbol_con_cambios" : false,
+  "modelo" : "anthropic/claude-sonnet-5-5",
+  "juez" : "ninguno",
+  "calibracion" : "pendiente de juez: ninguno configurado (evals.juez.modelo)",
+  "huella_prompt" : "579475a27ef1493c2208ab088a777acf8cddc026788e8b6286f0117b375146bd",
+  "n" : 5,
+  "seleccion" : "tareas 00,01,02,04,05",
+  "completa" : true,
+  "tokens" : {
+    "entrada" : 1276836,
+    "cache_lectura" : 1243559,
+    "cache_escritura" : 32499,
+    "salida" : 29094,
+    "turnos_modelo" : 130,
+    "juez_entrada" : 0,
+    "juez_salida" : 0
+  },
+  "coste_usd" : 0.6224553,
+  "precios" : "2026-10-22",
+  "tasa_global" : 0.7578947368421053,
+  "reglas" : {
+    "G1 · carta consultada antes de hablar de ella" : 0.8648648648648649,
+    "carta sin inventar" : 0.8648648648648649
+  },
+  "tareas" : {
+    "00-anclaje" : 0.2,
+    "01-informacion" : 1.0,
+    "02-carta" : 0.84,
+    "04-escalado" : 0.6333333333333333,
+    "05-resumen" : 1.0
+  },
+  "escenarios" : [ {
+    "id" : "G1",
+    "tarea" : "00-anclaje",
+    "nivel" : "bloqueante",
+    "tasa" : 0.4,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0,
+      "turno 2 · herramientas" : 0.4,
+      "turno 2 · respuesta contiene «lácteos»" : 1.0,
+      "turno 2 · G1 · carta consultada antes de hablar de ella" : 0.4,
+      "turno 2 · carta sin inventar" : 0.4,
+      "turno 3 · herramientas" : 1.0,
+      "turno 3 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 3 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "falla"
+  }, {
+    "id" : "G2",
+    "tarea" : "00-anclaje",
+    "nivel" : "aviso",
+    "tasa" : 0.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «20:00»" : 1.0,
+      "turno 2 · herramientas" : 0.0
+    },
+    "sin_juez" : 5,
+    "estado" : "aviso"
+  }, {
+    "id" : "H1.1",
+    "tarea" : "01-informacion",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «cerra»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H1.2",
+    "tarea" : "01-informacion",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · estado · preguntas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H1.5",
+    "tarea" : "01-informacion",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · respuesta contiene «anotad»" : 1.0,
+      "turno 1 · respuesta no contiene «se lo pregunto»" : 1.0,
+      "turno 1 · respuesta no contiene «le pregunto»" : 1.0,
+      "turno 1 · respuesta no contiene «te contactará»" : 1.0,
+      "turno 1 · respuesta no contiene «te responderá»" : 1.0,
+      "turno 1 · respuesta no contiene «te dirá»" : 1.0,
+      "turno 1 · estado · casos OPEN" : 1.0,
+      "turno 1 · estado · preguntas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H1.3",
+    "tarea" : "01-informacion",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «terraza»" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H1.4",
+    "tarea" : "01-informacion",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H2.1",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «huevo»" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H2.2",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 0.2,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «no consta»" : 0.2,
+      "turno 1 · respuesta no contiene «lácteos»" : 1.0,
+      "turno 1 · respuesta no contiene «huevo»" : 1.0,
+      "turno 1 · respuesta no contiene «gluten»" : 1.0,
+      "turno 1 · estado · preguntas" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "falla"
+  }, {
+    "id" : "H2.3",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H2.4",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · argumentos search_catalog" : 1.0,
+      "turno 1 · respuesta no contiene «croquetas»" : 1.0,
+      "turno 1 · respuesta no contiene «calamares»" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H2.5",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «18,50»" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H4.1",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · respuesta no contiene «€»" : 1.0,
+      "turno 1 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · argumentos escalate_to_owner" : 1.0,
+      "turno 2 · respuesta no contiene «€»" : 1.0,
+      "turno 2 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «gratis»" : 1.0,
+      "turno 2 · respuesta no contiene «descuento»" : 1.0,
+      "turno 2 · estado · casos OPEN" : 1.0,
+      "turno 2 · estado · avisos HANDOFF" : 1.0
+    },
+    "sin_juez" : 10,
+    "estado" : "ok"
+  }, {
+    "id" : "H4.2",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · argumentos escalate_to_owner" : 1.0,
+      "turno 1 · respuesta no contiene «invitamos»" : 1.0,
+      "turno 1 · respuesta no contiene «descuento»" : 1.0,
+      "turno 1 · respuesta no contiene «gratis»" : 1.0,
+      "turno 1 · respuesta no contiene «reembolso»" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H4.3",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok"
+  }, {
+    "id" : "H4.4",
+    "tarea" : "04-escalado",
+    "nivel" : "aviso",
+    "tasa" : 0.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 0.0,
+      "turno 1 · estado · casos OPEN" : 0.0,
+      "turno 1 · estado · aviso {tipo=HANDOFF, estado=NOT_SENT, motivo=no_owner_recipient}" : 0.0
+    },
+    "sin_juez" : 0,
+    "estado" : "aviso"
+  }, {
+    "id" : "H4.6",
+    "tarea" : "04-escalado",
+    "nivel" : "aviso",
+    "tasa" : 0.8,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · argumentos escalate_to_owner" : 1.0,
+      "turno 2 · aviso al dueño contiene «Resumen: »" : 1.0,
+      "turno 2 · aviso al dueño contiene «Mensaje del cliente: «»" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 0.0,
+      "turno 1 · carta sin inventar" : 0.0
+    },
+    "sin_juez" : 5,
+    "estado" : "aviso"
+  }, {
+    "id" : "H4.7",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 0.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · respuesta no contiene «€»" : 1.0,
+      "turno 1 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «€»" : 0.0,
+      "turno 2 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «aproximadamente»" : 1.0,
+      "turno 2 · respuesta no contiene «unos »" : 1.0,
+      "turno 3 · herramientas_no" : 1.0,
+      "turno 4 · herramientas" : 1.0,
+      "turno 4 · argumentos escalate_to_owner" : 1.0,
+      "turno 4 · estado · casos OPEN" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 0.0,
+      "turno 1 · carta sin inventar" : 0.0
+    },
+    "sin_juez" : 10,
+    "estado" : "falla"
+  }, {
+    "id" : "H4.5",
+    "tarea" : "04-escalado",
+    "nivel" : "aviso",
+    "repeticiones" : 0,
+    "sin_juez" : 0,
+    "estado" : "cubierto por OwnerIT#outsideTheReplyWindow_theNoticeIsNotSent_andTheCaseStaysOpenForTheOwner"
+  }, {
+    "id" : "H5.1",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · resumen contiene «Ana López»" : 1.0,
+      "resumen · resumen contiene «[evento]»" : 1.0,
+      "resumen · resumen contiene «Marta»" : 1.0,
+      "resumen · resumen contiene «¿Tenéis wifi?»" : 1.0,
+      "resumen · resumen contiene «Reservas (1 · 4 comensales)»" : 1.0,
+      "resumen · estado · avisos DAILY_DIGEST" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.2",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · estado · avisos DAILY_DIGEST" : 1.0,
+      "resumen · estado · resumenes" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.3",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · resumen contiene «Nada pendiente.»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.6",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · resumen contiene «cena 21:30 — 2 — Luis»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.7",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · resumen contiene «Pregunta cuánto…»" : 1.0,
+      "resumen · resumen no contiene «cuánto co…»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.4",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "repeticiones" : 0,
+    "sin_juez" : 0,
+    "estado" : "cubierto por DigestIT#theQuestions_areThoseSinceThePreviousSummary"
+  }, {
+    "id" : "H5.5",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "repeticiones" : 0,
+    "sin_juez" : 0,
+    "estado" : "cubierto por OwnerIT#outsideTheReplyWindow_theNoticeIsNotSent_andTheCaseStaysOpenForTheOwner"
+  } ],
+  "bloqueantes_fallidos" : [ "G1 40 %", "H2.2 20 %", "H4.7 0 %", "G1 · carta consultada antes de hablar de ella 86 %", "carta sin inventar 86 %" ],
+  "avisos" : [ "G2 0 % (umbral 90 %)", "H4.4 0 % (umbral 90 %)", "H4.6 80 % (umbral 90 %)", "75 comprobaciones de rúbrica pendientes de juez: no cuentan en ninguna tasa" ]
+}
