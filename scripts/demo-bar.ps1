@@ -2,9 +2,10 @@
 # sector pack (examples/hosteleria) into a running Cauce instance and, given two Telegram bots,
 # wires them up. See examples/hosteleria/README.md.
 #
-#   1. Creates a partner and the business "Bar La Esquina" (a client tenant).
+#   1. Finds the business "Bar La Esquina" under a partner "Demo Hosteleria" of this operator,
+#      or creates them: a run never makes a second business on the same instance.
 #   2. Loads its sheet, menu and agenda from examples/hosteleria/bar-ejemplo.
-#   3. Creates the customer agent (prompt + tool grant of the pack) and the owner agent.
+#   3. Finds or creates the customer agent (prompt + tool grant of the pack) and the owner agent.
 #   4. With TELEGRAM_CUSTOMER_BOT_TOKEN / TELEGRAM_OWNER_BOT_TOKEN (and PUBLIC_URL): binds each
 #      bot to its agent once and, on every run, renews its webhook secret, registers the webhook
 #      with Telegram and checks with getWebhookInfo that it took. Any failure stops the script.
@@ -15,7 +16,9 @@
 # anthropic), MODEL_NAME (default claude-sonnet-5-5), TELEGRAM_CUSTOMER_BOT_TOKEN,
 # TELEGRAM_OWNER_BOT_TOKEN, PUBLIC_URL (required with a token), TELEGRAM_API_URL (a stub, for
 # testing this script). Re-running reuses the ids saved in .demo-bar.env
-# (gitignored) and reloads the sheet, menu and agenda; delete that file to start over.
+# (gitignored) and reloads the sheet, menu and agenda. Without that file the business and its
+# agents are found again by name (the oldest of each when several match), so losing it does not
+# duplicate them; only the bot bindings, which the API does not list, are made again.
 
 # ASCII only: Windows PowerShell reads a script without a BOM in the ANSI code page, so the
 # non-ASCII letters of names below are written as char codes.
@@ -99,13 +102,48 @@ $OwnerAgentId     = Get-Setting 'OWNER_AGENT_ID' ''
 $CustomerConfigId = Get-Setting 'CUSTOMER_BOT_CONFIG_ID' ''
 $OwnerConfigId    = Get-Setting 'OWNER_BOT_CONFIG_ID' ''
 
+# The ids of every item named $name in the list $path, oldest first (every page; ids are UUIDv7,
+# so list order is creation order).
+function Get-Named($path, $name) {
+    $ids = @()
+    $cursor = $null
+    do {
+        $query = if ($cursor) { "?limit=200&cursor=$cursor" } else { '?limit=200' }
+        # Read the bytes as UTF-8: Windows PowerShell decodes a JSON response without a charset as
+        # ISO-8859-1, and "Hosteleria" with its accent would then never match.
+        try {
+            $raw = Invoke-WebRequest -UseBasicParsing -Method Get -Uri "$ApiUrl$path$query" `
+                -Headers @{ Authorization = "Bearer $ApiKey" }
+        } catch {
+            Fail "GET $path failed: $($_.Exception.Message) $($_.ErrorDetails.Message)"
+        }
+        $page = [Text.Encoding]::UTF8.GetString($raw.RawContentStream.ToArray()) | ConvertFrom-Json
+        $ids += @($page.data | Where-Object { $_.name -ceq $name } | ForEach-Object { $_.id })
+        $cursor = $page.next_cursor
+    } while ($cursor)
+    return $ids
+}
+function Get-FirstNamed($path, $name) { return @(Get-Named $path $name) | Select-Object -First 1 }
+
 # --- 1. tenants --------------------------------------------------------------
 
+$PartnerName = "Demo Hosteler$([char]0x00ED)a"
 if (-not $BarTenantId) {
-    Say "Creating the partner and the business 'Bar La Esquina'..."
-    $partner = Invoke-Api POST '/v1/tenants/partner' (@{ name = "Demo Hosteler$([char]0x00ED)a"; operator_id = $OperatorId } | ConvertTo-Json)
-    $client = Invoke-Api POST '/v1/tenants/client' (@{ name = 'Bar La Esquina'; partner_id = $partner.id } | ConvertTo-Json)
-    $BarTenantId = $client.id
+    # No saved id (a first run, or the state file is gone): reuse the business already here.
+    foreach ($partnerId in @(Get-Named "/v1/tenants/$OperatorId/children" $PartnerName)) {
+        $BarTenantId = Get-FirstNamed "/v1/tenants/$partnerId/children" 'Bar La Esquina'
+        if ($BarTenantId) { break }
+    }
+    if ($BarTenantId) {
+        Say "Reusing the business 'Bar La Esquina' already on this instance..."
+    } else {
+        Say "Creating the partner and the business 'Bar La Esquina'..."
+        $partnerId = Get-FirstNamed "/v1/tenants/$OperatorId/children" $PartnerName
+        if (-not $partnerId) {
+            $partnerId = (Invoke-Api POST '/v1/tenants/partner' (@{ name = $PartnerName; operator_id = $OperatorId } | ConvertTo-Json)).id
+        }
+        $BarTenantId = (Invoke-Api POST '/v1/tenants/client' (@{ name = 'Bar La Esquina'; partner_id = $partnerId } | ConvertTo-Json)).id
+    }
     Save 'BAR_TENANT_ID' $BarTenantId
 }
 Write-Host "   Business: $BarTenantId"
@@ -129,13 +167,29 @@ function New-AgentBody($name, $prompt, $tools, $fallback) {
     return (@{ name = $name; system_prompt = $prompt; model_provider = $ModelProvider; model_name = $ModelName;
                tools = @($tools); fallback_reply = $fallback } | ConvertTo-Json -Depth 4)
 }
-if (-not $CustomerAgentId) {
-    Say "Creating the customer agent ($ModelProvider / $ModelName)..."
-    $CustomerAgentId = (Invoke-Api POST "/v1/tenants/$BarTenantId/agents" `
-        (New-AgentBody 'Camarero de La Esquina' $customerPrompt $grants.agente_clientes $fallbacks.agente_clientes)).id
+$CustomerAgentName = 'Camarero de La Esquina'
+$OwnerAgentName = "Canal del due$([char]0x00F1)o"
+# Without saved ids, the business's own agents are found by name before any is created.
+if (-not $CustomerAgentId -or -not $OwnerAgentId) {
+    if (-not $CustomerAgentId) { $CustomerAgentId = Get-FirstNamed "/v1/tenants/$BarTenantId/agents" $CustomerAgentName }
+    if (-not $OwnerAgentId) { $OwnerAgentId = Get-FirstNamed "/v1/tenants/$BarTenantId/agents" $OwnerAgentName }
+    if ($CustomerAgentId -and $OwnerAgentId) {
+        Say 'Reusing the agents already on this business...'
+        Save 'CUSTOMER_AGENT_ID' $CustomerAgentId
+        Save 'OWNER_AGENT_ID' $OwnerAgentId
+    }
+}
+if (-not $CustomerAgentId -or -not $OwnerAgentId) {
+    Say "Creating the agents ($ModelProvider / $ModelName)..."
+    if (-not $CustomerAgentId) {
+        $CustomerAgentId = (Invoke-Api POST "/v1/tenants/$BarTenantId/agents" `
+            (New-AgentBody $CustomerAgentName $customerPrompt $grants.agente_clientes $fallbacks.agente_clientes)).id
+    }
+    if (-not $OwnerAgentId) {
+        $OwnerAgentId = (Invoke-Api POST "/v1/tenants/$BarTenantId/agents" `
+            (New-AgentBody $OwnerAgentName $ownerPrompt $grants.agente_dueno $fallbacks.agente_dueno)).id
+    }
     Save 'CUSTOMER_AGENT_ID' $CustomerAgentId
-    $OwnerAgentId = (Invoke-Api POST "/v1/tenants/$BarTenantId/agents" `
-        (New-AgentBody "Canal del due$([char]0x00F1)o" $ownerPrompt $grants.agente_dueno $fallbacks.agente_dueno)).id
     Save 'OWNER_AGENT_ID' $OwnerAgentId
 } else {
     Say 'Refreshing the prompts, tools and fallback replies of the existing agents...'

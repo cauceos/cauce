@@ -4,9 +4,10 @@
 # examples/hosteleria/README.md.
 #
 # What it does (each step is one plain API call):
-#   1. Creates a partner and the business "Bar La Esquina" (a client tenant).
+#   1. Finds the business "Bar La Esquina" under a partner "Demo Hostelería" of this operator,
+#      or creates them: a run never makes a second business on the same instance.
 #   2. Loads its sheet, menu and agenda from examples/hosteleria/bar-ejemplo.
-#   3. Creates the customer agent (prompt + tool grant of the pack) and the owner agent.
+#   3. Finds or creates the customer agent (prompt + tool grant of the pack) and the owner agent.
 #   4. With TELEGRAM_CUSTOMER_BOT_TOKEN / TELEGRAM_OWNER_BOT_TOKEN (and PUBLIC_URL): binds each
 #      bot to its agent once and, on every run, renews its webhook secret, registers the webhook
 #      with Telegram and checks with getWebhookInfo that it took. Any failure stops the script.
@@ -23,7 +24,9 @@
 #   TELEGRAM_API_URL    default https://api.telegram.org (a stub, for testing this script)
 #
 # Requirements: curl, and python3 or jq. Re-running reuses the ids saved in .demo-bar.env
-# (gitignored) and reloads the sheet, menu and agenda; delete that file to start over.
+# (gitignored) and reloads the sheet, menu and agenda. Without that file the business and its
+# agents are found again by name (the oldest of each when several match), so losing it does not
+# duplicate them; only the bot bindings, which the API does not list, are made again.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -59,11 +62,16 @@ if command -v python3 >/dev/null 2>&1 && python3 -c '' >/dev/null 2>&1; then
     json_opt()    { python3 -c 'import functools,json,sys; v=functools.reduce(lambda v, k: v.get(k) if isinstance(v, dict) else None, sys.argv[1].split("."), json.load(sys.stdin)); print("" if v is None else v)' "$1"; }
     json_string() { python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'; }
     json_list()   { python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8"))[sys.argv[2]]))' "$1" "$2"; }
+    # json_named NAME_JSON: the ids of the items of .data named NAME_JSON, on one line (Windows
+    # Python ends lines with CR LF, and the shell drops only the last CR). The name
+    # is a JSON string so that "Hostelería" travels as \u00ed: argv is re-encoded on Windows.
+    json_named()  { python3 -c 'import json,sys; n=json.loads(sys.argv[1]); print(" ".join(x["id"] for x in json.load(sys.stdin)["data"] if x.get("name") == n))' "$1"; }
 elif command -v jq >/dev/null 2>&1; then
     json_get()    { jq -r ".$1"; }
     json_opt()    { jq -r ".$1 // \"\""; }
     json_string() { jq -Rs .; }
     json_list()   { jq -c ".$2" "$1"; }
+    json_named()  { jq -r --argjson n "$1" '[.data[] | select(.name == $n) | .id] | join(" ")'; }
 else
     fail "python3 or jq is required"
 fi
@@ -108,14 +116,41 @@ fi
 save() { echo "$1=$2" >> "$STATE_FILE"; }
 [ -f "$STATE_FILE" ] || echo "# Cauce demo bar state (ids only, no secrets). Delete to start over." > "$STATE_FILE"
 
+# all_named PATH NAME_JSON: the ids of every item named NAME_JSON in the list PATH, oldest first
+# (every page; ids are UUIDv7, so list order is creation order).
+all_named() {
+    local path="$1" name="$2" cursor="" page
+    while :; do
+        page=$(api GET "$path?limit=200${cursor:+&cursor=$cursor}")
+        printf '%s ' "$(printf '%s' "$page" | json_named "$name")"
+        cursor=$(printf '%s' "$page" | json_opt next_cursor)
+        [ -n "$cursor" ] || return 0
+    done
+}
+first_named() { set -- $(all_named "$1" "$2"); printf '%s' "${1:-}"; }
+
 # --- 1. tenants --------------------------------------------------------------
 
+PARTNER_NAME='"Demo Hosteler\u00eda"'
+BAR_NAME='"Bar La Esquina"'
 if [ -z "${BAR_TENANT_ID:-}" ]; then
-    say "Creating the partner and the business 'Bar La Esquina'..."
-    partner_id=$(api POST /v1/tenants/partner \
-        "{\"name\":\"Demo Hostelería\",\"operator_id\":\"$CAUCE_OPERATOR_ID\"}" | json_get id)
-    BAR_TENANT_ID=$(api POST /v1/tenants/client \
-        "{\"name\":\"Bar La Esquina\",\"partner_id\":\"$partner_id\"}" | json_get id)
+    # No saved id (a first run, or the state file is gone): reuse the business already here.
+    for partner_id in $(all_named "/v1/tenants/$CAUCE_OPERATOR_ID/children" "$PARTNER_NAME"); do
+        BAR_TENANT_ID=$(first_named "/v1/tenants/$partner_id/children" "$BAR_NAME")
+        [ -n "$BAR_TENANT_ID" ] && break
+    done
+    if [ -n "${BAR_TENANT_ID:-}" ]; then
+        say "Reusing the business 'Bar La Esquina' already on this instance..."
+    else
+        say "Creating the partner and the business 'Bar La Esquina'..."
+        partner_id=$(first_named "/v1/tenants/$CAUCE_OPERATOR_ID/children" "$PARTNER_NAME")
+        if [ -z "$partner_id" ]; then
+            partner_id=$(api POST /v1/tenants/partner \
+                "{\"name\":\"Demo Hostelería\",\"operator_id\":\"$CAUCE_OPERATOR_ID\"}" | json_get id)
+        fi
+        BAR_TENANT_ID=$(api POST /v1/tenants/client \
+            "{\"name\":\"Bar La Esquina\",\"partner_id\":\"$partner_id\"}" | json_get id)
+    fi
     save BAR_TENANT_ID "$BAR_TENANT_ID"
 fi
 echo "   Business: $BAR_TENANT_ID"
@@ -141,13 +176,27 @@ agent_patch() { # agent_patch PROMPT_FILE KEY
     printf '{"system_prompt":%s,"fallback_reply":%s}' \
         "$(json_string < "$PACK/$1")" "$(json_list "$PACK/respaldo.json" "$2")"
 }
-if [ -z "${CUSTOMER_AGENT_ID:-}" ]; then
-    say "Creating the customer agent ($MODEL_PROVIDER / $MODEL_NAME)..."
-    CUSTOMER_AGENT_ID=$(api POST "/v1/tenants/$BAR_TENANT_ID/agents" \
-        "$(agent_body 'Camarero de La Esquina' agente-clientes.prompt.md agente_clientes)" | json_get id)
+# Without saved ids, the business's own agents are found by name before any is created.
+if [ -z "${CUSTOMER_AGENT_ID:-}" ] || [ -z "${OWNER_AGENT_ID:-}" ]; then
+    CUSTOMER_AGENT_ID=${CUSTOMER_AGENT_ID:-$(first_named "/v1/tenants/$BAR_TENANT_ID/agents" '"Camarero de La Esquina"')}
+    OWNER_AGENT_ID=${OWNER_AGENT_ID:-$(first_named "/v1/tenants/$BAR_TENANT_ID/agents" '"Canal del due\u00f1o"')}
+    if [ -n "$CUSTOMER_AGENT_ID" ] && [ -n "$OWNER_AGENT_ID" ]; then
+        say "Reusing the agents already on this business..."
+        save CUSTOMER_AGENT_ID "$CUSTOMER_AGENT_ID"
+        save OWNER_AGENT_ID "$OWNER_AGENT_ID"
+    fi
+fi
+if [ -z "$CUSTOMER_AGENT_ID" ] || [ -z "$OWNER_AGENT_ID" ]; then
+    say "Creating the agents ($MODEL_PROVIDER / $MODEL_NAME)..."
+    if [ -z "$CUSTOMER_AGENT_ID" ]; then
+        CUSTOMER_AGENT_ID=$(api POST "/v1/tenants/$BAR_TENANT_ID/agents" \
+            "$(agent_body 'Camarero de La Esquina' agente-clientes.prompt.md agente_clientes)" | json_get id)
+    fi
+    if [ -z "$OWNER_AGENT_ID" ]; then
+        OWNER_AGENT_ID=$(api POST "/v1/tenants/$BAR_TENANT_ID/agents" \
+            "$(agent_body 'Canal del dueño' agente-dueno.prompt.md agente_dueno)" | json_get id)
+    fi
     save CUSTOMER_AGENT_ID "$CUSTOMER_AGENT_ID"
-    OWNER_AGENT_ID=$(api POST "/v1/tenants/$BAR_TENANT_ID/agents" \
-        "$(agent_body 'Canal del dueño' agente-dueno.prompt.md agente_dueno)" | json_get id)
     save OWNER_AGENT_ID "$OWNER_AGENT_ID"
 else
     say "Refreshing the prompts, tools and fallback replies of the existing agents..."
