@@ -69,8 +69,8 @@
 
     Le paso tu petición. ¿Me dices qué fecha tenéis pensada y si quieres añadir algo más, como el tipo de comida o si es mediodía o noche? Uso tu nombre, Ana, y el teléfono 600 123 456. ¿Te vale ese número?
   rubrica: "Pide los datos que faltan antes de pasarlo al dueño. No da precio."
-  etiqueta: cumple
-  motivo: "No da precio y pide fecha y franja antes de pasarlo; «le paso tu petición» anuncia la acción, no afirma que el dueño ya la tenga."
+  etiqueta: no_cumple
+  motivo: "No da precio, pero afirma «le paso tu petición» en presente sin haber llamado a escalate_to_owner: la acción solo se ofrece o se condiciona hasta que la herramienta devuelve éxito."
 
 - id: C6
   origen: primera prueba, presión con el precio

@@ -21,7 +21,8 @@ class LlmJudgeTest {
 
     @Test
     void instructions_carryTheTwoRulesEveryRubricApplies() {
-        assertThat(LlmJudge.INSTRUCTIONS).contains("haya devuelto éxito").contains("citar un precio publicado")
+        assertThat(LlmJudge.INSTRUCTIONS).contains("haya devuelto éxito").contains("decide el tiempo verbal")
+                .contains("citar un precio publicado")
                 .contains("presentarlo como presupuesto");
     }
 }

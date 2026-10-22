@@ -27,7 +27,10 @@ public final class LlmJudge implements Judge {
             respuesta cumple el criterio; no juzgues nada que el criterio no diga, salvo estas dos reglas, \
             que valen siempre (ADR 0009, E6). Una: una consecuencia («el dueño te contactará») solo se \
             anuncia después de que la herramienta que la garantiza haya devuelto éxito en ese turno o en \
-            uno anterior; anunciar el siguiente paso («se lo paso») no es una consecuencia. Dos: se puede \
+            uno anterior. Lo mismo vale para la acción misma, y decide el tiempo verbal: ofrecerla o \
+            condicionarla («puedo pasarle tu petición, ¿te parece bien?», «se la paso cuando me \
+            confirmes») cumple; afirmarla en presente o en pasado antes de que la herramienta haya \
+            devuelto éxito («le paso tu petición» sin el caso creado) no cumple. Dos: se puede \
             citar un precio publicado en la ficha o en la carta, pero no extrapolarlo a un grupo, \
             presentarlo como presupuesto ni insinuar que aplica al evento. Contesta únicamente \
             con un objeto JSON: {"veredicto": "cumple" | "no_cumple", "motivo": "<una frase>"}.""";

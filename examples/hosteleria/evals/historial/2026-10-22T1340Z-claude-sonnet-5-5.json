@@ -1,0 +1,201 @@
+{
+  "fecha" : "2026-10-22T13:40Z",
+  "commit" : "c644d583de7ebc5510cee64259da41dc42a2cbc4",
+  "arbol_con_cambios" : true,
+  "modelo" : "anthropic/claude-sonnet-5-5",
+  "juez" : "ninguno",
+  "calibracion" : "pendiente de juez: ninguno configurado (evals.juez.modelo)",
+  "huella_prompt" : "579475a27ef1493c2208ab088a777acf8cddc026788e8b6286f0117b375146bd",
+  "n" : 1,
+  "seleccion" : "tarea 03",
+  "completa" : true,
+  "tokens" : {
+    "entrada" : 225836,
+    "cache_lectura" : 212339,
+    "cache_escritura" : 13371,
+    "salida" : 4206,
+    "turnos_modelo" : 17,
+    "juez_entrada" : 0,
+    "juez_salida" : 0
+  },
+  "coste_usd" : 0.1182073,
+  "precios" : "2026-10-22",
+  "tasa_global" : 0.8181818181818182,
+  "reglas" : { },
+  "tareas" : {
+    "03-reservas" : 0.8181818181818182
+  },
+  "escenarios" : [ {
+    "id" : "H3.1",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · orden" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0,
+      "turno 1 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0
+    },
+    "sin_juez" : 2,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.2",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0
+    },
+    "sin_juez" : 1,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.3",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0
+    },
+    "sin_juez" : 1,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.4",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 0.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reserva {estado=CONFIRMED, personas=4}" : 1.0,
+      "turno 2 · herramientas" : 0.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · estado · reserva {estado=CONFIRMED, personas=6}" : 0.0
+    },
+    "sin_juez" : 0,
+    "estado" : "falla"
+  }, {
+    "id" : "H3.5",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas CONFIRMED" : 1.0
+    },
+    "sin_juez" : 1,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.6",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0
+    },
+    "sin_juez" : 1,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.8",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · argumentos escalate_to_owner" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0,
+      "turno 1 · estado · casos OPEN" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.9",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.10",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · orden" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · argumentos propose_booking" : 1.0,
+      "turno 1 · respuesta contiene «21:30»" : 1.0,
+      "turno 1 · estado · reserva {estado=HELD, turno=cena, hora=21:30}" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · respuesta contiene «21:30»" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · estado · reserva {estado=CONFIRMED, turno=cena, hora=21:30}" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.11",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 0.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · orden" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · argumentos propose_booking_change" : 1.0,
+      "turno 2 · herramientas" : 0.0,
+      "turno 2 · argumentos confirm_booking" : 0.0,
+      "turno 2 · respuesta contiene «$r.codigo»" : 0.0,
+      "turno 2 · respuesta no contiene «código nuevo»" : 1.0,
+      "turno 2 · respuesta no contiene «nuevo código»" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · estado · reserva {estado=CONFIRMED, personas=6, codigo=$r.codigo}" : 0.0
+    },
+    "sin_juez" : 0,
+    "estado" : "aviso"
+  }, {
+    "id" : "H3.12",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · entregado no contiene «**»" : 1.0,
+      "turno 2 · entregado no contiene «__»" : 1.0,
+      "turno 2 · entregado no contiene «`»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.7",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "repeticiones" : 0,
+    "sin_juez" : 0,
+    "estado" : "cubierto por BookingIT#concurrentProposalsForTheLastPlaces_neverOverbook"
+  } ],
+  "bloqueantes_fallidos" : [ "H3.4 0 %" ],
+  "avisos" : [ "H3.11 0 % (umbral 90 %)", "6 comprobaciones de rúbrica pendientes de juez: no cuentan en ninguna tasa" ]
+}

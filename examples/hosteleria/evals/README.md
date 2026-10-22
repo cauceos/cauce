@@ -84,7 +84,9 @@ Por orden de fiabilidad:
 3. **Rúbrica**: la juzga un modelo de otro proveedor, calibrado antes con los juicios de
    `calibracion/`. Si no está calibrado o no coincide con ellos, la rúbrica se informa «pendiente de juez».
    Toda rúbrica aplica además dos reglas (ADR 0009, E6): una consecuencia («el dueño te
-   contactará») solo se anuncia cuando la herramienta que la garantiza ha devuelto éxito; y un
+   contactará») solo se anuncia cuando la herramienta que la garantiza ha devuelto éxito, y la
+   acción misma se ofrece o se condiciona («puedo pasarle tu petición, ¿te parece bien?») pero no
+   se afirma en presente ni en pasado antes de ese éxito («le paso tu petición»); y un
    precio publicado de la ficha o la carta se puede citar, pero no extrapolar al grupo, presentar
    como presupuesto ni insinuar que aplica al evento.
 
