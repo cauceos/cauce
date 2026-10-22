@@ -68,6 +68,17 @@ class CheckerTest {
                 .extracting(CheckResult::outcome).containsOnly(Outcome.FAIL);
     }
 
+    @Test
+    void aReplyContains_anyOfItsAlternatives() {
+        TurnTrace tart = new TurnTrace("¿Qué alérgenos tiene la tarta de queso?", List.of(),
+                "El bar no ha declarado los alérgenos, así que no me consta qué lleva.", null, null, change.state());
+        Expectation either = expectation(null, null, null, null, List.of("no consta | no me consta"), null, null);
+        Expectation neither = expectation(null, null, null, null, List.of("no consta | sin declarar"), null, null);
+
+        assertThat(checker.check("turno 1", either, tart)).extracting(CheckResult::outcome).containsExactly(Outcome.PASS);
+        assertThat(checker.check("turno 1", neither, tart)).extracting(CheckResult::outcome).containsExactly(Outcome.FAIL);
+    }
+
     private static Expectation expectation(List<String> tools, List<String> order, List<String> forbidden,
                                            Map<String, Map<String, Object>> args, List<String> contains,
                                            List<String> lacks, ExpectedState state) {

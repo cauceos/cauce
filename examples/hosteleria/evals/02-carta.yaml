@@ -21,7 +21,7 @@
     - cliente: "¿Qué alérgenos tiene la tarta de queso?"
       espera:
         herramientas: [search_catalog, record_unanswered_question]
-        respuesta_contiene: ["no consta"]
+        respuesta_contiene: ["no consta | no me consta | no ha declarado | no están declarados | sin declarar"]
         respuesta_no_contiene: ["lácteos", "huevo", "gluten"]
         estado: {preguntas: 1}
   cubierto_por: BusinessKnowledgeApiIT#agent_readsTheCatalogThroughItsTool_andRecordsWhatItCannotAnswer

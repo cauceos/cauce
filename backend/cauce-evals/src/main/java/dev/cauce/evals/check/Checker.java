@@ -9,6 +9,7 @@ import dev.cauce.evals.scenario.Scenario.Expectation;
 import dev.cauce.evals.scenario.Scenario.ExpectedState;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -88,9 +89,10 @@ public final class Checker {
         String plain = Text.plain(actual);
         if (contains != null) {
             for (String expected : contains) {
-                String value = resolve(expected);
-                results.add(CheckResult.of(name + " contiene «" + expected + "»", plain.contains(Text.plain(value)),
-                        excerpt(actual)));
+                // "no consta | no me consta": any of the alternatives is enough.
+                boolean found = Arrays.stream(expected.split(" \\| "))
+                        .anyMatch(alternative -> plain.contains(Text.plain(resolve(alternative.strip()))));
+                results.add(CheckResult.of(name + " contiene «" + expected + "»", found, excerpt(actual)));
             }
         }
         if (lacks != null) {

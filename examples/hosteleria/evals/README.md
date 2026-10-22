@@ -51,6 +51,7 @@ pasa.
         herramientas_no: [confirm_booking]                         # no llamadas en este turno
         argumentos: {propose_booking_change: {code: $r.codigo}}    # subconjunto de la entrada
         respuesta_contiene: ["21:30"]                              # sin distinguir mayúsculas
+        respuesta_contiene: ["no consta | no me consta"]           # basta una de las alternativas
         respuesta_no_contiene: ["código nuevo"]
         entregado_no_contiene: ["**"]                              # el texto que entrega el canal
         aviso_al_dueno_contiene: ["Mensaje del cliente: «"]        # el último aviso al dueño
