@@ -195,6 +195,10 @@ class InvocationApiIT extends AbstractApiIntegrationTest {
 
         worker.pollAndProcess();
         awaitTerminalStatus(invocationId, "FAILED");
+        // The worker commits FAILED before it appends the fallback, on the executor's thread.
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM messages WHERE conversation_id = ?::uuid AND role = 'FALLBACK'",
+                Integer.class, conversationId)).isEqualTo(1));
 
         // ADR 0005, C3: the writer reads USER then FALLBACK; the SYSTEM record stays internal.
         String body = mockMvc.perform(getAs(clientAuth, "/v1/conversations/" + conversationId + "/messages"))
