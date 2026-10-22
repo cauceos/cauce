@@ -70,6 +70,9 @@ public final class Report {
         }
         out.append("\nTasa global ").append(Aggregation.percent(s.overallRate())).append("\n");
         for (ScenarioRate rate : s.scenarios()) {
+            if (rate.checks() == null) {
+                continue; // covered by an IT: nothing ran
+            }
             rate.checks().entrySet().stream().filter(c -> c.getValue() < 1.0)
                     .forEach(c -> out.append("  ").append(rate.id()).append(" · ").append(c.getKey()).append(": ")
                             .append(Aggregation.percent(c.getValue())).append("\n"));

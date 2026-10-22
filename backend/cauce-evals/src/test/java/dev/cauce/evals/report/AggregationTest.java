@@ -86,6 +86,19 @@ class AggregationTest {
                 .contains("Bloqueantes por debajo del 100 %: H3.4 50 %").doesNotContain("Cliente:");
     }
 
+    @Test
+    void theConsoleSummary_listsAScenarioCoveredByAnIt_whichHasNoChecks() {
+        Scenario s = scenario("H3.1", Level.BLOCKING, "03-reservas");
+        Scenario covered = new Scenario("H3.7", "H3.7", Level.BLOCKING, "bar-ejemplo", null, null, null, null, null,
+                null, null, "BookingIT#neverOverbook", null, "03-reservas");
+
+        String console = Report.console(Aggregation.summarize(
+                List.of(run(s, 1, CheckResult.pass("turno 1 · herramientas", ""))), List.of(covered), 0.9, META));
+
+        assertThat(console).contains("H3.7      bloqueante       —  0     cubierto por BookingIT#neverOverbook\n")
+                .contains("Sin bloqueantes fallidos.");
+    }
+
     private static double rate(RunSummary summary, String id) {
         return summary.scenarios().stream().filter(r -> r.id().equals(id)).findFirst().orElseThrow().rate();
     }
