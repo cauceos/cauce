@@ -10,7 +10,8 @@ import java.util.Optional;
  * system properties (ADR 0009, E7, E10).
  *
  * @param pack the sector pack under {@code examples/} ({@code evals.paquete}, default hosteleria)
- * @param task only the scenarios of the task file with this prefix ({@code evals.tarea=03})
+ * @param tasks only the scenarios of the task files with these prefixes ({@code evals.tarea=03} or
+ *        {@code evals.tarea=01,02})
  * @param scenarioIds only these scenarios ({@code evals.escenarios=H3.10,H3.11})
  * @param repetitions N ({@code evals.n}, default 5)
  * @param limitUsd the estimate that needs confirmation ({@code evals.limite}, default 10 US$)
@@ -24,7 +25,7 @@ import java.util.Optional;
  * @param rehearsal a run against {@link RehearsalProvider} instead of the model ({@code evals.simulacro}):
  *        no tokens, nothing written to the history
  */
-public record EvalSettings(Path repoRoot, String pack, Optional<String> task, List<String> scenarioIds,
+public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<String> scenarioIds,
                            int repetitions, double limitUsd, boolean confirmed, double warningThreshold,
                            String agentProvider, String agentModel, Optional<String> judgeProvider,
                            Optional<String> judgeModel, boolean rehearsal) {
@@ -35,9 +36,8 @@ public record EvalSettings(Path repoRoot, String pack, Optional<String> task, Li
             throw new IllegalStateException("Run the evals through ./gradlew :cauce-evals:eval (evals.raiz is unset)");
         }
         return new EvalSettings(Path.of(root), property("evals.paquete").orElse("hosteleria"),
-                property("evals.tarea"),
-                property("evals.escenarios").map(ids -> Arrays.stream(ids.split(",")).map(String::strip).toList())
-                        .orElse(List.of()),
+                list("evals.tarea"),
+                list("evals.escenarios"),
                 property("evals.n").map(Integer::parseInt).orElse(5),
                 property("evals.limite").map(Double::parseDouble).orElse(10.0),
                 property("evals.confirmar").map(Boolean::parseBoolean).orElse(false),
@@ -62,7 +62,15 @@ public record EvalSettings(Path repoRoot, String pack, Optional<String> task, Li
         if (!scenarioIds.isEmpty()) {
             return String.join(",", scenarioIds);
         }
-        return task.map(t -> "tarea " + t).orElse("batería completa");
+        if (!tasks.isEmpty()) {
+            return (tasks.size() == 1 ? "tarea " : "tareas ") + String.join(",", tasks);
+        }
+        return "batería completa";
+    }
+
+    private static List<String> list(String name) {
+        return property(name).map(value -> Arrays.stream(value.split(",")).map(String::strip)
+                .filter(item -> !item.isEmpty()).toList()).orElse(List.of());
     }
 
     private static Optional<String> property(String name) {

@@ -9,6 +9,7 @@ escenario y por tarea. Las garantías que impone el código tienen además su te
 cd backend
 ./gradlew :cauce-evals:eval                                  # batería completa, N = 5
 ./gradlew :cauce-evals:eval -Pevals.tarea=03 -Pevals.n=3     # una tarea (el prefijo del fichero)
+./gradlew :cauce-evals:eval -Pevals.tarea=01,02 -Pevals.n=5  # varias tareas en una ejecución
 ./gradlew :cauce-evals:eval -Pevals.escenarios=H3.10,H3.11   # escenarios sueltos
 ./gradlew :cauce-evals:eval -Pevals.confirmar=true           # acepta una estimación sobre el límite
 ./gradlew :cauce-evals:eval -Pevals.juez.proveedor=openai -Pevals.juez.modelo=<modelo>   # el juez

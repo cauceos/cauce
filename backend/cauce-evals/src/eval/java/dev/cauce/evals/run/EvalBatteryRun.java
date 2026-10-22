@@ -307,7 +307,7 @@ class EvalBatteryRun {
 
     private static List<Scenario> select(List<Scenario> all) {
         return all.stream()
-                .filter(s -> SETTINGS.task().map(t -> s.task().startsWith(t)).orElse(true))
+                .filter(s -> SETTINGS.tasks().isEmpty() || SETTINGS.tasks().stream().anyMatch(s.task()::startsWith))
                 .filter(s -> SETTINGS.scenarioIds().isEmpty() || SETTINGS.scenarioIds().contains(s.id()))
                 .toList();
     }
