@@ -103,7 +103,7 @@ class BusinessToolsTest {
     }
 
     @Test
-    void recordUnansweredQuestion_recordsForTheContextNeverTheArguments() {
+    void recordUnansweredQuestion_recordsForTheContext_andTellsTheAgentNotToPromiseAnAnswer() {
         KnowledgeGapSink sink = mock(KnowledgeGapSink.class);
         when(sink.recordUnansweredQuestion(eq(tenantId), eq(context.agentId()), eq(context.conversationId()),
                 anyString())).thenReturn(KnowledgeGap.record(tenantId, context.agentId(), context.conversationId(), "q", Instant.now()));
@@ -111,7 +111,9 @@ class BusinessToolsTest {
         ToolResult result = new RecordUnansweredQuestionTool(() -> sink).execute(call("record_unanswered_question",
                 Map.of("question", " ¿Tenéis wifi? ", "tenant_id", UUID.randomUUID().toString())), context);
 
-        assertThat(result.output()).isEqualTo("{\"recorded\":true}");
+        assertThat(result.output()).contains("\"recorded\":true")
+                .contains("Do not say the owner will answer or contact them")
+                .contains("escalate_to_owner");
         verify(sink).recordUnansweredQuestion(tenantId, context.agentId(), context.conversationId(), "¿Tenéis wifi?");
         assertThatThrownBy(() -> new RecordUnansweredQuestionTool(() -> sink)
                 .execute(call("record_unanswered_question", Map.of()), context))
