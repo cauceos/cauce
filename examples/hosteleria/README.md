@@ -66,9 +66,14 @@ Abre el enlace del dueño en el móvil del dueño y pulsa **Iniciar**. El bot re
 chat recibirá los avisos de Bar La Esquina.» Desde ese momento los casos y el resumen nocturno
 llegan a ese chat. Comprobación: `GET /v1/tenants/{id}/owner` devuelve el chat vinculado.
 
-Si ese chat con el bot ya existía, Telegram envía `/start` sin el código y el bot contesta pidiendo
-el código: envíalo como mensaje (el código solo, o `/start CÓDIGO`). En el bot del dueño, un chat
-que no es el dueño vinculado nunca llega al agente.
+Si ese chat con el bot ya existía (por ejemplo, de una prueba anterior), Telegram puede abrir el
+enlace y enviar solo `/start`, sin el código: así pasó en la prueba real del 2026-10-22. El bot
+contesta pidiendo el código: envíalo como mensaje (el código solo, o `/start CÓDIGO`). Para no
+depender de eso, abre el enlace en un chat nuevo con el bot (bórralo antes) o manda el código a
+mano. El log de la instancia dice cuál de los casos fue (`Owner bot <config>: ... a bare /start,
+with no link code`, `... a link code that matches no code of this bot` o `... an owner chat
+linked`), sin escribir nunca el texto ni el código. En el bot del dueño, un chat que no es el dueño
+vinculado nunca llega al agente.
 
 ### 3. Una conversación por tarea (desde otro móvil, en el bot de clientes)
 
