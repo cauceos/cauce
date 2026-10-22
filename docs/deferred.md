@@ -13,6 +13,8 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Per-model limits beyond the context window.** Only the context window has a registry plus a conservative fallback (`ModelContextWindow`); max response tokens is a flat default, never per-model.
 - **`RESERVED_FOR_RESPONSE`** is a hardcoded token constant in `ContextBuilder`; revisit when tuning context assembly.
 - **Streaming** is not part of the LLM SPI — explicitly deferred past v1.0, to be added as a separate method. The orchestrator does one blocking `invoke`.
+- **Eliding past turns' tool results from the context (R1).** Every request resends the whole history, and the prompt makes the agent query the sheet and the menu again each turn, so earlier `TOOL_RESULT`s are mostly repeats (about half the history in the 2026-10-22 test). Replacing them with a marker would cut the history by 40-50 %, but changes what the model sees. Decided for after the eval harness, as its first measured experiment (before/after), with special attention to G1 (no dish or allergen without `search_catalog` in the same turn).
+- **A new thread after inactivity (R2).** An OPEN conversation never closes on its own, so a person who comes back days later carries the whole history. Decided for after the eval harness: close and start a new thread after a period without messages, 24 h by default, configurable per agent. Condition: the person's open bookings and cases must be readable through tools (`list_my_bookings` already lists bookings; open cases have no tool yet), so nothing depends on the history; verified by a scenario "the customer comes back the next day".
 - **Operator access to the failure diagnostic.** Since ADR 0005 (C3) the public messages endpoint hides SYSTEM `[orchestration_error]` records and a FALLBACK message carries only the public failure reason; the provider detail lives in the SYSTEM text and `pending_invocations.last_error`. Exposing it to operators belongs to the invocation status endpoint (`GET /v1/invocations/{id}`), under an operator-only view, and is not built.
 
 ## Ingest and idempotency
@@ -36,7 +38,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Templates for proactive messages on WhatsApp.** An owner notice outside the 24-hour window is recorded `NOT_SENT` with `outside_reply_window` (B9), the same rule as W4.
 - **The eval harness.** The scenarios of the hospitality pack (`examples/hosteleria/evals`) are data; `cauce-evals` does not run them yet. The guarantees the code enforces have their ITs.
 - **Owner-side booking actions.** The owner reads bookings over the API but cannot cancel or move one there; changes go through the customer's conversation.
-- **Listing an agent's channel bindings.** There is no `GET` of an agent's channel configs, so the demo-bar scripts, which find the business and its agents again by name when `.demo-bar.env` is lost, still bind the bots anew in that case (the previous config of the same bot stays active, unused).
 - **A summary missed across midnight.** A nightly summary whose local day ends while the instance is down is not sent late (the scheduler only runs today's).
 - **Retention of business rows.** Bookings, handoffs, unanswered questions, owner notifications, digests and used link codes have no purge; they hold personal data, so a retention policy per business is the follow-up. The purge's cutoff is SQL `now()` (ADR 0008), so the `created_at` it compares must be stamped by the database clock first: bookings and handoffs still take theirs from the JVM.
 
@@ -57,7 +58,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 ## Channels
 
 - **Delivery guarantee.** Outbound delivery is best-effort: fire-and-forget on the `channelOutboundExecutor`, no outbox, no retries, no delivery dedup; failures are logged and the reply stays readable by polling. The `AgentReplyDispatcher` port carries the TODO: persist the delivery intent behind the same port and drain it from a scheduled dispatcher, additively.
-- **Channel-config list and disable endpoints.** Only creation exists.
+- **Channel-config list and disable endpoints.** Only creation exists. Without the list, the demo-bar scripts, which find the business and its agents again by name when `.demo-bar.env` is lost, bind the bots anew (the previous config of the same bot stays active, unused).
 - **`SUPPORTED_CHANNELS` by SPI.** `ConversationService` validates `channel_type` against a hardcoded set; replacing it with the adapter registry needs a port, since a direct dependency would be a cycle.
 - **WhatsApp templates.** Outside the 24-hour customer service window a reply, or a fallback, is not sent: a loud failure (ADR 0006, W4). Sending approved templates there is a later unit.
 - **WhatsApp identity joining.** A changed number or BSUID (`system` webhook) starts a new identity and thread, with a WARN; joining the two is the memory subject ADR 0004 defers. The parent BSUID (`parent_user_id`, across portfolios) is not read.
