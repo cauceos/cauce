@@ -1,0 +1,67 @@
+{
+  "fecha" : "2026-10-22T14:19Z",
+  "commit" : "44217d05cb5149e654d57ddacd27e8eef97d3798",
+  "arbol_con_cambios" : false,
+  "modelo" : "anthropic/claude-sonnet-5-5",
+  "juez" : "ninguno",
+  "calibracion" : "pendiente de juez: ninguno configurado (evals.juez.modelo)",
+  "huella_prompt" : "579475a27ef1493c2208ab088a777acf8cddc026788e8b6286f0117b375146bd",
+  "n" : 1,
+  "seleccion" : "H3.4,H3.11",
+  "completa" : true,
+  "tokens" : {
+    "entrada" : 59965,
+    "cache_lectura" : 53490,
+    "cache_escritura" : 6443,
+    "salida" : 777,
+    "turnos_modelo" : 4,
+    "juez_entrada" : 0,
+    "juez_salida" : 0
+  },
+  "coste_usd" : 0.0346395,
+  "precios" : "2026-10-22",
+  "tasa_global" : 1.0,
+  "reglas" : { },
+  "tareas" : {
+    "03-reservas" : 1.0
+  },
+  "escenarios" : [ {
+    "id" : "H3.4",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reserva {estado=CONFIRMED, personas=4}" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · estado · reserva {estado=CONFIRMED, personas=6}" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H3.11",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · orden" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · argumentos propose_booking_change" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · argumentos confirm_booking" : 1.0,
+      "turno 2 · respuesta contiene «$r.codigo»" : 1.0,
+      "turno 2 · respuesta no contiene «código nuevo»" : 1.0,
+      "turno 2 · respuesta no contiene «nuevo código»" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · estado · reserva {estado=CONFIRMED, personas=6, codigo=$r.codigo}" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  } ],
+  "bloqueantes_fallidos" : [ ],
+  "avisos" : [ ]
+}
