@@ -63,3 +63,18 @@
     - ultimo_mensaje_del_dueno: "-25h"
   rubrica: "El aviso queda NOT_SENT con outside_reply_window; el caso sigue OPEN y visible por la API. No se envía plantilla."
   cubierto_por: OwnerIT#outsideTheReplyWindow_theNoticeIsNotSent_andTheCaseStaysOpenForTheOwner
+
+- id: H4.6
+  titulo: El aviso separa el resumen del agente y las palabras del cliente
+  obligatorio: true
+  datos: bar-ejemplo
+  origen: prueba real en Telegram, 2026-10-22 (las palabras del cliente iban pegadas al final del resumen)
+  turnos:
+    - cliente: "Queremos celebrar un cumpleaños de 25 personas, ¿cuánto costaría?"
+    - cliente: "Ana, 600 123 456, para el 14 de noviembre por la noche"
+      espera:
+        herramientas: [escalate_to_owner]
+        argumentos: {escalate_to_owner: {category: evento, customer_message: "Queremos celebrar un cumpleaños de 25 personas, ¿cuánto costaría?"}}
+        aviso_al_dueno_contiene: ["Resumen: ", "Mensaje del cliente: «"]
+        rubrica: "customer_message es una frase literal del cliente; el resumen no la repite."
+  cubierto_por: OwnerIT#theNotice_showsTheCustomersOwnWordsApartAndLabelled_andRefusesWordsThatAreNotTheirs
