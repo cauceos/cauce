@@ -65,6 +65,8 @@ val evalTask = tasks.register<Test>("eval") {
     useJUnitPlatform()
     // A run is never up to date: the model is not deterministic and the point is to measure it.
     outputs.upToDateWhen { false }
+    // Without the JVM's notices about Mockito's agent and class data sharing.
+    jvmArgs("-XX:+EnableDynamicAgentLoading", "-Xshare:off")
     systemProperty("evals.raiz", rootProject.projectDir.parentFile.absolutePath)
     project.properties.filterKeys { it.startsWith("evals.") }
             .forEach { (key, value) -> systemProperty(key, value.toString()) }

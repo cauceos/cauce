@@ -52,6 +52,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
@@ -73,7 +74,7 @@ import org.testcontainers.utility.DockerImageName;
  * <p>Started only by {@code ./gradlew :cauce-evals:eval}: it is not a test of the build.
  */
 @SpringBootTest(classes = CauceApplication.class)
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @ActiveProfiles("test")
 @Import(EvalInfrastructure.class)
 @TestPropertySource(properties = {
@@ -86,7 +87,10 @@ import org.testcontainers.utility.DockerImageName;
         "cauce.governance.audit.drainer.enabled=false",
         "cauce.business.notifications.enabled=false",
         "cauce.business.digest.enabled=false",
-        "logging.level.dev.cauce=WARN"
+        "logging.level.root=WARN",
+        // The generated password of the default user is irrelevant here: the API keys authenticate.
+        "logging.level.org.springframework.boot.autoconfigure.security=ERROR",
+        "spring.main.banner-mode=off"
 })
 class EvalBatteryRun {
 
@@ -330,18 +334,20 @@ class EvalBatteryRun {
         Files.writeString(out.resolve("trazas.txt"), runs.stream()
                 .map(r -> "== " + r.scenario().id() + " #" + r.repetition() + "\n" + r.transcript())
                 .collect(Collectors.joining("\n\n")), StandardCharsets.UTF_8);
+        // The console gets the summary by scenario, last; the transcripts are in the report.
         System.out.println();
-        System.out.println(markdown);
         System.out.println("Informe: " + out.resolve("informe.md"));
         if (SETTINGS.rehearsal()) {
             System.out.println("Simulacro: nada escrito en el historial.");
-            return;
+        } else {
+            Path history = SETTINGS.evalsDir().resolve("historial");
+            Files.createDirectories(history);
+            Path summaryFile = history.resolve(stamp + "-" + SETTINGS.agentModel() + ".json");
+            Files.writeString(summaryFile, Report.json(summary), StandardCharsets.UTF_8);
+            System.out.println("Resumen para el historial (commitéalo): " + summaryFile);
         }
-        Path history = SETTINGS.evalsDir().resolve("historial");
-        Files.createDirectories(history);
-        Path summaryFile = history.resolve(stamp + "-" + SETTINGS.agentModel() + ".json");
-        Files.writeString(summaryFile, Report.json(summary), StandardCharsets.UTF_8);
-        System.out.println("Resumen para el historial (commitéalo): " + summaryFile);
+        System.out.println();
+        System.out.println(Report.console(summary));
     }
 
     private static void truncate(JdbcTemplate admin) {

@@ -55,6 +55,39 @@ public final class Report {
         }
     }
 
+    /**
+     * The summary for the console, in plain columns: one line per scenario, then the checks that did
+     * not always pass, what blocks, and the tokens and cost. The transcripts stay in the Markdown page.
+     */
+    public static String console(RunSummary s) {
+        StringBuilder out = new StringBuilder();
+        out.append("Evals · ").append(s.selection()).append(" · N = ").append(s.repetitions()).append(" · ")
+                .append(s.agentModel()).append(" · juez: ").append(s.judge()).append("\n\n");
+        out.append(String.format("%-9s %-11s %6s  %-5s %s\n", "Escenario", "Nivel", "Tasa", "Rep.", "Estado"));
+        for (ScenarioRate rate : s.scenarios()) {
+            out.append(String.format("%-9s %-11s %6s  %-5d %s\n", rate.id(), rate.level(),
+                    rate.rate() == null ? "—" : Aggregation.percent(rate.rate()), rate.repetitions(), rate.status()));
+        }
+        out.append("\nTasa global ").append(Aggregation.percent(s.overallRate())).append("\n");
+        for (ScenarioRate rate : s.scenarios()) {
+            rate.checks().entrySet().stream().filter(c -> c.getValue() < 1.0)
+                    .forEach(c -> out.append("  ").append(rate.id()).append(" · ").append(c.getKey()).append(": ")
+                            .append(Aggregation.percent(c.getValue())).append("\n"));
+        }
+        out.append(s.blockingFailures().isEmpty() ? "Sin bloqueantes fallidos.\n"
+                : "Bloqueantes por debajo del 100 %: " + String.join(", ", s.blockingFailures()) + "\n");
+        s.warnings().forEach(w -> out.append("Aviso: ").append(w).append("\n"));
+        if (s.tokens() != null) {
+            RunSummary.Tokens t = s.tokens();
+            out.append(String.format("Tokens: %d de entrada (%s leídos de caché), %d de salida, en %d turnos de modelo\n",
+                    t.input(), t.input() == 0 ? "0 %" : Aggregation.percent((double) t.cacheRead() / t.input()),
+                    t.output(), t.modelTurns()));
+        }
+        out.append("Coste: ").append(s.costUsd() == null ? "sin precio en precios.yaml"
+                : String.format("%.4f US$", s.costUsd())).append("\n");
+        return out.toString();
+    }
+
     public static String markdown(RunSummary s, Optional<RunSummary> previous, List<ScenarioRun> runs) {
         StringBuilder md = new StringBuilder();
         md.append("# Evals · ").append(s.date()).append("\n\n");

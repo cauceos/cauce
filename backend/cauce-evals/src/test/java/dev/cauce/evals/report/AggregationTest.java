@@ -72,6 +72,20 @@ class AggregationTest {
         assertThat(Report.json(now)).contains("\"tasa_global\" : 0.5");
     }
 
+    @Test
+    void theConsoleSummary_hasOneLinePerScenario_andTheChecksThatDidNotAlwaysPass_withoutTranscripts() {
+        Scenario s = scenario("H3.4", Level.BLOCKING, "03-reservas");
+        List<ScenarioRun> runs = List.of(run(s, 1, CheckResult.pass("turno 1 · herramientas", ""),
+                        CheckResult.fail("turno 2 · herramientas", "faltan [confirm_booking]")),
+                run(s, 2, CheckResult.pass("turno 1 · herramientas", ""), CheckResult.pass("turno 2 · herramientas", "")));
+
+        String console = Report.console(Aggregation.summarize(runs, List.of(), 0.9, META));
+
+        assertThat(console).contains("H3.4      bloqueante    50 %  2     falla\n")
+                .contains("  H3.4 · turno 2 · herramientas: 50 %").doesNotContain("turno 1 · herramientas:")
+                .contains("Bloqueantes por debajo del 100 %: H3.4 50 %").doesNotContain("Cliente:");
+    }
+
     private static double rate(RunSummary summary, String id) {
         return summary.scenarios().stream().filter(r -> r.id().equals(id)).findFirst().orElseThrow().rate();
     }

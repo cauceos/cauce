@@ -1,0 +1,12 @@
+<!-- The eval run's console is its report: only warnings and errors are logged, from the start
+     (Testcontainers logs before Spring configures logging). -->
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%-5level %logger{30} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <root level="WARN">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
