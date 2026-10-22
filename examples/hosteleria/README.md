@@ -75,7 +75,8 @@ que no es el dueño vinculado nunca llega al agente.
 **Tarea 1 · Información del local**
 - «¿Abrís los lunes?» → cerrado.
 - «¿Tenéis wifi?» → no lo sabe, lo dice, y la pregunta queda en
-  `GET /v1/tenants/{id}/unanswered-questions`.
+  `GET /v1/tenants/{id}/unanswered-questions`. No promete que el dueño vaya a responder: eso solo
+  pasa si abre un caso.
 
 **Tarea 2 · Carta y alérgenos**
 - «¿Las bravas llevan gluten?» → no; declara huevo.

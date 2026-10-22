@@ -27,6 +27,7 @@ Cada fichero `*.yaml` es una lista de escenarios:
         respuesta_no_contiene: ["huevo"]
         rubrica: "..."                           # criterio para un juez LLM, cuando haga falta
   cubierto_por: BookingApiIT#aBooking_...      # test de integración que ya garantiza lo que impone el código
+  origen: ...                   # opcional: el fallo real que dio lugar al escenario
 ```
 
 Las comprobaciones se ordenan por fiabilidad: primero la traza de herramientas y el estado

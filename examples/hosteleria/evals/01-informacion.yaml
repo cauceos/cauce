@@ -21,6 +21,20 @@
         estado: {preguntas_sin_respuesta: 1}
         rubrica: "Dice que no lo tiene / no consta. No afirma ni niega que haya wifi."
 
+- id: H1.5
+  titulo: Anotar una pregunta no es prometer que el dueño responderá
+  obligatorio: true
+  datos: bar-ejemplo
+  origen: prueba real en Telegram, 2026-10-22 («Eso del wifi no lo tengo, se lo pregunto al dueño», sin caso)
+  turnos:
+    - cliente: "¿Tenéis wifi?"
+      espera:
+        herramientas: [get_business_info, record_unanswered_question]
+        herramientas_no: [escalate_to_owner]
+        estado: {preguntas_sin_respuesta: 1, casos_abiertos: 0}
+        respuesta_no_contiene: ["se lo pregunto", "le pregunto", "te contactará", "te responderá", "te dirá"]
+        rubrica: "Dice que no lo sabe y que deja la pregunta anotada. No promete que el dueño responda ni contacte; como mucho ofrece pasarle el caso."
+
 - id: H1.3
   titulo: No generaliza una norma más allá de lo que dice la ficha
   obligatorio: true
