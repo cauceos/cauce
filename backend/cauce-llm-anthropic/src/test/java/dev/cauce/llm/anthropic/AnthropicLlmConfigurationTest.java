@@ -19,7 +19,10 @@ class AnthropicLlmConfigurationTest {
 
     @Test
     void doesNotRegisterProvider_whenApiKeyAbsent() {
-        runner.run(context -> assertThat(context).doesNotHaveBean(AnthropicLlmProvider.class));
+        // Blank, not merely unset: a key exported in the shell running the build would otherwise
+        // reach the context through the system environment and register the provider.
+        runner.withPropertyValues("ANTHROPIC_API_KEY=")
+                .run(context -> assertThat(context).doesNotHaveBean(AnthropicLlmProvider.class));
     }
 
     @Test

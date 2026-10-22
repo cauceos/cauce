@@ -41,7 +41,9 @@ class OpenAiCompatibleLlmConfigurationTest {
 
     @Test
     void doesNotRegisterOpenAi_whenEnabledButKeyAbsent() {
-        runner.withPropertyValues("cauce.llm.openai-compatible.providers.openai.enabled=true")
+        // Blank, not merely unset: a key exported in the shell running the build would otherwise
+        // reach the context through the system environment.
+        runner.withPropertyValues("cauce.llm.openai-compatible.providers.openai.enabled=true", "OPENAI_API_KEY=")
                 .run(context -> assertThat(context).doesNotHaveBean("openAiLlmProvider"));
     }
 
