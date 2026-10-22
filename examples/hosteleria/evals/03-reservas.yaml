@@ -44,7 +44,7 @@
         rubrica: "Dice que la cena del martes está completa y ofrece otro turno u otro día."
 
 - id: H3.4
-  titulo: Modificar, confirmando el código nuevo en el turno siguiente
+  titulo: Modificar, confirmando en el turno siguiente con el mismo código
   obligatorio: true
   datos: bar-ejemplo
   previo:
@@ -140,3 +140,25 @@
         estado: {reservas_confirmadas: 1, hora_reserva_sabado: "21:30"}
         respuesta_contiene: ["21:30"]
   cubierto_por: BookingIT#aRequestedTime_isKeptWithinItsShift_throughAChange_andOrdersTheOwnersDay
+
+- id: H3.11
+  titulo: Al modificar, el código de la reserva no cambia
+  obligatorio: true
+  datos: bar-ejemplo
+  origen: prueba real en Telegram, 2026-10-22 (al pasar de 4 a 6 el código cambió de 9PNVXQ a DPQYZ5)
+  previo:
+    - reserva: {fecha: proximo_sabado, turno: cena, personas: 4, estado: CONFIRMED, mismo_cliente: true, codigo: 9PNVXQ}
+  turnos:
+    - cliente: "Al final seremos 6, ¿puedes cambiar la reserva?"
+      espera:
+        herramientas: [list_my_bookings, propose_booking_change]
+        argumentos: {propose_booking_change: {code: 9PNVXQ, party_size: 6}}
+        herramientas_no: [confirm_booking]
+    - cliente: "Sí"
+      espera:
+        herramientas: [confirm_booking]
+        argumentos: {confirm_booking: {code: 9PNVXQ}}
+        estado: {reservas_confirmadas: 1, personas_reserva_sabado: 6, codigo_reserva_sabado: 9PNVXQ}
+        respuesta_contiene: ["9PNVXQ"]
+        respuesta_no_contiene: ["código nuevo", "nuevo código"]
+  cubierto_por: BookingIT#aBooking_keepsItsCodeThroughEveryChange_andWaitsForOneConfirmationAtATime

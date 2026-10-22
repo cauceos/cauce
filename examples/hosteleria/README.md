@@ -90,8 +90,8 @@ que no es el dueño vinculado nunca llega al agente.
 - «Mesa para 4 el sábado a las 21:30, soy Ana, 600 000 000» → te lee los datos (con la hora
   pedida; las plazas se cuentan por turno) y pregunta si confirmas. Todavía no hay reserva: `GET /v1/tenants/{id}/bookings` la muestra `HELD`.
 - «Sí» → confirmada, con su código. Ahora está `CONFIRMED`.
-- «Al final seremos 6» → propone el cambio; «sí» → la reserva nueva queda confirmada y la vieja
-  cancelada.
+- «Al final seremos 6» → propone el cambio; «sí» → la reserva queda cambiada y conserva su código
+  (en la API, la versión nueva queda `CONFIRMED` y la anterior `CANCELLED`, con el mismo código).
 - «Cancela mi reserva» → pide confirmación; «sí» → `CANCELLED`.
 - «Mesa para 2 el lunes» → el lunes está cerrado.
 
