@@ -432,6 +432,8 @@ export interface BookingResponse {
   code: string
   date: string
   shift: string
+  /** The time the person asked for within the shift (HH:MM[:SS]); null when only the shift was named. */
+  time: string | null
   party_size: number
   contact_name: string
   contact_phone: string | null

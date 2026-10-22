@@ -41,7 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Every write locks the business's agenda row first and counts capacity after the lock, so
  * concurrent proposals for the last places of a shift are serialized and never overbook. Local
- * dates and shift times are in the business profile's time zone (UTC without a profile).
+ * dates and shift times are in the business profile's time zone (UTC without a profile). Capacity
+ * is per shift; a requested time is only checked to fall within its shift.
  */
 @Service
 public class BookingService implements BookingProvider {
@@ -94,8 +95,8 @@ public class BookingService implements BookingProvider {
         Agenda agenda = lockAgenda(requester.tenantId());
         Instant now = clock.instant();
         Shift shift = requireShift(agenda, details.shiftId());
-        Details canonical = new Details(details.date(), shift.id(), details.partySize(), details.contactName(),
-                details.contactPhone(), details.notes());
+        Details canonical = new Details(details.date(), shift.id(), details.time(), details.partySize(),
+                details.contactName(), details.contactPhone(), details.notes());
         requireBookable(agenda, requester.tenantId(), canonical, shift, now, Set.of());
         return save(Booking.propose(requester, canonical, holdUntil(agenda, now), null));
     }
@@ -111,7 +112,10 @@ public class BookingService implements BookingProvider {
                     + " is " + original.status());
         }
         Shift shift = requireShift(agenda, change.shiftId() == null ? original.shiftId() : change.shiftId());
-        Details details = new Details(change.date() == null ? original.date() : change.date(), shift.id(),
+        // A time belongs to its shift: kept while the shift stays, dropped when it moves without a new one.
+        LocalTime time = change.time() != null ? change.time()
+                : shift.id().equalsIgnoreCase(original.shiftId()) ? original.time().orElse(null) : null;
+        Details details = new Details(change.date() == null ? original.date() : change.date(), shift.id(), time,
                 change.partySize() == null ? original.partySize() : change.partySize(), original.contactName(),
                 original.contactPhone().orElse(null),
                 change.notes() == null ? original.notes().orElse(null) : change.notes());
@@ -181,8 +185,8 @@ public class BookingService implements BookingProvider {
     @Transactional(readOnly = true)
     public List<Booking> confirmedOn(UUID tenantId, LocalDate date) {
         Optional<Agenda> agenda = findAgenda(tenantId);
-        Comparator<Booking> byStart = Comparator.comparing(booking -> agenda
-                .flatMap(a -> a.shift(booking.shiftId())).map(Shift::start).orElse(LocalTime.MAX));
+        Comparator<Booking> byStart = Comparator.comparing(booking -> booking.time().orElseGet(() -> agenda
+                .flatMap(a -> a.shift(booking.shiftId())).map(Shift::start).orElse(LocalTime.MAX)));
         return bookingRepository.findByTenantIdAndServiceDateAndStatus(tenantId, date, Booking.Status.CONFIRMED)
                 .stream().map(bookingMapper::toDomain)
                 .sorted(byStart.thenComparing(Booking::createdAt))
@@ -222,6 +226,10 @@ public class BookingService implements BookingProvider {
                 zoneOf(tenantId));
         if (refused.isPresent()) {
             throw refused.get().toException();
+        }
+        if (details.time() != null && !shift.includes(details.time())) {
+            throw refusal(Reason.INVALID, details.time() + " is not within '" + shift.id() + "' (" + shift.start()
+                    + "-" + shift.end() + "): pick the shift that time falls in, or another time");
         }
         if (agenda.requirePhone() && details.contactPhone() == null) {
             throw refusal(Reason.INVALID, "a contact phone is required: ask the person for one");
@@ -268,7 +276,8 @@ public class BookingService implements BookingProvider {
         while (toSave.status() == Booking.Status.HELD && bookingRepository.findById(toSave.id()).isEmpty()
                 && bookingRepository.existsByTenantIdAndCode(toSave.tenantId(), toSave.code())) {
             toSave = Booking.rehydrate(toSave.id(), toSave.tenantId(), Booking.newCode(), toSave.agentId(),
-                    toSave.conversationId(), toSave.identityId(), toSave.date(), toSave.shiftId(), toSave.partySize(),
+                    toSave.conversationId(), toSave.identityId(), toSave.date(), toSave.shiftId(),
+                    toSave.time().orElse(null), toSave.partySize(),
                     toSave.contactName(), toSave.contactPhone().orElse(null), toSave.notes().orElse(null),
                     toSave.status(), toSave.replacesBookingId().orElse(null), toSave.proposedInMessageId(),
                     toSave.holdExpiresAt(), null, null, toSave.createdAt(), toSave.updatedAt());

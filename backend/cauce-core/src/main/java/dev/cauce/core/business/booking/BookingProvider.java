@@ -1,6 +1,7 @@
 package dev.cauce.core.business.booking;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,10 +47,16 @@ public interface BookingProvider {
     /** The requester identity's bookings from today on: confirmed, and proposals still pending. */
     List<Booking> upcomingFor(UUID tenantId, UUID identityId);
 
-    /** The confirmed bookings on {@code date}, by shift start: what the owner prepares for. */
+    /**
+     * The confirmed bookings on {@code date}, by time (the one asked for, else the shift start):
+     * what the owner prepares for.
+     */
     List<Booking> confirmedOn(UUID tenantId, LocalDate date);
 
-    /** The fields of a change; a null field keeps the booking's current value. */
-    record Change(LocalDate date, String shiftId, Integer partySize, String notes) {
+    /**
+     * The fields of a change; a null field keeps the booking's current value, except that a time
+     * belongs to its shift: moving to another shift without a new time leaves no time.
+     */
+    record Change(LocalDate date, String shiftId, LocalTime time, Integer partySize, String notes) {
     }
 }

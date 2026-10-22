@@ -4,6 +4,7 @@ import dev.cauce.core.UuidGenerator;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.Optional;
@@ -11,6 +12,8 @@ import java.util.UUID;
 
 /**
  * A booking of one shift on one date (ADR 0007, B6), owned by the interlocutor who made it.
+ * Capacity is counted per shift; the {@link #time() time} the person asked for, when they named
+ * one, is kept within its shift so it can be read back and prepared for.
  *
  * <p>Every change goes through a proposal that the person confirms in a later turn:
  * <ul>
@@ -62,6 +65,7 @@ public final class Booking {
     private final UUID identityId;
     private final LocalDate date;
     private final String shiftId;
+    private final LocalTime time;
     private final int partySize;
     private final String contactName;
     private final String contactPhone;
@@ -76,10 +80,10 @@ public final class Booking {
     private final Instant updatedAt;
 
     private Booking(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId, UUID identityId,
-                    LocalDate date, String shiftId, int partySize, String contactName, String contactPhone,
-                    String notes, Status status, UUID replacesBookingId, UUID proposedInMessageId,
-                    Instant holdExpiresAt, UUID cancellationRequestedInMessageId, Instant cancellationExpiresAt,
-                    Instant createdAt, Instant updatedAt) {
+                    LocalDate date, String shiftId, LocalTime time, int partySize, String contactName,
+                    String contactPhone, String notes, Status status, UUID replacesBookingId,
+                    UUID proposedInMessageId, Instant holdExpiresAt, UUID cancellationRequestedInMessageId,
+                    Instant cancellationExpiresAt, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.code = code;
@@ -88,6 +92,7 @@ public final class Booking {
         this.identityId = identityId;
         this.date = date;
         this.shiftId = shiftId;
+        this.time = time;
         this.partySize = partySize;
         this.contactName = contactName;
         this.contactPhone = contactPhone;
@@ -114,9 +119,13 @@ public final class Booking {
         }
     }
 
-    /** What is being booked. Name, phone and notes are stripped; phone and notes are optional. */
-    public record Details(LocalDate date, String shiftId, int partySize, String contactName, String contactPhone,
-                          String notes) {
+    /**
+     * What is being booked. {@code time} is the time the person asked for, to the minute, or null
+     * when they named only the shift; whether it falls within the shift is checked against the
+     * agenda. Name, phone and notes are stripped; phone and notes are optional.
+     */
+    public record Details(LocalDate date, String shiftId, LocalTime time, int partySize, String contactName,
+                          String contactPhone, String notes) {
 
         public Details {
             Objects.requireNonNull(date, "date");
@@ -124,6 +133,7 @@ public final class Booking {
                 throw new IllegalArgumentException("the shift is required");
             }
             shiftId = shiftId.strip();
+            time = time == null ? null : time.truncatedTo(ChronoUnit.MINUTES);
             if (contactName == null || contactName.isBlank()) {
                 throw new IllegalArgumentException("the contact name is required");
             }
@@ -144,19 +154,20 @@ public final class Booking {
         Instant now = now();
         return new Booking(UuidGenerator.newV7(), requester.tenantId(), newCode(), requester.agentId(),
                 requester.conversationId(), requester.identityId(), details.date(), details.shiftId(),
-                details.partySize(), details.contactName(), details.contactPhone(), details.notes(), Status.HELD,
-                replacesBookingId, requester.messageId(), Objects.requireNonNull(holdExpiresAt, "holdExpiresAt"),
+                details.time(), details.partySize(), details.contactName(), details.contactPhone(), details.notes(),
+                Status.HELD, replacesBookingId, requester.messageId(), Objects.requireNonNull(holdExpiresAt, "holdExpiresAt"),
                 null, null, now, now);
     }
 
     /** Rebuilds a persisted booking. For the persistence layer only. */
     public static Booking rehydrate(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId,
-                                    UUID identityId, LocalDate date, String shiftId, int partySize,
-                                    String contactName, String contactPhone, String notes, Status status,
+                                    UUID identityId, LocalDate date, String shiftId, LocalTime time,
+                                    int partySize, String contactName, String contactPhone, String notes,
+                                    Status status,
                                     UUID replacesBookingId, UUID proposedInMessageId, Instant holdExpiresAt,
                                     UUID cancellationRequestedInMessageId, Instant cancellationExpiresAt,
                                     Instant createdAt, Instant updatedAt) {
-        return new Booking(id, tenantId, code, agentId, conversationId, identityId, date, shiftId, partySize,
+        return new Booking(id, tenantId, code, agentId, conversationId, identityId, date, shiftId, time, partySize,
                 contactName, contactPhone, notes, status, replacesBookingId, proposedInMessageId, holdExpiresAt,
                 cancellationRequestedInMessageId, cancellationExpiresAt, createdAt, updatedAt);
     }
@@ -183,7 +194,7 @@ public final class Booking {
     }
 
     private Booking copy(Status newStatus, UUID cancellationMessageId, Instant cancellationExpiry) {
-        return new Booking(id, tenantId, code, agentId, conversationId, identityId, date, shiftId, partySize,
+        return new Booking(id, tenantId, code, agentId, conversationId, identityId, date, shiftId, time, partySize,
                 contactName, contactPhone, notes, newStatus, replacesBookingId, proposedInMessageId, holdExpiresAt,
                 cancellationMessageId, cancellationExpiry, createdAt, now());
     }
@@ -281,6 +292,11 @@ public final class Booking {
         return shiftId;
     }
 
+    /** The time the person asked for, within the shift; empty when they named only the shift. */
+    public Optional<LocalTime> time() {
+        return Optional.ofNullable(time);
+    }
+
     public int partySize() {
         return partySize;
     }
@@ -342,7 +358,7 @@ public final class Booking {
     @Override
     public String toString() {
         // Contact data is intentionally omitted.
-        return "Booking[id=%s, code=%s, date=%s, shift=%s, party=%d, status=%s]"
-                .formatted(id, code, date, shiftId, partySize, status);
+        return "Booking[id=%s, code=%s, date=%s, shift=%s, time=%s, party=%d, status=%s]"
+                .formatted(id, code, date, shiftId, time, partySize, status);
     }
 }

@@ -60,6 +60,11 @@ public final class Agenda {
                 throw new IllegalArgumentException("shift '" + id + "' must have a capacity of at least 1");
             }
         }
+
+        /** Whether a booking may ask for {@code time} in this shift: from its start, before its end. */
+        public boolean includes(LocalTime time) {
+            return !time.isBefore(start) && time.isBefore(end);
+        }
     }
 
     private final UUID id;

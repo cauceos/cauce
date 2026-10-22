@@ -91,7 +91,8 @@ class BusinessMappersTest {
         BookingMapper mapper = new BookingMapper();
         Booking held = Booking.propose(new Booking.Requester(tenantId, UUID.randomUUID(), UUID.randomUUID(),
                         UUID.randomUUID(), UUID.randomUUID()),
-                new Booking.Details(LocalDate.of(2026, 11, 3), "cena", 4, "Ana", "+34 600", "Terraza"),
+                new Booking.Details(LocalDate.of(2026, 11, 3), "cena", LocalTime.of(21, 30), 4, "Ana", "+34 600",
+                        "Terraza"),
                 Instant.now().truncatedTo(ChronoUnit.MICROS), UUID.randomUUID());
         Booking requested = held.confirmed().withCancellationRequested(UUID.randomUUID(),
                 Instant.now().truncatedTo(ChronoUnit.MICROS));

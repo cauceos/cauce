@@ -69,6 +69,14 @@ class AgendaTest {
         assertThat(agenda.settings().closedDates()).containsExactly(LocalDate.of(2026, 10, 24));
     }
 
+    @Test
+    void includes_aTimeFromTheShiftStart_beforeItsEnd() {
+        assertThat(CENA.includes(LocalTime.of(20, 30))).isTrue();
+        assertThat(CENA.includes(LocalTime.of(21, 30))).isTrue();
+        assertThat(CENA.includes(LocalTime.of(23, 0))).isFalse();
+        assertThat(CENA.includes(LocalTime.of(20, 29))).isFalse();
+    }
+
     private Optional<Reason> reason(LocalDate date, int party, Instant now) {
         return agenda.refusalFor(date, CENA, party, now, MADRID).map(BookingRefusal::reason);
     }

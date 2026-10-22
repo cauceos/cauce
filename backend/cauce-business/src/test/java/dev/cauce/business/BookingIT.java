@@ -118,7 +118,7 @@ class BookingIT extends AbstractBusinessIntegrationTest {
 
         assertRefused(() -> bookings.confirm(stranger, held.code()), Reason.NOT_FOUND);
         assertRefused(() -> bookings.proposeCancellation(stranger, held.code()), Reason.NOT_FOUND);
-        assertRefused(() -> bookings.proposeChange(stranger, held.code(), new Change(null, null, 3, null)),
+        assertRefused(() -> bookings.proposeChange(stranger, held.code(), new Change(null, null, null, 3, null)),
                 Reason.NOT_FOUND);
         assertThat(asA(() -> bookings.upcomingFor(f.clientA().id(), other.identityId()))).isEmpty();
         assertThat(asA(() -> bookings.upcomingFor(f.clientA().id(), f.conversation().identityId())))
@@ -179,9 +179,10 @@ class BookingIT extends AbstractBusinessIntegrationTest {
         Requester turn = requester(f.conversation(), UUID.randomUUID());
 
         // 8 -> 10 fits because the original's 8 places are its own.
-        assertRefused(() -> bookings.proposeChange(turn, original.code(), new Change(null, null, 9, null)),
+        assertRefused(() -> bookings.proposeChange(turn, original.code(), new Change(null, null, null, 9, null)),
                 Reason.PARTY_TOO_LARGE);
-        Booking change = asA(() -> bookings.proposeChange(turn, original.code(), new Change(null, null, 7, "Trona")));
+        Booking change = asA(() -> bookings.proposeChange(turn, original.code(),
+                new Change(null, null, null, 7, "Trona")));
         Booking confirmed = asA(() -> bookings.confirm(requester(f.conversation(), UUID.randomUUID()), change.code()));
 
         assertThat(confirmed.partySize()).isEqualTo(7);
@@ -189,6 +190,24 @@ class BookingIT extends AbstractBusinessIntegrationTest {
         assertThat(confirmed.replacesBookingId()).contains(original.id());
         assertThat(asA(() -> bookings.confirmedOn(f.clientA().id(), nextTuesday)))
                 .extracting(Booking::code).containsExactly(change.code());
+    }
+
+    @Test
+    void aRequestedTime_isKeptWithinItsShift_throughAChange_andOrdersTheOwnersDay() {
+        Requester turn = requester(f.conversation(), UUID.randomUUID());
+        assertRefused(() -> bookings.propose(turn, details(2, LocalTime.of(23, 0))), Reason.INVALID);
+        assertRefused(() -> bookings.propose(turn, details(2, LocalTime.of(14, 0))), Reason.INVALID);
+
+        Booking late = confirm(f.conversation(), details(2, LocalTime.of(21, 30)));
+        Booking early = confirm(other, details(2, null)); // no time: listed at the shift start, 20:30
+        Booking change = asA(() -> bookings.proposeChange(requester(f.conversation(), UUID.randomUUID()),
+                late.code(), new Change(null, null, null, 4, null)));
+        Booking changed = asA(() -> bookings.confirm(requester(f.conversation(), UUID.randomUUID()), change.code()));
+
+        assertThat(late.time()).contains(LocalTime.of(21, 30));
+        assertThat(changed.time()).contains(LocalTime.of(21, 30));
+        assertThat(asA(() -> bookings.confirmedOn(f.clientA().id(), nextTuesday)))
+                .extracting(Booking::id).containsExactly(early.id(), changed.id());
     }
 
     @Test
@@ -221,7 +240,11 @@ class BookingIT extends AbstractBusinessIntegrationTest {
     }
 
     private Details details(int party) {
-        return new Details(nextTuesday, "Cena", party, "Ana", null, null);
+        return details(party, null);
+    }
+
+    private Details details(int party, LocalTime time) {
+        return new Details(nextTuesday, "Cena", time, party, "Ana", null, null);
     }
 
     private Requester requester(Conversation conversation, UUID messageId) {

@@ -32,7 +32,7 @@ class DigestComposerTest {
 
     @Test
     void compose_listsTomorrowsBookingsTheOpenCasesAndTheQuestions_inTheBusinessLanguage() {
-        Booking booking = Booking.propose(requester, new Booking.Details(TOMORROW, "cena", 4, "Ana López",
+        Booking booking = Booking.propose(requester, new Booking.Details(TOMORROW, "cena", null, 4, "Ana López",
                 "+34 600 000 000", "Trona"), Instant.now().plusSeconds(60), null).confirmed();
         Handoff handoff = Handoff.open(requester, new Handoff.Request("evento", "Cumpleaños de 25 personas",
                 "Marta", null));
@@ -47,6 +47,17 @@ class DigestComposerTest {
                 .contains("· cena 20:30 — 4 — Ana López (+34 600 000 000) · ref " + booking.code() + " · Trona")
                 .contains("Casos pendientes (1)\n· [evento] ref " + handoff.code() + " · Marta — Cumpleaños")
                 .contains("Preguntas sin respuesta (1)\n· ¿Tenéis wifi?");
+    }
+
+    @Test
+    void compose_listsTheTimeThePersonAskedFor_insteadOfTheShiftStart() {
+        Booking at = Booking.propose(requester, new Booking.Details(TOMORROW, "cena", LocalTime.of(21, 30), 2, "Luis",
+                null, null), Instant.now().plusSeconds(60), null).confirmed();
+
+        String text = DigestComposer.compose(new Contents("Bar", "es", TOMORROW, Optional.of(agenda), List.of(at),
+                List.of(), List.of()));
+
+        assertThat(text).contains("· cena 21:30 — 2 — Luis · ref " + at.code()).doesNotContain("20:30");
     }
 
     @Test

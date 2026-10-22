@@ -10,6 +10,7 @@ import dev.cauce.core.business.booking.BookingRefusal.Reason;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +19,7 @@ class BookingTest {
     private final UUID proposalMessage = UUID.randomUUID();
     private final Requester requester = new Requester(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
             UUID.randomUUID(), proposalMessage);
-    private final Details details = new Details(LocalDate.of(2026, 10, 24), "cena", 4, " Ana López ", " ", null);
+    private final Details details = new Details(LocalDate.of(2026, 10, 24), "cena", null, 4, " Ana López ", " ", null);
     private final Instant now = Instant.now();
 
     @Test
@@ -64,12 +65,22 @@ class BookingTest {
     }
 
     @Test
+    void propose_keepsTheRequestedTimeToTheMinute_andNoTimeWhenOnlyTheShiftWasNamed() {
+        Details at = new Details(LocalDate.of(2026, 10, 24), "cena", LocalTime.of(21, 30, 15), 4, "Ana", null, null);
+
+        assertThat(at.time()).isEqualTo(LocalTime.of(21, 30));
+        assertThat(Booking.propose(requester, at, now.plus(Duration.ofMinutes(10)), null).time())
+                .contains(LocalTime.of(21, 30));
+        assertThat(Booking.propose(requester, details, now.plus(Duration.ofMinutes(10)), null).time()).isEmpty();
+    }
+
+    @Test
     void details_requireAShiftAndAName_andBoundTheirLength() {
-        assertThatThrownBy(() -> new Details(LocalDate.now(), " ", 2, "Ana", null, null))
+        assertThatThrownBy(() -> new Details(LocalDate.now(), " ", null, 2, "Ana", null, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new Details(LocalDate.now(), "cena", 2, " ", null, null))
+        assertThatThrownBy(() -> new Details(LocalDate.now(), "cena", null, 2, " ", null, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new Details(LocalDate.now(), "cena", 2, "Ana", null,
+        assertThatThrownBy(() -> new Details(LocalDate.now(), "cena", null, 2, "Ana", null,
                 "x".repeat(Booking.MAX_NOTES_LENGTH + 1))).isInstanceOf(IllegalArgumentException.class);
     }
 }

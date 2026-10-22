@@ -71,10 +71,24 @@ class BookingToolsTest {
     }
 
     @Test
+    void proposeBooking_passesTheRequestedTime_andReadsItBack() {
+        when(provider.propose(any(), any())).thenAnswer(call -> Booking.propose(call.getArgument(0),
+                call.getArgument(1), NOW.plusSeconds(600), null));
+
+        String output = run(BookingTools.proposeBooking(() -> provider, CLOCK), Map.of("date", "2026-11-03",
+                "shift", "cena", "time", "21:30", "party_size", 4, "contact_name", "Ana"));
+
+        assertThat(output).contains("\"time\":\"21:30\"").contains("\"start\":\"20:30\"");
+        assertThatThrownBy(() -> run(BookingTools.proposeBooking(() -> provider, CLOCK), Map.of("date", "2026-11-03",
+                "shift", "cena", "time", "half past nine", "party_size", 4, "contact_name", "Ana")))
+                .isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("HH:MM");
+    }
+
+    @Test
     void aHeldBooking_waitsForConfirmationOnlyUntilItsHoldEnds_onTheInjectedClock() {
         Booking held = Booking.propose(new Booking.Requester(context.tenantId(), context.agentId(),
                 context.conversationId(), context.identityId(), context.triggerMessageId()),
-                new Booking.Details(date, "cena", 2, "Ana", null, null), NOW.plusSeconds(600), null);
+                new Booking.Details(date, "cena", null, 2, "Ana", null, null), NOW.plusSeconds(600), null);
         when(provider.upcomingFor(context.tenantId(), context.identityId())).thenReturn(List.of(held));
 
         // The clock is the database's (ADR 0008), the one the hold was stamped with: not the JVM's.

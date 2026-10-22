@@ -18,6 +18,7 @@ import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,6 +76,8 @@ public final class BookingTools {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("date", dateProperty());
         properties.put("shift", text("The shift, as check_availability names it."));
+        properties.put("time", timeProperty("The time the person asked for, if they named one; it must fall "
+                + "within the shift. Places are counted per shift, the time is kept and read back."));
         properties.put("party_size", Map.of("type", "integer", "minimum", 1,
                 "description", "How many people (or units) the booking is for."));
         properties.put("contact_name", text("The name the booking is under."));
@@ -100,6 +103,8 @@ public final class BookingTools {
         properties.put("code", text("The code of the booking to change."));
         properties.put("date", dateProperty());
         properties.put("shift", text("The new shift, if it changes."));
+        properties.put("time", timeProperty("The new time, if it changes. Moving to another shift without a "
+                + "new time leaves the booking with no time."));
         properties.put("party_size", Map.of("type", "integer", "minimum", 1,
                 "description", "The new party size, if it changes."));
         properties.put("notes", text("The new notes, if they change."));
@@ -111,8 +116,8 @@ public final class BookingTools {
             @Override
             Map<String, Object> run(BookingProvider bookings, ToolArguments args, ToolExecutionContext context) {
                 LocalDate date = args.text("date").isPresent() ? date(args, "date") : null;
-                Change change = new Change(date, args.text("shift").orElse(null), args.integer("party_size").orElse(null),
-                        args.text("notes").orElse(null));
+                Change change = new Change(date, args.text("shift").orElse(null), time(args).orElse(null),
+                        args.integer("party_size").orElse(null), args.text("notes").orElse(null));
                 Booking booking = bookings.proposeChange(requester(context), args.requiredText("code"), change);
                 return proposed(bookings, context, booking, clock.instant());
             }
@@ -246,6 +251,7 @@ public final class BookingTools {
         view.put("weekday", weekday(booking.date()));
         view.put("shift", booking.shiftId());
         shift.ifPresent(s -> view.put("start", s.start().toString()));
+        booking.time().ifPresent(time -> view.put("time", time.toString()));
         view.put("party_size", booking.partySize());
         view.put("contact_name", booking.contactName());
         booking.contactPhone().ifPresent(phone -> view.put("contact_phone", phone));
@@ -267,9 +273,21 @@ public final class BookingTools {
     }
 
     private static Booking.Details details(ToolArguments args) {
-        return new Booking.Details(date(args, "date"), args.requiredText("shift"), args.requiredInteger("party_size"),
-                args.requiredText("contact_name"), args.text("contact_phone").orElse(null),
-                args.text("notes").orElse(null));
+        return new Booking.Details(date(args, "date"), args.requiredText("shift"), time(args).orElse(null),
+                args.requiredInteger("party_size"), args.requiredText("contact_name"),
+                args.text("contact_phone").orElse(null), args.text("notes").orElse(null));
+    }
+
+    private static Optional<LocalTime> time(ToolArguments args) {
+        Optional<String> text = args.text("time");
+        if (text.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(LocalTime.parse(text.get()));
+        } catch (DateTimeParseException e) {
+            throw new InvalidToolArgumentException("'time' must be a time as HH:MM, not '" + text.get() + "'");
+        }
     }
 
     private static LocalDate date(ToolArguments args, String name) {
@@ -287,6 +305,10 @@ public final class BookingTools {
 
     private static Map<String, Object> dateProperty() {
         return Map.of("type", "string", "description", "The date as YYYY-MM-DD, in the business's local calendar.");
+    }
+
+    private static Map<String, Object> timeProperty(String description) {
+        return Map.of("type", "string", "description", "As HH:MM, 24-hour, local time. " + description);
     }
 
     private static Map<String, Object> text(String description) {

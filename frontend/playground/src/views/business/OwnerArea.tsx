@@ -86,7 +86,8 @@ export function CasesArea({ client, tenantId }: { client: ApiClient; tenantId: s
               <div className="top">
                 <span className="name">{booking.contact_name}</span>
                 <span className="price">
-                  {booking.date} · {booking.shift} · {booking.party_size}
+                  {booking.date} · {booking.shift}
+                  {booking.time !== null && ` ${booking.time.slice(0, 5)}`} · {booking.party_size}
                 </span>
               </div>
               <div className="meta">

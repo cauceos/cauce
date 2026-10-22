@@ -180,7 +180,7 @@ class DigestIT extends AbstractBusinessIntegrationTest {
     private Booking confirmTomorrow(String name) {
         LocalDate tomorrow = LocalDate.now(clock.withZone(MADRID)).plusDays(1);
         Booking held = as(f.clientA(), () -> bookings.propose(requester(),
-                new Booking.Details(tomorrow, "cena", 4, name, null, null)));
+                new Booking.Details(tomorrow, "cena", null, 4, name, null, null)));
         return as(f.clientA(), () -> bookings.confirm(requester(), held.code()));
     }
 

@@ -9,9 +9,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 
-/** JPA mapping of a {@code bookings} row (V36). */
+/** JPA mapping of a {@code bookings} row (V36, V40). */
 @Entity
 @Table(name = "bookings")
 public class BookingEntity {
@@ -40,6 +41,9 @@ public class BookingEntity {
 
     @Column(name = "shift_id", nullable = false, updatable = false, length = 40)
     private String shiftId;
+
+    @Column(name = "requested_time", updatable = false)
+    private LocalTime requestedTime;
 
     @Column(name = "party_size", nullable = false, updatable = false)
     private int partySize;
@@ -83,8 +87,8 @@ public class BookingEntity {
     }
 
     public BookingEntity(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId, UUID identityId,
-                         LocalDate serviceDate, String shiftId, int partySize, String contactName, String contactPhone,
-                         String notes, Booking.Status status, UUID replacesBookingId, UUID proposedInMessageId,
+                         LocalDate serviceDate, String shiftId, LocalTime requestedTime, int partySize,
+                         String contactName, String contactPhone, String notes, Booking.Status status, UUID replacesBookingId, UUID proposedInMessageId,
                          Instant holdExpiresAt, UUID cancellationRequestedInMessageId, Instant cancellationExpiresAt,
                          Instant createdAt, Instant updatedAt) {
         this.id = id;
@@ -95,6 +99,7 @@ public class BookingEntity {
         this.identityId = identityId;
         this.serviceDate = serviceDate;
         this.shiftId = shiftId;
+        this.requestedTime = requestedTime;
         this.partySize = partySize;
         this.contactName = contactName;
         this.contactPhone = contactPhone;
@@ -139,6 +144,10 @@ public class BookingEntity {
 
     public String getShiftId() {
         return shiftId;
+    }
+
+    public LocalTime getRequestedTime() {
+        return requestedTime;
     }
 
     public int getPartySize() {

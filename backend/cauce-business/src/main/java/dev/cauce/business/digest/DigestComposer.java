@@ -54,7 +54,8 @@ public final class DigestComposer {
             text.append("\n· ").append(es ? "ninguna" : "none");
         }
         for (Booking b : c.bookings()) {
-            String start = c.agenda().flatMap(a -> a.shift(b.shiftId())).map(Agenda.Shift::start)
+            // The time the person asked for; without one, when the shift starts.
+            String start = b.time().or(() -> c.agenda().flatMap(a -> a.shift(b.shiftId())).map(Agenda.Shift::start))
                     .map(LocalTime::toString).map(time -> " " + time).orElse("");
             text.append("\n· ").append(b.shiftId()).append(start).append(" — ").append(b.partySize()).append(" — ")
                     .append(b.contactName());
