@@ -15,6 +15,18 @@
     estado: {avisos_al_dueno: {DAILY_DIGEST: 1}}
   cubierto_por: DigestIT#theSummary_reportsTomorrowTheOpenCasesAndTheQuestions_andIsSentOncePerDay
 
+- id: H5.6
+  titulo: El resumen lista la hora que pidió el cliente, no solo el turno
+  obligatorio: true
+  datos: bar-ejemplo
+  origen: prueba real en Telegram, 2026-10-22 (la reserva de las 21:30 solo constaba como turno de cena)
+  previo:
+    - reserva: {fecha: +1, turno: cena, hora: "21:30", personas: 2, estado: CONFIRMED, contacto: Luis}
+  accion: resumen_de_hoy
+  espera:
+    resumen_contiene: ["cena 21:30 — 2 — Luis"]
+  cubierto_por: DigestComposerTest#compose_listsTheTimeThePersonAskedFor_insteadOfTheShiftStart
+
 - id: H5.2
   titulo: Ejecutarlo dos veces no duplica
   obligatorio: true

@@ -87,8 +87,8 @@ que no es el dueño vinculado nunca llega al agente.
 - «¿Tenéis paella?» → no está en la carta.
 
 **Tarea 3 · Reservas**
-- «Mesa para 4 el sábado para cenar, soy Ana, 600 000 000» → te lee los datos y pregunta si
-  confirmas. Todavía no hay reserva: `GET /v1/tenants/{id}/bookings` la muestra `HELD`.
+- «Mesa para 4 el sábado a las 21:30, soy Ana, 600 000 000» → te lee los datos (con la hora
+  pedida; las plazas se cuentan por turno) y pregunta si confirmas. Todavía no hay reserva: `GET /v1/tenants/{id}/bookings` la muestra `HELD`.
 - «Sí» → confirmada, con su código. Ahora está `CONFIRMED`.
 - «Al final seremos 6» → propone el cambio; «sí» → la reserva nueva queda confirmada y la vieja
   cancelada.

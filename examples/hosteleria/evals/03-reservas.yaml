@@ -120,3 +120,23 @@
         herramientas: [confirm_booking]
         estado: {reservas_confirmadas: 0}
   cubierto_por: BookingIT#aCancellation_isRequestedThenConfirmedInALaterTurn
+
+- id: H3.10
+  titulo: Guarda la hora pedida y la lee al confirmar
+  obligatorio: true
+  datos: bar-ejemplo
+  origen: prueba real en Telegram, 2026-10-22 (pidió «a las 21:30» y solo se guardó el turno)
+  turnos:
+    - cliente: "Mesa para 4 el sábado a las 21:30, soy Ana, 600 123 456"
+      espera:
+        herramientas: [check_availability, propose_booking]
+        argumentos: {propose_booking: {shift: cena, time: "21:30"}}
+        herramientas_no: [confirm_booking]
+        respuesta_contiene: ["21:30"]
+        rubrica: "Lee la hora pedida (21:30), no solo el inicio del turno, y pregunta si lo confirma."
+    - cliente: "Sí"
+      espera:
+        herramientas: [confirm_booking]
+        estado: {reservas_confirmadas: 1, hora_reserva_sabado: "21:30"}
+        respuesta_contiene: ["21:30"]
+  cubierto_por: BookingIT#aRequestedTime_isKeptWithinItsShift_throughAChange_andOrdersTheOwnersDay
