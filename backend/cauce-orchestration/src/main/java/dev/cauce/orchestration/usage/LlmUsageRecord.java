@@ -14,7 +14,9 @@ import java.util.UUID;
  *
  * <p>Immutable billing fact: tokens, provider, and model are persisted; cost is deliberately
  * not — pricing is a future versioned table and cost a view over these facts, so a tariff
- * change never rewrites the ledger. {@code provider}, {@code model}, and {@code finishReason}
+ * change never rewrites the ledger. {@code inputTokens} is the whole prompt; {@code cacheReadTokens}
+ * and {@code cacheWriteTokens} are the parts of it the provider served from or wrote to its prompt
+ * cache, priced differently, so they are facts too. {@code provider}, {@code model}, and {@code finishReason}
  * are {@code String}s because their vocabularies are owned by the cauce-llm SPI.
  *
  * <p>Pure domain type: no persistence or framework dependencies.
@@ -30,6 +32,8 @@ public record LlmUsageRecord(UUID id,
                              int inputTokens,
                              int outputTokens,
                              int totalTokens,
+                             int cacheReadTokens,
+                             int cacheWriteTokens,
                              String finishReason,
                              Instant createdAt) {
 
@@ -55,7 +59,7 @@ public record LlmUsageRecord(UUID id,
         if (roundIndex < 0) {
             throw new IllegalArgumentException("roundIndex must not be negative");
         }
-        if (inputTokens < 0 || outputTokens < 0 || totalTokens < 0) {
+        if (inputTokens < 0 || outputTokens < 0 || totalTokens < 0 || cacheReadTokens < 0 || cacheWriteTokens < 0) {
             throw new IllegalArgumentException("token counts must not be negative");
         }
     }
@@ -67,6 +71,7 @@ public record LlmUsageRecord(UUID id,
         Objects.requireNonNull(usage, "usage must not be null");
         return new LlmUsageRecord(UuidGenerator.newV7(), tenantId, agentId, conversationId,
                 invocationId, provider, model, roundIndex, usage.inputTokens(),
-                usage.outputTokens(), usage.totalTokens(), finishReason, Instant.now());
+                usage.outputTokens(), usage.totalTokens(), usage.cacheReadTokens(), usage.cacheWriteTokens(),
+                finishReason, Instant.now());
     }
 }

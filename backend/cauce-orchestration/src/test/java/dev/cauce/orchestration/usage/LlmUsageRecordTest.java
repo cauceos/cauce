@@ -90,7 +90,7 @@ class LlmUsageRecordTest {
     void constructor_whenNegativeTokens_throwsIllegalArgument() {
         assertThatThrownBy(() -> new LlmUsageRecord(UUID.randomUUID(), tenantId, agentId,
                 conversationId, invocationId, "anthropic", "claude-sonnet-4-7", 0,
-                -1, 0, 0, "STOP", Instant.now()))
+                -1, 0, 0, 0, 0, "STOP", Instant.now()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("token");
     }

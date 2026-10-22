@@ -182,6 +182,9 @@ public class OrchestratorService {
                     .maxTokens(agent.maxResponseTokens())
                     .temperature(agent.temperature().orElse(null))
                     .credential(credential)
+                    // The agent's tools and prompt are fixed and the context only grows: a
+                    // provider that caches prompt prefixes may cache them (billing only).
+                    .cacheablePrefix(true)
                     .build();
 
             eventPublisher.publishEvent(new LlmInvoked(invocationId, provider.id(),

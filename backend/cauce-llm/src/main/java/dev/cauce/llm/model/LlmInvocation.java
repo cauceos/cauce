@@ -13,6 +13,12 @@ import java.util.Objects;
  * be null (adapters apply provider defaults). {@code tools} declares the neutral
  * {@link ToolDefinition tool definitions} the model may call; each adapter translates them to
  * its provider's wire format. It defaults to empty (a plain completion request).
+ *
+ * <p>{@code cacheablePrefix} is a neutral hint, false by default: the caller states that the
+ * tools and the system prompt are the same on every call of this conversation and that the
+ * messages only grow at the end. A provider that caches prompt prefixes may then cache them; one
+ * that does not ignores it. It never changes what the model is sent, only how it may be billed,
+ * and what was cached shows in {@link LlmUsage}.
  */
 public record LlmInvocation(
         String modelName,
@@ -21,7 +27,8 @@ public record LlmInvocation(
         List<ToolDefinition> tools,
         Integer maxTokens,
         Double temperature,
-        LlmCredential credential) {
+        LlmCredential credential,
+        boolean cacheablePrefix) {
 
     public LlmInvocation {
         if (modelName == null || modelName.isBlank()) {
@@ -51,6 +58,7 @@ public record LlmInvocation(
         private Integer maxTokens;
         private Double temperature;
         private LlmCredential credential;
+        private boolean cacheablePrefix;
 
         private Builder() {
         }
@@ -90,9 +98,15 @@ public record LlmInvocation(
             return this;
         }
 
+        /** See {@link LlmInvocation}: the tools and system prompt are stable, the messages only grow. */
+        public Builder cacheablePrefix(boolean cacheablePrefix) {
+            this.cacheablePrefix = cacheablePrefix;
+            return this;
+        }
+
         public LlmInvocation build() {
-            return new LlmInvocation(
-                    modelName, messages, systemPrompt, tools, maxTokens, temperature, credential);
+            return new LlmInvocation(modelName, messages, systemPrompt, tools, maxTokens, temperature, credential,
+                    cacheablePrefix);
         }
     }
 }

@@ -150,6 +150,46 @@ class AnthropicMessageMapperTest {
         return (List<AnthropicContentBlock>) message.content();
     }
 
+    @Test
+    void toRequestJson_aCacheablePrefix_marksTheEndOfThePrompt_andCachesTheConversationAutomatically()
+            throws Exception {
+        LlmInvocation invocation = baseInvocation()
+                .systemPrompt("Eres el asistente de un bar.")
+                .messages(List.of(LlmMessage.system("[orchestration_error] x"), LlmMessage.user("Hola")))
+                .tools(List.of(new ToolDefinition("search_catalog", "Busca en la carta.",
+                        Map.of("type", "object", "properties", Map.of()))))
+                .cacheablePrefix(true)
+                .build();
+
+        String json = mapper.toRequestJson(invocation, 4096);
+
+        // The agent's prompt carries the breakpoint; a SYSTEM message of the conversation follows it.
+        assertThat(json).contains("\"system\":[{\"type\":\"text\",\"text\":\"Eres el asistente de un bar.\","
+                + "\"cache_control\":{\"type\":\"ephemeral\"}},"
+                + "{\"type\":\"text\",\"text\":\"[orchestration_error] x\"}]");
+        assertThat(json).endsWith(",\"cache_control\":{\"type\":\"ephemeral\"}}");
+        // Map keys sorted (records keep their declared order): the same bytes on every call.
+        assertThat(json).contains("\"input_schema\":{\"properties\":{},\"type\":\"object\"}");
+    }
+
+    @Test
+    void toRequest_aCacheablePrefixWithoutAPrompt_marksTheLastTool_andWithoutTheHintNothingIsMarked() {
+        List<ToolDefinition> tools = List.of(new ToolDefinition("a", "A.", Map.of("type", "object")),
+                new ToolDefinition("b", "B.", Map.of("type", "object")));
+
+        AnthropicMessagesRequest cached = mapper.toRequest(baseInvocation().tools(tools).cacheablePrefix(true).build(),
+                4096);
+        AnthropicMessagesRequest plain = mapper.toRequest(baseInvocation().tools(tools).systemPrompt("S").build(),
+                4096);
+
+        assertThat(cached.tools()).extracting(AnthropicMessageMapper.AnthropicTool::cacheControl)
+                .containsExactly(null, AnthropicMessageMapper.EPHEMERAL);
+        assertThat(cached.system()).isNull();
+        assertThat(plain.system()).isEqualTo("S");
+        assertThat(plain.cacheControl()).isNull();
+        assertThat(plain.tools()).extracting(AnthropicMessageMapper.AnthropicTool::cacheControl).containsOnlyNulls();
+    }
+
     private static LlmInvocation.Builder baseInvocation() {
         return LlmInvocation.builder()
                 .modelName("claude-sonnet-4-7")

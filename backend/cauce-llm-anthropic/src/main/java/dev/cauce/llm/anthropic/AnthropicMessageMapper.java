@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolContent;
 import dev.cauce.core.tool.ToolDefinition;
@@ -33,6 +34,13 @@ import java.util.Map;
  *
  * <p>{@code max_tokens} is mandatory for Anthropic, so a default is applied when the invocation
  * does not specify one.
+ *
+ * <p>Prompt caching: when the invocation marks its prefix cacheable, the system prompt is sent as a
+ * text block carrying a cache breakpoint (tools render before it, so tools and prompt are cached
+ * together; without a prompt the breakpoint goes on the last tool), and the request asks for
+ * automatic caching of the conversation, which then reads back everything earlier calls wrote.
+ * SYSTEM messages of the conversation follow the breakpoint in a block of their own. Without the
+ * hint the request is exactly as before.
  */
 final class AnthropicMessageMapper {
 
@@ -42,22 +50,26 @@ final class AnthropicMessageMapper {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * The request body. Map keys are written in sorted order: a cached prefix must be the same bytes
+     * on every call, and the iteration order of a tool's {@code Map.of} schema is not guaranteed.
+     */
     String toRequestJson(LlmInvocation invocation, int defaultMaxTokens) throws JsonProcessingException {
-        return objectMapper.writeValueAsString(toRequest(invocation, defaultMaxTokens));
+        return objectMapper.writer().with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+                .writeValueAsString(toRequest(invocation, defaultMaxTokens));
     }
 
     AnthropicMessagesRequest toRequest(LlmInvocation invocation, int defaultMaxTokens) {
-        List<String> systemParts = new ArrayList<>();
-        if (invocation.systemPrompt() != null && !invocation.systemPrompt().isBlank()) {
-            systemParts.add(invocation.systemPrompt().strip());
-        }
+        String agentPrompt = invocation.systemPrompt() == null || invocation.systemPrompt().isBlank()
+                ? null : invocation.systemPrompt().strip();
+        List<String> systemMessages = new ArrayList<>();
 
         List<AnthropicMessage> messages = new ArrayList<>();
         String groupRole = null;
         List<AnthropicContentBlock> groupBlocks = null;
         for (LlmMessage message : invocation.messages()) {
             if (message.role() == LlmRole.SYSTEM) {
-                systemParts.add(message.content());
+                systemMessages.add(message.content());
                 continue;
             }
             String role = message.role() == LlmRole.USER ? "user" : "assistant";
@@ -72,10 +84,33 @@ final class AnthropicMessageMapper {
         }
         flush(messages, groupRole, groupBlocks);
 
-        String system = systemParts.isEmpty() ? null : String.join("\n\n", systemParts);
         int maxTokens = invocation.maxTokens() != null ? invocation.maxTokens() : defaultMaxTokens;
-        return new AnthropicMessagesRequest(invocation.modelName(), maxTokens, system, messages,
-                invocation.temperature(), toTools(invocation.tools()));
+        List<AnthropicTool> tools = toTools(invocation.tools());
+        if (!invocation.cacheablePrefix()) {
+            List<String> systemParts = new ArrayList<>();
+            if (agentPrompt != null) {
+                systemParts.add(agentPrompt);
+            }
+            systemParts.addAll(systemMessages);
+            String system = systemParts.isEmpty() ? null : String.join("\n\n", systemParts);
+            return new AnthropicMessagesRequest(invocation.modelName(), maxTokens, system, messages,
+                    invocation.temperature(), tools, null);
+        }
+        // A cacheable prefix: an explicit breakpoint at the end of the stable part (tools render
+        // before the system prompt, so a marker on the prompt caches both), and automatic caching
+        // for the conversation, which only grows. SYSTEM messages of the conversation go after the
+        // marker: they are not part of the agent's stable prefix.
+        List<AnthropicContentBlock> system = new ArrayList<>();
+        if (agentPrompt != null) {
+            system.add(AnthropicContentBlock.text(agentPrompt).cached());
+        } else if (tools != null) {
+            tools.set(tools.size() - 1, tools.get(tools.size() - 1).cached());
+        }
+        if (!systemMessages.isEmpty()) {
+            system.add(AnthropicContentBlock.text(String.join("\n\n", systemMessages)));
+        }
+        return new AnthropicMessagesRequest(invocation.modelName(), maxTokens, system.isEmpty() ? null : system,
+                messages, invocation.temperature(), tools, EPHEMERAL);
     }
 
     /**
@@ -112,26 +147,38 @@ final class AnthropicMessageMapper {
         }
         List<AnthropicTool> result = new ArrayList<>(tools.size());
         for (ToolDefinition tool : tools) {
-            result.add(new AnthropicTool(tool.name(), tool.description(), tool.inputSchema()));
+            result.add(new AnthropicTool(tool.name(), tool.description(), tool.inputSchema(), null));
         }
         return result;
     }
 
-    // null system/temperature/tools are omitted from the JSON payload.
+    /** The marker of a cache breakpoint, with the default (5-minute) lifetime. */
+    static final Map<String, String> EPHEMERAL = Map.of("type", "ephemeral");
+
+    // null system/temperature/tools/cache_control are omitted from the JSON payload. {@code system}
+    // is a String, or a list of text blocks when part of it carries a cache breakpoint; a top-level
+    // {@code cache_control} asks the API to cache the conversation up to its last block.
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record AnthropicMessagesRequest(
             @JsonProperty("model") String model,
             @JsonProperty("max_tokens") int maxTokens,
-            @JsonProperty("system") String system,
+            @JsonProperty("system") Object system,
             @JsonProperty("messages") List<AnthropicMessage> messages,
             @JsonProperty("temperature") Double temperature,
-            @JsonProperty("tools") List<AnthropicTool> tools) {
+            @JsonProperty("tools") List<AnthropicTool> tools,
+            @JsonProperty("cache_control") Map<String, String> cacheControl) {
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     record AnthropicTool(
             @JsonProperty("name") String name,
             @JsonProperty("description") String description,
-            @JsonProperty("input_schema") Map<String, Object> inputSchema) {
+            @JsonProperty("input_schema") Map<String, Object> inputSchema,
+            @JsonProperty("cache_control") Map<String, String> cacheControl) {
+
+        AnthropicTool cached() {
+            return new AnthropicTool(name, description, inputSchema, EPHEMERAL);
+        }
     }
 
     /** A message whose {@code content} is either a plain String (text turn) or a block array. */
@@ -151,19 +198,25 @@ final class AnthropicMessageMapper {
             @JsonProperty("input") Map<String, Object> input,
             @JsonProperty("tool_use_id") String toolUseId,
             @JsonProperty("content") String content,
-            @JsonProperty("is_error") Boolean isError) {
+            @JsonProperty("is_error") Boolean isError,
+            @JsonProperty("cache_control") Map<String, String> cacheControl) {
 
         static AnthropicContentBlock text(String text) {
-            return new AnthropicContentBlock("text", text, null, null, null, null, null, null);
+            return new AnthropicContentBlock("text", text, null, null, null, null, null, null, null);
         }
 
         static AnthropicContentBlock toolUse(String id, String name, Map<String, Object> input) {
-            return new AnthropicContentBlock("tool_use", null, id, name, input, null, null, null);
+            return new AnthropicContentBlock("tool_use", null, id, name, input, null, null, null, null);
         }
 
         static AnthropicContentBlock toolResult(String toolUseId, String content, boolean isError) {
             return new AnthropicContentBlock(
-                    "tool_result", null, null, null, null, toolUseId, content, isError);
+                    "tool_result", null, null, null, null, toolUseId, content, isError, null);
+        }
+
+        /** This block as the end of a cached prefix. */
+        AnthropicContentBlock cached() {
+            return new AnthropicContentBlock(type, text, id, name, input, toolUseId, content, isError, EPHEMERAL);
         }
     }
 }

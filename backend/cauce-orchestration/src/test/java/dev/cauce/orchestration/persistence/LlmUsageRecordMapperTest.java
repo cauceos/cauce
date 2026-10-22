@@ -15,7 +15,7 @@ class LlmUsageRecordMapperTest {
     void roundTrip_preservesAllFields() {
         LlmUsageRecord original = LlmUsageRecord.create(UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), "mistral", "mistral-large-latest", 3,
-                LlmUsage.of(120, 45), "TOOL_USE");
+                LlmUsage.of(120, 45, 80, 20), "TOOL_USE");
 
         LlmUsageRecord roundTripped = mapper.toDomain(mapper.toEntity(original));
 
@@ -26,7 +26,7 @@ class LlmUsageRecordMapperTest {
     void toEntity_mapsEveryColumn() {
         LlmUsageRecord record = LlmUsageRecord.create(UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-4-7", 0,
-                LlmUsage.of(7, 9), "STOP");
+                LlmUsage.of(7, 9, 4, 2), "STOP");
 
         LlmUsageRecordEntity entity = mapper.toEntity(record);
 
@@ -41,6 +41,8 @@ class LlmUsageRecordMapperTest {
         assertThat(entity.getInputTokens()).isEqualTo(7);
         assertThat(entity.getOutputTokens()).isEqualTo(9);
         assertThat(entity.getTotalTokens()).isEqualTo(16);
+        assertThat(entity.getCacheReadTokens()).isEqualTo(4);
+        assertThat(entity.getCacheWriteTokens()).isEqualTo(2);
         assertThat(entity.getFinishReason()).isEqualTo("STOP");
         assertThat(entity.getCreatedAt()).isEqualTo(record.createdAt());
     }

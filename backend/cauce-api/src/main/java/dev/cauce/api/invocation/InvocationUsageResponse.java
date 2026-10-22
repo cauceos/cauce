@@ -21,6 +21,8 @@ import java.util.List;
  * @param inputTokens  sum of the calls' input tokens
  * @param outputTokens sum of the calls' output tokens
  * @param totalTokens  sum of the calls' total tokens
+ * @param cacheReadTokens  sum of the input tokens the provider served from its prompt cache
+ * @param cacheWriteTokens sum of the input tokens the provider wrote to its prompt cache
  * @param complete     whether the recorded calls account for the whole invocation. False when
  *                     the invocation did not end successfully: usage is written only after a
  *                     provider responds, so a round that failed on the way out contributes
@@ -30,6 +32,8 @@ public record InvocationUsageResponse(List<InvocationUsageCallResponse> calls,
                                       int inputTokens,
                                       int outputTokens,
                                       int totalTokens,
+                                      int cacheReadTokens,
+                                      int cacheWriteTokens,
                                       boolean complete) {
 
     /**
@@ -46,16 +50,22 @@ public record InvocationUsageResponse(List<InvocationUsageCallResponse> calls,
         int input = 0;
         int output = 0;
         int total = 0;
+        int cacheRead = 0;
+        int cacheWrite = 0;
         for (LlmUsageRecord record : records) {
             input += record.inputTokens();
             output += record.outputTokens();
             total += record.totalTokens();
+            cacheRead += record.cacheReadTokens();
+            cacheWrite += record.cacheWriteTokens();
         }
         return new InvocationUsageResponse(
                 records.stream().map(InvocationUsageCallResponse::from).toList(),
                 input,
                 output,
                 total,
+                cacheRead,
+                cacheWrite,
                 complete);
     }
 }

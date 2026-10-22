@@ -16,6 +16,9 @@ import java.time.Instant;
  * @param roundIndex   which agentic round this call was, within its attempt
  * @param provider     provider id, verbatim from the cauce-llm SPI vocabulary
  * @param model        the model as the agent had it configured when the call was made
+ * @param inputTokens  the whole prompt of the call, cached or not
+ * @param cacheReadTokens  the part of the prompt the provider served from its prompt cache
+ * @param cacheWriteTokens the part of the prompt the provider wrote to its prompt cache
  * @param finishReason why the provider stopped, verbatim from the SPI vocabulary
  */
 public record InvocationUsageCallResponse(int roundIndex,
@@ -24,6 +27,8 @@ public record InvocationUsageCallResponse(int roundIndex,
                                           int inputTokens,
                                           int outputTokens,
                                           int totalTokens,
+                                          int cacheReadTokens,
+                                          int cacheWriteTokens,
                                           String finishReason,
                                           Instant recordedAt) {
 
@@ -35,6 +40,8 @@ public record InvocationUsageCallResponse(int roundIndex,
                 record.inputTokens(),
                 record.outputTokens(),
                 record.totalTokens(),
+                record.cacheReadTokens(),
+                record.cacheWriteTokens(),
                 record.finishReason(),
                 record.createdAt());
     }

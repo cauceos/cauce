@@ -32,6 +32,22 @@ class AnthropicResponseMapperTest {
     }
 
     @Test
+    void toDomain_countsTheCachedPartsWithinTheWholePrompt() throws Exception {
+        String body = """
+                {"content":[{"type":"text","text":"Hola"}],"stop_reason":"end_turn",
+                 "usage":{"input_tokens":120,"output_tokens":30,
+                          "cache_creation_input_tokens":200,"cache_read_input_tokens":3800}}
+                """;
+
+        LlmResponse response = mapper.toDomain(body);
+
+        assertThat(response.usage().inputTokens()).isEqualTo(4120);
+        assertThat(response.usage().cacheReadTokens()).isEqualTo(3800);
+        assertThat(response.usage().cacheWriteTokens()).isEqualTo(200);
+        assertThat(response.usage().totalTokens()).isEqualTo(4150);
+    }
+
+    @Test
     void toDomain_mapsMaxTokensStopReason() throws Exception {
         String body = """
                 {"content":[{"type":"text","text":"truncated"}],"stop_reason":"max_tokens",

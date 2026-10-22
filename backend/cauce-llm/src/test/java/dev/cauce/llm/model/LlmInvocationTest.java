@@ -44,6 +44,12 @@ class LlmInvocationTest {
     }
 
     @Test
+    void builder_leavesThePrefixUncacheableUnlessTheCallerSaysSo() {
+        assertThat(baseBuilder().build().cacheablePrefix()).isFalse();
+        assertThat(baseBuilder().cacheablePrefix(true).build().cacheablePrefix()).isTrue();
+    }
+
+    @Test
     void builder_defaultsToolsToEmpty() {
         LlmInvocation invocation = baseBuilder().build();
 

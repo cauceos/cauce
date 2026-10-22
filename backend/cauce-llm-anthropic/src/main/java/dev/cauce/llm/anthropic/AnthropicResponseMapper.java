@@ -42,9 +42,7 @@ final class AnthropicResponseMapper {
                         block.input() == null ? Map.of() : block.input()))
                 .toList();
 
-        LlmUsage usage = response.usage() == null
-                ? LlmUsage.of(0, 0)
-                : LlmUsage.of(response.usage().inputTokens(), response.usage().outputTokens());
+        LlmUsage usage = response.usage() == null ? LlmUsage.of(0, 0) : response.usage().toNeutral();
 
         return new LlmResponse(text, toolCalls, mapStopReason(response.stopReason()), usage);
     }
@@ -79,6 +77,18 @@ final class AnthropicResponseMapper {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Usage(
             @JsonProperty("input_tokens") int inputTokens,
-            @JsonProperty("output_tokens") int outputTokens) {
+            @JsonProperty("output_tokens") int outputTokens,
+            @JsonProperty("cache_creation_input_tokens") Integer cacheCreationInputTokens,
+            @JsonProperty("cache_read_input_tokens") Integer cacheReadInputTokens) {
+
+        /**
+         * Anthropic's {@code input_tokens} is only the part of the prompt after the last cache
+         * breakpoint; the neutral input is the whole prompt, the cached parts within it.
+         */
+        LlmUsage toNeutral() {
+            int written = cacheCreationInputTokens == null ? 0 : cacheCreationInputTokens;
+            int read = cacheReadInputTokens == null ? 0 : cacheReadInputTokens;
+            return LlmUsage.of(inputTokens + written + read, outputTokens, read, written);
+        }
     }
 }

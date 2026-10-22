@@ -172,6 +172,9 @@ export interface InvocationUsageCallResponse {
   input_tokens: number
   output_tokens: number
   total_tokens: number
+  /** Parts of input_tokens the provider read from / wrote to its prompt cache. */
+  cache_read_tokens: number
+  cache_write_tokens: number
   finish_reason: string
   recorded_at: string
 }
@@ -189,6 +192,8 @@ export interface InvocationUsageResponse {
   input_tokens: number
   output_tokens: number
   total_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
   complete: boolean
 }
 

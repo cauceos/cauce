@@ -123,6 +123,18 @@ class OpenAiMessageMapperTest {
         assertThat(tool.get("content").asText()).isEqualTo("2026-06-13T10:15:30Z");
     }
 
+    @Test
+    void toRequestJson_ignoresTheCacheablePrefixHint() throws Exception {
+        LlmInvocation.Builder invocation = LlmInvocation.builder()
+                .modelName("gpt-4o")
+                .systemPrompt("You are helpful.")
+                .messages(List.of(LlmMessage.user("Hi")))
+                .credential(cred());
+
+        assertThat(mapper.toRequestJson(invocation.cacheablePrefix(true).build(), 4096))
+                .isEqualTo(mapper.toRequestJson(invocation.cacheablePrefix(false).build(), 4096));
+    }
+
     private static LlmCredential cred() {
         return new LlmCredential() {
             @Override

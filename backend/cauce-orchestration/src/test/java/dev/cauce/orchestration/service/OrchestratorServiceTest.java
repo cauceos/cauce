@@ -139,6 +139,8 @@ class OrchestratorServiceTest {
         // Regression: an agent that configures no temperature sends none (the model's default).
         assertThat(invocation.temperature()).isNull();
         assertThat(invocation.maxTokens()).isEqualTo(4096);
+        // The agent's tools and prompt are a stable prefix: the provider may cache it.
+        assertThat(invocation.cacheablePrefix()).isTrue();
     }
 
     @Test

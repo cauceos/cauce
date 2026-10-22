@@ -56,6 +56,18 @@ class InvocationUsageResponseTest {
     }
 
     @Test
+    void from_sumsTheCachedPartsOfTheInput_perCallAndInTotal() {
+        List<LlmUsageRecord> calls = List.of(cached(0, 4000, 0, 3800), cached(1, 4500, 3800, 500));
+
+        InvocationUsageResponse usage = InvocationUsageResponse.from(calls, true);
+
+        assertThat(usage.inputTokens()).isEqualTo(8500);
+        assertThat(usage.cacheReadTokens()).isEqualTo(3800);
+        assertThat(usage.cacheWriteTokens()).isEqualTo(4300);
+        assertThat(usage.calls()).extracting(InvocationUsageCallResponse::cacheReadTokens).containsExactly(0, 3800);
+    }
+
+    @Test
     void from_retryRepeatingARound_countsBothCallsAndShowsTheRepeatedIndex() {
         // A worker retry re-runs the loop from round 0, so the same index appears twice.
         // Each row is one real provider-billed call: the total counts both, and the
@@ -95,10 +107,16 @@ class InvocationUsageResponseTest {
         assertThat(view.recordedAt()).isEqualTo(call.createdAt());
     }
 
+    private static LlmUsageRecord cached(int roundIndex, int inputTokens, int cacheRead, int cacheWrite) {
+        return new LlmUsageRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-5-5",
+                roundIndex, inputTokens, 10, inputTokens + 10, cacheRead, cacheWrite, "STOP", Instant.now());
+    }
+
     private static LlmUsageRecord record(int roundIndex, int inputTokens, int outputTokens) {
         return new LlmUsageRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-4-7",
-                roundIndex, inputTokens, outputTokens, inputTokens + outputTokens, "STOP",
+                roundIndex, inputTokens, outputTokens, inputTokens + outputTokens, 0, 0, "STOP",
                 Instant.now());
     }
 }

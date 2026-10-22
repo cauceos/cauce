@@ -23,6 +23,8 @@ public final class LlmUsageRecordMapper {
                 record.inputTokens(),
                 record.outputTokens(),
                 record.totalTokens(),
+                record.cacheReadTokens(),
+                record.cacheWriteTokens(),
                 record.finishReason(),
                 record.createdAt());
     }
@@ -40,6 +42,8 @@ public final class LlmUsageRecordMapper {
                 entity.getInputTokens(),
                 entity.getOutputTokens(),
                 entity.getTotalTokens(),
+                entity.getCacheReadTokens(),
+                entity.getCacheWriteTokens(),
                 entity.getFinishReason(),
                 entity.getCreatedAt());
     }

@@ -30,6 +30,10 @@ import java.util.Map;
  * each {@link ToolResult} becomes its own {@code role:"tool"} message keyed by {@code tool_call_id}.
  * OpenAI has no {@code is_error} field, so an errored result's text is conveyed in the tool
  * message {@code content}.
+ *
+ * <p>{@link LlmInvocation#cacheablePrefix()} is ignored: the OpenAI-compatible endpoints have no
+ * cache markers in the request (those that cache prompt prefixes do it on their own), so the
+ * request is the same with or without the hint.
  */
 final class OpenAiMessageMapper {
 
