@@ -346,6 +346,13 @@ cd backend
 ./gradlew :cauce-api:bootRun  # run the application (dev profile by default)
 ```
 
+**The full build gates every commit.** Before committing, `./gradlew build` must have run every
+module green. When the machine lacks the memory for it, run it as
+`./gradlew build --rerun-tasks --max-workers=2` instead — never commit with modules left
+unexecuted. Tests must not depend on the shell's environment: a provider key exported for a
+manual test (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) reaches every Spring context, so a test of the
+"no key" case sets the key blank, and an IT that registers a fake provider disables the real one.
+
 `cauce-api` serves on http://localhost:8080 with the `dev` profile active, which
 connects to the Docker Compose services above. Health:
 http://localhost:8080/actuator/health.
@@ -481,7 +488,7 @@ Major versions often carry breaking changes that need manual migration; they are
 - Do not commit secrets, API keys, credentials, or `.env` files.
 - Do not use Lombok for business logic. Limit Lombok to logging and simple DTOs.
 - Do not skip writing tests for new public methods.
-- Do not commit code that fails the build or tests.
+- Do not commit code that fails the build or tests, nor with any module's tests left unexecuted: short on memory, run the full build with `--max-workers=2`.
 - Do not bypass code style or linting.
 - Do not commit Unix shell scripts (e.g. `gradlew`, `bin/*.sh`) without the executable bit set in the Git index. This repo is bootstrapped on Windows, which does not preserve Unix exec bits. Set it with `git update-index --chmod=+x <path>` and confirm `git ls-files --stage <path>` reports mode `100755` (not `100644`). `.gitattributes` does not control exec bits — only the index mode does. A missing bit causes "Permission denied" on Linux CI runners.
 - Do not write implementation status into this file. It belongs in the code, in `git log`, or in `docs/deferred.md`.
