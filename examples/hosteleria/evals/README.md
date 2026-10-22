@@ -25,6 +25,7 @@ Cada fichero `*.yaml` es una lista de escenarios:
         estado: {reservas_confirmadas: 1}       # registros tras el turno
         respuesta_contiene: ["no consta"]       # comprobación textual, sin distinguir mayúsculas
         respuesta_no_contiene: ["huevo"]
+        entregado_no_contiene: ["**"]           # sobre el texto que entrega el canal (canal: telegram)
         rubrica: "..."                           # criterio para un juez LLM, cuando haga falta
   cubierto_por: BookingApiIT#aBooking_...      # test de integración que ya garantiza lo que impone el código
   origen: ...                   # opcional: el fallo real que dio lugar al escenario

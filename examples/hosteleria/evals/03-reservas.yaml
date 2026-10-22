@@ -162,3 +162,18 @@
         respuesta_contiene: ["9PNVXQ"]
         respuesta_no_contiene: ["código nuevo", "nuevo código"]
   cubierto_por: BookingIT#aBooking_keepsItsCodeThroughEveryChange_andWaitsForOneConfirmationAtATime
+
+- id: H3.12
+  titulo: El código llega sin marcas de formato literales
+  obligatorio: true
+  datos: bar-ejemplo
+  canal: telegram
+  origen: prueba real en Telegram, 2026-10-22 (el código llegó como **9PNVXQ**)
+  turnos:
+    - cliente: "Mesa para 2 el sábado a comer, soy Eva, 622 222 222"
+    - cliente: "Sí"
+      espera:
+        herramientas: [confirm_booking]
+        entregado_no_contiene: ["**", "__", "`"]
+        rubrica: "El mensaje entregado por el canal muestra el código en negrita o como texto, nunca con asteriscos."
+  cubierto_por: TelegramChannelAdapterTest#deliver_rendersTheAgentsMarkdownAsTelegramHtml_neverLiteralAsterisks
