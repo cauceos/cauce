@@ -88,7 +88,8 @@ public class BookingEntity {
 
     public BookingEntity(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId, UUID identityId,
                          LocalDate serviceDate, String shiftId, LocalTime requestedTime, int partySize,
-                         String contactName, String contactPhone, String notes, Booking.Status status, UUID replacesBookingId, UUID proposedInMessageId,
+                         String contactName, String contactPhone, String notes, Booking.Status status,
+                         UUID replacesBookingId, UUID proposedInMessageId,
                          Instant holdExpiresAt, UUID cancellationRequestedInMessageId, Instant cancellationExpiresAt,
                          Instant createdAt, Instant updatedAt) {
         this.id = id;

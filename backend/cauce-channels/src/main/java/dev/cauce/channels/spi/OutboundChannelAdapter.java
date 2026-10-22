@@ -5,7 +5,9 @@ import dev.cauce.channels.config.ChannelConfig;
 /**
  * The outbound half of the channel SPI (invariant 3): delivers a neutral
  * {@link ChannelOutboundMessage} through the provider (Telegram {@code sendMessage},
- * WhatsApp Cloud API {@code messages}). The credential travels in {@code config}.
+ * WhatsApp Cloud API {@code messages}). The credential travels in {@code config}. The content is
+ * rendered for the channel's own formatting capability through {@link ReplyMarkdown}: shown as
+ * formatting where the channel supports it, its markers dropped where it does not.
  *
  * <p>Contract only for now: no implementation or caller exists yet — delivery lands in the
  * outbound commit, where the trigger (an {@code InvocationCompleted} consumer or an

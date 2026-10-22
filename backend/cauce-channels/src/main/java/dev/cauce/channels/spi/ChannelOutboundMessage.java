@@ -17,7 +17,8 @@ import java.util.Optional;
  * @param identityKind what {@code identityValue} is
  * @param identityValue the interlocutor's identifier in the channel's own vocabulary, exactly
  *        as the inbound adapter produced it (Telegram: the {@code chat.id})
- * @param content the textual reply
+ * @param content the textual reply as the agent wrote it, Markdown included: the adapter renders it
+ *        for what its channel can show ({@link ReplyMarkdown}), never verbatim
  * @param interlocutorLastMessageAt when the interlocutor last wrote, {@code null} if unknown — what
  *        a channel with a reply window (WhatsApp's 24 hours, ADR 0006) checks before sending
  */

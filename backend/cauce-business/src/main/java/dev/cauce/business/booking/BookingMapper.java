@@ -20,7 +20,8 @@ public class BookingMapper {
     public Booking toDomain(BookingEntity entity) {
         return Booking.rehydrate(entity.getId(), entity.getTenantId(), entity.getCode(), entity.getAgentId(),
                 entity.getConversationId(), entity.getIdentityId(), entity.getServiceDate(), entity.getShiftId(),
-                entity.getRequestedTime(), entity.getPartySize(), entity.getContactName(), entity.getContactPhone(), entity.getNotes(),
+                entity.getRequestedTime(), entity.getPartySize(), entity.getContactName(), entity.getContactPhone(),
+                entity.getNotes(),
                 entity.getStatus(), entity.getReplacesBookingId(), entity.getProposedInMessageId(),
                 entity.getHoldExpiresAt(), entity.getCancellationRequestedInMessageId(),
                 entity.getCancellationExpiresAt(), entity.getCreatedAt(), entity.getUpdatedAt());

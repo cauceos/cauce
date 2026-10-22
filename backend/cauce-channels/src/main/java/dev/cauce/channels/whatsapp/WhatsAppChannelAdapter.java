@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.OutsideReplyWindowException;
+import dev.cauce.channels.spi.ReplyMarkdown;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.core.identity.IdentityKind;
@@ -76,8 +77,10 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter {
             throw new OutsideReplyWindowException("Outside the WhatsApp 24-hour customer service window "
                     + "(last interlocutor message at " + lastInbound + "); templates are not supported yet");
         }
-        if (message.content().length() > MAX_TEXT_LENGTH) {
-            throw new ChannelDeliveryException("Reply of " + message.content().length()
+        // WhatsApp has its own markers: the agent's Markdown is rendered into them, never sent verbatim.
+        String body = ReplyMarkdown.toWhatsApp(message.content());
+        if (body.length() > MAX_TEXT_LENGTH) {
+            throw new ChannelDeliveryException("Reply of " + body.length()
                     + " characters exceeds the WhatsApp text limit of " + MAX_TEXT_LENGTH + "; it is not split");
         }
 
@@ -87,7 +90,7 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter {
         payload.put("recipient", message.identityValue());
         payload.put("type", "text");
         ObjectNode text = payload.putObject("text");
-        text.put("body", message.content());
+        text.put("body", body);
         text.put("preview_url", false);
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(properties.getBaseUrl() + "/"

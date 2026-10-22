@@ -11,6 +11,7 @@ import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.spi.InboundChannelAdapter;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
+import dev.cauce.channels.spi.ReplyMarkdown;
 import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
@@ -50,6 +51,10 @@ import java.util.Optional;
  * {base-url}/bot{token}/sendMessage} with the interlocutor's identity value (the
  * {@code chat.id} this adapter produced) as {@code chat_id}. The bot token is the config's credential; failures surface as
  * {@link dev.cauce.channels.spi.ChannelDeliveryException} for the (best-effort) caller.
+ * Telegram shows formatting only when asked: the agent's Markdown is rendered to Telegram's HTML
+ * subset and sent with {@code parse_mode=HTML}, so a code never arrives as {@code **9PNVXQ**}.
+ * Should Telegram still reject the entities, the same reply is sent once more as plain text,
+ * markers dropped: formatting is never worth losing the reply.
  * Registered as a bean by {@code ChannelsConfig} (it carries the HTTP client and
  * properties, mirroring the LLM adapter configurations).
  */
@@ -59,6 +64,9 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
     static final String SECRET_TOKEN_HEADER = "X-Telegram-Bot-Api-Secret-Token";
 
     static final String CHANNEL_TYPE = "telegram";
+
+    /** What Telegram answers (HTTP 400) to a {@code parse_mode} text it cannot parse. */
+    static final String ENTITIES_REJECTED = "can't parse entities";
 
     // Own mapper on purpose: the Telegram wire format is fixed by the Bot API and must not
     // inherit the application's Jackson configuration (e.g. the global snake_case strategy).
@@ -128,8 +136,19 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
                     + message.identityKind());
         }
         payload.put("chat_id", message.identityValue());
-        payload.put("text", message.content());
+        payload.put("text", ReplyMarkdown.toHtml(message.content()));
+        payload.put("parse_mode", "HTML");
+        try {
+            send(payload, config);
+        } catch (EntitiesRejectedException e) {
+            ObjectNode plain = objectMapper.createObjectNode();
+            plain.put("chat_id", message.identityValue());
+            plain.put("text", ReplyMarkdown.toPlain(message.content()));
+            send(plain, config);
+        }
+    }
 
+    private void send(ObjectNode payload, ChannelConfig config) {
         HttpRequest request = HttpRequest.newBuilder(
                         URI.create(properties.getBaseUrl() + "/bot" + config.credential() + "/sendMessage"))
                 .timeout(properties.getTimeout())
@@ -146,6 +165,10 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
             Thread.currentThread().interrupt();
             throw new ChannelDeliveryException("Interrupted during Telegram delivery", e);
         }
+        if (response.statusCode() == 400 && payload.has("parse_mode")
+                && response.body().contains(ENTITIES_REJECTED)) {
+            throw new EntitiesRejectedException();
+        }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             // The response body carries Telegram's error description, never our token.
             throw new ChannelDeliveryException("Telegram sendMessage returned HTTP "
@@ -160,6 +183,14 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
         if (!body.path("ok").asBoolean(false)) {
             throw new ChannelDeliveryException("Telegram sendMessage rejected: "
                     + body.path("description").asText("(no description)"));
+        }
+    }
+
+    /** Telegram refused the formatting of a reply, not the reply: it is sent again as plain text. */
+    private static final class EntitiesRejectedException extends RuntimeException {
+
+        EntitiesRejectedException() {
+            super(null, null, false, false);
         }
     }
 }

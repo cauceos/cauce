@@ -145,7 +145,7 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
                 TELEGRAM.verify(1, postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage"))
                         .withRequestBody(equalToJson("{\"chat_id\": \"987654321\", \"text\": \""
-                                + FakeLlmProvider.REPLY + "\"}"))));
+                                + FakeLlmProvider.REPLY + "\", \"parse_mode\": \"HTML\"}"))));
         // The reply is also persisted: the poll fallback keeps working alongside delivery.
         UUID conversationId = telegramConversationId();
         assertThat(agentMessageCount(conversationId)).isEqualTo(1);

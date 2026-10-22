@@ -3,7 +3,10 @@ package dev.cauce.channels.telegram;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.containing;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.notContaining;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
@@ -178,7 +181,35 @@ class TelegramChannelAdapterTest {
 
         verify(postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage"))
                 .withRequestBody(equalToJson(
-                        "{\"chat_id\": \"987654321\", \"text\": \"Hola, soy un agente\"}")));
+                        "{\"chat_id\": \"987654321\", \"text\": \"Hola, soy un agente\", \"parse_mode\": \"HTML\"}")));
+    }
+
+    @Test
+    void deliver_rendersTheAgentsMarkdownAsTelegramHtml_neverLiteralAsterisks(WireMockRuntimeInfo wm) {
+        stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson("{\"ok\": true}")));
+
+        adapterAgainst(wm).deliver(new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                "Tu código es **9PNVXQ**. 2 < 3 & más"), config);
+
+        verify(postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage")).withRequestBody(equalToJson(
+                "{\"chat_id\": \"987654321\", \"text\": \"Tu código es <b>9PNVXQ</b>. 2 &lt; 3 &amp; más\","
+                        + " \"parse_mode\": \"HTML\"}")));
+    }
+
+    @Test
+    void deliver_whenTelegramRejectsTheEntities_sendsTheSameReplyOnceAsPlainText(WireMockRuntimeInfo wm) {
+        stubFor(post("/bot12345:bot-token/sendMessage").withRequestBody(containing("parse_mode"))
+                .willReturn(aResponse().withStatus(400).withBody(
+                        "{\"ok\": false, \"description\": \"Bad Request: can't parse entities: unclosed tag\"}")));
+        stubFor(post("/bot12345:bot-token/sendMessage").withRequestBody(notContaining("parse_mode"))
+                .willReturn(okJson("{\"ok\": true}")));
+
+        adapterAgainst(wm).deliver(new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                "Tu código es **9PNVXQ**"), config);
+
+        verify(2, postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage")));
+        verify(postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage")).withRequestBody(equalToJson(
+                "{\"chat_id\": \"987654321\", \"text\": \"Tu código es 9PNVXQ\"}")));
     }
 
     @Test

@@ -54,17 +54,18 @@ class WhatsAppChannelAdapterTest {
     }
 
     @Test
-    void deliver_postsATextMessageToTheBsuid_withTheNumbersToken_neverATo(WireMockRuntimeInfo wm) {
+    void deliver_postsATextMessageToTheBsuid_withTheNumbersToken_neverATo_inWhatsAppsMarkers(
+            WireMockRuntimeInfo wm) {
         stubFor(post(SEND_PATH).willReturn(okJson("{\"messages\":[{\"id\":\"wamid.X\"}]}")));
 
-        adapterAgainst(wm).deliver(reply("Hola, ¿en qué te ayudo?", Duration.ofMinutes(1)), number);
+        adapterAgainst(wm).deliver(reply("Hola, ¿en qué te **ayudo**?", Duration.ofMinutes(1)), number);
 
         verify(postRequestedFor(urlEqualTo(SEND_PATH))
                 .withHeader("Authorization", equalTo("Bearer EAAG-access-token"))
                 .withRequestBody(equalToJson("""
                         {"messaging_product":"whatsapp","recipient_type":"individual",
                          "recipient":"ES.13491208655302741918","type":"text",
-                         "text":{"body":"Hola, ¿en qué te ayudo?","preview_url":false}}""")));
+                         "text":{"body":"Hola, ¿en qué te *ayudo*?","preview_url":false}}""")));
     }
 
     @Test
