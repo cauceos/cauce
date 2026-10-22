@@ -36,6 +36,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Templates for proactive messages on WhatsApp.** An owner notice outside the 24-hour window is recorded `NOT_SENT` with `outside_reply_window` (B9), the same rule as W4.
 - **The eval harness.** The scenarios of the hospitality pack (`examples/hosteleria/evals`) are data; `cauce-evals` does not run them yet. The guarantees the code enforces have their ITs.
 - **Owner-side booking actions.** The owner reads bookings over the API but cannot cancel or move one there; changes go through the customer's conversation.
+- **Listing an agent's channel bindings.** There is no `GET` of an agent's channel configs, so the demo-bar scripts, which find the business and its agents again by name when `.demo-bar.env` is lost, still bind the bots anew in that case (the previous config of the same bot stays active, unused).
 - **A summary missed across midnight.** A nightly summary whose local day ends while the instance is down is not sent late (the scheduler only runs today's).
 - **Retention of business rows.** Bookings, handoffs, unanswered questions, owner notifications, digests and used link codes have no purge; they hold personal data, so a retention policy per business is the follow-up. The purge's cutoff is SQL `now()` (ADR 0008), so the `created_at` it compares must be stamped by the database clock first: bookings and handoffs still take theirs from the JVM.
 
