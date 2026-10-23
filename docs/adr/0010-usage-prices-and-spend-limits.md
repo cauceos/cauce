@@ -139,6 +139,14 @@ the prefix and the conversation. It is an agent's setting (`agents.prompt_cache_
 minutes apart. How many answers arrive within the hour is measured in production by the gap
 between a person's messages (S10).
 
+**S10 — The gap between a person's messages is measured.** Ingest takes the time since the same
+person's previous message in the conversation (both stamped by the database clock) and carries it
+on `InvocationRequested`; observability counts each message as `first`, `within_5m`, `within_1h` or
+`over_1h` (`cauce.conversation.customer_messages`, readable at `/actuator/metrics` until an exporter
+lands) and times the gap with those bounds as objectives. The cache's clock restarts with the
+agent's reply, a little after the person's message, so the gap slightly overstates the time the
+cache had to survive: the share within the hour is a floor.
+
 ## References
 
 - ADR 0001 — RLS escape hatches

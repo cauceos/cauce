@@ -88,4 +88,11 @@ class OrchestrationEventTest {
             assertThat(event.occurredAt()).isEqualTo(TS);
         }
     }
+
+    @Test
+    void invocationRequested_withoutAPreviousMessage_hasNoGap() {
+        assertThat(new InvocationRequested(ID, ID, ID, ID, ID, TS).sincePreviousMessage()).isNull();
+        assertThat(new InvocationRequested(ID, ID, ID, ID, ID, TS, java.time.Duration.ofMinutes(3))
+                .sincePreviousMessage()).isEqualTo(java.time.Duration.ofMinutes(3));
+    }
 }

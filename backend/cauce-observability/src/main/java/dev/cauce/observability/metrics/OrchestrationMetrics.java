@@ -52,6 +52,12 @@ public class OrchestrationMetrics {
     static final String LLM_TOKENS = "cauce.orchestration.llm.tokens";
     static final String TOOL_CALLS = "cauce.orchestration.tools.calls";
     static final String TOOL_EXECUTION = "cauce.orchestration.tools.execution";
+    static final String CUSTOMER_MESSAGES = "cauce.conversation.customer_messages";
+    static final String CUSTOMER_MESSAGE_GAP = "cauce.conversation.customer_message.gap";
+
+    /** The lifetimes of the two prompt cache retentions (ADR 0010, S9): the gaps that matter. */
+    static final Duration SHORT_CACHE = Duration.ofMinutes(5);
+    static final Duration LONG_CACHE = Duration.ofHours(1);
 
     private final MeterRegistry registry;
 
@@ -75,8 +81,10 @@ public class OrchestrationMetrics {
 
     private void record(OrchestrationEvent event) {
         switch (event) {
-            case InvocationRequested requested ->
-                    registry.counter(INVOCATIONS_REQUESTED).increment();
+            case InvocationRequested requested -> {
+                registry.counter(INVOCATIONS_REQUESTED).increment();
+                customerGap(requested.sincePreviousMessage());
+            }
             case InvocationCompleted completed ->
                     registry.counter(INVOCATIONS_COMPLETED).increment();
             case InvocationFailed failed ->
@@ -107,6 +115,26 @@ public class OrchestrationMetrics {
                 // No metric yet: a context-size distribution (estimatedTokens vs window) is
                 // deferred until context tuning needs it.
             }
+        }
+    }
+
+    /**
+     * ADR 0010, S10: how long a person took since their previous message in the conversation, against
+     * the lifetimes of the prompt cache. The counter's {@code since_previous} tag ({@code first},
+     * {@code within_5m}, {@code within_1h}, {@code over_1h}) reads in-process at
+     * {@code /actuator/metrics}; the timer carries the same bounds as service-level objectives for an
+     * exporter.
+     */
+    private void customerGap(Duration gap) {
+        String bucket = gap == null ? "first"
+                : gap.compareTo(SHORT_CACHE) <= 0 ? "within_5m"
+                : gap.compareTo(LONG_CACHE) <= 0 ? "within_1h" : "over_1h";
+        registry.counter(CUSTOMER_MESSAGES, "since_previous", bucket).increment();
+        if (gap != null) {
+            Timer.builder(CUSTOMER_MESSAGE_GAP)
+                    .serviceLevelObjectives(SHORT_CACHE, LONG_CACHE)
+                    .register(registry)
+                    .record(gap);
         }
     }
 

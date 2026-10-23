@@ -113,6 +113,21 @@ class MessageServiceIT {
     }
 
     @Test
+    void lastMessageAt_isTheLatestOfTheRole_andNothingWithoutOne() {
+        appendForClientA(MessageRole.USER, "Hola");
+        appendForClientA(MessageRole.AGENT, "Hola, ¿en qué te ayudo?");
+        Message second = appendForClientA(MessageRole.USER, "Mesa para dos");
+
+        TenantContext.setCurrentTenantId(clientA.id());
+        try {
+            assertThat(messageService.lastMessageAt(conversation.id(), MessageRole.USER)).contains(second.createdAt());
+            assertThat(messageService.lastMessageAt(conversation.id(), MessageRole.TOOL_CALL)).isEmpty();
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @Test
     void appendMessage_advancesConversationLastMessageAt() throws InterruptedException {
         Instant originalLastMessageAt = conversation.lastMessageAt();
         Thread.sleep(5); // ensure the clock advances past the conversation's start

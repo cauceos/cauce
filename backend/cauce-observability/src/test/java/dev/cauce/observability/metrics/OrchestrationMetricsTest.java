@@ -18,6 +18,7 @@ import dev.cauce.orchestration.events.ToolExecuted;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -45,6 +46,25 @@ class OrchestrationMetricsTest {
 
         assertThat(registry.counter(OrchestrationMetrics.INVOCATIONS_REQUESTED).count())
                 .isEqualTo(1.0);
+    }
+
+    @Test
+    void on_invocationRequested_countsTheGapSinceThePersonsPreviousMessage_againstTheCacheLifetimes() {
+        for (Duration gap : java.util.Arrays.asList(null, Duration.ofMinutes(2), Duration.ofMinutes(5),
+                Duration.ofMinutes(40), Duration.ofHours(1), Duration.ofHours(3))) {
+            metrics.on(new InvocationRequested(INVOCATION_ID, UUID.randomUUID(), UUID.randomUUID(),
+                    UUID.randomUUID(), UUID.randomUUID(), NOW, gap));
+        }
+
+        assertThat(registry.counter(OrchestrationMetrics.CUSTOMER_MESSAGES, "since_previous", "first").count())
+                .isEqualTo(1.0);
+        assertThat(registry.counter(OrchestrationMetrics.CUSTOMER_MESSAGES, "since_previous", "within_5m").count())
+                .isEqualTo(2.0);
+        assertThat(registry.counter(OrchestrationMetrics.CUSTOMER_MESSAGES, "since_previous", "within_1h").count())
+                .isEqualTo(2.0);
+        assertThat(registry.counter(OrchestrationMetrics.CUSTOMER_MESSAGES, "since_previous", "over_1h").count())
+                .isEqualTo(1.0);
+        assertThat(registry.timer(OrchestrationMetrics.CUSTOMER_MESSAGE_GAP).count()).isEqualTo(5);
     }
 
     @Test

@@ -1,5 +1,7 @@
 package dev.cauce.tenancy;
 
+import java.util.Optional;
+import java.time.Instant;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
@@ -54,6 +56,16 @@ public class MessageService {
         Message saved = messageMapper.toDomain(messageRepository.save(messageMapper.toEntity(message)));
         conversationRepository.touchLastMessageAt(conversationId, saved.createdAt());
         return saved;
+    }
+
+    /**
+     * When the latest message of {@code role} in the conversation was stamped (the database clock),
+     * if it has one visible under the current context.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Instant> lastMessageAt(UUID conversationId, MessageRole role) {
+        return messageRepository.findFirstByConversationIdAndRoleOrderBySeqDesc(conversationId, role)
+                .map(MessageEntity::getCreatedAt);
     }
 
     /**

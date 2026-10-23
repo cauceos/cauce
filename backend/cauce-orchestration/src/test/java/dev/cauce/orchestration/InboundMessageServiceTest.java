@@ -118,6 +118,28 @@ class InboundMessageServiceTest {
         assertThat(event.conversationId()).isEqualTo(conversation.id());
         assertThat(event.messageId()).isEqualTo(userMessage.id());
         assertThat(event.occurredAt()).isNotNull();
+        assertThat(event.sincePreviousMessage()).isNull(); // the person's first message
+    }
+
+    @Test
+    void ingest_aLaterMessage_carriesTheGapSinceThePersonsPreviousOne() {
+        UUID agentId = UUID.randomUUID();
+        Conversation conversation = Conversation.start(agentId, API_IDENTITY, null);
+        java.time.Instant previous = java.time.Instant.parse("2026-10-23T12:00:00Z");
+        Message userMessage = Message.from(conversation.id(), MessageRole.USER, "Hola")
+                .stampedAt(previous.plus(java.time.Duration.ofMinutes(7)));
+        PendingInvocation invocation = PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id());
+        when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
+                .thenReturn(conversation);
+        when(messageService.lastMessageAt(conversation.id(), MessageRole.USER)).thenReturn(java.util.Optional.of(previous));
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola")).thenReturn(userMessage);
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id())).thenReturn(invocation);
+
+        service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
+
+        ArgumentCaptor<InvocationRequested> captor = ArgumentCaptor.forClass(InvocationRequested.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().sincePreviousMessage()).isEqualTo(java.time.Duration.ofMinutes(7));
     }
 
     @Test

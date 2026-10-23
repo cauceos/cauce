@@ -1,5 +1,6 @@
 package dev.cauce.orchestration.events;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -19,6 +20,8 @@ import java.util.UUID;
  * @param conversationId the conversation the message belongs to
  * @param messageId the ingested USER message that triggered the invocation
  * @param occurredAt when the ingest happened
+ * @param sincePreviousMessage the time since the same person's previous message in this
+ *     conversation, both stamped by the database clock; null for the first (ADR 0010, S10)
  */
 public record InvocationRequested(
         UUID invocationId,
@@ -26,7 +29,8 @@ public record InvocationRequested(
         UUID agentId,
         UUID conversationId,
         UUID messageId,
-        Instant occurredAt) implements OrchestrationEvent {
+        Instant occurredAt,
+        Duration sincePreviousMessage) implements OrchestrationEvent {
 
     public InvocationRequested {
         Objects.requireNonNull(invocationId, "invocationId");
@@ -35,5 +39,11 @@ public record InvocationRequested(
         Objects.requireNonNull(conversationId, "conversationId");
         Objects.requireNonNull(messageId, "messageId");
         Objects.requireNonNull(occurredAt, "occurredAt");
+    }
+
+    /** The first message of a conversation: no previous one. */
+    public InvocationRequested(UUID invocationId, UUID tenantId, UUID agentId, UUID conversationId, UUID messageId,
+                               Instant occurredAt) {
+        this(invocationId, tenantId, agentId, conversationId, messageId, occurredAt, null);
     }
 }

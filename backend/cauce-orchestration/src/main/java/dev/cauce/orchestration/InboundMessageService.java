@@ -13,6 +13,7 @@ import dev.cauce.orchestration.persistence.IngestIdempotencyRecordMapper;
 import dev.cauce.orchestration.persistence.IngestIdempotencyRecordRepository;
 import dev.cauce.tenancy.ConversationService;
 import dev.cauce.tenancy.MessageService;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -153,6 +154,8 @@ public class InboundMessageService {
             }
         }
 
+        // ADR 0010, S10: how long the person took since their previous message, for the cache retention.
+        Optional<Instant> previousMessageAt = messageService.lastMessageAt(conversation.id(), MessageRole.USER);
         Message userMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, content);
         PendingInvocation invocation =
                 pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id());
@@ -172,7 +175,8 @@ public class InboundMessageService {
         // @TransactionalEventListener(phase = AFTER_COMMIT) (or move this behind an outbox).
         // Only this winning path publishes: an idempotent replay is event-silent.
         eventPublisher.publishEvent(new InvocationRequested(invocation.id(), invocation.tenantId(),
-                agentId, conversation.id(), userMessage.id(), Instant.now()));
+                agentId, conversation.id(), userMessage.id(), Instant.now(),
+                previousMessageAt.map(previous -> Duration.between(previous, userMessage.createdAt())).orElse(null)));
         return new InboundMessageResult(conversation.id(), userMessage.id(), invocation.id());
     }
 
