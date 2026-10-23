@@ -6,7 +6,7 @@ It holds what does not change with the next unit of work: invariants, convention
 
 ## Project overview
 
-Cauce is the open-source Agent OS for European businesses. It is a Java-native platform for building, operating, and governing AI agents in production. Multi-tenant from the first commit, sovereign by design, with first-class support for voice and chat channels.
+Cauce is the Agent OS for European businesses: public code (BUSL license). It is a Java-native platform for building, operating, and governing AI agents in production. Multi-tenant from the first commit, sovereign by design, with first-class support for voice and chat channels.
 
 See [README.md](README.md) for the user-facing project description.
 

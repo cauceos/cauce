@@ -6,7 +6,7 @@
   <img alt="Cauce" src=".github/assets/cauce-lockup-light.svg" width="380">
 </picture>
 
-### The open-source Agent OS for European businesses.
+### The Agent OS for European businesses. Public code (BUSL license).
 
 Multi-channel. Multi-tenant. Sovereign by design.
 
@@ -20,7 +20,7 @@ Multi-channel. Multi-tenant. Sovereign by design.
 
 ## What is Cauce
 
-Cauce is an open-source platform for building, operating, and governing AI agents in production. Built natively on Java and Spring Boot, with first-class support for voice and chat channels, designed for European businesses and the consultancies, agencies, and integrators that serve them.
+Cauce is a platform for building, operating, and governing AI agents in production — public code (BUSL license). Built natively on Java and Spring Boot, with first-class support for voice and chat channels, designed for European businesses and the consultancies, agencies, and integrators that serve them.
 
 Today's agent platforms are either Python-only frameworks (LangGraph, CrewAI), closed-source US products (Vapi, Retell, Sierra), or single-channel gateways (Evolution API). None of them offer a complete, open, sovereign-by-design platform with multi-tenant operations and unified cross-channel memory for European businesses. Cauce fills that gap.
 
@@ -58,7 +58,7 @@ If you are a consultancy, agency, or integrator building agent solutions for Eur
 - **Unified cross-channel memory.** A single conversation memory across WhatsApp, voice, email, and web. Users don't repeat themselves across channels.
 - **Self-improving agents.** Native eval framework with a self-improvement loop that proposes prompt and policy updates based on production conversations.
 - **Sovereign by design.** RGPD-native endpoints, immutable audit log, configurable data residency, support for European LLM providers and self-hosted models.
-- **Open source under BUSL.** Source-available with Apache 2.0 conversion four years after each release. No rugpull, no openwashing.
+- **Public code (BUSL license).** Source-available with Apache 2.0 conversion four years after each release. No rugpull, no openwashing.
 
 ## Roadmap
 
