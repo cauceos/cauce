@@ -114,6 +114,8 @@ after that. Re-provisioning re-creates the rules, so a series still in its windo
 
 After changing a rule, run `scripts/observability/test-alerts.sh`: against a throwaway OpenObserve,
 it checks that two agents get one alert each, none repeated, readable (about two minutes, Docker).
+To check the whole path on a development PC, with your own bot, run
+`scripts/verificar-alertas.ps1` (Windows PowerShell; it explains its two steps).
 
 ## 4. A server that is down: Healthchecks
 
