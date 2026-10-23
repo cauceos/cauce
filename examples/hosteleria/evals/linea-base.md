@@ -228,8 +228,14 @@ Con la conversación media de la batería (1,74 mensajes):
   el coste por mensaje crece con el historial (G3, diez mensajes, lleva 18.666 tokens de entrada por
   mensaje frente a unos 10.000 en los escenarios de uno). Las conversaciones de la batería son cortas
   a propósito; con datos de producción, la longitud media real sustituye a la de 1,74.
-- Es el coste de proveedor a precio de lista (ADR 0010), sin el juez, sin canales y sin margen. Cauce
-  pide hoy solo la caché de 5 minutos: b) requiere la caché de 1 hora, que no está construida.
+- Es el coste de proveedor a precio de lista (ADR 0010), sin el juez, sin canales y sin margen.
+- **El ahorro de la caché de 1 hora solo se medirá en producción.** Ya está construida (ADR 0010,
+  S9) y el agente de clientes del paquete la usa, pero en el arnés los mensajes de una conversación
+  van seguidos y la caché nunca se enfría, ni la de 5 minutos ni la de 1 hora: una batería con ella
+  solo mide la calidad y lo que cuesta de más escribir a 1 hora, no lo que ahorra. Lo dirá la
+  métrica de huecos entre los mensajes de una persona (`cauce.conversation.customer_messages`,
+  S10): la parte que llega dentro de la hora es la que lee su historial de la caché en vez de
+  volver a escribirlo. Hasta entonces, b) es una estimación.
 
 ## Línea base anterior · 2026-10-23T0914Z · 100 %
 
