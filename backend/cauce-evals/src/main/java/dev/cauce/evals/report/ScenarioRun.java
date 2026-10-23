@@ -19,8 +19,13 @@ public record ScenarioRun(Scenario scenario, int repetition, List<CheckResult> r
         return results.stream().filter(CheckResult::counts).allMatch(r -> r.outcome() == CheckResult.Outcome.PASS);
     }
 
+    /** Whether it counts towards a rate: not when a turn failed to execute, which says nothing of the agent. */
     public boolean counted() {
-        return results.stream().anyMatch(CheckResult::counts);
+        return !executionFailure() && results.stream().anyMatch(CheckResult::counts);
+    }
+
+    public boolean executionFailure() {
+        return results.stream().anyMatch(r -> r.outcome() == CheckResult.Outcome.EXECUTION_FAILURE);
     }
 
     public boolean harnessError() {

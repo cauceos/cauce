@@ -149,7 +149,8 @@ public final class Report {
         for (ScenarioRun run : runs) {
             List<CheckResult> failed = run.results().stream()
                     .filter(r -> r.outcome() == CheckResult.Outcome.FAIL || r.outcome() == CheckResult.Outcome.HARNESS_ERROR
-                            || r.outcome() == CheckResult.Outcome.INCONCLUSIVE)
+                            || r.outcome() == CheckResult.Outcome.INCONCLUSIVE
+                            || r.outcome() == CheckResult.Outcome.EXECUTION_FAILURE)
                     .toList();
             if (failed.isEmpty()) {
                 continue;

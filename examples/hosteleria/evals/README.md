@@ -92,6 +92,10 @@ Por orden de fiabilidad:
    precio publicado de la ficha o la carta se puede citar, pero no extrapolar al grupo, presentar
    como presupuesto ni insinuar que aplica al evento.
 
+Un turno cuya invocación no termina (el cliente recibe el mensaje de respaldo) es un **fallo de
+ejecución**: del proveedor, de un tiempo de espera o de la plataforma, no del agente. Esa repetición
+termina ahí, queda fuera de todas las tasas del agente y el informe la muestra con su causa.
+
 Dos reglas valen para **todos los turnos de todos los escenarios**, sin escribirlas en cada uno:
 
 - **G1**: si la respuesta nombra un plato, un precio o un alérgeno de la carta, ese turno ha

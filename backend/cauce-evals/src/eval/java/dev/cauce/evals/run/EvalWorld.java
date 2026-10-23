@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
@@ -134,7 +135,8 @@ final class EvalWorld {
      * dispatches the owner's notices, and returns what the turn left behind.
      */
     /** What a turn left behind, and the invocation that answered it. */
-    record Played(TurnTrace trace, String invocationId) {
+    /** A played turn; {@code executionFailure} is the cause when its invocation did not complete. */
+    record Played(TurnTrace trace, String invocationId, Optional<String> executionFailure) {
     }
 
     Played turn(String message) throws Exception {
@@ -154,7 +156,19 @@ final class EvalWorld {
             return status.equals("COMPLETED") || status.equals("FAILED") || status.equals("ABANDONED");
         });
         s.dispatcher().dispatchDue();
-        return new Played(trace(message, conversationId, messageId), invocationId);
+        return new Played(trace(message, conversationId, messageId), invocationId, executionFailure(invocationId));
+    }
+
+    /** Why the invocation did not complete (status, failure type and the internal error), if it did not. */
+    private Optional<String> executionFailure(String invocationId) {
+        Map<String, Object> row = s.admin().queryForMap("SELECT status, failure_type, last_error FROM "
+                + "pending_invocations WHERE id = ?::uuid", invocationId);
+        if ("COMPLETED".equals(row.get("status"))) {
+            return Optional.empty();
+        }
+        String error = row.get("last_error") == null ? "sin detalle" : (String) row.get("last_error");
+        return Optional.of(row.get("status") + " · " + row.get("failure_type") + " · "
+                + (error.length() > 300 ? error.substring(0, 300) + "…" : error));
     }
 
     /** Runs the nightly summary for today, {@code times} times, and returns what it left behind. */

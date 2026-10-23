@@ -19,7 +19,13 @@ public record CheckResult(String name, Outcome outcome, String detail) {
         /** The judge's answer could not be read: never counted as passed. */
         INCONCLUSIVE,
         /** The harness could not establish the facts (the trace and the audit disagree). */
-        HARNESS_ERROR
+        HARNESS_ERROR,
+        /**
+         * The turn's invocation failed and the person got the fallback reply: a fault of the run
+         * (the provider, a timeout, the platform), not of the agent. Its repetition stays out of the
+         * agent's rates, and the report names the cause.
+         */
+        EXECUTION_FAILURE
     }
 
     public static CheckResult pass(String name, String detail) {

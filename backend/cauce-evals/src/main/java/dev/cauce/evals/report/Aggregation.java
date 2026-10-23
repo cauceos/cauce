@@ -70,6 +70,11 @@ public final class Aggregation {
             } else {
                 status = "ok";
             }
+            for (ScenarioRun rep : reps) {
+                rep.results().stream().filter(r -> r.outcome() == Outcome.EXECUTION_FAILURE).forEach(r ->
+                        warnings.add(scenario.id() + " · repetición " + rep.repetition() + " · " + r.name()
+                                + ", fuera de la tasa del agente: " + r.detail()));
+            }
             if (reps.stream().anyMatch(ScenarioRun::harnessError)) {
                 warnings.add(scenario.id() + ": error del arnés en alguna repetición (ver informe)");
             }

@@ -99,6 +99,27 @@ class AggregationTest {
                 .contains("Sin bloqueantes fallidos.");
     }
 
+    @Test
+    void anExecutionFailure_keepsItsRepetitionOutOfTheRates_andTheReportNamesItsCause() {
+        // H3.10 of the 2026-10-23 baseline: turn 2 got the fallback reply after a provider 400.
+        Scenario s = scenario("H3.10", Level.WARNING, "03-reservas");
+        String cause = "FAILED · LLM_ERROR · HTTP 400: This model does not support assistant message prefill.";
+        List<ScenarioRun> runs = List.of(
+                run(s, 1, CheckResult.pass("turno 1 · herramientas", ""), CheckResult.pass("turno 2 · herramientas", "")),
+                run(s, 2, CheckResult.pass("turno 1 · herramientas", ""),
+                        new CheckResult("turno 2 · fallo de ejecución", Outcome.EXECUTION_FAILURE, cause)));
+
+        RunSummary summary = Aggregation.summarize(runs, List.of(), 0.9, META);
+
+        assertThat(rate(summary, "H3.10")).isEqualTo(1.0);
+        assertThat(summary.overallRate()).isEqualTo(1.0);
+        assertThat(summary.warnings()).contains(
+                "H3.10 · repetición 2 · turno 2 · fallo de ejecución, fuera de la tasa del agente: " + cause);
+        assertThat(Report.console(summary)).contains("fuera de la tasa del agente: " + cause);
+        assertThat(Report.markdown(summary, Optional.empty(), runs)).contains("### H3.10 · repetición 2")
+                .contains("EXECUTION_FAILURE · turno 2 · fallo de ejecución: " + cause);
+    }
+
     private static double rate(RunSummary summary, String id) {
         return summary.scenarios().stream().filter(r -> r.id().equals(id)).findFirst().orElseThrow().rate();
     }

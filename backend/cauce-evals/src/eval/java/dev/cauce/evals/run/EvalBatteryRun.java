@@ -247,6 +247,12 @@ class EvalBatteryRun {
             transcript.append("Cliente: ").append(turn.message()).append('\n');
             trace.tools().forEach(t -> transcript.append("  [").append(t.name()).append("] ").append(t.input()).append('\n'));
             transcript.append("Agente: ").append(trace.reply()).append("\n\n");
+            if (played.executionFailure().isPresent()) {
+                // The later turns build on this one: the repetition ends here, outside the agent's rates.
+                results.add(new CheckResult(prefix + " · fallo de ejecución", Outcome.EXECUTION_FAILURE,
+                        played.executionFailure().get()));
+                break;
+            }
             List<String> audited = world.auditedTools(played.invocationId());
             List<String> traced = trace.tools().stream().map(TurnTrace.ToolUse::name).toList();
             if (!sameTools(audited, traced)) {
