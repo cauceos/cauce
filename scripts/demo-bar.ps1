@@ -98,6 +98,16 @@ function Invoke-Telegram($token, $method, $form) {
 if (-not $ApiKey) { Fail 'Set CAUCE_API_KEY to an operator key (or run the quickstart first).' }
 $OperatorId = Get-Setting 'CAUCE_OPERATOR_ID' ''
 if (-not $OperatorId) { $OperatorId = (Invoke-Api GET '/v1/me').tenant_id }
+
+# The agents' provider must be configured on the instance, or every message they get fails: ask
+# it before creating anything.
+$providers = @((Invoke-Api GET '/v1/llm-providers').data | ForEach-Object { $_.id })
+if ($providers -notcontains $ModelProvider) {
+    Fail ("The instance has no '$ModelProvider' provider configured (it has: $($providers -join ', ')). " +
+        "anthropic on the quickstart's stack: put ANTHROPIC_API_KEY in .env and recreate the app, " +
+        "docker compose --profile api up -d. Or the local model (small, a weaker waiter): " +
+        "set MODEL_PROVIDER=ollama and MODEL_NAME=qwen2.5:3b, and run this again.")
+}
 if (-not (Test-Path $StateFile)) {
     Set-Content -Path $StateFile -Value '# Cauce demo bar state (ids only, no secrets). Delete to start over.' -Encoding ascii
 }
@@ -323,5 +333,15 @@ if ($OwnerConfigId) {
 Say 'Done.'
 Write-Host "   Business:       $BarTenantId"
 if ($CustomerToken) { Write-Host "   Customer bot:   https://t.me/$((Invoke-Telegram $CustomerToken 'getMe' $null).result.username)" }
+Write-Host '   Talk to the waiter (the customer agent) without Telegram -- the reply arrives'
+Write-Host '   asynchronously; read it from the conversation the 202 names:'
+Write-Host @"
+     `$key = (Get-Content .quickstart.env | Select-String 'CAUCE_API_KEY=(.*)').Matches[0].Groups[1].Value
+     `$sent = Invoke-RestMethod -Method Post "$ApiUrl/v1/agents/$CustomerAgentId/messages" ``
+         -Headers @{ Authorization = "Bearer `$key" } -ContentType 'application/json' ``
+         -Body '{"external_identity_ref":"cliente-1","content":"Teneis mesa para cuatro esta noche?"}'
+     (Invoke-RestMethod "$ApiUrl/v1/conversations/`$(`$sent.conversation_id)/messages" ``
+         -Headers @{ Authorization = "Bearer `$key" }).data | Select-Object role, content
+"@
 Write-Host "   Read the cases:  GET $ApiUrl/v1/tenants/$BarTenantId/handoffs"
 Write-Host "   Summary now:     POST $ApiUrl/v1/tenants/$BarTenantId/daily-digests"

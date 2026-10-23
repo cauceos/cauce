@@ -19,7 +19,7 @@
 #   CAUCE_API_URL       default http://localhost:8080
 #   CAUCE_API_KEY       an operator key; default: the one saved by the quickstart (.quickstart.env)
 #   CAUCE_OPERATOR_ID   the operator tenant id; default: from .quickstart.env, else GET /v1/me
-#   MODEL_PROVIDER      default anthropic   (needs ANTHROPIC_API_KEY on the instance)
+#   MODEL_PROVIDER      default anthropic   (needs ANTHROPIC_API_KEY on the instance; checked first)
 #   MODEL_NAME          default claude-sonnet-5-5
 #   MODEL_PRICE_INPUT, MODEL_PRICE_OUTPUT, MODEL_PRICE_CACHE_READ, MODEL_PRICE_CACHE_WRITE,
 #   MODEL_PRICE_CACHE_WRITE_LONG (the one-hour write)
@@ -124,6 +124,14 @@ if [ -z "${CAUCE_OPERATOR_ID:-}" ]; then
     CAUCE_OPERATOR_ID=$(api GET /v1/me | json_get tenant_id)
 fi
 save() { echo "$1=$2" >> "$STATE_FILE"; }
+
+# The agents' provider must be configured on the instance, or every message they get fails: ask
+# it before creating anything.
+providers=$(api GET /v1/llm-providers)
+printf '%s' "$providers" | grep -q "\"id\":\"$MODEL_PROVIDER\"" || fail "The instance has no '$MODEL_PROVIDER' provider configured (it answered: $providers).
+       anthropic on the quickstart's stack: put ANTHROPIC_API_KEY in .env and recreate the app,
+       docker compose --profile api up -d. Or the local model (small, a weaker waiter):
+       MODEL_PROVIDER=ollama MODEL_NAME=qwen2.5:3b ./scripts/demo-bar.sh"
 [ -f "$STATE_FILE" ] || echo "# Cauce demo bar state (ids only, no secrets). Delete to start over." > "$STATE_FILE"
 
 # all_named PATH NAME_JSON: the ids of every item named NAME_JSON in the list PATH, oldest first
@@ -335,5 +343,12 @@ echo "   Business:       $BAR_TENANT_ID"
     customer_bot=$(telegram "$CUSTOMER_TOKEN" getMe | json_get result.username || true)
     [ -n "$customer_bot" ] && echo "   Customer bot:   https://t.me/$customer_bot"
 }
+echo "   Talk to the waiter (the customer agent) without Telegram — the reply arrives"
+echo "   asynchronously; read it from the conversation the 202 names:"
+echo "     curl -X POST $API_URL/v1/agents/$CUSTOMER_AGENT_ID/messages \\"
+echo "          -H \"Authorization: Bearer \$CAUCE_API_KEY\" -H \"Content-Type: application/json\" \\"
+echo "          -d '{\"external_identity_ref\":\"cliente-1\",\"content\":\"¿Tenéis mesa para cuatro esta noche?\"}'"
+echo "     curl $API_URL/v1/conversations/<conversation_id>/messages -H \"Authorization: Bearer \$CAUCE_API_KEY\""
+echo "   (CAUCE_API_KEY: the operator key, in .quickstart.env.)"
 echo "   Read the cases:  GET $API_URL/v1/tenants/$BAR_TENANT_ID/handoffs"
 echo "   Summary now:     POST $API_URL/v1/tenants/$BAR_TENANT_ID/daily-digests"
