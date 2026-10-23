@@ -24,6 +24,7 @@ import dev.cauce.evals.report.RunSummary;
 import dev.cauce.evals.report.ScenarioRun;
 import dev.cauce.evals.scenario.Scenario;
 import dev.cauce.evals.scenario.Scenario.Kind;
+import dev.cauce.evals.scenario.RelativeDates;
 import dev.cauce.evals.scenario.ScenarioLoader;
 import dev.cauce.llm.spi.LlmProvider;
 import dev.cauce.llm.spi.LlmProviderRegistry;
@@ -242,9 +243,11 @@ class EvalBatteryRun {
         for (int i = 0; i < scenario.turns().size(); i++) {
             Scenario.Turn turn = scenario.turns().get(i);
             String prefix = "turno " + (i + 1);
-            EvalWorld.Played played = world.turn(turn.message());
+            // The person's dates are written out from today, so no scenario depends on the day it runs.
+            String message = RelativeDates.render(turn.message(), world::resolveDate);
+            EvalWorld.Played played = world.turn(message);
             TurnTrace trace = played.trace();
-            transcript.append("Cliente: ").append(turn.message()).append('\n');
+            transcript.append("Cliente: ").append(message).append('\n');
             trace.tools().forEach(t -> transcript.append("  [").append(t.name()).append("] ").append(t.input()).append('\n'));
             transcript.append("Agente: ").append(trace.reply()).append("\n\n");
             if (played.executionFailure().isPresent()) {
@@ -287,7 +290,7 @@ class EvalBatteryRun {
         }
         List<String> tools = trace.tools().stream()
                 .map(t -> t.name() + ": " + abbreviate(t.output(), 300)).toList();
-        Judge.Judgement judgement = judge.get().judge(new Judge.Case(turn.message(), tools, trace.reply(),
+        Judge.Judgement judgement = judge.get().judge(new Judge.Case(trace.message(), tools, trace.reply(),
                 turn.expectation().rubric()));
         return switch (judgement.verdict()) {
             case MEETS -> CheckResult.pass(name, judgement.reason());

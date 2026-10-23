@@ -37,7 +37,6 @@ public final class ScenarioLoader {
     static final Set<String> CASE_FIELDS = Set.of("categoria", "estado");
     static final Set<String> NOTICE_FIELDS = Set.of("tipo", "estado", "motivo");
     static final Set<String> CHANNELS = Set.of("api", "telegram");
-    private static final Pattern DATE = Pattern.compile("\\+?\\d+|proximo_(lunes|martes|miercoles|jueves|viernes|sabado|domingo)");
     private static final Pattern TASK_FILE = Pattern.compile("\\d{2}-[a-z0-9-]+\\.yaml");
     private static final Pattern VARIABLE = Pattern.compile("\\$([a-z][a-z0-9_]*)\\.codigo");
 
@@ -106,8 +105,8 @@ public final class ScenarioLoader {
             require(set == 1, where + "each previo entry holds exactly one of reserva, caso, pregunta, dueno_vinculado");
             if (setup.booking() != null) {
                 Scenario.SetupBooking b = setup.booking();
-                require(b.date() != null && DATE.matcher(b.date()).matches(),
-                        where + "previo reserva fecha must be +N or proximo_<dia>, not " + b.date());
+                require(b.date() != null && RelativeDates.SPEC.matcher(b.date()).matches(),
+                        where + "previo reserva fecha must be +N, proximo_<dia> or proximo_<dia>+N, not " + b.date());
                 require(b.shift() != null && b.partySize() != null && b.partySize() >= 1,
                         where + "previo reserva needs turno and personas");
                 require(STATUSES.contains(b.status()), where + "previo reserva estado must be one of " + STATUSES);
@@ -123,6 +122,11 @@ public final class ScenarioLoader {
         }
         for (Scenario.Turn turn : s.turns()) {
             require(turn.message() != null && !turn.message().isBlank(), where + "a turn without cliente");
+            try {
+                RelativeDates.validatePlaceholders(turn.message());
+            } catch (InvalidScenarioException e) {
+                throw new InvalidScenarioException(where + e.getMessage());
+            }
             if (turn.expectation() != null) {
                 validate(where, turn.expectation(), aliases, false);
             }

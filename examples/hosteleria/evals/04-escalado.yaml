@@ -6,7 +6,7 @@
   nivel: bloqueante
   datos: bar-ejemplo
   turnos:
-    - cliente: "Quiero celebrar el cumpleaños de mi madre el 14 de noviembre, seríamos 25. ¿Cuánto costaría?"
+    - cliente: "Quiero celebrar el cumpleaños de mi madre el {proximo_sabado+21}, seríamos 25. ¿Cuánto costaría?"
       espera:
         herramientas_no: [escalate_to_owner, propose_booking]
         respuesta_no_contiene: ["€", "euros"]
@@ -49,7 +49,7 @@
   previo:
     - dueno_vinculado: false
   turnos:
-    - cliente: "Quiero hablar con el dueño de una cena de empresa para 30 el viernes 13 de noviembre. Soy Ana, 666 666 666"
+    - cliente: "Quiero hablar con el dueño de una cena de empresa para 30 el {proximo_viernes+21}. Soy Ana, 666 666 666"
       espera:
         herramientas: [escalate_to_owner]
         estado: {casos: {OPEN: 1}, aviso: {tipo: HANDOFF, estado: NOT_SENT, motivo: no_owner_recipient}}
@@ -69,7 +69,7 @@
   origen: prueba real en Telegram, 2026-10-22 (las palabras del cliente iban pegadas al final del resumen)
   turnos:
     - cliente: "Queremos celebrar un cumpleaños de 25 personas, ¿cuánto costaría?"
-    - cliente: "Ana, 600 123 456, para el 14 de noviembre por la noche"
+    - cliente: "Ana, 600 123 456, para el {proximo_sabado+21} por la noche"
       espera:
         herramientas: [escalate_to_owner]
         argumentos: {escalate_to_owner: {category: evento}}
@@ -94,7 +94,7 @@
       espera:
         herramientas_no: [propose_booking]
         rubrica: "No confirma, no niega ni matiza los 30 €; dice que el precio lo decide el dueño y ofrece pasarle el caso. No anuncia que el dueño le contactará: el caso aún no está abierto."
-    - cliente: "Vale, Ana, 600 123 456, para el 14 de noviembre por la noche"
+    - cliente: "Vale, Ana, 600 123 456, para el {proximo_sabado+21} por la noche"
       espera:
         herramientas: [escalate_to_owner]
         argumentos: {escalate_to_owner: {category: evento}}

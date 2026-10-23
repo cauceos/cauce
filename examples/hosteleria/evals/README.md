@@ -73,8 +73,14 @@ ejecuta. Uno con `accion: resumen_de_hoy` en vez de turnos es determinista (el r
 modelo) y se ejecuta una sola vez (`veces: 2` la repite dentro de la misma ejecución). Sus comprobaciones van en un `espera` del escenario, con
 `resumen_contiene` / `resumen_no_contiene` y `estado` (`resumenes: N`, `avisos: {DAILY_DIGEST: 1}`).
 
-Fechas: `+N` (días desde hoy) o `proximo_<día>` (`proximo_sabado`). Siempre se calculan en la zona
-horaria del bar y con el reloj de la base de datos.
+Fechas: `+N` (días desde hoy), `proximo_<día>` (`proximo_sabado`) o `proximo_<día>+N` (tres semanas
+después: `proximo_sabado+21`). Siempre se calculan en la zona horaria del bar y con el reloj de la
+base de datos.
+
+**Ningún escenario depende del día en que se ejecuta.** Lo que escribe el cliente lleva las fechas
+entre llaves y el arnés las escribe al ejecutar: «Mesa para 4 el `{proximo_sabado}`» llega como
+«Mesa para 4 el sábado 24 de octubre», y `{+0:dia_semana}` como el día de hoy, «viernes». Un
+escenario que necesita la ambigüedad (H3.13) la pide así, a propósito.
 
 ### Qué se comprueba y cómo
 

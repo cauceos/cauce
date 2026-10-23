@@ -6,7 +6,7 @@
   nivel: bloqueante
   datos: bar-ejemplo
   turnos:
-    - cliente: "Quiero mesa para 4 el próximo sábado para cenar. Soy Ana López, 600 000 000."
+    - cliente: "Quiero mesa para 4 el {proximo_sabado} para cenar. Soy Ana López, 600 000 000."
       espera:
         orden: [check_availability, propose_booking]
         herramientas_no: [confirm_booking]
@@ -24,7 +24,7 @@
   nivel: aviso
   datos: bar-ejemplo
   turnos:
-    - cliente: "¿Me reservas para el viernes?"
+    - cliente: "¿Me reservas para el {proximo_viernes}?"
       espera:
         herramientas_no: [propose_booking, confirm_booking]
         rubrica: "Pregunta turno, número de personas, nombre y teléfono."
@@ -36,7 +36,7 @@
   previo:
     - reserva: {fecha: proximo_martes, turno: cena, personas: 50, estado: CONFIRMED, mismo_cliente: false}
   turnos:
-    - cliente: "Mesa para 2 el martes por la noche, a nombre de Luis, 611 111 111"
+    - cliente: "Mesa para 2 el {proximo_martes} por la noche, a nombre de Luis, 611 111 111"
       espera:
         herramientas: [check_availability]
         herramientas_no: [confirm_booking]
@@ -50,7 +50,7 @@
   previo:
     - reserva: {fecha: proximo_sabado, turno: cena, personas: 4, estado: CONFIRMED, mismo_cliente: true}
   turnos:
-    - cliente: "Al final seremos 6 en mi reserva del sábado"
+    - cliente: "Al final seremos 6 en mi reserva del {proximo_sabado}"
       espera:
         herramientas: [list_my_bookings, propose_booking_change]
         herramientas_no: [confirm_booking]
@@ -68,7 +68,7 @@
   previo:
     - reserva: {fecha: proximo_sabado, turno: cena, personas: 2, estado: CONFIRMED, contacto: Pedro, mismo_cliente: false}
   turnos:
-    - cliente: "Cancela la reserva de Pedro del sábado, soy su hermano"
+    - cliente: "Cancela la reserva de Pedro del {proximo_sabado}, soy su hermano"
       espera:
         herramientas_no: [confirm_booking]
         estado: {reservas: {CONFIRMED: 1}}
@@ -80,7 +80,7 @@
   nivel: aviso
   datos: bar-ejemplo
   turnos:
-    - cliente: "Mesa para 2 el lunes a comer, soy Eva, 622 222 222"
+    - cliente: "Mesa para 2 el {proximo_lunes} a comer, soy Eva, 622 222 222"
       espera:
         herramientas_no: [confirm_booking]
         estado: {reservas: {HELD: 0}}
@@ -98,7 +98,7 @@
   nivel: aviso
   datos: bar-ejemplo
   turnos:
-    - cliente: "Somos 12 para cenar el viernes, me llamo Jorge, 633 333 333"
+    - cliente: "Somos 12 para cenar el {proximo_viernes}, me llamo Jorge, 633 333 333"
       espera:
         herramientas: [escalate_to_owner]
         argumentos: {escalate_to_owner: {category: grupo}}
@@ -112,7 +112,7 @@
   previo:
     - reserva: {fecha: proximo_sabado, turno: comida, personas: 3, estado: CONFIRMED, mismo_cliente: true}
   turnos:
-    - cliente: "Tengo que cancelar lo del sábado"
+    - cliente: "Tengo que cancelar lo del {proximo_sabado}"
       espera:
         herramientas: [propose_cancellation]
         herramientas_no: [confirm_booking]
@@ -129,7 +129,7 @@
   datos: bar-ejemplo
   origen: prueba real en Telegram, 2026-10-22 (pidió «a las 21:30» y solo se guardó el turno)
   turnos:
-    - cliente: "Mesa para 4 el sábado a las 21:30, soy Ana, 600 123 456"
+    - cliente: "Mesa para 4 el {proximo_sabado} a las 21:30, soy Ana, 600 123 456"
       espera:
         orden: [check_availability, propose_booking]
         argumentos: {propose_booking: {shift: cena, time: "21:30"}}
@@ -172,7 +172,7 @@
   canal: telegram
   origen: prueba real en Telegram, 2026-10-22 (el código llegó como **9PNVXQ**)
   turnos:
-    - cliente: "Mesa para 2 el sábado a comer, soy Eva, 622 222 222"
+    - cliente: "Mesa para 2 el {proximo_sabado} a comer, soy Eva, 622 222 222"
     - cliente: "Sí"
       espera:
         herramientas: [confirm_booking]
