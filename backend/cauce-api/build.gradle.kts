@@ -39,12 +39,19 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // ADR 0011, T1: traces through Micrometer Tracing on OpenTelemetry, exported over OTLP only.
+    implementation("io.micrometer:micrometer-tracing-bridge-otel")
+    implementation("io.opentelemetry:opentelemetry-exporter-otlp")
+    // ADR 0011, T1: the log lines, with their ids, over OTLP too (only when an endpoint is set).
+    implementation(libs.opentelemetry.logback.appender)
 
     runtimeOnly("org.postgresql:postgresql")
 
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
     testImplementation("org.springframework.security:spring-security-test")
+    // TracingIT collects the spans in memory.
+    testImplementation("io.opentelemetry:opentelemetry-sdk-testing")
     // The Telegram round-trip IT stubs the Bot API with WireMock.
     testImplementation(libs.wiremock)
     testImplementation("org.springframework.boot:spring-boot-testcontainers")

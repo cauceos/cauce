@@ -85,7 +85,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 ## Observability
 
 - **Events outside the invocation path.** Tenancy and API operations emit no `OrchestrationEvent`-style events.
-- **Distributed traces.** No OpenTelemetry dependency.
 - **A metric exporter** (OTLP or Prometheus). Metrics exist in-process via Micrometer only.
 
 ## Frontend

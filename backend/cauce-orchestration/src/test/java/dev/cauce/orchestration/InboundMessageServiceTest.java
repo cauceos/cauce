@@ -60,7 +60,8 @@ class InboundMessageServiceTest {
         auditRecorder = mock(AuditEventRecorder.class);
         service = new InboundMessageService(conversationService, messageService,
                 pendingInvocationService, idempotencyRecordRepository,
-                new IngestIdempotencyRecordMapper(), eventPublisher, auditRecorder);
+                new IngestIdempotencyRecordMapper(), eventPublisher, auditRecorder,
+                dev.cauce.orchestration.tracing.MessageTracing.noop());
     }
 
     @Test
@@ -75,7 +76,7 @@ class InboundMessageServiceTest {
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
                 .thenReturn(userMessage);
-        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(invocation);
 
         InboundMessageResult result = service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
@@ -87,7 +88,7 @@ class InboundMessageServiceTest {
         InOrder inOrder = inOrder(conversationService, messageService, pendingInvocationService);
         inOrder.verify(conversationService).resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null);
         inOrder.verify(messageService).appendMessage(conversation.id(), MessageRole.USER, "Hola");
-        inOrder.verify(pendingInvocationService).enqueueInvocation(conversation.id(), userMessage.id());
+        inOrder.verify(pendingInvocationService).enqueueInvocation(conversation.id(), userMessage.id(), null);
     }
 
     @Test
@@ -103,7 +104,7 @@ class InboundMessageServiceTest {
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
                 .thenReturn(userMessage);
-        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(invocation);
 
         service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
@@ -133,7 +134,7 @@ class InboundMessageServiceTest {
                 .thenReturn(conversation);
         when(messageService.lastMessageAt(conversation.id(), MessageRole.USER)).thenReturn(java.util.Optional.of(previous));
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola")).thenReturn(userMessage);
-        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id())).thenReturn(invocation);
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null)).thenReturn(invocation);
 
         service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
 
@@ -155,7 +156,7 @@ class InboundMessageServiceTest {
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hi"))
                 .thenReturn(userMessage);
-        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id()));
 
         service.ingest(agentId, "telegram", configId, IdentityKind.PROVIDER_USER_ID, "42", "Hi");
@@ -179,7 +180,7 @@ class InboundMessageServiceTest {
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
                 .thenReturn(userMessage);
-        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(invocation);
 
         service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
@@ -215,7 +216,7 @@ class InboundMessageServiceTest {
                 .thenReturn(conversation);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
                 .thenReturn(userMessage);
-        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id()));
 
         service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola", null);
@@ -280,7 +281,7 @@ class InboundMessageServiceTest {
                 .thenReturn(1);
         when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
                 .thenReturn(userMessage);
-        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id()))
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(invocation);
 
         InboundMessageResult result = service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola", "wamid-1");

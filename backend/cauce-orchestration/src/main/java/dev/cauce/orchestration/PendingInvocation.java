@@ -6,6 +6,7 @@ import dev.cauce.orchestration.exception.InvalidPendingInvocationTransitionExcep
 import dev.cauce.orchestration.exception.MaxRetriesExceededException;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -53,13 +54,14 @@ public final class PendingInvocation {
     private final String claimedBy;      // null unless currently PROCESSING
     private final Instant completedAt;   // null unless COMPLETED, FAILED or ABANDONED
     private final Instant nextAttemptAt; // null unless PENDING after a retry release
+    private final String traceParent;    // the ingest's W3C traceparent; null when not traced (V52)
 
     private PendingInvocation(UUID id, UUID tenantId, UUID conversationId, UUID triggerMessageId,
                              PendingInvocationStatus status, int attemptCount, int maxAttempts,
                              Instant lastAttemptAt, String lastError,
                              InvocationFailureType failureType, Instant createdAt,
                              Instant claimedAt, String claimedBy, Instant completedAt,
-                             Instant nextAttemptAt) {
+                             Instant nextAttemptAt, String traceParent) {
         this.id = id;
         this.tenantId = tenantId;
         this.conversationId = conversationId;
@@ -75,6 +77,7 @@ public final class PendingInvocation {
         this.claimedBy = claimedBy;
         this.completedAt = completedAt;
         this.nextAttemptAt = nextAttemptAt;
+        this.traceParent = traceParent;
     }
 
     // === FACTORY METHODS ===
@@ -86,6 +89,12 @@ public final class PendingInvocation {
      * attempt budget, and {@code nextAttemptAt} unset (immediately eligible).
      */
     public static PendingInvocation create(UUID tenantId, UUID conversationId, UUID triggerMessageId) {
+        return create(tenantId, conversationId, triggerMessageId, null);
+    }
+
+    /** As {@link #create(UUID, UUID, UUID)}, continuing the trace {@code traceParent} names (ADR 0011, T2). */
+    public static PendingInvocation create(UUID tenantId, UUID conversationId, UUID triggerMessageId,
+                                           String traceParent) {
         return new PendingInvocation(
                 UuidGenerator.newV7(),
                 Objects.requireNonNull(tenantId, "tenantId"),
@@ -101,7 +110,8 @@ public final class PendingInvocation {
                 null,
                 null,
                 null,
-                null);
+                null,
+                traceParent);
     }
 
     /** Rebuilds an invocation from already-persisted state. For the persistence layer only. */
@@ -112,6 +122,19 @@ public final class PendingInvocation {
                                              Instant createdAt, Instant claimedAt,
                                              String claimedBy, Instant completedAt,
                                              Instant nextAttemptAt) {
+        return rehydrate(id, tenantId, conversationId, triggerMessageId, status, attemptCount, maxAttempts,
+                lastAttemptAt, lastError, failureType, createdAt, claimedAt, claimedBy, completedAt, nextAttemptAt,
+                null);
+    }
+
+    /** As the other {@code rehydrate}, with the trace the invocation continues (V52). */
+    public static PendingInvocation rehydrate(UUID id, UUID tenantId, UUID conversationId,
+                                             UUID triggerMessageId, PendingInvocationStatus status,
+                                             int attemptCount, int maxAttempts, Instant lastAttemptAt,
+                                             String lastError, InvocationFailureType failureType,
+                                             Instant createdAt, Instant claimedAt,
+                                             String claimedBy, Instant completedAt,
+                                             Instant nextAttemptAt, String traceParent) {
         return new PendingInvocation(
                 Objects.requireNonNull(id, "id"),
                 Objects.requireNonNull(tenantId, "tenantId"),
@@ -127,7 +150,8 @@ public final class PendingInvocation {
                 claimedAt,     // nullable
                 claimedBy,     // nullable
                 completedAt,   // nullable
-                nextAttemptAt); // nullable
+                nextAttemptAt, // nullable
+                traceParent);  // nullable
     }
 
     // === LIFECYCLE TRANSITIONS (IMMUTABLE - RETURN NEW INSTANCES) ===
@@ -149,7 +173,7 @@ public final class PendingInvocation {
         Instant now = Instant.now();
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.PROCESSING, attemptCount + 1, maxAttempts, now, lastError,
-                failureType, createdAt, now, worker, completedAt, null);
+                failureType, createdAt, now, worker, completedAt, null, traceParent);
     }
 
     /**
@@ -166,7 +190,7 @@ public final class PendingInvocation {
         }
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.COMPLETED, attemptCount, maxAttempts, lastAttemptAt, lastError,
-                failureType, createdAt, claimedAt, claimedBy, Instant.now(), null);
+                failureType, createdAt, claimedAt, claimedBy, Instant.now(), null, traceParent);
     }
 
     /**
@@ -210,7 +234,7 @@ public final class PendingInvocation {
         Instant next = Objects.requireNonNull(now, "now").plusSeconds(delaySeconds);
         return new PendingInvocation(id, tenantId, conversationId, triggerMessageId,
                 PendingInvocationStatus.PENDING, attemptCount, maxAttempts, lastAttemptAt,
-                truncateError(errorMessage), failureType, createdAt, null, null, completedAt, next);
+                truncateError(errorMessage), failureType, createdAt, null, null, completedAt, next, traceParent);
     }
 
     /**
@@ -231,7 +255,7 @@ public final class PendingInvocation {
                 PendingInvocationStatus.FAILED, attemptCount, maxAttempts, lastAttemptAt,
                 truncateError(requireText(errorMessage, "errorMessage")),
                 Objects.requireNonNull(failureType, "failureType"), createdAt, claimedAt,
-                claimedBy, Instant.now(), null);
+                claimedBy, Instant.now(), null, traceParent);
     }
 
     /**
@@ -252,7 +276,7 @@ public final class PendingInvocation {
                 PendingInvocationStatus.ABANDONED, attemptCount, maxAttempts, lastAttemptAt,
                 truncateError(requireText(errorMessage, "errorMessage")),
                 Objects.requireNonNull(failureType, "failureType"), createdAt, claimedAt,
-                claimedBy, Instant.now(), null);
+                claimedBy, Instant.now(), null, traceParent);
     }
 
     private String transitionError(PendingInvocationStatus target) {
@@ -329,6 +353,11 @@ public final class PendingInvocation {
 
     public Instant completedAt() {
         return completedAt;
+    }
+
+    /** The W3C traceparent of the trace this invocation continues, when one was being recorded. */
+    public Optional<String> traceParent() {
+        return Optional.ofNullable(traceParent);
     }
 
     public Instant nextAttemptAt() {

@@ -37,6 +37,7 @@ import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
+import dev.cauce.orchestration.tracing.MessageTracing;
 import dev.cauce.orchestration.usage.LlmUsageRecord;
 import dev.cauce.orchestration.usage.LlmUsageRecorder;
 import dev.cauce.orchestration.usage.SpendGuard;
@@ -126,6 +127,7 @@ public class OrchestratorService {
     private final ObjectProvider<AgentReplyDispatcher> replyDispatcher;
     private final AgenticLoopProperties loopProperties;
     private final SpendGuard spendGuard;
+    private final MessageTracing tracing;
     private final Clock clock;
 
     public OrchestratorService(ConversationGateway conversationGateway,
@@ -139,6 +141,7 @@ public class OrchestratorService {
                                ObjectProvider<AgentReplyDispatcher> replyDispatcher,
                                AgenticLoopProperties loopProperties,
                                SpendGuard spendGuard,
+                               MessageTracing tracing,
                                Clock clock) {
         this.conversationGateway = conversationGateway;
         this.llmProviderRegistry = llmProviderRegistry;
@@ -151,6 +154,7 @@ public class OrchestratorService {
         this.replyDispatcher = replyDispatcher;
         this.loopProperties = loopProperties;
         this.spendGuard = spendGuard;
+        this.tracing = tracing;
         this.clock = clock;
     }
 
@@ -215,7 +219,24 @@ public class OrchestratorService {
 
             eventPublisher.publishEvent(new LlmInvoked(invocationId, provider.id(),
                     agent.modelName(), iteration, Instant.now()));
-            LlmResponse response = invoke(provider, invocation, conversationId, agent);
+            LlmResponse response;
+            // ADR 0011, T3: the model call's span says which model and what it cost, never what was said.
+            try (MessageTracing.TracedSpan span = tracing.childSpan("cauce.llm.call")
+                    .tag("provider", provider.id()).tag("model", agent.modelName()).tag("round", iteration)
+                    .tag("tenant_id", agent.tenantId().toString()).tag("agent_id", agent.id().toString())) {
+                try {
+                    response = invoke(provider, invocation, conversationId, agent);
+                } catch (RuntimeException e) {
+                    span.error(e);
+                    throw e;
+                }
+                span.tag("input_tokens", response.usage().inputTokens())
+                        .tag("output_tokens", response.usage().outputTokens())
+                        .tag("cache_read_tokens", response.usage().cacheReadTokens())
+                        .tag("cache_write_tokens", response.usage().cacheWriteTokens())
+                        .tag("finish_reason", response.finishReason().name())
+                        .tag("outcome", "ok");
+            }
             // Billing fact: committed in its own short transaction before the event is
             // observable; a failure here fails the invocation rather than losing usage.
             usageRecorder.record(LlmUsageRecord.create(agent.tenantId(), agent.id(),
@@ -265,7 +286,12 @@ public class OrchestratorService {
             }
             for (ToolCall call : response.toolCalls()) {
                 long dispatchStartNanos = System.nanoTime();
-                ToolResult result = dispatch(call, agent, toolContext);
+                ToolResult result;
+                try (MessageTracing.TracedSpan span = tracing.childSpan("cauce.tool.call")
+                        .tag("tool", call.toolName()).tag("round", iteration)) {
+                    result = dispatch(call, agent, toolContext);
+                    span.tag("outcome", result.isError() ? "error" : "ok");
+                }
                 long dispatchMillis = elapsedMillis(dispatchStartNanos);
                 Message resultMessage = Message.toolResult(conversationId, result);
                 messages.add(conversationGateway.appendAudited(resultMessage, ConductAuditEvents.toolReturned(

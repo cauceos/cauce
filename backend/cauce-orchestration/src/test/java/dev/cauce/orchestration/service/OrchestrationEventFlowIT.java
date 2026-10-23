@@ -202,7 +202,7 @@ class OrchestrationEventFlowIT extends AbstractOrchestrationIntegrationTest {
         assertThat(claimed).hasSize(1);
         PendingInvocationWorker syncWorker = new PendingInvocationWorker(pendingInvocationService,
                 orchestratorService, workerIdentity, new SyncTaskExecutor(), properties,
-                applicationContext, failureFallbackService);
+                applicationContext, failureFallbackService, dev.cauce.orchestration.tracing.MessageTracing.noop());
         syncWorker.processInvocation(claimed.get(0));
         return result;
     }

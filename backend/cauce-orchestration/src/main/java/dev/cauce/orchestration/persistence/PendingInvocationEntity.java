@@ -69,6 +69,10 @@ public class PendingInvocationEntity {
     @Column(name = "next_attempt_at")
     private Instant nextAttemptAt;
 
+    /** The ingest's W3C traceparent (V52); written once, never changed. */
+    @Column(name = "trace_parent", updatable = false, length = 55)
+    private String traceParent;
+
     protected PendingInvocationEntity() {
         // for JPA
     }
@@ -79,6 +83,17 @@ public class PendingInvocationEntity {
                                    InvocationFailureType failureType, Instant createdAt,
                                    Instant claimedAt, String claimedBy, Instant completedAt,
                                    Instant nextAttemptAt) {
+        this(id, tenantId, conversationId, triggerMessageId, status, attemptCount, maxAttempts, lastAttemptAt,
+                lastError, failureType, createdAt, claimedAt, claimedBy, completedAt, nextAttemptAt, null);
+    }
+
+    public PendingInvocationEntity(UUID id, UUID tenantId, UUID conversationId, UUID triggerMessageId,
+                                   PendingInvocationStatus status, int attemptCount, int maxAttempts,
+                                   Instant lastAttemptAt, String lastError,
+                                   InvocationFailureType failureType, Instant createdAt,
+                                   Instant claimedAt, String claimedBy, Instant completedAt,
+                                   Instant nextAttemptAt, String traceParent) {
+        this.traceParent = traceParent;
         this.id = id;
         this.tenantId = tenantId;
         this.conversationId = conversationId;
@@ -154,5 +169,9 @@ public class PendingInvocationEntity {
 
     public Instant getNextAttemptAt() {
         return nextAttemptAt;
+    }
+
+    public String getTraceParent() {
+        return traceParent;
     }
 }

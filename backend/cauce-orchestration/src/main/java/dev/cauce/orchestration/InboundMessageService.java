@@ -12,6 +12,7 @@ import dev.cauce.orchestration.events.InvocationRequested;
 import dev.cauce.orchestration.exception.InvalidIdempotencyKeyException;
 import dev.cauce.orchestration.persistence.IngestIdempotencyRecordMapper;
 import dev.cauce.orchestration.persistence.IngestIdempotencyRecordRepository;
+import dev.cauce.orchestration.tracing.MessageTracing;
 import dev.cauce.tenancy.ConversationService;
 import dev.cauce.tenancy.MessageService;
 import java.time.Duration;
@@ -71,6 +72,7 @@ public class InboundMessageService {
     private final IngestIdempotencyRecordMapper idempotencyRecordMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final AuditEventRecorder auditRecorder;
+    private final MessageTracing tracing;
 
     public InboundMessageService(ConversationService conversationService,
                                  MessageService messageService,
@@ -78,7 +80,8 @@ public class InboundMessageService {
                                  IngestIdempotencyRecordRepository idempotencyRecordRepository,
                                  IngestIdempotencyRecordMapper idempotencyRecordMapper,
                                  ApplicationEventPublisher eventPublisher,
-                                 AuditEventRecorder auditRecorder) {
+                                 AuditEventRecorder auditRecorder,
+                                 MessageTracing tracing) {
         this.conversationService = conversationService;
         this.messageService = messageService;
         this.pendingInvocationService = pendingInvocationService;
@@ -86,6 +89,7 @@ public class InboundMessageService {
         this.idempotencyRecordMapper = idempotencyRecordMapper;
         this.eventPublisher = eventPublisher;
         this.auditRecorder = auditRecorder;
+        this.tracing = tracing;
     }
 
     /**
@@ -175,7 +179,8 @@ public class InboundMessageService {
         Optional<Instant> previousMessageAt = messageService.lastMessageAt(conversation.id(), MessageRole.USER);
         Message userMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, content);
         PendingInvocation invocation =
-                pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id());
+                pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(),
+                        tracing.currentTraceParent().orElse(null)); // ADR 0011, T2: the reply continues this trace
         if (idempotencyKey != null) {
             idempotencyRecordRepository.recordResult(
                     lockId, conversation.id(), userMessage.id(), invocation.id());

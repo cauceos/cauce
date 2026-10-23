@@ -16,6 +16,7 @@ import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
+import dev.cauce.orchestration.tracing.MessageTracing;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
@@ -64,6 +65,7 @@ public class PendingInvocationWorker {
     private final WorkerIdentity workerIdentity;
     private final TaskExecutor executor;
     private final PendingInvocationWorkerProperties properties;
+    private final MessageTracing tracing;
     private final ApplicationEventPublisher eventPublisher;
     private final FailureFallbackService failureFallbackService;
 
@@ -74,12 +76,14 @@ public class PendingInvocationWorker {
                                            TaskExecutor executor,
                                    PendingInvocationWorkerProperties properties,
                                    ApplicationEventPublisher eventPublisher,
-                                   FailureFallbackService failureFallbackService) {
+                                   FailureFallbackService failureFallbackService,
+                                   MessageTracing tracing) {
         this.pendingInvocationService = pendingInvocationService;
         this.orchestratorService = orchestratorService;
         this.workerIdentity = workerIdentity;
         this.executor = executor;
         this.properties = properties;
+        this.tracing = tracing;
         this.eventPublisher = eventPublisher;
         this.failureFallbackService = failureFallbackService;
     }
@@ -123,16 +127,26 @@ public class PendingInvocationWorker {
         MDC.put(LogKeys.TENANT_ID, invocation.tenantId().toString());
         MDC.put(LogKeys.INVOCATION_ID, invocation.id().toString());
         MDC.put(LogKeys.CONVERSATION_ID, invocation.conversationId().toString());
+        // ADR 0011, T2: the span of this invocation continues the trace of the message's ingest.
+        MessageTracing.TracedSpan span = tracing.continueTrace(invocation.traceParent().orElse(null), "cauce.invocation")
+                .tag("tenant_id", invocation.tenantId().toString())
+                .tag("invocation_id", invocation.id().toString())
+                .tag("conversation_id", invocation.conversationId().toString())
+                .tag("message_id", invocation.triggerMessageId().toString());
         try {
             try {
                 orchestratorService.respondToMessage(invocation.id(),
                         invocation.conversationId(), invocation.triggerMessageId());
+                span.tag("outcome", "completed");
                 pendingInvocationService.markCompleted(invocation.id());
                 log.debug("Worker {} completed invocation {}",
                         workerIdentity.getId(), invocation.id());
             } catch (LlmProviderException e) {
+                span.error(e);
                 handleLlmFailure(invocation, e);
             } catch (RuntimeException e) {
+                span.error(e);
+                span.tag("failure_type", failureTypeOf(e).name());
                 // Setup errors (conversation/agent/message not found, invalid trigger,
                 // provider not configured, unknown model, context too large, etc.) are
                 // not transient — failing the row is the correct action.
@@ -146,6 +160,7 @@ public class PendingInvocationWorker {
                 }, invocation, "FAILED");
             }
         } finally {
+            span.close();
             TenantContext.clear();
             MDC.remove(LogKeys.TENANT_ID);
             MDC.remove(LogKeys.INVOCATION_ID);

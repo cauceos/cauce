@@ -79,6 +79,15 @@ public class PendingInvocationService {
      */
     @Transactional
     public PendingInvocation enqueueInvocation(UUID conversationId, UUID triggerMessageId) {
+        return enqueueInvocation(conversationId, triggerMessageId, null);
+    }
+
+    /**
+     * As {@link #enqueueInvocation(UUID, UUID)}, the invocation continuing the trace {@code traceParent}
+     * names (ADR 0011, T2); null when nothing is being traced.
+     */
+    @Transactional
+    public PendingInvocation enqueueInvocation(UUID conversationId, UUID triggerMessageId, String traceParent) {
         ConversationEntity conversation = conversationRepository.findById(conversationId).orElseThrow(() ->
                 new ConversationNotFoundException("No conversation found for id " + conversationId));
 
@@ -90,7 +99,7 @@ public class PendingInvocationService {
                 new AgentNotFoundException("No agent found for id " + conversation.getAgentId()));
 
         PendingInvocation invocation =
-                PendingInvocation.create(agent.getTenantId(), conversationId, triggerMessageId);
+                PendingInvocation.create(agent.getTenantId(), conversationId, triggerMessageId, traceParent);
         return pendingInvocationMapper.toDomain(
                 pendingInvocationRepository.save(pendingInvocationMapper.toEntity(invocation)));
     }

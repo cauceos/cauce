@@ -9,6 +9,8 @@ spring-boot = "3.5.14"
 spring-dependency-management = "1.1.7"
 uuid-creator = "6.1.1"
 wiremock = "3.9.2"
+# Must match the OpenTelemetry API the Spring Boot BOM manages (1.49.0 for Boot 3.5).
+opentelemetry-instrumentation = "2.15.0-alpha"
 
 [libraries]
 # RFC 9562 UUIDv7 (time-ordered) generator. Used by the domain to mint ids.
@@ -16,6 +18,8 @@ uuid-creator = { module = "com.github.f4b6a3:uuid-creator", version.ref = "uuid-
 # HTTP mock server for adapter tests. The standalone (shaded) artifact bundles its own
 # Jetty/Jackson so it cannot clash with the Spring Boot dependency versions on the classpath.
 wiremock = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock" }
+# Bridges Logback to the OpenTelemetry SDK, so log lines are exported over OTLP (ADR 0011).
+opentelemetry-logback-appender = { module = "io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0", version.ref = "opentelemetry-instrumentation" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

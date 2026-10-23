@@ -10,6 +10,8 @@ import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.identity.Identity;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.orchestration.LogSafe;
+import dev.cauce.orchestration.tracing.MessageTracing;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -51,15 +53,18 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
     private final ChannelConfigService channelConfigService;
     private final InterlocutorLookup interlocutorLookup;
     private final TaskExecutor outboundExecutor;
+    private final MessageTracing tracing;
 
     public OutboundDeliveryService(ChannelAdapterRegistry adapterRegistry,
                                    ChannelConfigService channelConfigService,
                                    InterlocutorLookup interlocutorLookup,
-                                   @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor) {
+                                   @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor,
+                                   MessageTracing tracing) {
         this.adapterRegistry = adapterRegistry;
         this.channelConfigService = channelConfigService;
         this.interlocutorLookup = interlocutorLookup;
         this.outboundExecutor = outboundExecutor;
+        this.tracing = tracing;
     }
 
     @Override
@@ -76,9 +81,11 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
                     + "for conversation {}", conversation.id());
             return;
         }
+        // ADR 0011, T2: the delivery runs on another thread; it continues the invocation's trace.
+        String traceParent = tracing.currentTraceParent().orElse(null);
         try {
             outboundExecutor.execute(() ->
-                    deliverUnderTenant(tenantId.get(), configId.get(), conversation, agentReply));
+                    deliverUnderTenant(tenantId.get(), configId.get(), conversation, agentReply, traceParent));
         } catch (RuntimeException e) {
             log.warn("Could not queue outbound delivery for conversation {}: {}",
                     conversation.id(), e.toString(), e);
@@ -87,7 +94,16 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
 
     /** Runs on the outbound executor: everything is best-effort and fully caught. */
     private void deliverUnderTenant(UUID tenantId, UUID configId, Conversation conversation,
-                                    Message agentReply) {
+                                    Message agentReply, String traceParent) {
+        try (MessageTracing.TracedSpan span = tracing.continueTrace(traceParent, "cauce.reply.delivery")
+                .tag("tenant_id", tenantId.toString()).tag("conversation_id", conversation.id().toString())
+                .tag("message_id", agentReply.id().toString()).tag("channel_config_id", configId.toString())) {
+            deliver(tenantId, configId, conversation, agentReply, span);
+        }
+    }
+
+    private void deliver(UUID tenantId, UUID configId, Conversation conversation, Message agentReply,
+                         MessageTracing.TracedSpan span) {
         TenantContext.setCurrentTenantId(tenantId);
         MDC.put(LogKeys.TENANT_ID, tenantId.toString()); // ADR 0011, L1
         MDC.put(LogKeys.CONVERSATION_ID, conversation.id().toString());
@@ -101,6 +117,7 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
                 return;
             }
             String channelType = config.get().channelType();
+            span.tag("channel_type", channelType);
             Optional<OutboundChannelAdapter> adapter = adapterRegistry.outboundAdapter(channelType);
             if (adapter.isEmpty()) {
                 log.debug("Channel '{}' has no outbound adapter; reply {} is poll-only",
@@ -119,10 +136,13 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
                     interlocutorLookup.lastMessageAt(conversation.id()).orElse(null)), config.get());
             log.debug("Delivered reply {} through channel '{}' for conversation {}",
                     agentReply.id(), channelType, conversation.id());
+            span.tag("outcome", "delivered");
         } catch (RuntimeException e) {
+            span.error(e);
             log.warn("Outbound delivery failed for conversation {} through config {} (best-effort; "
                             + "the reply stays readable via the messages API): {}",
-                    conversation.id(), configId, e.toString(), e);
+                    conversation.id(), configId, LogSafe.describe(e));
+            log.debug("Outbound delivery failure detail", e);
         } finally {
             TenantContext.clear();
             MDC.remove(LogKeys.TENANT_ID);

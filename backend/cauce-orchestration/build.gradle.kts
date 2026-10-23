@@ -31,6 +31,9 @@ dependencies {
     implementation(project(":cauce-tools"))
     implementation(project(":cauce-tenancy"))
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    // The Micrometer Tracing API only: a message's trace continued across the queue (ADR 0011, T2).
+    // The OpenTelemetry bridge and its exporter are wired by cauce-api.
+    implementation("io.micrometer:micrometer-tracing")
 
     // Main code emits audit events through the cauce-core AuditEventRecorder port only;
     // the outbox adapter (cauce-governance) is test-scope so ITs boot with the real

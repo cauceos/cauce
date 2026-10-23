@@ -58,7 +58,8 @@ class OutboundDeliveryServiceTest {
         interlocutorLookup = mock(InterlocutorLookup.class);
         service = new OutboundDeliveryService(
                 new ChannelAdapterRegistry(List.of(), List.of(telegramOutbound)),
-                channelConfigService, interlocutorLookup, new SyncTaskExecutor());
+                channelConfigService, interlocutorLookup, new SyncTaskExecutor(),
+                dev.cauce.orchestration.tracing.MessageTracing.noop());
         interlocutor = Identity.create(TENANT_ID, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321");
         when(interlocutorLookup.find(interlocutor.id())).thenReturn(Optional.of(interlocutor));
         config = ChannelConfig.create(TENANT_ID, AGENT_ID, "telegram", "12345:token", "hash");

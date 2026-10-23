@@ -754,7 +754,8 @@ class OrchestratorServiceTest {
         loop.setMaxIterations(maxIterations);
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
                 new MockEnvironment(), errorRecorder, usageRecorder, eventPublisher,
-                replyDispatcherProvider, loop, spendGuard, CLOCK);
+                replyDispatcherProvider, loop, spendGuard,
+                dev.cauce.orchestration.tracing.MessageTracing.noop(), CLOCK);
     }
 
     /** All lifecycle events published so far, in publication order. */

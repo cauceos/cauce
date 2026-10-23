@@ -70,7 +70,7 @@ class PendingInvocationWorkerTest {
         properties.setRetryBaseIntervalSeconds(30L);
         eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
         worker = new PendingInvocationWorker(pendingInvocationService, orchestratorService,
-                workerIdentity, executor, properties, eventPublisher, failureFallbackService);
+                workerIdentity, executor, properties, eventPublisher, failureFallbackService, dev.cauce.orchestration.tracing.MessageTracing.noop());
         TenantContext.clear();
     }
 
