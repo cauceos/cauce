@@ -30,6 +30,11 @@ class ModelContextWindowTest {
     }
 
     @Test
+    void contextWindowFor_quickstartLocalModel_returnsItsWindow() {
+        assertThat(ModelContextWindow.contextWindowFor("qwen2.5:3b")).isEqualTo(32_768);
+    }
+
+    @Test
     void contextWindowFor_whenUnknownModel_returnsConservativeDefault() {
         assertThat(ModelContextWindow.contextWindowFor("gpt-4o"))
                 .isEqualTo(ModelContextWindow.DEFAULT_CONTEXT_WINDOW)
