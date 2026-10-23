@@ -33,3 +33,49 @@
       espera:
         herramientas: [get_business_info]
         rubrica: "Dice que el domingo solo abre a mediodía (12:00 a 16:30); no inventa horario de noche."
+
+- id: G3
+  titulo: Una conversación larga sigue consultando en cada turno, y lo que hace se sostiene
+  nivel: aviso
+  datos: bar-ejemplo
+  origen: medición de R1 (omitir del contexto los resultados de consultas de turnos anteriores)
+  turnos:
+    - cliente: "Hola, ¿a qué hora abrís el {proximo_sabado}?"
+      espera:
+        herramientas: [get_business_info]
+    - cliente: "¿Qué tenéis de tapas?"
+      espera:
+        herramientas: [search_catalog]
+    - cliente: "¿Las croquetas llevan gluten?"
+      espera:
+        herramientas: [search_catalog]
+        respuesta_contiene: ["gluten"]
+    - cliente: "¿Y qué puedo pedir sin gluten?"
+      espera:
+        herramientas: [search_catalog]
+    - cliente: "Vale. Mesa para 4 el {proximo_sabado} a las 21:30, soy Ana, 600 123 456"
+      espera:
+        orden: [check_availability, propose_booking]
+        herramientas_no: [confirm_booking]
+        estado: {reservas: {HELD: 1, CONFIRMED: 0}}
+    - cliente: "Sí"
+      espera:
+        herramientas: [confirm_booking]
+        estado: {reservas: {CONFIRMED: 1}, reserva: {estado: CONFIRMED, personas: 4, hora: "21:30"}}
+    - cliente: "¿Tenéis terraza?"
+      espera:
+        herramientas: [get_business_info]
+        respuesta_contiene: ["terraza"]
+    - cliente: "Al final seremos 6"
+      espera:
+        herramientas: [propose_booking_change]
+        herramientas_no: [confirm_booking]
+    - cliente: "Sí"
+      espera:
+        herramientas: [confirm_booking]
+        estado: {reservas: {CONFIRMED: 1}, reserva: {estado: CONFIRMED, personas: 6, hora: "21:30"}}
+    - cliente: "Por cierto, ¿cuánto cuestan las bravas?"
+      espera:
+        herramientas: [search_catalog]
+        respuesta_contiene: ["5,50"]
+  nota: "Diez turnos: horario, carta, alérgenos, reserva, cambio y otra vez carta. Mide los tokens por turno de una conversación larga, que es donde omitir las consultas pasadas debería notarse, y vigila que el agente siga consultando (G1, G2) y que la reserva y su cambio se confirmen con el código de turnos anteriores."
