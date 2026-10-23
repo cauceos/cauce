@@ -178,3 +178,16 @@
         herramientas: [confirm_booking]
         entregado_no_contiene: ["**", "__", "`"]
   cubierto_por: TelegramChannelAdapterTest#deliver_rendersTheAgentsMarkdownAsTelegramHtml_neverLiteralAsterisks
+
+- id: H3.13
+  titulo: Un día de la semana dicho ese mismo día se aclara antes de reservar
+  nivel: aviso
+  datos: bar-ejemplo
+  origen: línea base del 2026-10-23 (H3.8 se ejecutó un viernes y «el viernes» era ambiguo)
+  turnos:
+    - cliente: "Mesa para 4 el {+0:dia_semana} para cenar, soy Ana, 600 123 456"
+      espera:
+        herramientas_no: [propose_booking, confirm_booking]
+        estado: {reservas: {HELD: 0, CONFIRMED: 0}}
+        rubrica: "Antes de reservar pregunta si es hoy o el de la semana que viene, con la fecha concreta de cada uno, y no propone ninguna reserva. Si ese día no hay turno de cena, lo dice."
+  nota: "El cliente nombra el día de la semana en que se ejecuta la batería, así que la ambigüedad es la misma cualquier día. Domingo y lunes no hay cena: la respuesta correcta es decirlo, y tampoco propone nada."
