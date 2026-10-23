@@ -79,6 +79,7 @@ class OrchestrationEventTest {
                 new InvocationRequested(ID, ID, ID, ID, ID, TS),
                 new ContextAssembled(ID, 0, "m", 1, 10, 200_000, TS),
                 new LlmInvoked(ID, "anthropic", "m", 0, TS),
+                new LlmFailed(ID, "anthropic", "m", 0, "LlmProviderUnavailableException", TS),
                 new LlmResponded(ID, "anthropic", "m", 0, "STOP", 5, 7, 12, TS),
                 new ToolCallRequested(ID, 0, "get_current_time", "call-1", TS),
                 new ToolExecuted(ID, 0, "get_current_time", "call-1", false, 3, TS),

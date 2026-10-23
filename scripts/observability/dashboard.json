@@ -1,0 +1,491 @@
+{
+  "version": 8,
+  "title": "Cauce — operación",
+  "description": "Lo que el operador vigila de una instancia de Cauce (ADR 0011). Solo ids y recuentos.",
+  "tabs": [
+    {
+      "tabId": "default",
+      "name": "Operación",
+      "panels": [
+        {
+          "id": "panel_01",
+          "type": "line",
+          "title": "Mensajes recibidos por agente",
+          "description": "Mensajes de clientes por agente, cada 5 minutos.",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": null,
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "sum by (tenant_id, agent_id) (sum_over_time(cauce_orchestration_invocations_requested[5m]))",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "{agent_id}"
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 0,
+            "w": 96,
+            "h": 9,
+            "i": 1
+          }
+        },
+        {
+          "id": "panel_02",
+          "type": "line",
+          "title": "Respaldo por agente (%)",
+          "description": "Mensajes contestados con el texto de respaldo, sobre los recibidos (15 min).",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": "percent",
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "100 * sum by (tenant_id, agent_id) (sum_over_time(cauce_orchestration_fallbacks[15m])) / sum by (tenant_id, agent_id) (sum_over_time(cauce_orchestration_invocations_requested[15m]))",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "{agent_id}"
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 0,
+            "w": 96,
+            "h": 9,
+            "i": 2
+          }
+        },
+        {
+          "id": "panel_03",
+          "type": "line",
+          "title": "Latencia del turno (media, s)",
+          "description": "Del mensaje del cliente a la respuesta, por agente (5 min).",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": "seconds",
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "sum by (agent_id) (sum_over_time(cauce_orchestration_turn_latency_sum[5m])) / sum by (agent_id) (sum_over_time(cauce_orchestration_turn_latency_count[5m]))",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "{agent_id}"
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 9,
+            "w": 96,
+            "h": 9,
+            "i": 3
+          }
+        },
+        {
+          "id": "panel_04",
+          "type": "line",
+          "title": "Llamadas fallidas por proveedor",
+          "description": "Llamadas al modelo fallidas, por proveedor y tipo de error (5 min).",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": null,
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "sum by (provider, error_type) (sum_over_time(cauce_orchestration_llm_failures[5m]))",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "{provider} {error_type}"
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 9,
+            "w": 96,
+            "h": 9,
+            "i": 4
+          }
+        },
+        {
+          "id": "panel_05",
+          "type": "line",
+          "title": "Cola de invocaciones",
+          "description": "Pendientes y antigüedad de la más antigua que ya debía haberse procesado (s).",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": null,
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "max(cauce_queue_pending)",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "pendientes"
+              }
+            },
+            {
+              "query": "max(cauce_queue_oldest_due_age)",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "antigüedad (s)"
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 18,
+            "w": 96,
+            "h": 9,
+            "i": 5
+          }
+        },
+        {
+          "id": "panel_06",
+          "type": "line",
+          "title": "Auditoría sin encadenar",
+          "description": "Eventos de auditoría esperando a la cadena y antigüedad del más antiguo (s).",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": null,
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "max(cauce_audit_outbox_pending)",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "pendientes"
+              }
+            },
+            {
+              "query": "max(cauce_audit_outbox_oldest_age)",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "antigüedad (s)"
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 18,
+            "w": 96,
+            "h": 9,
+            "i": 6
+          }
+        },
+        {
+          "id": "panel_07",
+          "type": "bar",
+          "title": "Gasto del mes por cliente (US$)",
+          "description": "Gasto con precio de cada cliente en el mes en curso (UTC).",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": null,
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "max by (tenant_id) (cauce_spend_month)",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "{tenant_id}"
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 27,
+            "w": 96,
+            "h": 9,
+            "i": 7
+          }
+        },
+        {
+          "id": "panel_08",
+          "type": "metric",
+          "title": "Avisos al dueño no enviados (24 h)",
+          "description": "Avisos NOT_SENT o FAILED en las últimas 24 horas.",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": null,
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "max(cauce_owner_notices_unsent)",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "avisos"
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 27,
+            "w": 96,
+            "h": 9,
+            "i": 8
+          }
+        },
+        {
+          "id": "panel_09",
+          "type": "line",
+          "title": "Tokens por modelo",
+          "description": "Tokens de entrada y salida por modelo (5 min).",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": null,
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "sum by (model, kind) (sum_over_time(cauce_orchestration_llm_tokens{kind!=\"total\"}[5m]))",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "{model} {kind}"
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 36,
+            "w": 96,
+            "h": 9,
+            "i": 9
+          }
+        },
+        {
+          "id": "panel_10",
+          "type": "bar",
+          "title": "Fallos por tipo",
+          "description": "Invocaciones fallidas por tipo de fallo (15 min).",
+          "queryType": "promql",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "unit": null,
+            "decimals": 2
+          },
+          "queries": [
+            {
+              "query": "sum by (failure_type) (sum_over_time(cauce_orchestration_invocations_failed[15m]))",
+              "customQuery": true,
+              "fields": {
+                "stream": "",
+                "stream_type": "metrics",
+                "x": [],
+                "y": [],
+                "z": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                },
+                "promql_labels": [],
+                "promql_operations": []
+              },
+              "config": {
+                "promql_legend": "{failure_type}"
+              }
+            }
+          ],
+          "layout": {
+            "x": 96,
+            "y": 36,
+            "w": 96,
+            "h": 9,
+            "i": 10
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDatetimeDuration": {
+    "type": "relative",
+    "relativeTimePeriod": "6h",
+    "startTime": 0,
+    "endTime": 0
+  }
+}

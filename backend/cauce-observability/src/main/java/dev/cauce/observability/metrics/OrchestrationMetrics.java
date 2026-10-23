@@ -5,6 +5,7 @@ import dev.cauce.orchestration.events.FallbackSent;
 import dev.cauce.orchestration.events.InvocationCompleted;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationRequested;
+import dev.cauce.orchestration.events.LlmFailed;
 import dev.cauce.orchestration.events.LlmInvoked;
 import dev.cauce.orchestration.events.LlmResponded;
 import dev.cauce.orchestration.events.OrchestrationEvent;
@@ -52,6 +53,7 @@ public class OrchestrationMetrics {
     static final String INVOCATIONS_FAILED = "cauce.orchestration.invocations.failed";
     static final String LLM_CALLS = "cauce.orchestration.llm.calls";
     static final String LLM_RESPONSES = "cauce.orchestration.llm.responses";
+    static final String LLM_FAILURES = "cauce.orchestration.llm.failures";
     static final String LLM_TOKENS = "cauce.orchestration.llm.tokens";
     static final String TOOL_CALLS = "cauce.orchestration.tools.calls";
     static final String TOOL_EXECUTION = "cauce.orchestration.tools.execution";
@@ -129,6 +131,11 @@ public class OrchestrationMetrics {
                 tokens(responded, "output", responded.outputTokens());
                 tokens(responded, "total", responded.totalTokens());
             }
+            case LlmFailed failed ->
+                    registry.counter(LLM_FAILURES,
+                            "provider", failed.provider(),
+                            "model", failed.modelName(),
+                            "error_type", failed.errorType()).increment();
             case ToolCallRequested toolCall ->
                     registry.counter(TOOL_CALLS, "tool", toolCall.toolName()).increment();
             case ToolExecuted executed ->

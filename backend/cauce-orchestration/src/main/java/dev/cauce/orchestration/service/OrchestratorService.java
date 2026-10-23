@@ -26,6 +26,7 @@ import dev.cauce.orchestration.context.ContextBuilder;
 import dev.cauce.orchestration.context.LlmInvocationContext;
 import dev.cauce.orchestration.events.ContextAssembled;
 import dev.cauce.orchestration.events.InvocationCompleted;
+import dev.cauce.orchestration.events.LlmFailed;
 import dev.cauce.orchestration.events.LlmInvoked;
 import dev.cauce.orchestration.events.LlmResponded;
 import dev.cauce.orchestration.events.ToolCallRequested;
@@ -244,6 +245,8 @@ public class OrchestratorService {
                     response = invoke(provider, invocation, conversationId, agent);
                 } catch (RuntimeException e) {
                     span.error(e);
+                    eventPublisher.publishEvent(new LlmFailed(invocationId, provider.id(), agent.modelName(),
+                            iteration, e.getClass().getSimpleName(), Instant.now()));
                     throw e;
                 }
                 span.tag("input_tokens", response.usage().inputTokens())

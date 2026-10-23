@@ -12,6 +12,7 @@ import dev.cauce.orchestration.events.InvocationCompleted;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.events.InvocationRequested;
+import dev.cauce.orchestration.events.LlmFailed;
 import dev.cauce.orchestration.events.LlmInvoked;
 import dev.cauce.orchestration.events.LlmResponded;
 import dev.cauce.orchestration.events.ToolCallRequested;
@@ -125,6 +126,14 @@ class OrchestrationMetricsTest {
 
         assertThat(registry.counter(OrchestrationMetrics.LLM_CALLS,
                 "provider", "anthropic", "model", "claude-sonnet-4-7").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    void on_llmFailed_countsFailuresByProviderModelAndType() {
+        metrics.on(new LlmFailed(INVOCATION_ID, "ollama", "qwen2.5:3b", 0, "LlmProviderUnavailableException", NOW));
+
+        assertThat(registry.counter(OrchestrationMetrics.LLM_FAILURES, "provider", "ollama", "model", "qwen2.5:3b",
+                "error_type", "LlmProviderUnavailableException").count()).isEqualTo(1.0);
     }
 
     @Test

@@ -6,7 +6,7 @@ import java.util.UUID;
 /**
  * An observable step in the life of one queued LLM invocation, from enqueue
  * ({@link InvocationRequested}) through the agentic loop's rounds ({@link ContextAssembled},
- * {@link LlmInvoked}, {@link LlmResponded}, {@link ToolCallRequested}, {@link ToolExecuted})
+ * {@link LlmInvoked}, {@link LlmResponded} or {@link LlmFailed}, {@link ToolCallRequested}, {@link ToolExecuted})
  * to a terminal outcome ({@link InvocationCompleted} or {@link InvocationFailed}, the latter
  * followed by {@link FallbackSent} when the person got the fallback reply).
  *
@@ -17,7 +17,7 @@ import java.util.UUID;
  * this contract is the hook for observability, governance, and usage accounting.
  */
 public sealed interface OrchestrationEvent
-        permits InvocationRequested, ContextAssembled, LlmInvoked, LlmResponded,
+        permits InvocationRequested, ContextAssembled, LlmInvoked, LlmResponded, LlmFailed,
         ToolCallRequested, ToolExecuted, InvocationCompleted, InvocationFailed, FallbackSent {
 
     /** The id of the queued invocation ({@code pending_invocations} row) this event belongs to. */

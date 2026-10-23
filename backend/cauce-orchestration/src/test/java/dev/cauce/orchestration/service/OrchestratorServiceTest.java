@@ -38,6 +38,7 @@ import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.context.ContextBuilder;
 import dev.cauce.orchestration.events.ContextAssembled;
 import dev.cauce.orchestration.events.InvocationCompleted;
+import dev.cauce.orchestration.events.LlmFailed;
 import dev.cauce.orchestration.events.LlmInvoked;
 import dev.cauce.orchestration.events.LlmResponded;
 import dev.cauce.orchestration.events.OrchestrationEvent;
@@ -529,10 +530,12 @@ class OrchestratorServiceTest {
                 .respondToMessage(invocationId, conversationId, triggerId))
                 .isInstanceOf(LlmRateLimitException.class);
 
-        // The call was announced but produced nothing: LlmInvoked yes, the rest is the
+        // The call was announced and failed: LlmInvoked then LlmFailed; the rest is the
         // worker's InvocationFailed (not emitted from here).
         assertThat(publishedEvents())
-                .hasExactlyElementsOfTypes(ContextAssembled.class, LlmInvoked.class);
+                .hasExactlyElementsOfTypes(ContextAssembled.class, LlmInvoked.class, LlmFailed.class);
+        assertThat(publishedEvents().get(2)).isInstanceOfSatisfying(LlmFailed.class, failed ->
+                assertThat(failed.errorType()).isEqualTo("LlmRateLimitException"));
     }
 
     // === SPEND LIMIT (ADR 0010, S6, S7: checked before the model is called) ===

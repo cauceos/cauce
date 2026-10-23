@@ -21,6 +21,7 @@ import dev.cauce.orchestration.events.InvocationCompleted;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.events.InvocationRequested;
+import dev.cauce.orchestration.events.LlmFailed;
 import dev.cauce.orchestration.events.LlmInvoked;
 import dev.cauce.orchestration.events.LlmResponded;
 import dev.cauce.orchestration.events.OrchestrationEvent;
@@ -182,9 +183,9 @@ class OrchestrationEventFlowIT extends AbstractOrchestrationIntegrationTest {
 
         List<OrchestrationEvent> events = recordedEvents();
         assertThat(events).hasExactlyElementsOfTypes(InvocationRequested.class,
-                ContextAssembled.class, LlmInvoked.class, InvocationFailed.class, FallbackSent.class);
+                ContextAssembled.class, LlmInvoked.class, LlmFailed.class, InvocationFailed.class, FallbackSent.class);
 
-        InvocationFailed failed = (InvocationFailed) events.get(3);
+        InvocationFailed failed = (InvocationFailed) events.get(4);
         assertThat(failed.invocationId()).isEqualTo(result.invocationId());
         assertThat(failed.failureType()).isEqualTo(InvocationFailureType.LLM_ERROR);
         assertThat(failed.detail()).contains("401");

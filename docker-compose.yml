@@ -14,6 +14,10 @@
 #
 # Devs running bootRun who only want a local Ollama:
 #   docker compose --profile ollama up -d
+#
+# Observability backend (OpenObserve: traces, metrics, logs, alerts; ADR 0011),
+# see docs/operations/observability.md:
+#   docker compose --profile observability up -d
 name: cauce
 
 services:
@@ -143,6 +147,27 @@ services:
     networks:
       - cauce-net
 
+  # --- Observability profile ---------------------------------------------------
+  # Only with `--profile observability`. The application exports to it over OTLP when
+  # MANAGEMENT_OTLP_* point here; alerts are provisioned by scripts/observability/provision.sh.
+  openobserve:
+    image: openobserve/openobserve:v1.0.4
+    container_name: cauce-openobserve
+    profiles: [observability]
+    environment:
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_ROOT_EMAIL:-root@cauce.local}
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_ROOT_PASSWORD:-cauce_dev_observe}
+      ZO_DATA_DIR: /data
+      # Ids only ever reach it (ADR 0011, L2, T3); a month is enough to follow an incident.
+      ZO_COMPACT_DATA_RETENTION_DAYS: ${OPENOBSERVE_RETENTION_DAYS:-30}
+      ZO_TELEMETRY: "false"
+    ports:
+      - "${OPENOBSERVE_PORT:-5080}:5080"
+    volumes:
+      - cauce_observedata:/data
+    networks:
+      - cauce-net
+
 volumes:
   cauce_pgdata:
     name: cauce_pgdata
@@ -150,6 +175,8 @@ volumes:
     name: cauce_redisdata
   cauce_ollamadata:
     name: cauce_ollamadata
+  cauce_observedata:
+    name: cauce_observedata
 
 networks:
   cauce-net:
