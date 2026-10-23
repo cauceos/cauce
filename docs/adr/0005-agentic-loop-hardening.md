@@ -105,6 +105,30 @@ hashes, so that erasing the business rows never touches the chain.
 The criteria above were set before implementation began, in reply to the diagnosis of the
 loop. This record is their home in the repository.
 
+## Amendment (2026-10-23): eliding past lookups (R1), measured and rejected
+
+Every request resends the whole window, and the bar's agent queries the profile and the menu
+again on each turn, so the earlier results of those lookups are repeats. R1 replaced them, before
+the latest user message, with a marker ("resultado omitido; vuelve a consultar si lo necesitas"),
+keeping the call and its paired result (C2) and never touching an action's result. It was built
+behind a per-agent switch (`agents.elide_past_lookups`, V45) and measured with the eval harness
+(ADR 0009) on the full battery, N = 5, same commit and prompt:
+
+| Run | R1 | Pass rate | Input tokens per model turn | Read from cache | Cost |
+|---|---|---|---|---|---|
+| `2026-10-23T0914Z` | off | 100 % | 13,282 | 97 % | 1.6168 US$ |
+| `2026-10-23T0941Z` | on | 100 % | 12,695 | 96 % | 1.6768 US$ |
+
+- **Rejected; the switch stays, off by default.** Quality does not change, input tokens fall by
+  4 %, and cost rises by 3.7 %: eliding rewrites the previous turn's results, so the cached prefix
+  ends earlier on every turn and more of the window is written to the cache again (cache writes
+  +27 %). A cheaper token that has to be rewritten costs more than a cached one that is read.
+- **Reopening condition: measure with production data**, where the cache goes cold between a
+  person's messages (they often take longer than its five minutes) and only the tools and the
+  prompt stay cached. There R1 no longer breaks a warm prefix, and the tokens it removes are paid
+  at the full input price. The harness cannot show this: its calls follow each other and its cache
+  never expires.
+
 ## References
 
 - `backend/cauce-orchestration/src/main/java/dev/cauce/orchestration/service/OrchestratorService.java` — the loop

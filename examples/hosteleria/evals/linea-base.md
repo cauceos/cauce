@@ -1,7 +1,8 @@
 # Línea base del agente de clientes del bar
 
-**Vigente:** la batería completa [`2026-10-23T0732Z`](historial/2026-10-23T0732Z-claude-sonnet-5-5.json)
-con el prompt vigente, N = 5: **98 %** global y **todos los bloqueantes al 100 %**.
+**Vigente:** la batería completa [`2026-10-23T0914Z`](historial/2026-10-23T0914Z-claude-sonnet-5-5.json)
+con el prompt vigente, N = 5: **100 %** global en sus 40 escenarios y **todos los bloqueantes al
+100 %**.
 
 **Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `8f304cf5de01` · **Juez:** ninguno
 
@@ -20,9 +21,76 @@ vigente, la anterior se conserva más abajo con su diagnóstico y los cambios qu
 arreglos de comprobación y prompt → **97 %**, bloqueantes al 100 % (`1543Z`) → **regresión en
 H3.8** (100 % → 20 %), provocada por el prompt nuevo → corrección del prompt → **H3.8 al 100 %**
 sin romper G1, G2, H4.1, H4.4, H4.6 ni H4.7 (`1559Z`) → **98 %** con la batería completa sobre el
-prompt corregido (`0732Z`).
+prompt corregido (`0732Z`) → arreglos del arnés y del orden de los mensajes, y escenarios G3 y
+H3.13 → **100 %** (`0914Z`). El experimento R1 (`0941Z`) no cambia la línea base: se rechazó.
 
-## Línea base vigente · 2026-10-23T0732Z
+## Línea base vigente · 2026-10-23T0914Z
+
+| Commit | Huella del prompt | Turnos de modelo | Coste |
+|---|---|---|---|
+| `d9465c2` | `8f304cf5de01` | 270 | 1,6168 US$ |
+
+| Entrada | Leída de caché | Escrita en caché | Salida |
+|---|---|---|---|
+| 3.586.219 | 3.476.815 (97,0 %) | 107.638 | 64.884 |
+
+- Sin caché, las mismas llamadas habrían costado 7,8213 US$: la caché ahorró un **79 %**. Ese
+  ahorro es un techo, por lo mismo que en las líneas base anteriores.
+- Coste medio: **0,0060 US$ por turno de modelo**; **13.282 tokens de entrada por turno**.
+  Precios de `precios.yaml`, versión 2026-10-22.
+- Es el mismo prompt que `0732Z`. Lo que cambió desde entonces es el sistema y la batería: el orden
+  de los mensajes por `seq` (`8b031a7`, la causa del fallo de H3.10), las fechas deterministas en el
+  texto del cliente (`f12cdd9`, la de H3.8), los turnos que no se completan fuera de las tasas
+  (`7f24821`), la comprobación de H1.1, y dos escenarios nuevos: H3.13 (un día de la semana dicho ese
+  mismo día) y G3 (diez turnos). Por eso cuesta más que `0732Z`: 270 turnos de modelo, no 214.
+
+### Tasas
+
+**Global: 100 %** (160 de 160 repeticiones con todas sus comprobaciones en verde).
+
+| Tarea | Tasa |
+|---|---|
+| 00 · anclaje | 100 % |
+| 01 · información | 100 % |
+| 02 · carta | 100 % |
+| 03 · reservas | 100 % |
+| 04 · escalado | 100 % |
+| 05 · resumen | 100 % |
+
+| Regla general | Tasa |
+|---|---|
+| G1 · carta consultada antes de hablar de ella | 100 % |
+| Carta sin inventar | 100 % |
+
+**Bloqueantes por debajo del 100 %:** ninguno. **Avisos bajo el umbral del 90 %:** ninguno. De los
+40 escenarios, 36 se ejecutaron y están al 100 %; H3.7, H4.5, H5.4 y H5.5 siguen cubiertos por sus
+IT. 110 comprobaciones de rúbrica, pendientes de juez.
+
+## Experimento R1 · consultas pasadas omitidas · rechazado
+
+Con R1, antes del último mensaje del cliente, el resultado de una consulta (ficha, carta,
+disponibilidad) se sustituye por «resultado omitido; vuelve a consultar si lo necesitas». Se
+midió con la batería completa, N = 5, el mismo código y el mismo prompt; solo cambia el
+interruptor (`-Pevals.r1=true`):
+
+| Ejecución | R1 | Tasa | Tokens de entrada por turno | Leída de caché | Coste |
+|---|---|---|---|---|---|
+| [`0914Z`](historial/2026-10-23T0914Z-claude-sonnet-5-5.json) | apagado | 100 % | 13.282 | 97 % | 1,6168 US$ |
+| [`0941Z`](historial/2026-10-23T0941Z-claude-sonnet-5-5.json)¹ | encendido | 100 % | 12.695 | 96 % | 1,6768 US$ |
+
+¹ Con cambios sin commitear: solo el resumen de `0914Z` en `historial/`.
+
+**Decisión: R1 queda apagado por defecto; se conserva el interruptor.** No mejora la calidad, y
+aunque la entrada baja un 4 %, el coste sube un **3,7 %**: al omitir el resultado del turno
+anterior, el prefijo en caché acaba antes y en cada turno se vuelve a escribir parte de la ventana
+(escrituras en caché: 107.638 → 136.593, +27 %). Enmienda del ADR 0005, con la condición de
+reapertura: medir con datos de producción, donde la caché se enfría entre mensajes.
+
+**G3 por separado: sin medir.** El historial guarda los tokens de la ejecución entera, no los de
+cada escenario, así que estas dos ejecuciones no dicen cuánto ahorra R1 en los diez turnos de G3.
+
+
+## Línea base anterior · 2026-10-23T0732Z · 98 %
 
 | Commit | Huella del prompt | Turnos de modelo | Coste |
 |---|---|---|---|
