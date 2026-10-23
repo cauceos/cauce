@@ -8,7 +8,7 @@
 spring-boot = "3.5.14"
 spring-dependency-management = "1.1.7"
 uuid-creator = "6.1.1"
-wiremock = "3.9.2"
+wiremock = "3.13.2"
 
 [libraries]
 # RFC 9562 UUIDv7 (time-ordered) generator. Used by the domain to mint ids.
