@@ -45,6 +45,7 @@ docker-compose.override.yml
 
 # --- Quickstart state (bootstrap API key and demo ids — never commit) ---
 .quickstart.env
+.quickstart/
 .demo-bar.env
 
 # --- Frontend (npm / Vite) ---

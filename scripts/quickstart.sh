@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# Cauce quickstart: turns a freshly started `docker compose --profile quickstart`
-# stack into a responding agent, end to end. See QUICKSTART.md.
+# Cauce quickstart: turns a freshly started compose stack into a responding agent, end to end.
+# See QUICKSTART.md.
 #
 # What it does (each step is one plain API call — the curls are documented in
 # QUICKSTART.md if you prefer to run them yourself):
-#   1. Waits for the API and for the Ollama model pull to finish.
+#   1. Waits for the API and checks that the chosen LLM provider is configured on it; with
+#      Ollama, also waits for the model pull to finish.
 #   2. Reads the one-time bootstrap operator API key from the app logs and saves
 #      it to .quickstart.env (gitignored) — the key is shown ONCE and cannot be
 #      recovered later.
-#   3. Creates the demo tenant chain (partner -> client) and a demo agent.
+#   3. Creates the demo tenant chain (partner -> client) and a demo agent for the provider.
 #   4. Sends "What time is it right now?" and polls until the agent answers.
 #
-# Requirements: docker compose (running the quickstart profile) and curl.
+# Provider (environment or .env): QUICKSTART_PROVIDER=ollama (default: local, no cost) or
+# anthropic (needs ANTHROPIC_API_KEY in .env, where compose reads it; the model is
+# ANTHROPIC_MODEL, default claude-haiku-5-5).
+#
+# Requirements: docker compose (the stack of QUICKSTART.md) and curl.
 # Re-running is safe: ids are cached in .quickstart.env and reused.
 
 set -euo pipefail
@@ -32,7 +37,12 @@ read_knob() { # read_knob KEY DEFAULT
 
 API_URL="http://localhost:$(read_knob API_PORT 8080)"
 OLLAMA_URL="http://localhost:$(read_knob OLLAMA_PORT 11434)"
-MODEL="$(read_knob OLLAMA_MODEL qwen2.5:3b)"
+PROVIDER="$(read_knob QUICKSTART_PROVIDER ollama)"
+case "$PROVIDER" in
+    ollama)    MODEL="$(read_knob OLLAMA_MODEL qwen2.5:3b)"; AGENT_VAR=CAUCE_AGENT_ID ;;
+    anthropic) MODEL="$(read_knob ANTHROPIC_MODEL claude-haiku-5-5)"; AGENT_VAR=CAUCE_AGENT_ID_ANTHROPIC ;;
+    *) printf 'ERROR: QUICKSTART_PROVIDER must be ollama or anthropic, not "%s"\n' "$PROVIDER" >&2; exit 1 ;;
+esac
 STATE_FILE=".quickstart.env"
 
 say()  { printf '\n== %s\n' "$1"; }
@@ -85,7 +95,12 @@ print(msgs[-1]["content"] if msgs else "")'
 
 # --- 1. wait for the stack ---------------------------------------------------
 
-say "Waiting for the API at $API_URL (the first run also builds the app image and pulls ~6 GB — be patient)..."
+if [ "$PROVIDER" = anthropic ] && [ -z "$(read_knob ANTHROPIC_API_KEY '')" ]; then
+    fail "QUICKSTART_PROVIDER=anthropic, but ANTHROPIC_API_KEY is not in .env (nor in this shell).
+       Add it to .env and recreate the app: docker compose --profile api up -d --build"
+fi
+
+say "Waiting for the API at $API_URL..."
 for i in $(seq 1 360); do
     if curl -fsS "$API_URL/actuator/health" 2>/dev/null | grep -q '"UP"'; then
         api_up=1; break
@@ -95,16 +110,19 @@ for i in $(seq 1 360); do
 done
 [ "${api_up:-}" = 1 ] || fail "API not healthy after 30 minutes. Check: docker compose ps && docker compose logs cauce-api"
 
-say "Waiting for Ollama to have the model '$MODEL' (first pull downloads ~2 GB)..."
-for i in $(seq 1 240); do
-    # Ollama lists a tag-less pull as '<name>:latest', so accept both forms.
-    if curl -fsS "$OLLAMA_URL/api/tags" 2>/dev/null | grep -Eq "\"$MODEL(:latest)?\""; then
-        model_ready=1; break
-    fi
-    [ $((i % 6)) -eq 0 ] && echo "   still pulling... (docker compose logs ollama-init to watch)"
-    sleep 5
-done
-[ "${model_ready:-}" = 1 ] || fail "Model '$MODEL' not available after 20 minutes. Check: docker compose logs ollama-init"
+if [ "$PROVIDER" = ollama ]; then
+    say "Waiting for Ollama to have the model '$MODEL' (first pull downloads ~2 GB)..."
+    for i in $(seq 1 240); do
+        # Ollama lists a tag-less pull as '<name>:latest', so accept both forms.
+        if curl -fsS "$OLLAMA_URL/api/tags" 2>/dev/null | grep -Eq "\"$MODEL(:latest)?\""; then
+            model_ready=1; break
+        fi
+        [ $((i % 6)) -eq 0 ] && echo "   still pulling... (docker compose logs ollama-init to watch; your own Ollama: ollama pull $MODEL)"
+        sleep 5
+    done
+    [ "${model_ready:-}" = 1 ] || fail "Model '$MODEL' not available at $OLLAMA_URL after 20 minutes.
+       Ollama in Docker: docker compose logs ollama-init. Your own Ollama: ollama pull $MODEL"
+fi
 
 # --- 2. bootstrap API key ----------------------------------------------------
 
@@ -119,7 +137,8 @@ if [ -n "${CAUCE_API_KEY:-}" ]; then
     if [ "$probe" = 401 ] || [ "$probe" = 404 ]; then
         echo "   Cached state in $STATE_FILE no longer matches the database (was it reset?). Starting fresh."
         rm -f "$STATE_FILE"
-        CAUCE_API_KEY=""; CAUCE_OPERATOR_ID=""; CAUCE_AGENT_ID=""
+        CAUCE_API_KEY=""; CAUCE_OPERATOR_ID=""; CAUCE_CLIENT_ID=""
+        CAUCE_AGENT_ID=""; CAUCE_AGENT_ID_ANTHROPIC=""
     fi
 fi
 
@@ -142,42 +161,62 @@ fi
 
 # --- 3. demo tenants + agent -------------------------------------------------
 
-if [ -z "${CAUCE_AGENT_ID:-}" ]; then
-    say "Creating demo partner -> client -> agent..."
+# The agent's provider must be one the instance has configured: ask it, instead of letting the
+# first message fail. A key added to .env reaches the app only when compose recreates it.
+providers=$(api GET /v1/llm-providers)
+printf '%s' "$providers" | grep -q "\"id\":\"$PROVIDER\"" || fail "This instance has no '$PROVIDER' provider configured (it answered: $providers).
+       anthropic: put ANTHROPIC_API_KEY in .env, then recreate the app: docker compose --profile api up -d --build"
+
+# A state file written before the client was saved: the client is the existing agent's tenant.
+if [ -z "${CAUCE_CLIENT_ID:-}" ] && [ -n "${CAUCE_AGENT_ID:-}" ]; then
+    CAUCE_CLIENT_ID=$(json_field tenant_id "$(api GET "/v1/agents/$CAUCE_AGENT_ID")")
+    echo "CAUCE_CLIENT_ID=$CAUCE_CLIENT_ID" >> "$STATE_FILE"
+fi
+
+if [ -z "${CAUCE_CLIENT_ID:-}" ]; then
+    say "Creating demo partner -> client..."
     partner=$(api POST /v1/tenants/partner "{\"name\":\"Demo Partner\",\"operator_id\":\"$CAUCE_OPERATOR_ID\"}")
     partner_id=$(extract_id "$partner")
 
     client=$(api POST /v1/tenants/client "{\"name\":\"Demo Client\",\"partner_id\":\"$partner_id\"}")
-    client_id=$(extract_id "$client")
+    CAUCE_CLIENT_ID=$(extract_id "$client")
+    [ -n "$CAUCE_CLIENT_ID" ] || fail "Client creation returned no id: $client"
+    echo "CAUCE_CLIENT_ID=$CAUCE_CLIENT_ID" >> "$STATE_FILE"
+fi
 
-    agent=$(api POST "/v1/tenants/$client_id/agents" "{
+agent_id="${!AGENT_VAR:-}"
+if [ -z "$agent_id" ]; then
+    say "Creating the demo agent ($PROVIDER / $MODEL)..."
+    agent=$(api POST "/v1/tenants/$CAUCE_CLIENT_ID/agents" "{
         \"name\": \"Demo Agent\",
         \"system_prompt\": \"You are the Cauce quickstart demo agent. You have a get_current_time tool; call it whenever the user asks about the current date or time. Keep answers to one or two short sentences.\",
-        \"model_provider\": \"ollama\",
+        \"model_provider\": \"$PROVIDER\",
         \"model_name\": \"$MODEL\"
     }")
-    CAUCE_AGENT_ID=$(extract_id "$agent")
-    [ -n "$CAUCE_AGENT_ID" ] || fail "Agent creation returned no id: $agent"
-    echo "CAUCE_AGENT_ID=$CAUCE_AGENT_ID" >> "$STATE_FILE"
-    echo "   Agent $CAUCE_AGENT_ID ready."
+    agent_id=$(extract_id "$agent")
+    [ -n "$agent_id" ] || fail "Agent creation returned no id: $agent"
+    echo "$AGENT_VAR=$agent_id" >> "$STATE_FILE"
+    echo "   Agent $agent_id ready."
 fi
 
 # Agents start with no tools (ADR 0005, C4): grant the clock on every run, so an agent left
 # by an earlier run (created before tools were per agent) is covered too.
-api PUT "/v1/agents/$CAUCE_AGENT_ID/tools" '{"tools":["get_current_time"]}' > /dev/null
+api PUT "/v1/agents/$agent_id/tools" '{"tools":["get_current_time"]}' > /dev/null
 
 # --- 4. first message --------------------------------------------------------
 
-say "Loading the model into memory (first load takes a while on CPU)..."
-curl -sS --max-time 600 "$OLLAMA_URL/api/generate" \
-    -d "{\"model\":\"$MODEL\",\"prompt\":\"hi\",\"stream\":false}" > /dev/null \
-    || fail "Could not warm up the model. Check: docker compose logs ollama"
+if [ "$PROVIDER" = ollama ]; then
+    say "Loading the model into memory (first load takes a while on CPU)..."
+    curl -sS --max-time 600 "$OLLAMA_URL/api/generate" \
+        -d "{\"model\":\"$MODEL\",\"prompt\":\"hi\",\"stream\":false}" > /dev/null \
+        || fail "Could not warm up the model. Check: docker compose logs ollama"
+fi
 
 say "Asking the agent: 'What time is it right now?'"
 # A unique identity per run starts a fresh conversation, so the demo is a clean
 # single exchange every time (small local models get wobbly in long contexts).
 demo_user="quickstart-user-$(date +%s)"
-posted=$(api POST "/v1/agents/$CAUCE_AGENT_ID/messages" \
+posted=$(api POST "/v1/agents/$agent_id/messages" \
     "{\"external_identity_ref\":\"$demo_user\",\"content\":\"What time is it right now?\"}")
 conversation_id=$(json_field conversation_id "$posted")
 invocation_id=$(json_field invocation_id "$posted")
@@ -196,7 +235,7 @@ done
 
 if [ "$status" != "COMPLETED" ]; then
     [ "$status" = "FAILED" ] && fail "Invocation failed (failure_reason: $(json_field failure_reason "$invocation")).
-       Check: docker compose logs cauce-api"
+       The reason is in: docker compose logs cauce-api"
     fail "Invocation still $status after 5 minutes. Check: docker compose logs cauce-api"
 fi
 
@@ -217,10 +256,13 @@ fi
 
 say "Done. Keep talking to it:"
 cat <<EOF
-   curl -X POST $API_URL/v1/agents/$CAUCE_AGENT_ID/messages \\
+   curl -X POST $API_URL/v1/agents/$agent_id/messages \\
         -H "Authorization: Bearer \$(grep CAUCE_API_KEY= .quickstart.env | cut -d= -f2)" \\
         -H "Content-Type: application/json" \\
         -d '{"external_identity_ref":"$demo_user","content":"..."}'
    (Same external_identity_ref = same conversation, so the agent keeps context.)
    Your operator API key and demo ids are in $STATE_FILE.
+
+   Every step above was written to a signed audit chain. Check it yourself:
+   ./scripts/verify-audit.sh
 EOF

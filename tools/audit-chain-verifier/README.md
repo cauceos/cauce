@@ -70,6 +70,8 @@ program's own dump format — not the export artefact that ADR 0003 defers, whic
 own unit and may take a different shape. A dump is produced with database access, by the
 operator:
 
+The query is [`dump.sql`](dump.sql), next to this file:
+
 ```sql
 SELECT json_build_object(
   'format', 'cauce-audit-chain-dump/1',
@@ -94,7 +96,9 @@ FROM audit_log_entries
 WHERE tenant_id = :'tenant';
 ```
 
-With `psql`: `psql "$DATABASE_URL" -v tenant=<tenant-uuid> -At -f dump.sql > dump.json`.
+With `psql`: `psql "$DATABASE_URL" -v tenant=<tenant-uuid> -At -f dump.sql > dump.json`. On the
+quickstart's stack, `scripts/verify-audit.sh` (or `.ps1`) runs it through the Postgres container,
+fetches the instance's registry and runs this program: see [QUICKSTART.md](../../QUICKSTART.md).
 `drained_at` must be written with six fractional digits in UTC, as above; the program derives
 the variable-precision form scheme v1 requires from it (specification §3.1).
 

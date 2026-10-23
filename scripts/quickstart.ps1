@@ -1,14 +1,19 @@
-# Cauce quickstart (PowerShell twin of quickstart.sh): turns a freshly started
-# `docker compose --profile quickstart` stack into a responding agent. See QUICKSTART.md.
+# Cauce quickstart (PowerShell twin of quickstart.sh): turns a freshly started compose stack
+# into a responding agent. See QUICKSTART.md.
 #
-#   1. Waits for the API and for the Ollama model pull to finish.
+#   1. Waits for the API and checks that the chosen LLM provider is configured on it; with
+#      Ollama, also waits for the model pull to finish.
 #   2. Reads the one-time bootstrap operator API key from the app logs and saves
 #      it to .quickstart.env (gitignored) -- the key is shown ONCE and cannot be
 #      recovered later.
-#   3. Creates the demo tenant chain (partner -> client) and a demo agent.
+#   3. Creates the demo tenant chain (partner -> client) and a demo agent for the provider.
 #   4. Sends "What time is it right now?" and polls until the agent answers.
 #
-# Requirements: docker compose (running the quickstart profile). Re-running is
+# Provider (environment or .env): QUICKSTART_PROVIDER=ollama (default: local, no cost) or
+# anthropic (needs ANTHROPIC_API_KEY in .env, where compose reads it; the model is
+# ANTHROPIC_MODEL, default claude-haiku-5-5).
+#
+# Requirements: docker compose (the stack of QUICKSTART.md). Re-running is
 # safe: ids are cached in .quickstart.env and reused.
 
 $ErrorActionPreference = 'Stop'
@@ -31,11 +36,26 @@ function Get-Setting($name, $default) {
 
 $ApiUrl    = "http://localhost:$(Get-Setting 'API_PORT' '8080')"
 $OllamaUrl = "http://localhost:$(Get-Setting 'OLLAMA_PORT' '11434')"
-$Model     = Get-Setting 'OLLAMA_MODEL' 'qwen2.5:3b'
+$Provider  = Get-Setting 'QUICKSTART_PROVIDER' 'ollama'
 $StateFile = '.quickstart.env'
 
 function Say($msg)  { Write-Host "`n== $msg" }
 function Fail($msg) { Write-Error $msg; exit 1 }
+
+switch ($Provider) {
+    'ollama'    { $Model = Get-Setting 'OLLAMA_MODEL' 'qwen2.5:3b'; $AgentVar = 'CAUCE_AGENT_ID' }
+    'anthropic' { $Model = Get-Setting 'ANTHROPIC_MODEL' 'claude-haiku-5-5'; $AgentVar = 'CAUCE_AGENT_ID_ANTHROPIC' }
+    default     { Fail "QUICKSTART_PROVIDER must be ollama or anthropic, not '$Provider'" }
+}
+
+function Save-State($name, $value) {
+    # Written via .NET, not Out-File: quickstart.sh sources this same file, so it
+    # must be BOM-free ASCII with LF endings (PS 5.1 Out-File emits CRLF, which
+    # breaks the round-trip under WSL bash).
+    $script:state[$name] = $value
+    [IO.File]::AppendAllText((Join-Path (Get-Location).Path $StateFile),
+        "$name=$value`n", [Text.Encoding]::ASCII)
+}
 
 function Invoke-Api($method, $path, $body) {
     $params = @{
@@ -63,7 +83,14 @@ function Invoke-Api($method, $path, $body) {
 
 # --- 1. wait for the stack ---------------------------------------------------
 
-Say "Waiting for the API at $ApiUrl (the first run also builds the app image and pulls ~6 GB -- be patient)..."
+if ($Provider -eq 'anthropic' -and -not (Get-Setting 'ANTHROPIC_API_KEY' '')) {
+    Fail @'
+QUICKSTART_PROVIDER=anthropic, but ANTHROPIC_API_KEY is not in .env (nor in this shell).
+Add it to .env and recreate the app: docker compose --profile api up -d --build
+'@
+}
+
+Say "Waiting for the API at $ApiUrl..."
 $apiUp = $false
 foreach ($i in 1..360) {
     try {
@@ -75,18 +102,22 @@ foreach ($i in 1..360) {
 }
 if (-not $apiUp) { Fail 'API not healthy after 30 minutes. Check: docker compose ps; docker compose logs cauce-api' }
 
-Say "Waiting for Ollama to have the model '$Model' (first pull downloads ~2 GB)..."
-$modelReady = $false
-foreach ($i in 1..240) {
-    try {
-        $tags = Invoke-RestMethod "$OllamaUrl/api/tags" -TimeoutSec 5
-        # Ollama lists a tag-less pull as '<name>:latest', so accept both forms.
-        if ($tags.models | Where-Object { $_.name -eq $Model -or $_.name -eq "${Model}:latest" }) { $modelReady = $true; break }
-    } catch {}
-    if ($i % 6 -eq 0) { Write-Host '   still pulling... (docker compose logs ollama-init to watch)' }
-    Start-Sleep -Seconds 5
+if ($Provider -eq 'ollama') {
+    Say "Waiting for Ollama to have the model '$Model' (first pull downloads ~2 GB)..."
+    $modelReady = $false
+    foreach ($i in 1..240) {
+        try {
+            $tags = Invoke-RestMethod "$OllamaUrl/api/tags" -TimeoutSec 5
+            # Ollama lists a tag-less pull as '<name>:latest', so accept both forms.
+            if ($tags.models | Where-Object { $_.name -eq $Model -or $_.name -eq "${Model}:latest" }) { $modelReady = $true; break }
+        } catch {}
+        if ($i % 6 -eq 0) { Write-Host "   still pulling... (docker compose logs ollama-init to watch; your own Ollama: ollama pull $Model)" }
+        Start-Sleep -Seconds 5
+    }
+    if (-not $modelReady) {
+        Fail "Model '$Model' not available at $OllamaUrl after 20 minutes. Ollama in Docker: docker compose logs ollama-init. Your own Ollama: ollama pull $Model"
+    }
 }
-if (-not $modelReady) { Fail "Model '$Model' not available after 20 minutes. Check: docker compose logs ollama-init" }
 
 # --- 2. bootstrap API key ----------------------------------------------------
 
@@ -131,54 +162,63 @@ first boot, the key is gone (it is logged exactly once). Start over with:
 docker compose --profile quickstart down -v; Remove-Item .quickstart.env; docker compose --profile quickstart up -d
 '@
     }
-    $state['CAUCE_OPERATOR_ID'] = $line.Matches[0].Groups[1].Value
-    $state['CAUCE_API_KEY']     = $line.Matches[0].Groups[2].Value
-    # Written via .NET, not Out-File: quickstart.sh sources this same file, so it
-    # must be BOM-free ASCII with LF endings (PS 5.1 Out-File emits CRLF, which
-    # breaks the round-trip under WSL bash).
-    $stateLines = @(
-        '# Cauce quickstart state -- contains the operator API key. Do not commit.'
-        "CAUCE_API_KEY=$($state['CAUCE_API_KEY'])"
-        "CAUCE_OPERATOR_ID=$($state['CAUCE_OPERATOR_ID'])"
-    )
     [IO.File]::WriteAllText((Join-Path (Get-Location).Path $StateFile),
-        (($stateLines -join "`n") + "`n"), [Text.Encoding]::ASCII)
+        "# Cauce quickstart state -- contains the operator API key. Do not commit.`n", [Text.Encoding]::ASCII)
+    Save-State 'CAUCE_API_KEY' $line.Matches[0].Groups[2].Value
+    Save-State 'CAUCE_OPERATOR_ID' $line.Matches[0].Groups[1].Value
     Write-Host "   Key saved to $StateFile (the log line is the only other copy)."
 }
 $script:ApiKey = $state['CAUCE_API_KEY']
 
 # --- 3. demo tenants + agent -------------------------------------------------
 
-if (-not $state['CAUCE_AGENT_ID']) {
-    Say 'Creating demo partner -> client -> agent...'
+# The agent's provider must be one the instance has configured: ask it, instead of letting the
+# first message fail. A key added to .env reaches the app only when compose recreates it.
+$providers = @((Invoke-Api GET '/v1/llm-providers').data | ForEach-Object { $_.id })
+if ($providers -notcontains $Provider) {
+    Fail "This instance has no '$Provider' provider configured (it has: $($providers -join ', ')). anthropic: put ANTHROPIC_API_KEY in .env, then recreate the app: docker compose --profile api up -d --build"
+}
+
+# A state file written before the client was saved: the client is the existing agent's tenant.
+if (-not $state['CAUCE_CLIENT_ID'] -and $state['CAUCE_AGENT_ID']) {
+    Save-State 'CAUCE_CLIENT_ID' (Invoke-Api GET "/v1/agents/$($state['CAUCE_AGENT_ID'])").tenant_id
+}
+
+if (-not $state['CAUCE_CLIENT_ID']) {
+    Say 'Creating demo partner -> client...'
     $partner = Invoke-Api POST '/v1/tenants/partner' (@{
         name = 'Demo Partner'; operator_id = $state['CAUCE_OPERATOR_ID'] } | ConvertTo-Json)
     $client = Invoke-Api POST '/v1/tenants/client' (@{
         name = 'Demo Client'; partner_id = $partner.id } | ConvertTo-Json)
-    $agent = Invoke-Api POST "/v1/tenants/$($client.id)/agents" (@{
+    Save-State 'CAUCE_CLIENT_ID' $client.id
+}
+
+if (-not $state[$AgentVar]) {
+    Say "Creating the demo agent ($Provider / $Model)..."
+    $agent = Invoke-Api POST "/v1/tenants/$($state['CAUCE_CLIENT_ID'])/agents" (@{
         name           = 'Demo Agent'
         system_prompt  = 'You are the Cauce quickstart demo agent. You have a get_current_time tool; call it whenever the user asks about the current date or time. Keep answers to one or two short sentences.'
-        model_provider = 'ollama'
+        model_provider = $Provider
         model_name     = $Model
     } | ConvertTo-Json)
-    $state['CAUCE_AGENT_ID'] = $agent.id
-    [IO.File]::AppendAllText((Join-Path (Get-Location).Path $StateFile),
-        "CAUCE_AGENT_ID=$($agent.id)`n", [Text.Encoding]::ASCII)
+    Save-State $AgentVar $agent.id
     Write-Host "   Agent $($agent.id) ready."
 }
+$agentId = $state[$AgentVar]
 
 # Agents start with no tools (ADR 0005, C4): grant the clock on every run, so an agent left
 # by an earlier run (created before tools were per agent) is covered too.
-Invoke-Api PUT "/v1/agents/$($state['CAUCE_AGENT_ID'])/tools" (@{ tools = @('get_current_time') } | ConvertTo-Json) | Out-Null
-$agentId = $state['CAUCE_AGENT_ID']
+Invoke-Api PUT "/v1/agents/$agentId/tools" (@{ tools = @('get_current_time') } | ConvertTo-Json) | Out-Null
 
 # --- 4. first message --------------------------------------------------------
 
-Say 'Loading the model into memory (first load takes a while on CPU)...'
-try {
-    Invoke-RestMethod "$OllamaUrl/api/generate" -Method Post -TimeoutSec 600 `
-        -Body (@{ model = $Model; prompt = 'hi'; stream = $false } | ConvertTo-Json) | Out-Null
-} catch { Fail 'Could not warm up the model. Check: docker compose logs ollama' }
+if ($Provider -eq 'ollama') {
+    Say 'Loading the model into memory (first load takes a while on CPU)...'
+    try {
+        Invoke-RestMethod "$OllamaUrl/api/generate" -Method Post -TimeoutSec 600 `
+            -Body (@{ model = $Model; prompt = 'hi'; stream = $false } | ConvertTo-Json) | Out-Null
+    } catch { Fail 'Could not warm up the model. Check: docker compose logs ollama' }
+}
 
 Say "Asking the agent: 'What time is it right now?'"
 # A unique identity per run starts a fresh conversation, so the demo is a clean
@@ -195,7 +235,7 @@ foreach ($i in 1..100) {
     Start-Sleep -Seconds 3
 }
 if ($invocation.status -eq 'FAILED') {
-    Fail "Invocation failed (failure_reason: $($invocation.failure_reason)). Check: docker compose logs cauce-api"
+    Fail "Invocation failed (failure_reason: $($invocation.failure_reason)). The reason is in: docker compose logs cauce-api"
 }
 if ($invocation.status -ne 'COMPLETED') {
     Fail "Invocation still $($invocation.status) after 5 minutes. Check: docker compose logs cauce-api"
@@ -221,4 +261,7 @@ Write-Host @"
        -Body '{"external_identity_ref":"$demoUser","content":"..."}'
    (Same external_identity_ref = same conversation, so the agent keeps context.)
    Your operator API key and demo ids are in $StateFile.
+
+   Every step above was written to a signed audit chain. Check it yourself:
+   powershell -ExecutionPolicy Bypass -File scripts\verify-audit.ps1
 "@

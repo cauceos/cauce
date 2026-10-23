@@ -29,7 +29,10 @@ RUN find cauce-api/build/libs -name '*.jar' ! -name '*-plain.jar' \
 # --- Runtime stage -----------------------------------------------------------
 FROM eclipse-temurin:21-jre-alpine
 
-RUN addgroup -S cauce && adduser -S cauce -G cauce
+# /app/audit-keys exists, owned by the app's user, so that a named volume mounted there (the
+# quickstart's audit signing key, docker/quickstart/start-api.sh) starts writable by it.
+RUN addgroup -S cauce && adduser -S cauce -G cauce \
+    && mkdir -p /app/audit-keys && chown cauce:cauce /app/audit-keys
 USER cauce
 WORKDIR /app
 

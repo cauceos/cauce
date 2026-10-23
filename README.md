@@ -26,22 +26,22 @@ Today's agent platforms are either Python-only frameworks (LangGraph, CrewAI), c
 
 ## Try it
 
-A local quickstart — from clone to a responding agent with a local LLM (Ollama), no
-paid API keys and no JDK required, everything in Docker:
+A local quickstart — from clone to a responding agent, everything in Docker, no JDK
+required — with a local LLM (Ollama, no cost) or an Anthropic key:
 
 ```bash
 git clone https://github.com/cauceos/cauce.git
 cd cauce
-docker compose --profile quickstart up -d --build
-./scripts/quickstart.sh    # Windows: powershell -ExecutionPolicy Bypass -File scripts\quickstart.ps1
+docker compose --profile quickstart up -d --build   # Ollama in Docker; see QUICKSTART.md for the others
+./scripts/quickstart.sh     # Windows: powershell -ExecutionPolicy Bypass -File scripts\quickstart.ps1
+./scripts/verify-audit.sh   # the signed audit chain, checked by an independent verifier
 ```
 
-See **[QUICKSTART.md](QUICKSTART.md)** for requirements (~8 GB RAM for Docker, ~15 GB
-disk) and honest timings: measured ~5 minutes clone → answer on a modern laptop with
-fast internet, but the ≈6 GB of initial downloads dominate — budget 15–30 minutes on a
-slower connection. The demo shows the agentic tool loop (the model calls a real tool and
-answers from its result), not just chat, and ends with how to optionally connect a
-Telegram bot.
+See **[QUICKSTART.md](QUICKSTART.md)** for the three paths and honest timings: under 10 minutes
+with an Anthropic key or an Ollama you already have; with Ollama in Docker the first run
+downloads ≈5 GB, so it takes what your connection takes. The demo shows the agentic tool loop
+(the model calls a real tool and answers from its result), not just chat; then every step of
+it is verified in a signed, hash-chained audit log by a program that shares no code with Cauce.
 
 ## Status
 

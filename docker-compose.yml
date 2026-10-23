@@ -9,8 +9,10 @@
 #   docker compose down       # stop, keep data
 #   docker compose down -v    # stop and wipe volumes
 #
-# Quickstart (app + Ollama in containers, no local JDK needed — see QUICKSTART.md):
-#   docker compose --profile quickstart up -d --build
+# Quickstart (the app in a container, no local JDK needed — see QUICKSTART.md):
+#   docker compose --profile quickstart up -d --build   # app + Ollama in containers (no cost)
+#   docker compose --profile api up -d --build          # app only: Anthropic (ANTHROPIC_API_KEY
+#                                                       # in .env) or your own Ollama (OLLAMA_BASE_URL)
 #
 # Devs running bootRun who only want a local Ollama:
 #   docker compose --profile ollama up -d
@@ -67,13 +69,15 @@ services:
       postgres:
         condition: service_healthy
 
-  # --- Quickstart profile ----------------------------------------------------
-  # The services below only start with `--profile quickstart` (Ollama also with
-  # `--profile ollama`). A plain `docker compose up -d` stays infra-only, so the
-  # regular dev flow (compose up + bootRun) is unchanged.
+  # --- Quickstart profiles -----------------------------------------------------
+  # The services below only start with a profile: `quickstart` is the app and Ollama,
+  # `api` the app alone, `ollama` Ollama alone. A plain `docker compose up -d` stays
+  # infra-only, so the regular dev flow (compose up + bootRun) is unchanged.
 
+  # Pinned: the image is the bulk of the first download (≈3.4 GB compressed), and its size
+  # and behaviour change between releases.
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.8
     profiles: [quickstart, ollama]
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
@@ -89,7 +93,7 @@ services:
   # One-shot: pulls the default model into the ollama volume, then exits.
   # Re-runs are cheap (the model is already in the ollama-data volume).
   ollama-init:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.8
     profiles: [quickstart, ollama]
     depends_on:
       ollama:
@@ -102,9 +106,18 @@ services:
 
   cauce-api:
     build: ./backend
-    profiles: [quickstart]
+    profiles: [quickstart, api]
+    # Generates the audit signing key on the first start (kept in the audit-keys volume),
+    # then starts the app signing with it: docker/quickstart/start-api.sh.
+    entrypoint: ["sh", "/opt/cauce/start-api.sh"]
     ports:
       - "${API_PORT:-8080}:8080"
+    volumes:
+      - audit-keys:/app/audit-keys
+      - ./docker/quickstart/start-api.sh:/opt/cauce/start-api.sh:ro
+    # Lets OLLAMA_BASE_URL reach an Ollama on the host, on Linux too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       SPRING_PROFILES_ACTIVE: dev
       # The dev profile points at localhost; inside the compose network the
@@ -115,7 +128,12 @@ services:
       CAUCE_ADMIN_DATASOURCE_USERNAME: ${POSTGRES_USER:-cauce}
       CAUCE_ADMIN_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-cauce_dev}
       SPRING_DATA_REDIS_HOST: redis
-      CAUCE_LLM_OPENAICOMPATIBLE_PROVIDERS_OLLAMA_BASEURL: http://ollama:11434/v1
+      # The containerized Ollama by default; your own with
+      # OLLAMA_BASE_URL=http://host.docker.internal:11434/v1 in .env (and --profile api).
+      CAUCE_LLM_OPENAICOMPATIBLE_PROVIDERS_OLLAMA_BASEURL: ${OLLAMA_BASE_URL:-http://ollama:11434/v1}
+      # Registers the Anthropic provider when set (in .env: compose reads it from there and
+      # passes it on). Blank, the provider stays off.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # CPU inference loads the model on first request; the 60s default is too
       # tight for that cold load on modest hardware.
       CAUCE_LLM_OPENAICOMPATIBLE_PROVIDERS_OLLAMA_TIMEOUT: 180s
@@ -124,8 +142,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # Only when the profile starts it: under `--profile api` there is none to wait for.
       ollama:
         condition: service_started
+        required: false
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
       interval: 10s
@@ -157,3 +177,4 @@ volumes:
   redis-data:
   ollama-data:
   observe-data:
+  audit-keys:

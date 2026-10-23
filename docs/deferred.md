@@ -86,6 +86,10 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 - **Events outside the invocation path.** Tenancy and API operations emit no `OrchestrationEvent`-style events.
 
+## Quickstart and distribution
+
+- **A published API image.** The quickstart builds the application image from source (Gradle inside Docker, a few minutes on the first run, plus the JDK base image). A versioned image in a public registry would remove both from the first run of every path. Deferred: it needs a release process — version tags, image signing, a registry — that does not exist yet.
+
 ## Frontend
 
 - **The product dashboard** (`frontend/cauce-dashboard`, Angular) has not been started. The React playground is a developer testing tool, not the dashboard.
