@@ -129,4 +129,4 @@ bloquear.
 | `05-resumen.yaml` | 5. Resumen nocturno |
 | `calibracion/` | Turnos reales con el juicio del dueño del paquete, para calibrar al juez |
 | `precios.yaml` | Precios por millón de tokens, con fecha, para estimar el coste |
-| `historial/` | Un resumen por ejecución: modelo, huella del prompt, commit y resultados |
+| `historial/` | Un resumen por ejecución: modelo, huella del prompt, commit, resultados, y tokens y coste de cada escenario |

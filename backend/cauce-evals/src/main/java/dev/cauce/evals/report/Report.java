@@ -142,13 +142,15 @@ public final class Report {
                 task = rate.task();
                 Double taskRate = s.tasks().get(task);
                 md.append("\n## ").append(task).append(taskRate == null ? "" : " · " + Aggregation.percent(taskRate))
-                        .append("\n\n| Escenario | Nivel | Tasa | Repeticiones | Estado |\n|---|---|---|---|---|\n");
+                        .append("\n\n| Escenario | Nivel | Tasa | Repeticiones | Estado | Coste por repetición |\n"
+                                + "|---|---|---|---|---|---|\n");
             }
             ScenarioRate old = before.get(rate.id());
             md.append("| ").append(rate.id()).append(" | ").append(rate.level()).append(" | ")
                     .append(rate.rate() == null ? "—" : Aggregation.percent(rate.rate())
                             + delta(rate.rate(), Optional.ofNullable(old).map(ScenarioRate::rate)))
-                    .append(" | ").append(rate.repetitions()).append(" | ").append(rate.status()).append(" |\n");
+                    .append(" | ").append(rate.repetitions()).append(" | ").append(rate.status()).append(" | ")
+                    .append(costPerRepetition(rate)).append(" |\n");
         }
 
         md.append("\n## Comprobaciones que fallaron\n");
@@ -172,6 +174,14 @@ public final class Report {
             md.append("\nNinguna.\n");
         }
         return md.toString();
+    }
+
+    /** What one repetition of the scenario cost on average: one conversation of the agent. */
+    static String costPerRepetition(ScenarioRate rate) {
+        if (rate.costUsd() == null || rate.repetitions() == 0) {
+            return "—";
+        }
+        return String.format("%.4f US$", rate.costUsd() / rate.repetitions());
     }
 
     private static String delta(double now, Optional<Double> before) {

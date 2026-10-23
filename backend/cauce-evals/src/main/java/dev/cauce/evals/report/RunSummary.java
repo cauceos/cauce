@@ -43,7 +43,30 @@ public record RunSummary(
             @JsonProperty("juez_salida") long judgeOutput) {
     }
 
-    /** One scenario's rate over its repetitions, and each of its checks'. */
+    /**
+     * The agent's tokens of one scenario, summed over its repetitions. {@code entrada} includes the
+     * cached parts; {@code turnos_modelo} counts the customer messages the model answered.
+     */
+    public record ScenarioTokens(
+            @JsonProperty("entrada") long input,
+            @JsonProperty("cache_lectura") long cacheRead,
+            @JsonProperty("cache_escritura") long cacheWrite,
+            @JsonProperty("salida") long output,
+            @JsonProperty("turnos_modelo") int modelTurns) {
+
+        public static final ScenarioTokens NONE = new ScenarioTokens(0, 0, 0, 0, 0);
+
+        public ScenarioTokens plus(ScenarioTokens other) {
+            return new ScenarioTokens(input + other.input, cacheRead + other.cacheRead, cacheWrite + other.cacheWrite,
+                    output + other.output, modelTurns + other.modelTurns);
+        }
+    }
+
+    /**
+     * One scenario's rate over its repetitions, and each of its checks'; its tokens and cost (the
+     * agent's, never the judge's) when it drove the model. Summaries written before these two
+     * fields existed read with both null.
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ScenarioRate(
             @JsonProperty("id") String id,
@@ -53,6 +76,8 @@ public record RunSummary(
             @JsonProperty("repeticiones") int repetitions,
             @JsonProperty("comprobaciones") Map<String, Double> checks,
             @JsonProperty("sin_juez") int withoutJudge,
-            @JsonProperty("estado") String status) {
+            @JsonProperty("estado") String status,
+            @JsonProperty("tokens") ScenarioTokens tokens,
+            @JsonProperty("coste_usd") Double costUsd) {
     }
 }

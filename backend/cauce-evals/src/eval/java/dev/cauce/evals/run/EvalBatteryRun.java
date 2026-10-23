@@ -224,7 +224,7 @@ class EvalBatteryRun {
         RunSummary summary = Aggregation.summarize(runs, covered, SETTINGS.warningThreshold(), new Aggregation.Meta(
                 now, git[0], Boolean.parseBoolean(git[1]), SETTINGS.agentProvider() + "/" + SETTINGS.agentModel(),
                 judge.map(LlmJudge::describe).orElse("ninguno"), calibrationText, footprint(), n, SETTINGS.selection(),
-                complete, tokens, cost, prices.version()));
+                complete, tokens, cost, prices.version(), agentPrice.orElse(null)));
         writeOutputs(summary, previous, runs, now);
         if (SETTINGS.rehearsal()) {
             return; // a rehearsal's verdict says nothing about the agent
@@ -239,6 +239,7 @@ class EvalBatteryRun {
                 SETTINGS.agentModel(), SETTINGS.elidePastLookups());
         Checker checker = new Checker(world.codes(), world::resolveDate);
         List<CheckResult> results = new ArrayList<>();
+        List<String> invocations = new ArrayList<>();
         StringBuilder transcript = new StringBuilder();
         for (int i = 0; i < scenario.turns().size(); i++) {
             Scenario.Turn turn = scenario.turns().get(i);
@@ -246,6 +247,7 @@ class EvalBatteryRun {
             // The person's dates are written out from today, so no scenario depends on the day it runs.
             String message = RelativeDates.render(turn.message(), world::resolveDate);
             EvalWorld.Played played = world.turn(message);
+            invocations.add(played.invocationId());
             TurnTrace trace = played.trace();
             transcript.append("Cliente: ").append(message).append('\n');
             trace.tools().forEach(t -> transcript.append("  [").append(t.name()).append("] ").append(t.input()).append('\n'));
@@ -271,7 +273,8 @@ class EvalBatteryRun {
             results.add(prefixed(prefix, GeneralRules.g1(trace, menu)));
             results.add(prefixed(prefix, GeneralRules.grounded(trace, menu)));
         }
-        return new ScenarioRun(scenario, rep, results, transcript.toString().strip());
+        return new ScenarioRun(scenario, rep, results, transcript.toString().strip(),
+                tokensOf(new JdbcTemplate(services.adminDataSource()), invocations));
     }
 
     private ScenarioRun digest(EvalWorld.Services services, Scenario scenario, UUID partnerId) throws Exception {
@@ -319,6 +322,19 @@ class EvalBatteryRun {
                 .filter(s -> SETTINGS.tasks().isEmpty() || SETTINGS.tasks().stream().anyMatch(s.task()::startsWith))
                 .filter(s -> SETTINGS.scenarioIds().isEmpty() || SETTINGS.scenarioIds().contains(s.id()))
                 .toList();
+    }
+
+    /** The agent's tokens of the given invocations: every provider call they made, retries included. */
+    private static RunSummary.ScenarioTokens tokensOf(JdbcTemplate admin, List<String> invocationIds) {
+        if (invocationIds.isEmpty()) {
+            return RunSummary.ScenarioTokens.NONE;
+        }
+        Map<String, Object> u = admin.queryForMap("SELECT coalesce(sum(input_tokens), 0) AS i, "
+                + "coalesce(sum(cache_read_tokens), 0) AS r, coalesce(sum(cache_write_tokens), 0) AS w, "
+                + "coalesce(sum(output_tokens), 0) AS o FROM llm_usage_records WHERE invocation_id = ANY (?::uuid[])",
+                (Object) invocationIds.toArray(String[]::new));
+        return new RunSummary.ScenarioTokens(num(u, "i"), num(u, "r"), num(u, "w"), num(u, "o"),
+                invocationIds.size());
     }
 
     private double spent(JdbcTemplate admin, Optional<LlmJudge> judge, Optional<PriceTable.Price> agentPrice,

@@ -3,6 +3,7 @@ package dev.cauce.evals.report;
 import dev.cauce.evals.check.CheckResult;
 import dev.cauce.evals.check.CheckResult.Outcome;
 import dev.cauce.evals.check.GeneralRules;
+import dev.cauce.evals.cost.PriceTable;
 import dev.cauce.evals.report.RunSummary.ScenarioRate;
 import dev.cauce.evals.scenario.Scenario;
 import dev.cauce.evals.scenario.Scenario.Level;
@@ -18,14 +19,15 @@ import java.util.function.Predicate;
  * The general rules (G1, the grounded menu) are rated over every turn they applied to. Blocking:
  * a blocking scenario, or a general rule, under 100 %. Warning: any other scenario under the
  * threshold. Neither a rubric pending a judge nor a harness error ever counts as passed: a run
- * without a judge is a run of the deterministic checks.
+ * without a judge is a run of the deterministic checks. Each scenario's tokens are the sum of its
+ * repetitions', priced with the agent's price when the table has one.
  */
 public final class Aggregation {
 
-    /** Everything about a run that is not its results. */
+    /** Everything about a run that is not its results; {@code agentPrice} is null when the table has none. */
     public record Meta(String date, String commit, boolean dirtyTree, String agentModel, String judge,
                        String calibration, String promptFootprint, int repetitions, String selection, boolean complete,
-                       RunSummary.Tokens tokens, Double costUsd, String priceVersion) {
+                       RunSummary.Tokens tokens, Double costUsd, String priceVersion, PriceTable.Price agentPrice) {
     }
 
     private Aggregation() {
@@ -79,12 +81,16 @@ public final class Aggregation {
                 warnings.add(scenario.id() + ": error del arnés en alguna repetición (ver informe)");
             }
             pendingJudge += withoutJudge;
+            RunSummary.ScenarioTokens tokens = reps.stream().map(ScenarioRun::tokens).filter(java.util.Objects::nonNull)
+                    .reduce(RunSummary.ScenarioTokens::plus).orElse(null);
+            Double cost = tokens == null || meta.agentPrice() == null ? null
+                    : meta.agentPrice().cost(tokens.input(), tokens.cacheRead(), tokens.cacheWrite(), tokens.output());
             scenarios.add(new ScenarioRate(scenario.id(), scenario.task(), level(scenario), rate, reps.size(), checks,
-                    withoutJudge, status));
+                    withoutJudge, status, tokens, cost));
         }
         for (Scenario covered : coveredByIt) {
             scenarios.add(new ScenarioRate(covered.id(), covered.task(), level(covered), null, 0, null, 0,
-                    "cubierto por " + covered.coveredBy()));
+                    "cubierto por " + covered.coveredBy(), null, null));
         }
 
         if (pendingJudge > 0) {
