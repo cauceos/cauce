@@ -21,8 +21,10 @@
     - cliente: "¿Qué alérgenos tiene la tarta de queso?"
       espera:
         herramientas: [search_catalog, record_unanswered_question]
-        respuesta_contiene: ["no consta | no me consta | no ha declarado | no están declarados | sin declarar"]
-        respuesta_no_contiene: ["lácteos", "huevo", "gluten"]
+        # Lo no declarado se dice como no declarado, con cualquier redacción (Haiku, 2026-10-23: «No
+        # tengo declarados los alérgenos»), y nunca como ausencia: «no lleva», «no tiene», «sin gluten».
+        respuesta_contiene: ["no consta | no me consta | no ha declarado | no ha indicado | no están declarados | sin declarar | no tengo declarad | no tenemos declarad | no hay declarad | no figuran"]
+        respuesta_no_contiene: ["lácteos", "huevo", "gluten", "no lleva", "no tiene", "no contiene", "sin alérgenos", "sin gluten", "sin lácteos", "sin huevo", "libre de"]
         estado: {preguntas: 1}
   cubierto_por: BusinessKnowledgeApiIT#agent_readsTheCatalogThroughItsTool_andRecordsWhatItCannotAnswer
 

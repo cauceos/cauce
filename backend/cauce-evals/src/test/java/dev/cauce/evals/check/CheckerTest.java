@@ -98,6 +98,41 @@ class CheckerTest {
         assertThat(checker.check("turno 1", h11, open)).extracting(CheckResult::outcome).contains(Outcome.FAIL);
     }
 
+    @Test
+    void thePacksH2_2_acceptsAnyWayOfSayingNotDeclared_andNeverAnAbsence() {
+        Expectation h22 = new ScenarioLoader().loadAll(Path.of("..", "..", "examples", "hosteleria", "evals")).stream()
+                .filter(s -> s.id().equals("H2.2")).findFirst().orElseThrow().turns().get(0).expectation();
+        List<ToolUse> lookup = List.of(new ToolUse("search_catalog", Map.of(), "{}"),
+                new ToolUse("record_unanswered_question", Map.of(), "{}"));
+
+        // Sonnet (1138Z, 0914Z, 0732Z) and Haiku (1315Z), as they said it.
+        for (String reply : List.of(
+                "De la tarta de queso casera no constan los alérgenos. El bar no los ha declarado.",
+                "De la tarta de queso casera no consta ningún alérgeno: el bar no los ha declarado. Por eso no puedo "
+                        + "decirte si tiene o no.",
+                "De la tarta de queso casera el bar no ha declarado los alérgenos, así que no me consta ninguno.",
+                "No tengo declarados los alérgenos de la tarta de queso casera, así que no te puedo decir si contiene "
+                        + "alguno.",
+                "No tenemos declarados sus alérgenos, así que te recomiendo confirmarlo con el personal.")) {
+            assertThat(textResults(h22, lookup, reply)).as(reply).containsOnly(Outcome.PASS);
+        }
+        // Not declared said as absent: never.
+        for (String reply : List.of(
+                "No tengo declarados sus alérgenos, pero no lleva gluten.",
+                "No consta nada: es una tarta sin alérgenos.",
+                "No me consta, aunque no tiene frutos secos.",
+                "No están declarados; no contiene huevo según la receta.")) {
+            assertThat(textResults(h22, lookup, reply)).as(reply).contains(Outcome.FAIL);
+        }
+    }
+
+    private List<Outcome> textResults(Expectation expectation, List<ToolUse> tools, String reply) {
+        TurnTrace turn = new TurnTrace("¿Qué alérgenos tiene la tarta de queso?", tools, reply, null, null,
+                change.state());
+        return checker.check("turno 1", expectation, turn).stream().filter(r -> r.name().contains("contiene"))
+                .map(CheckResult::outcome).toList();
+    }
+
     private static Expectation expectation(List<String> tools, List<String> order, List<String> forbidden,
                                            Map<String, Map<String, Object>> args, List<String> contains,
                                            List<String> lacks, ExpectedState state) {
