@@ -18,12 +18,15 @@
 # Observability backend (OpenObserve: traces, metrics, logs, alerts; ADR 0011),
 # see docs/operations/observability.md:
 #   docker compose --profile observability up -d
-name: cauce
+#
+# Names are per clone: the project is named after the clone's directory (Compose's default),
+# so containers are <dir>-<service>-1 and volumes <dir>_<volume>. Two clones in directories of
+# different names never share a container or a database; for two clones under the same name,
+# set COMPOSE_PROJECT_NAME in one's .env.
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: cauce-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-cauce}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cauce_dev}
@@ -31,7 +34,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
-      - cauce_pgdata:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cauce} -d ${POSTGRES_DB:-cauce_dev}"]
@@ -39,29 +42,23 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - cauce-net
 
   redis:
     image: redis:7-alpine
-    container_name: cauce-redis
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
-      - cauce_redisdata:/data
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
-    networks:
-      - cauce-net
 
   adminer:
     image: adminer:4-standalone
-    container_name: cauce-adminer
     environment:
       ADMINER_DEFAULT_SERVER: postgres
     ports:
@@ -69,8 +66,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - cauce-net
 
   # --- Quickstart profile ----------------------------------------------------
   # The services below only start with `--profile quickstart` (Ollama also with
@@ -79,26 +74,22 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: cauce-ollama
     profiles: [quickstart, ollama]
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
     volumes:
-      - cauce_ollamadata:/root/.ollama
+      - ollama-data:/root/.ollama
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks:
-      - cauce-net
 
   # One-shot: pulls the default model into the ollama volume, then exits.
-  # Re-runs are cheap (the model is already in cauce_ollamadata).
+  # Re-runs are cheap (the model is already in the ollama-data volume).
   ollama-init:
     image: ollama/ollama:latest
-    container_name: cauce-ollama-init
     profiles: [quickstart, ollama]
     depends_on:
       ollama:
@@ -108,12 +99,9 @@ services:
     entrypoint: ["ollama"]
     command: ["pull", "${OLLAMA_MODEL:-qwen2.5:3b}"]
     restart: "no"
-    networks:
-      - cauce-net
 
   cauce-api:
     build: ./backend
-    container_name: cauce-api
     profiles: [quickstart]
     ports:
       - "${API_PORT:-8080}:8080"
@@ -144,15 +132,12 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
-    networks:
-      - cauce-net
 
   # --- Observability profile ---------------------------------------------------
   # Only with `--profile observability`. The application exports to it over OTLP when
   # MANAGEMENT_OTLP_* point here; alerts are provisioned by scripts/observability/provision.sh.
   openobserve:
     image: openobserve/openobserve:v1.0.4
-    container_name: cauce-openobserve
     profiles: [observability]
     environment:
       ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_ROOT_EMAIL:-root@cauce.local}
@@ -165,21 +150,10 @@ services:
     ports:
       - "${OPENOBSERVE_PORT:-5080}:5080"
     volumes:
-      - cauce_observedata:/data
-    networks:
-      - cauce-net
+      - observe-data:/data
 
 volumes:
-  cauce_pgdata:
-    name: cauce_pgdata
-  cauce_redisdata:
-    name: cauce_redisdata
-  cauce_ollamadata:
-    name: cauce_ollamadata
-  cauce_observedata:
-    name: cauce_observedata
-
-networks:
-  cauce-net:
-    name: cauce-net
-    driver: bridge
+  postgres-data:
+  redis-data:
+  ollama-data:
+  observe-data:

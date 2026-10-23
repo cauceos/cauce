@@ -22,8 +22,8 @@ docker compose --profile observability up -d
 ```
 
 OpenObserve refuses to start with a weak password: 8 to 128 characters, with an upper-case and a
-lower-case letter, a digit and a symbol (the container exits; `docker logs cauce-openobserve` says
-so). The first user is created on the first start and kept in the `cauce_observedata` volume:
+lower-case letter, a digit and a symbol (the container exits; `docker compose logs openobserve`
+says so). The first user is created on the first start and kept in the `observe-data` volume:
 changing the password in `.env` afterwards changes nothing until the volume is recreated, or the
 password is changed in the UI.
 

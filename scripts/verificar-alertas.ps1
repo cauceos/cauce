@@ -52,10 +52,10 @@ function Secreto($pregunta) {
 if ($Api) {
     if ($BaseDeDatos -ne 'cauce_dev') {
         Paso "Base de datos $BaseDeDatos"
-        $existe = docker exec cauce-postgres psql -U cauce -d cauce_dev -tAc "SELECT 1 FROM pg_database WHERE datname = '$BaseDeDatos'"
+        $existe = docker compose -f "$repo\docker-compose.yml" exec -T postgres psql -U cauce -d cauce_dev -tAc "SELECT 1 FROM pg_database WHERE datname = '$BaseDeDatos'"
         if ("$existe".Trim() -ne '1') {
-            docker exec cauce-postgres psql -U cauce -d cauce_dev -qc "CREATE DATABASE $BaseDeDatos" | Out-Null
-            docker exec cauce-postgres psql -U cauce -d $BaseDeDatos -qc 'CREATE EXTENSION IF NOT EXISTS vector' | Out-Null
+            docker compose -f "$repo\docker-compose.yml" exec -T postgres psql -U cauce -d cauce_dev -qc "CREATE DATABASE $BaseDeDatos" | Out-Null
+            docker compose -f "$repo\docker-compose.yml" exec -T postgres psql -U cauce -d $BaseDeDatos -qc 'CREATE EXTENSION IF NOT EXISTS vector' | Out-Null
             Write-Host "Creada. La API escribira en su log, una sola vez, la key del operador nuevo (busca 'cannot be recovered:')."
         }
         $env:SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5433/$BaseDeDatos"
