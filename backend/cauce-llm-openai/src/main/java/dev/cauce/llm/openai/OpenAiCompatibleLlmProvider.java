@@ -16,6 +16,7 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.OptionalInt;
 
 /**
  * {@link LlmProvider} for any OpenAI-compatible chat-completions endpoint (OpenAI, Mistral, Ollama),
@@ -41,6 +42,7 @@ public final class OpenAiCompatibleLlmProvider implements LlmProvider {
     private final String baseUrl;
     private final int defaultMaxTokens;
     private final Duration requestTimeout;
+    private final Integer servedContextWindow;
 
     public OpenAiCompatibleLlmProvider(String providerId,
                                        HttpClient httpClient,
@@ -49,7 +51,8 @@ public final class OpenAiCompatibleLlmProvider implements LlmProvider {
                                        OpenAiErrorMapper errorMapper,
                                        String baseUrl,
                                        int defaultMaxTokens,
-                                       Duration requestTimeout) {
+                                       Duration requestTimeout,
+                                       Integer servedContextWindow) {
         this.providerId = providerId;
         this.httpClient = httpClient;
         this.messageMapper = messageMapper;
@@ -58,11 +61,18 @@ public final class OpenAiCompatibleLlmProvider implements LlmProvider {
         this.baseUrl = stripTrailingSlash(baseUrl);
         this.defaultMaxTokens = defaultMaxTokens;
         this.requestTimeout = requestTimeout;
+        this.servedContextWindow = servedContextWindow;
     }
 
     @Override
     public String id() {
         return providerId;
+    }
+
+    /** The endpoint's configured window (Ollama's context length) for every model; else the model's own. */
+    @Override
+    public OptionalInt servedContextWindow(String modelName) {
+        return servedContextWindow == null ? OptionalInt.empty() : OptionalInt.of(servedContextWindow);
     }
 
     @Override

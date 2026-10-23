@@ -63,6 +63,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -453,6 +454,26 @@ class OrchestratorServiceTest {
                 .isInstanceOf(ConversationNotFoundException.class);
         verifyNoInteractions(errorRecorder);
         verify(provider, never()).invoke(any());
+    }
+
+    @Test
+    void respondToMessage_providerServesItsOwnWindow_sizesToItNotToTheModel() {
+        // Ollama serves 4096 tokens whatever the model could hold: assuming the model's window
+        // (or the 16K fallback) would send what the server silently cuts.
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.servedContextWindow(MODEL)).thenReturn(OptionalInt.of(4096));
+        when(provider.invoke(any())).thenReturn(reply("ok"));
+
+        serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId);
+
+        ContextAssembled assembled = (ContextAssembled) publishedEvents().get(0);
+        assertThat(assembled.contextWindowLimit()).isEqualTo(4096);
+        ArgumentCaptor<LlmInvocation> captor = ArgumentCaptor.forClass(LlmInvocation.class);
+        verify(provider).invoke(captor.capture());
+        // History gets half of the window and the response the other half: together they fit.
+        assertThat(captor.getValue().maxTokens()).isEqualTo(2048);
+        assertThat(assembled.estimatedTokens() + captor.getValue().maxTokens()).isLessThanOrEqualTo(4096);
     }
 
     @Test

@@ -44,6 +44,11 @@ class LlmProviderRegistryTest {
                 .hasMessageContaining("anthropic");
     }
 
+    @Test
+    void servedContextWindow_byDefault_isTheModelsOwnSoEmpty() {
+        assertThat(fakeProvider("anthropic").servedContextWindow("claude-sonnet-5-5")).isEmpty();
+    }
+
     private static LlmProvider fakeProvider(String id) {
         return new LlmProvider() {
             @Override

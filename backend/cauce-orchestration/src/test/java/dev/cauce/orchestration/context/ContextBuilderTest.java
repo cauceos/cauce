@@ -13,6 +13,7 @@ import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +33,39 @@ class ContextBuilderTest {
         String prefix = tag + ":";
         String content = prefix + "x".repeat(chars - prefix.length());
         return Message.from(CONVERSATION, MessageRole.USER, content);
+    }
+
+    @Test
+    void build_inAServedWindowOf4096_reservesHalfAndKeepsHistoryInTheOtherHalf() {
+        // 12 messages of 700 chars => 200 tokens each; 2048 tokens of history fit 10 of them.
+        List<Message> messages = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            messages.add(userMessageOfLength("m" + i, 700));
+        }
+
+        LlmInvocationContext context = builder.build(messages, "qwen2.5:3b", 4096, SYSTEM_PROMPT, Set.of());
+
+        assertThat(context.contextWindowLimit()).isEqualTo(4096);
+        assertThat(context.reservedForResponse()).isEqualTo(2048);
+        assertThat(context.messages()).hasSize(10);
+        assertThat(context.estimatedTokens() + context.reservedForResponse()).isLessThanOrEqualTo(4096);
+    }
+
+    @Test
+    void responseTokens_inASmallWindow_isCappedToWhatWasHeldBack() {
+        LlmInvocationContext context = builder.build(
+                List.of(userMessageOfLength("hi", 10)), "qwen2.5:3b", 4096, SYSTEM_PROMPT, Set.of());
+
+        assertThat(context.responseTokens(4096)).isEqualTo(2048);
+        assertThat(context.responseTokens(1000)).isEqualTo(1000);
+    }
+
+    @Test
+    void responseTokens_inALargeWindow_isTheAgentsOwn() {
+        LlmInvocationContext context = builder.build(List.of(userMessageOfLength("hi", 10)), MODEL, SYSTEM_PROMPT);
+
+        assertThat(context.reservedForResponse()).isEqualTo(ContextBuilder.RESERVED_FOR_RESPONSE);
+        assertThat(context.responseTokens(16_000)).isEqualTo(16_000);
     }
 
     @Test

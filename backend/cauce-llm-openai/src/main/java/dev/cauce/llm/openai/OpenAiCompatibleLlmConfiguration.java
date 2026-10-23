@@ -30,11 +30,19 @@ public class OpenAiCompatibleLlmConfiguration {
     static final String OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1";
     static final String MISTRAL_DEFAULT_BASE_URL = "https://api.mistral.ai/v1";
 
+    /**
+     * The context length Ollama serves when neither its {@code OLLAMA_CONTEXT_LENGTH} nor a
+     * Modelfile sets one (checked on Ollama 0.40.8: 4096, whatever the model could hold). Its
+     * OpenAI-compatible endpoint takes no per-request {@code num_ctx}, so Cauce cannot raise it
+     * per call, only match it: {@code providers.ollama.context-window} must equal the server's.
+     */
+    static final int OLLAMA_DEFAULT_CONTEXT_WINDOW = 4096;
+
     @Bean
     @ConditionalOnProperty(prefix = "cauce.llm.openai-compatible.providers.ollama",
             name = "enabled", havingValue = "true")
     public OpenAiCompatibleLlmProvider ollamaLlmProvider(OpenAiCompatibleProperties properties) {
-        return buildProvider(OLLAMA_ID, properties, OLLAMA_DEFAULT_BASE_URL);
+        return buildProvider(OLLAMA_ID, properties, OLLAMA_DEFAULT_BASE_URL, OLLAMA_DEFAULT_CONTEXT_WINDOW);
     }
 
     @Bean
@@ -42,7 +50,7 @@ public class OpenAiCompatibleLlmConfiguration {
             name = "enabled", havingValue = "true")
     @Conditional(OpenAiApiKeyCondition.class)
     public OpenAiCompatibleLlmProvider openAiLlmProvider(OpenAiCompatibleProperties properties) {
-        return buildProvider(OPENAI_ID, properties, OPENAI_DEFAULT_BASE_URL);
+        return buildProvider(OPENAI_ID, properties, OPENAI_DEFAULT_BASE_URL, null);
     }
 
     @Bean
@@ -50,16 +58,24 @@ public class OpenAiCompatibleLlmConfiguration {
             name = "enabled", havingValue = "true")
     @Conditional(MistralApiKeyCondition.class)
     public OpenAiCompatibleLlmProvider mistralLlmProvider(OpenAiCompatibleProperties properties) {
-        return buildProvider(MISTRAL_ID, properties, MISTRAL_DEFAULT_BASE_URL);
+        return buildProvider(MISTRAL_ID, properties, MISTRAL_DEFAULT_BASE_URL, null);
     }
 
     private static OpenAiCompatibleLlmProvider buildProvider(String id,
                                                              OpenAiCompatibleProperties properties,
-                                                             String defaultBaseUrl) {
+                                                             String defaultBaseUrl,
+                                                             Integer defaultContextWindow) {
         ProviderSettings settings = properties.getProviders().getOrDefault(id, new ProviderSettings());
         String baseUrl = (settings.getBaseUrl() != null && !settings.getBaseUrl().isBlank())
                 ? settings.getBaseUrl()
                 : defaultBaseUrl;
+        Integer contextWindow = settings.getContextWindow() != null
+                ? settings.getContextWindow()
+                : defaultContextWindow;
+        if (contextWindow != null && contextWindow <= 0) {
+            throw new IllegalStateException("cauce.llm.openai-compatible.providers." + id
+                    + ".context-window must be positive, was " + contextWindow);
+        }
 
         ObjectMapper objectMapper = new ObjectMapper();
         HttpClient httpClient = HttpClient.newBuilder()
@@ -73,6 +89,7 @@ public class OpenAiCompatibleLlmConfiguration {
                 new OpenAiErrorMapper(objectMapper),
                 baseUrl,
                 settings.getMaxTokens(),
-                settings.getTimeout());
+                settings.getTimeout(),
+                contextWindow);
     }
 }

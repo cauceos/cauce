@@ -66,6 +66,10 @@ On Linux, Ollama listens on `127.0.0.1` only by default, which a container canno
 it with `OLLAMA_HOST=0.0.0.0` (for the systemd service: `systemctl edit ollama`, then
 `Environment="OLLAMA_HOST=0.0.0.0"`). On Windows and macOS nothing changes.
 
+Cauce sizes every request to the context length your Ollama serves, 4096 tokens unless you
+started it with another `OLLAMA_CONTEXT_LENGTH`: Ollama cannot be asked for more per request. If
+you raised it, put the same value in `.env` (`OLLAMA_CONTEXT_LENGTH=16384`).
+
 **C. Ollama in Docker.**
 
 ```bash
@@ -158,7 +162,8 @@ with its sheet, menu and agenda, a waiter agent for customers and an agent for t
 Its agents use Anthropic (`claude-sonnet-5-5`) by default, so it needs path A's key; the script
 checks the instance has the provider before creating anything. With path B or C,
 `MODEL_PROVIDER=ollama MODEL_NAME=qwen2.5:3b ./scripts/demo-bar.sh` works, with a noticeably
-weaker waiter. It ends with a ready-made `curl` to talk to the waiter, and optionally connects
+weaker waiter; give it room with `OLLAMA_CONTEXT_LENGTH=16384` in `.env` (and, with your own
+Ollama, the same on the server), since the bar's prompts outgrow Ollama's default 4096 tokens. It ends with a ready-made `curl` to talk to the waiter, and optionally connects
 two Telegram bots: see [examples/hosteleria/README.md](examples/hosteleria/README.md).
 
 ## Your API key (read this)
@@ -249,6 +254,9 @@ Copy `.env.example` to `.env` to override defaults:
   misses. `qwen2.5:7b` (~4.7 GB, needs ~8 GB RAM for the model alone) is noticeably
   more reliable if your machine can take it.
 - `OLLAMA_BASE_URL` — your own Ollama instead of the containerized one (path B).
+- `OLLAMA_CONTEXT_LENGTH` (default `4096`, Ollama's own) — the context length Ollama serves. Compose
+  gives it to the containerized Ollama and to the app, which sizes its requests to it; with your
+  own Ollama, it must equal what that server is started with. 16384 takes ≈0.5 GB more RAM.
 - `API_PORT` (default `8080`), `OLLAMA_PORT` (default `11434`) — host ports, next to the
   existing `POSTGRES_PORT=5433`, `REDIS_PORT=6379`, `ADMINER_PORT=8081`.
 - `COMPOSE_PROJECT_NAME` — only to tell apart two clones in directories of the same name.

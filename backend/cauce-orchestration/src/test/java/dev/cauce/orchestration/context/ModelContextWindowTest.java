@@ -30,8 +30,10 @@ class ModelContextWindowTest {
     }
 
     @Test
-    void contextWindowFor_quickstartLocalModel_returnsItsWindow() {
-        assertThat(ModelContextWindow.contextWindowFor("qwen2.5:3b")).isEqualTo(32_768);
+    void contextWindowFor_aModelALocalServerServes_isNotClaimedByTheRegistry() {
+        // Its window is the server's setting, reported by its provider: never the model's 32K here.
+        assertThat(ModelContextWindow.contextWindowFor("qwen2.5:3b"))
+                .isEqualTo(ModelContextWindow.DEFAULT_CONTEXT_WINDOW);
     }
 
     @Test

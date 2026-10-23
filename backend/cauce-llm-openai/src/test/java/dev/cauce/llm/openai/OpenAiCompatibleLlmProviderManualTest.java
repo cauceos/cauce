@@ -31,7 +31,8 @@ class OpenAiCompatibleLlmProviderManualTest {
                 new OpenAiErrorMapper(objectMapper),
                 "http://localhost:11434/v1",
                 256,
-                Duration.ofSeconds(60));
+                Duration.ofSeconds(60),
+                null);
 
         LlmResponse response = provider.invoke(LlmInvocation.builder()
                 .modelName("llama3.2")

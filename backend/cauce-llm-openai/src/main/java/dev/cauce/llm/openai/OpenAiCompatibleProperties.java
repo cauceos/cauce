@@ -42,6 +42,13 @@ public class OpenAiCompatibleProperties {
         /** {@code max_tokens} used when an invocation does not specify one. */
         private int maxTokens = 4096;
 
+        /**
+         * The context window the endpoint serves, in tokens, when it is the server's setting
+         * rather than the model's (Ollama's context length). Null: the model's own window. For
+         * Ollama, null means Ollama's default; set it to what the server is started with.
+         */
+        private Integer contextWindow;
+
         public boolean isEnabled() {
             return enabled;
         }
@@ -72,6 +79,14 @@ public class OpenAiCompatibleProperties {
 
         public void setMaxTokens(int maxTokens) {
             this.maxTokens = maxTokens;
+        }
+
+        public Integer getContextWindow() {
+            return contextWindow;
+        }
+
+        public void setContextWindow(Integer contextWindow) {
+            this.contextWindow = contextWindow;
         }
     }
 }

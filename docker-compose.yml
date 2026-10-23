@@ -81,6 +81,11 @@ services:
     profiles: [quickstart, ollama]
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
+    environment:
+      # The context length Ollama serves. The app reads the same variable (cauce-api below):
+      # it sizes every request to it, since Ollama's OpenAI-compatible endpoint takes none per
+      # request. 4096 is Ollama's own default; raise both together with OLLAMA_CONTEXT_LENGTH.
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-4096}
     volumes:
       - ollama-data:/root/.ollama
     healthcheck:
@@ -131,6 +136,9 @@ services:
       # The containerized Ollama by default; your own with
       # OLLAMA_BASE_URL=http://host.docker.internal:11434/v1 in .env (and --profile api).
       CAUCE_LLM_OPENAICOMPATIBLE_PROVIDERS_OLLAMA_BASEURL: ${OLLAMA_BASE_URL:-http://ollama:11434/v1}
+      # Must equal what Ollama serves: the same variable as the ollama service's (your own
+      # Ollama: the value it is started with).
+      CAUCE_LLM_OPENAICOMPATIBLE_PROVIDERS_OLLAMA_CONTEXTWINDOW: ${OLLAMA_CONTEXT_LENGTH:-4096}
       # Registers the Anthropic provider when set (in .env: compose reads it from there and
       # passes it on). Blank, the provider stays off.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

@@ -34,8 +34,8 @@ public final class ModelContextWindow {
     // Opus 5.5, Sonnet 5.5 and Haiku 5.5 (current), and Fable 5, Opus 5, Sonnet 5, Opus 4.8/4.7/4.6
     // and Sonnet 4.6 (legacy) have a 1M window by default (no beta header); every other model,
     // Haiku 4.5 among them, has 200K. Sonnet 4.7 is not listed there and keeps the 200K it had.
-    // qwen2.5:3b is the quickstart's local model (an Ollama tag): Qwen2.5 3B has a 32K window. The
-    // window Ollama actually serves is its num_ctx setting, which may be smaller.
+    // Models served by a local server (Ollama) are not here: the window is the server's setting,
+    // which their provider reports (LlmProvider#servedContextWindow), not the model's.
     private static final Map<String, Integer> KNOWN_MODELS = Map.ofEntries(
             Map.entry("claude-fable-5-1", 1_000_000),
             Map.entry("claude-opus-5-5", 1_000_000),
@@ -50,8 +50,7 @@ public final class ModelContextWindow {
             Map.entry("claude-sonnet-4-6", 1_000_000),
             Map.entry("claude-sonnet-4-7", 200_000),
             Map.entry("claude-haiku-4-5", 200_000),
-            Map.entry("claude-haiku-4-5-20251001", 200_000),
-            Map.entry("qwen2.5:3b", 32_768));
+            Map.entry("claude-haiku-4-5-20251001", 200_000));
 
     /** Unknown model ids already warned about, so the fallback WARN fires once per id per JVM. */
     private static final Set<String> WARNED_UNKNOWN_MODELS = ConcurrentHashMap.newKeySet();

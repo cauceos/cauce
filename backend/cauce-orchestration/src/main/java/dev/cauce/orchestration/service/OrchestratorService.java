@@ -24,6 +24,7 @@ import dev.cauce.orchestration.LogSafe;
 import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.context.ContextBuilder;
 import dev.cauce.orchestration.context.LlmInvocationContext;
+import dev.cauce.orchestration.context.ModelContextWindow;
 import dev.cauce.orchestration.events.ContextAssembled;
 import dev.cauce.orchestration.events.InvocationCompleted;
 import dev.cauce.orchestration.events.LlmFailed;
@@ -201,6 +202,10 @@ public class OrchestratorService {
         LlmCredential credential = new SystemDefaultLlmCredential(agent.modelProvider(), environment);
         LlmProvider provider = llmProviderRegistry.getProvider(agent.modelProvider())
                 .orElseThrow(() -> providerNotConfigured(agent.modelProvider()));
+        // The window the provider actually serves when it is its setting (Ollama's context
+        // length), else the model's: what is sent must fit what is served, or it is cut silently.
+        int contextWindow = provider.servedContextWindow(agent.modelName())
+                .orElseGet(() -> ModelContextWindow.contextWindowFor(agent.modelName()));
         List<ToolDefinition> toolDefinitions = toolDefinitions(agent);
         // Deferred R1, behind a per-agent switch: earlier turns' lookups the agent can repeat.
         Set<String> elidedLookups = agent.elidesPastLookups() ? toolRegistry.lookupTools() : Set.of();
@@ -214,7 +219,8 @@ public class OrchestratorService {
         int alreadyUsed = roundsAlreadyUsed(loaded.messages(), triggerMessageId);
         for (int iteration = alreadyUsed; iteration < maxIterations; iteration++) {
             LlmInvocationContext context =
-                    contextBuilder.build(messages, agent.modelName(), agent.systemPrompt(), elidedLookups);
+                    contextBuilder.build(messages, agent.modelName(), contextWindow, agent.systemPrompt(),
+                            elidedLookups);
             eventPublisher.publishEvent(new ContextAssembled(invocationId, iteration,
                     agent.modelName(), context.messages().size(), context.estimatedTokens(),
                     context.contextWindowLimit(), Instant.now()));
@@ -223,7 +229,7 @@ public class OrchestratorService {
                     .messages(context.messages())
                     .systemPrompt(agent.systemPrompt())
                     .tools(toolDefinitions)
-                    .maxTokens(agent.maxResponseTokens())
+                    .maxTokens(context.responseTokens(agent.maxResponseTokens()))
                     .temperature(agent.temperature().orElse(null))
                     .credential(credential)
                     // The agent's tools and prompt are fixed and the context only grows: a

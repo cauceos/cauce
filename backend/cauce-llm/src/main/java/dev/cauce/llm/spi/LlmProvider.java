@@ -2,6 +2,7 @@ package dev.cauce.llm.spi;
 
 import dev.cauce.llm.model.LlmInvocation;
 import dev.cauce.llm.model.LlmResponse;
+import java.util.OptionalInt;
 
 /**
  * The pluggable contract every LLM provider adapter implements. The core depends only on
@@ -27,4 +28,18 @@ public interface LlmProvider {
 
     /** Whether this provider can serve the given model, e.g. Anthropic for {@code claude-*}. */
     boolean supports(String modelName);
+
+    /**
+     * The context window, in tokens, this provider actually serves for {@code modelName}, when
+     * that is the provider's setting rather than the model's: a local server such as Ollama
+     * serves its own context length whatever the model could hold, and a request cannot change
+     * it. The orchestrator sizes the context to this window, so what it sends always fits what
+     * is served.
+     *
+     * @return the served window, or empty (the default) when it is the model's own, which the
+     *         orchestrator then looks up by model name
+     */
+    default OptionalInt servedContextWindow(String modelName) {
+        return OptionalInt.empty();
+    }
 }

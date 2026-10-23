@@ -132,7 +132,8 @@ class OpenAiCompatibleLlmProviderTest {
                 new OpenAiErrorMapper(objectMapper),
                 wm.getHttpBaseUrl(),
                 4096,
-                requestTimeout);
+                requestTimeout,
+                null);
     }
 
     private static LlmInvocation invocation(String apiKey) {

@@ -35,8 +35,16 @@ import java.util.Set;
  */
 public final class ContextBuilder {
 
-    /** 8K reserved for the model's response plus a 2K safety buffer. */
+    /**
+     * 8K reserved for the model's response plus a 2K safety buffer — in a window large enough to
+     * keep {@link #MIN_HISTORY} after it. A smaller window (a local server's, e.g. Ollama's 4096)
+     * reserves half of itself instead ({@link #reservedForResponse}), so that it still holds a
+     * conversation.
+     */
     static final int RESERVED_FOR_RESPONSE = 10_000;
+
+    /** History a window must keep after the standard reservation for that reservation to apply. */
+    static final int MIN_HISTORY = 4_096;
 
     /** What stands in for a past lookup's result when the agent elides them (deferred R1). */
     public static final String ELIDED_RESULT = "resultado omitido; vuelve a consultar si lo necesitas";
@@ -62,11 +70,22 @@ public final class ContextBuilder {
      */
     public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
                                       String systemPrompt, Set<String> elidedLookups) {
+        return build(conversationMessages, modelName, ModelContextWindow.contextWindowFor(modelName),
+                systemPrompt, elidedLookups);
+    }
+
+    /**
+     * {@link #build(List, String, String, Set)} for a window {@code contextWindow} tokens wide,
+     * given rather than looked up by model: the window the provider actually serves, when it is
+     * the provider's setting (a local server's context length) and not the model's.
+     */
+    public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
+                                      int contextWindow, String systemPrompt, Set<String> elidedLookups) {
         if (!elidedLookups.isEmpty()) {
             conversationMessages = elidePastLookups(conversationMessages, elidedLookups);
         }
-        int contextWindow = ModelContextWindow.contextWindowFor(modelName);
-        int effectiveWindow = contextWindow - RESERVED_FOR_RESPONSE;
+        int reservedForResponse = reservedForResponse(contextWindow);
+        int effectiveWindow = contextWindow - reservedForResponse;
 
         // v1.0: the systemPrompt is NOT counted against the window — it belongs to the Agent,
         // not the conversation history. TODO(v2): if system prompts grow large enough to
@@ -112,7 +131,12 @@ public final class ContextBuilder {
                 .map(ContextBuilder::toLlmMessage)
                 .toList();
         return new LlmInvocationContext(
-                window, systemPrompt, runningTokens, contextWindow, RESERVED_FOR_RESPONSE);
+                window, systemPrompt, runningTokens, contextWindow, reservedForResponse);
+    }
+
+    /** {@link #RESERVED_FOR_RESPONSE}, or half the window when that would leave under {@link #MIN_HISTORY}. */
+    static int reservedForResponse(int contextWindow) {
+        return contextWindow - RESERVED_FOR_RESPONSE >= MIN_HISTORY ? RESERVED_FOR_RESPONSE : contextWindow / 2;
     }
 
     private static List<Message> elidePastLookups(List<Message> messages, Set<String> elidedLookups) {
