@@ -24,7 +24,8 @@ H3.8** (100 % → 20 %), provocada por el prompt nuevo → corrección del promp
 sin romper G1, G2, H4.1, H4.4, H4.6 ni H4.7 (`1559Z`) → **98 %** con la batería completa sobre el
 prompt corregido (`0732Z`) → arreglos del arnés y del orden de los mensajes, y escenarios G3 y
 H3.13 → **100 %** (`0914Z`). El experimento R1 (`0941Z`) no cambia la línea base: se rechazó. →
-**99 %** (`1138Z`), mismo prompt, con tokens por escenario: H3.13 al 80 %, variabilidad.
+**99 %** (`1138Z`), mismo prompt, con tokens por escenario: H3.13 al 80 %, variabilidad. Haiku 5.5
+(`1315Z`): **86 %** y seis bloqueantes por debajo del 100 %, **no aprobado**.
 
 ## Línea base vigente · 2026-10-23T1138Z
 
@@ -73,6 +74,72 @@ fallos de ejecución, la registró como completa al 100 %. No se commitea. Desde
 para la ejecución en el primer turno y una ejecución sin repeticiones válidas, o con más fallos de
 ejecución que el umbral, falla y no se escribe en el historial.
 
+## Haiku 5.5 · 2026-10-23T1315Z · no aprobado
+
+La batería completa con el modelo más barato, el mismo prompt y el mismo commit
+(`-Pevals.modelo=claude-haiku-5-5`, [`1315Z`](historial/2026-10-23T1315Z-claude-haiku-5-5.json)), N = 5:
+**86 %** global (137 de 159 repeticiones válidas; una de H1.5 acabó en respuesta vacía, fuera de la
+tasa) y **seis bloqueantes por debajo del 100 %**. **Decisión: Haiku no se aprueba como modelo del
+agente.** El prompt no se toca: se escribió y se ajustó para Sonnet.
+
+| Bloqueante | Sonnet `1138Z` | Haiku `1315Z` |
+|---|---|---|
+| G1 · carta consultada en el mismo turno | 100 % | 80 % |
+| H1.5 · anota la pregunta sin prometer respuesta del dueño | 100 % | 75 % |
+| H2.1 · alérgenos declarados | 100 % | 80 % |
+| H2.2 · alérgenos no declarados | 100 % | **0 %** |
+| H3.1 · propone, lee y pregunta | 100 % | 40 % |
+| H3.9 · cancelación con confirmación | 100 % | 80 % |
+| Los otros nueve bloqueantes | 100 % | 100 % |
+
+Reglas generales: G1 y carta sin inventar, 89 % (100 % con Sonnet). Avisos por debajo del umbral:
+G2 80 %, G3 40 %, H1.2 80 %, H3.12 0 %; H3.13 sube al 100 %. Tareas: anclaje 67 %, información 92 %,
+carta 76 %, reservas 85 %, escalado y resumen 100 %.
+
+| | Sonnet `1138Z` | Haiku `1315Z` |
+|---|---|---|
+| Entrada por mensaje | 13.285 | 12.913 |
+| Salida por mensaje | 240 | 319 (+33 %) |
+| Leída de caché | 96,9 % | 97,1 % |
+| Coste de la batería (precios 2026-10-23) | 1,2779 US$ | 0,0897 US$ (14 veces menos) |
+| Por conversación: medido (caliente) | 0,0082 US$ | 0,0006 US$ |
+| Por conversación: a) 5 min, prefijo caliente | 0,0162 US$ | 0,0009 US$ |
+| Por conversación: b) 1 hora | 0,0093 US$ | 0,0006 US$ |
+| Por conversación: todo frío | 0,0360 US$ | 0,0019 US$ |
+| 900 conversaciones al mes (medido / a / b / frío) | 7,42 / 14,54 / 8,39 / 32,41 US$ | 0,52 / 0,84 / 0,56 / 1,69 US$ |
+
+Los supuestos de a), b) y «todo frío» son los de la [sección de coste](#coste-por-conversación-del-bar),
+con el mismo prefijo de 4.900 tokens: Haiku lleva una entrada por mensaje casi igual.
+
+### Diagnóstico de sus fallos, sin tocar el prompt
+
+**Peligroso** es inventar platos o alérgenos o afirmar algo falso; **de forma**, decir lo correcto
+con otras palabras, o dar un paso de más o de menos.
+
+| Escenario | Qué dijo y qué llamó | Clase |
+|---|---|---|
+| H2.2 (5 de 5) | Llamó a `search_catalog` y a `record_unanswered_question` en las cinco y dijo «No tengo declarados los alérgenos de la tarta de queso casera, así que no te puedo decir si contiene alguno», recomendando confirmarlo con el personal. No nombró ningún alérgeno. La comprobación espera «no consta \| no me consta \| no ha declarado \| no están declarados \| sin declarar» | **De forma**: correcto con otras palabras |
+| G1 (1 de 5, rep. 2) | A «¿Y las croquetas llevan leche?» respondió «Sí, las croquetas de jamón contienen lácteos» sin volver a llamar a `search_catalog`: usó la consulta del turno anterior. Lo que dijo es cierto | **De forma**: un paso de menos. Es el fallo que G1 existe para impedir: con la carta cambiada, la respuesta sería vieja |
+| H3.1 (3 de 5, rep. 2, 4 y 5) | Consultó disponibilidad y, en vez de proponer la reserva, preguntó si le iba bien el turno o pidió confirmar los datos; con el «Sí, perfecto» propuso (`propose_booking`) y volvió a preguntar «¿Lo confirmo?». Nunca confirmó sin permiso ni dio por hecha la reserva | **De forma**: un paso de más. Cuesta un mensaje más al cliente, y si no contesta, la retención caduca sin reserva |
+
+Los otros tres bloqueantes, por ver si alguno es peligroso:
+
+- **H1.5, repetición 5: peligroso.** A «¿Tenéis wifi?», sin `record_unanswered_question`: «No tenemos
+  wifi: la ficha del local no lo menciona, así que no puedo confirmarlo». Afirma que no hay wifi
+  sin saberlo, y se contradice en la misma frase. La repetición 3 acabó en respuesta vacía (fallo de
+  ejecución, con mensaje de respaldo).
+- **H2.1, repetición 2: de forma.** A «¿Las patatas bravas llevan gluten?» consultó la carta, pero
+  solo dijo que lo había anotado como pregunta pendiente, sin dar el dato que la carta sí tiene.
+- **H3.9, repetición 2: de forma.** Un paso de más: pidió confirmar la cancelación, y con el «Sí» la
+  propuso y volvió a pedir confirmación.
+- **«Carta sin inventar» (89 %) no es invención.** Sus fallos (G1, G3) nombran platos y precios
+  reales de turnos anteriores sin volver a consultar en el turno («Las patatas bravas cuestan
+  5,50 €», cierto). Es el mismo paso de menos que G1.
+
+**En resumen:** un fallo peligroso (afirma algo que no sabe) y el resto de forma, pero los de forma
+son los que el prompt prohíbe expresamente (consultar en cada turno, proponer en el mismo turno), y
+en un bloqueante de alérgenos (H2.2) la redacción no cumple lo que la comprobación pide.
+
 ## Coste por conversación del bar
 
 Con los tokens por escenario de `1138Z`: 31 escenarios de conversación, 155 conversaciones (N = 5) y
@@ -97,37 +164,72 @@ En el arnés, los mensajes de una conversación van seguidos y la caché no cadu
 | Por conversación | **0,0082 US$** | 0,0020 US$ (H2.5, 1 mensaje) | 0,0532 US$ (G3, 10 mensajes) |
 | Por mensaje | **0,0047 US$** | 0,0020 US$ (H2.5) | 0,0102 US$ (H3.8) |
 
-### Estimado: caché fría
+### Estimado: el prefijo compartido y el historial de cada conversación
 
-**No está medido.** Supone el peor caso de un bar real: entre mensaje y mensaje del cliente pasan más
-de los 5 minutos que dura la caché, así que cada mensaje empieza con la caché vacía. La primera
-llamada al modelo de cada mensaje escribe en caché todo su prompt (2,50 US$ por millón en vez de
-0,10) y las siguientes del mismo mensaje lo leen. Se supone que esa primera llamada lleva la mitad de
-la entrada del mensaje (unas dos llamadas por mensaje, medido el 2026-10-22). El techo es sin caché
-ninguna (toda la entrada a 2,00 US$ por millón).
+Cada llamada al modelo lleva delante un **prefijo**, las herramientas y el prompt del agente, que es
+igual para todos los clientes del agente y para todos los bares del paquete: el prompt no lleva
+nada del bar (sus datos llegan por las herramientas). Detrás va el **historial** de esa conversación.
+El adaptador marca el final del prefijo para la caché y cachea también la conversación, que solo
+crece (ADR 0005). La caché se comparte dentro de la organización y el espacio de trabajo de la clave
+de la API, así que el prefijo es uno para toda la instancia.
 
-| | Media | Más barato | Más caro | Techo sin caché |
-|---|---|---|---|---|
-| Por conversación | **0,0360 US$** | 0,0141 US$ (H2.5) | 0,2772 US$ (G3) | 0,0505 US$ |
-| Por mensaje | **0,0207 US$** | 0,0141 US$ (H2.5) | 0,0303 US$ (H3.8) | 0,0290 US$ |
+**Medido o derivado de lo medido**
+
+- Los tokens de cada escenario (`1138Z`) y los precios de la documentación de Anthropic: escritura
+  en caché a 5 minutos, 2,50 US$ por millón (1,25 × entrada); a 1 hora, **4,00** (2 × entrada);
+  lectura, 0,10.
+- **El prefijo, unos 4.900 tokens.** Derivado: en los escenarios de un mensaje con una sola
+  herramienta (dos llamadas: H2.5, H2.1, H2.3, H1.1, H1.3) la entrada es de 10.036 a 10.988 tokens,
+  es decir, dos prefijos más el mensaje, la llamada y su resultado. Es el 72 % de la entrada de la
+  primera llamada de cada mensaje (con dos llamadas por mensaje, el supuesto de abajo).
+
+**Supuesto**
+
+- Dos llamadas al modelo por mensaje del cliente, la primera con la mitad de su entrada (medido el
+  2026-10-22, como antes).
+- **a) Caché de 5 minutos, prefijo caliente durante el servicio, historial frío:** entre mensaje y
+  mensaje de una persona pasan más de 5 minutos, así que cada mensaje vuelve a escribir su historial;
+  el prefijo se lee porque la instancia tiene tráfico al menos cada 5 minutos.
+- **b) Caché de 1 hora, para prefijo e historial:** la persona contesta en menos de una hora, así que
+  el historial sigue en caché como en el arnés; solo cambia que cada escritura cuesta 4,00 y no 2,50.
+- Cada vez que el prefijo se enfría, volver a escribirlo cuesta 0,012 US$ (5 minutos) o 0,020 US$
+  (1 hora), una vez para toda la instancia: con diez arranques en frío al día, unos 3,70 o 5,90 US$
+  al mes. No entra en las tablas.
+- «Todo frío» es la estimación anterior: cada mensaje reescribe también el prefijo.
+
+| Por conversación | Media | Más barato | Más caro |
+|---|---|---|---|
+| Medido (caché caliente) | 0,0082 US$ | 0,0020 US$ (H2.5) | 0,0532 US$ (G3) |
+| a) 5 minutos, prefijo caliente | **0,0162 US$** | 0,0023 US$ (H2.5) | 0,1596 US$ (G3) |
+| b) 1 hora | **0,0093 US$** | 0,0021 US$ (H2.5) | 0,0615 US$ (G3) |
+| 5 minutos, todo frío | 0,0360 US$ | 0,0141 US$ (H2.5) | 0,2772 US$ (G3) |
+| Techo sin caché | 0,0505 US$ | 0,0209 US$ (H2.5) | 0,3945 US$ (G3) |
+
+Por mensaje del cliente: medido 0,0047 US$; a) 0,0093; b) 0,0053; todo frío 0,0207; techo 0,0290.
+
+**La caché de 1 hora sale más barata que la de 5 minutos con el prefijo caliente.** Reescribir el
+historial de cada mensaje a 2,50 cuesta más que escribir solo lo nuevo a 4,00: con 1 hora, el coste
+queda a un 13 % del medido. La diferencia crece con la conversación (G3: 0,1596 frente a 0,0615).
 
 ### Proyección mensual, estimada
 
 Con la conversación media de la batería (1,74 mensajes):
 
-| Conversaciones al mes | Caché caliente | Caché fría | Techo sin caché |
-|---|---|---|---|
-| 300 | 2,47 US$ | 10,80 US$ | 15,14 US$ |
-| 900 | 7,42 US$ | 32,41 US$ | 45,43 US$ |
-| 1.500 | 12,37 US$ | 54,02 US$ | 75,71 US$ |
+| Conversaciones al mes | Medido (caliente) | a) 5 min, prefijo caliente | b) 1 hora | Todo frío | Techo |
+|---|---|---|---|---|---|
+| 300 | 2,47 US$ | 4,85 US$ | 2,80 US$ | 10,80 US$ | 15,14 US$ |
+| 900 | 7,42 US$ | 14,54 US$ | 8,39 US$ | 32,41 US$ | 45,43 US$ |
+| 1.500 | 12,37 US$ | 24,23 US$ | 13,98 US$ | 54,02 US$ | 75,71 US$ |
 
+- **Con poco tráfico, a) no se sostiene.** Para que el prefijo siga caliente con 5 minutos hace falta
+  una llamada cada 5 minutos en toda la instancia; un bar con 300 conversaciones al mes (unas 10 al
+  día) queda casi siempre en «todo frío». Con 1 hora basta una llamada por hora de servicio.
 - **Lo que más mueve la cifra es la longitud de la conversación**, no el número de conversaciones:
   el coste por mensaje crece con el historial (G3, diez mensajes, lleva 18.666 tokens de entrada por
   mensaje frente a unos 10.000 en los escenarios de uno). Las conversaciones de la batería son cortas
   a propósito; con datos de producción, la longitud media real sustituye a la de 1,74.
-- La realidad de un bar queda entre caliente y fría: los mensajes seguidos de una misma persona
-  (en menos de 5 minutos) leen de caché.
-- Es el coste de proveedor a precio de lista (ADR 0010), sin el juez, sin canales y sin margen.
+- Es el coste de proveedor a precio de lista (ADR 0010), sin el juez, sin canales y sin margen. Cauce
+  pide hoy solo la caché de 5 minutos: b) requiere la caché de 1 hora, que no está construida.
 
 ## Línea base anterior · 2026-10-23T0914Z · 100 %
 
