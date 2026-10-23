@@ -148,6 +148,22 @@ class LlmPriceServiceIT extends AbstractOrchestrationIntegrationTest {
     }
 
     @Test
+    void costView_aLongWriteWithoutItsPrice_isUnpriced_butACallWithoutLongWritesIsPriced() {
+        // A price row with the short cache prices only.
+        insertPrice("2026-10-05T00:00:00Z", "2.00", "10.00", "0.10", "2.50");
+        UUID longWrites = insertUsage(client.id(), "2026-10-10T12:00:00Z", 1_000_000, 0, 600_000, 0);
+        jdbc.update("UPDATE llm_usage_records SET cache_write_long_tokens = 400000 WHERE id = ?", longWrites);
+        UUID shortWrites = insertUsage(client.id(), "2026-10-10T12:00:00Z", 1_000_000, 0, 600_000, 0);
+
+        Map<UUID, BigDecimal> costs = costsAs(client.id());
+
+        assertThat(costs).containsKey(longWrites);
+        assertThat(costs.get(longWrites)).isNull();
+        // 400k uncached × 2.00 + 600k short writes × 2.50, per million.
+        assertThat(costs.get(shortWrites)).isEqualByComparingTo("2.30");
+    }
+
+    @Test
     void costView_withTwoPricesFromTheSameInstant_usesTheOneAddedLast() {
         insertPrice("2026-10-05T00:00:00Z", "2.00", "10.00", null, null);
         insertPrice("2026-10-05T00:00:00Z", "4.00", "10.00", null, null);

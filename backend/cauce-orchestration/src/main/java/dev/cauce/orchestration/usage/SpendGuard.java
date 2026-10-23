@@ -2,6 +2,7 @@ package dev.cauce.orchestration.usage;
 
 import dev.cauce.core.UuidGenerator;
 import dev.cauce.core.agent.Agent;
+import dev.cauce.core.agent.PromptCacheRetention;
 import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.usage.SpendAlertNotifier;
 import dev.cauce.core.usage.SpendAlertNotifier.SpendAlert;
@@ -22,7 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The spend check before each invocation (ADR 0010, S6, S7). Without a limit, everything runs.
- * With one, an agent whose model has no price in force is refused, and otherwise the client's spend
+ * With one, an agent whose model has no price in force is refused, as is one that asks for the long
+ * prompt cache when that price has no long-write price (S8), and otherwise the client's spend
  * this month (UTC) is compared with its limit: at 80 % the owner is warned and the invocation runs;
  * at 100 % the invocation is refused. Each threshold is reported once per tenant and month: only the
  * check whose insert creates the {@code spend_alerts} row tells the owner (through
@@ -69,7 +71,9 @@ public class SpendGuard {
         if (limit.isEmpty()) {
             return Verdict.ALLOWED;
         }
-        if (!repository.hasPriceInForce(agent.modelProvider(), agent.modelName())) {
+        // An agent that asks for the long cache writes at its price, which must be there too (V51).
+        boolean longWrites = agent.promptCacheRetention() == PromptCacheRetention.LONG;
+        if (!repository.hasPriceInForce(agent.modelProvider(), agent.modelName(), longWrites)) {
             return Verdict.UNPRICED_MODEL;
         }
         BigDecimal spent = (BigDecimal) SpendLimitService.spentThisMonth(repository, agent.tenantId())[0];

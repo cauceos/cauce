@@ -220,7 +220,8 @@ class EvalBatteryRun {
         RunSummary.Tokens tokens = new RunSummary.Tokens(num(usage, "i"), num(usage, "r"), num(usage, "w"),
                 num(usage, "l"), num(usage, "o"), (int) num(usage, "t"), judge.map(LlmJudge::inputTokens).orElse(0L),
                 judge.map(LlmJudge::outputTokens).orElse(0L));
-        Double cost = agentPrice.map(p -> p.cost(tokens.input(), tokens.cacheRead(), tokens.cacheWrite(), tokens.cacheWriteLong(),
+        Double cost = agentPrice.filter(p -> p.prices(tokens.cacheWriteLong()))
+                .map(p -> p.cost(tokens.input(), tokens.cacheRead(), tokens.cacheWrite(), tokens.cacheWriteLong(),
                         tokens.output())
                 + judgePrice.map(j -> j.cost(tokens.judgeInput(), 0, 0, tokens.judgeOutput())).orElse(0.0)).orElse(null);
         String now = clock.instant().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm'Z'"));

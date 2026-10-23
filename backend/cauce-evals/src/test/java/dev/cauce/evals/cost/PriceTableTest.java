@@ -46,9 +46,12 @@ class PriceTableTest {
     }
 
     @Test
-    void aPriceWithoutTheLongWrite_pricesLongWritesAsInput() {
+    void aPriceWithoutTheLongWrite_doesNotPriceLongWrites_onlyEstimatesThem() {
         PriceTable.Price price = new PriceTable.Price("anthropic", "m", 2.0, 2.5, null, 0.1, 10.0, "2026-10-23");
 
+        assertThat(price.prices(0)).isTrue();
+        assertThat(price.prices(1)).isFalse();
+        // The budget estimate of a run, never a reported cost.
         assertThat(price.cost(1_000_000, 0, 1_000_000, 1_000_000, 0)).isCloseTo(2.0, org.assertj.core.data.Offset.offset(1e-9));
     }
 }

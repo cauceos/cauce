@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.core.agent.Agent;
+import dev.cauce.core.agent.PromptCacheRetention;
 import dev.cauce.core.audit.AuditEvent;
 import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.usage.SpendAlertNotifier;
@@ -53,7 +54,7 @@ class SpendGuardTest {
         ObjectProvider<SpendAlertNotifier> provider = Mockito.mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(notifier);
         guard = new SpendGuard(repository, mapper, auditRecorder, provider, Clock.fixed(NOW, ZoneOffset.UTC));
-        when(repository.hasPriceInForce("anthropic", "claude-sonnet-5-5")).thenReturn(true);
+        when(repository.hasPriceInForce("anthropic", "claude-sonnet-5-5", false)).thenReturn(true);
         when(repository.recordAlertOnce(any(), any(), any(), anyInt(), any(), any())).thenReturn(1);
     }
 
@@ -63,7 +64,7 @@ class SpendGuardTest {
 
         assertThat(guard.check(agent)).isEqualTo(Verdict.ALLOWED);
 
-        verify(repository, never()).hasPriceInForce(any(), any());
+        verify(repository, never()).hasPriceInForce(any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(repository, never()).spentThisMonth(any());
         verifyNoInteractions(auditRecorder, notifier);
     }
@@ -125,11 +126,23 @@ class SpendGuardTest {
     @Test
     void withALimit_aModelWithoutPrice_isAMisconfiguration() {
         limit("50.00");
-        when(repository.hasPriceInForce("anthropic", "claude-sonnet-5-5")).thenReturn(false);
+        when(repository.hasPriceInForce("anthropic", "claude-sonnet-5-5", false)).thenReturn(false);
 
         assertThat(guard.check(agent)).isEqualTo(Verdict.UNPRICED_MODEL);
 
         verify(repository, never()).spentThisMonth(any());
+    }
+
+    @Test
+    void withALimit_aLongCacheAgent_needsTheLongWritePrice() {
+        limit("50.00");
+        spent("1.00");
+        Agent longCache = agent.withPromptCacheRetention(PromptCacheRetention.LONG);
+        when(repository.hasPriceInForce("anthropic", "claude-sonnet-5-5", true)).thenReturn(false, true);
+
+        assertThat(guard.check(longCache)).isEqualTo(Verdict.UNPRICED_MODEL);
+        assertThat(guard.check(longCache)).isEqualTo(Verdict.ALLOWED);
+        assertThat(guard.check(agent)).isEqualTo(Verdict.ALLOWED); // a short-cache agent does not need it
     }
 
     private void limit(String usd) {

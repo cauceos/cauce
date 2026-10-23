@@ -126,8 +126,10 @@ lives an hour, whose writes cost more (2 × input against 1.25 ×). Decided: bui
 **S8 — Long-retention writes are their own fact.** `llm_usage_records.cache_write_long_tokens` (V49)
 is the part of the cache writes made for the long retention, read from the provider's breakdown of
 its writes by lifetime; `llm_prices.cache_write_long_usd_per_mtok` prices them, and the cost view
-charges short and long writes each at its own price. Absent, a long write is priced as input, the
-rule of the other cache prices. The usage endpoint and the invocation's usage report it, and the
+charges short and long writes each at its own price. Absent, a call with long writes has no cost
+(V51): pricing it as input would under-state the spend. It counts as an unpriced call, and a client
+with a spend limit is refused an agent that asks for the long retention while its model's price has
+no long-write price, as a misconfiguration (S7). The usage endpoint and the invocation's usage report it, and the
 eval harness records it per run and per scenario (`cache_escritura_larga`).
 
 **S9 — The retention is a neutral hint, per agent.** The LLM SPI carries `PromptCacheRetention`

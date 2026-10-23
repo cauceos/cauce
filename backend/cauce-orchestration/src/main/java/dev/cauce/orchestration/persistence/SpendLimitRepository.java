@@ -31,10 +31,17 @@ public interface SpendLimitRepository extends JpaRepository<SpendLimitEntity, UU
             """, nativeQuery = true)
     List<Object[]> spentThisMonth(@Param("tenantId") UUID tenantId);
 
-    /** Whether {@code provider}'s {@code model} has a price in force now, by the database clock. */
-    @Query(value = "SELECT EXISTS (SELECT 1 FROM llm_prices WHERE provider = :provider AND model = :model "
-            + "AND valid_from <= now())", nativeQuery = true)
-    boolean hasPriceInForce(@Param("provider") String provider, @Param("model") String model);
+    /**
+     * Whether {@code provider}'s {@code model} has a price in force now, by the database clock, and,
+     * when {@code longWrites}, whether that price (the latest in force) prices long-retention cache
+     * writes: without it they are unpriced (V51).
+     */
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM (SELECT cache_write_long_usd_per_mtok FROM llm_prices "
+            + "WHERE provider = :provider AND model = :model AND valid_from <= now() "
+            + "ORDER BY valid_from DESC, id DESC LIMIT 1) latest "
+            + "WHERE NOT :longWrites OR latest.cache_write_long_usd_per_mtok IS NOT NULL)", nativeQuery = true)
+    boolean hasPriceInForce(@Param("provider") String provider, @Param("model") String model,
+                            @Param("longWrites") boolean longWrites);
 
     /**
      * Records that {@code tenantId} reached {@code thresholdPercent} of its limit in the month that

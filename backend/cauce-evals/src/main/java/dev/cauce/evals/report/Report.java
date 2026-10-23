@@ -101,6 +101,8 @@ public final class Report {
                             + " (%d de entrada por turno)\n",
                     t.input(), t.input() == 0 ? "0 %" : Aggregation.percent((double) t.cacheRead() / t.input()),
                     t.output(), t.modelTurns(), perTurn(t)));
+            out.append(String.format("Escritura en caché: %d tokens, de ellos %d para 1 hora\n", t.cacheWrite(),
+                    t.cacheWriteLong()));
         }
         out.append("Coste: ").append(s.costUsd() == null ? "sin precio en precios.yaml"
                 : String.format("%.4f US$", s.costUsd())).append("\n");

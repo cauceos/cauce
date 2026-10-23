@@ -91,7 +91,8 @@ public final class Aggregation {
             pendingJudge += withoutJudge;
             RunSummary.ScenarioTokens tokens = reps.stream().map(ScenarioRun::tokens).filter(java.util.Objects::nonNull)
                     .reduce(RunSummary.ScenarioTokens::plus).orElse(null);
-            Double cost = tokens == null || meta.agentPrice() == null ? null
+            Double cost = tokens == null || meta.agentPrice() == null || !meta.agentPrice().prices(tokens.cacheWriteLong())
+                    ? null
                     : meta.agentPrice().cost(tokens.input(), tokens.cacheRead(), tokens.cacheWrite(), tokens.cacheWriteLong(),
                             tokens.output());
             scenarios.add(new ScenarioRate(scenario.id(), scenario.task(), level(scenario), rate, reps.size(), checks,

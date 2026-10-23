@@ -157,6 +157,22 @@ class SpendLimitServiceIT extends AbstractOrchestrationIntegrationTest {
         assertThat(spendGuard.check(agent)).isEqualTo(Verdict.ALLOWED);
     }
 
+    @Test
+    void theCheck_withALimit_refusesALongCacheAgent_untilItsPriceHasTheLongWrite() {
+        Agent longCache = agent.withPromptCacheRetention(dev.cauce.core.agent.PromptCacheRetention.LONG);
+        TenantContext.setCurrentTenantId(partner.id());
+        spendLimitService.setLimit(client.id(), new BigDecimal("1.00"));
+        TenantContext.setCurrentTenantId(client.id());
+        assertThat(spendGuard.check(longCache)).isEqualTo(Verdict.UNPRICED_MODEL);
+        assertThat(spendGuard.check(agent)).isEqualTo(Verdict.ALLOWED);
+
+        // A new price row with the long write: the latest in force decides.
+        jdbc.update("INSERT INTO llm_prices (id, tenant_id, provider, model, input_usd_per_mtok, output_usd_per_mtok, "
+                + "cache_write_long_usd_per_mtok, valid_from) VALUES (?, ?, 'anthropic', 'claude-sonnet-5-5', 2.00, "
+                + "10.00, 4.00, now() - interval '1 hour')", UuidGenerator.newV7(), operator.id());
+        assertThat(spendGuard.check(longCache)).isEqualTo(Verdict.ALLOWED);
+    }
+
     private void insertUsageNow(int inputTokens) {
         jdbc.update("INSERT INTO llm_usage_records (id, tenant_id, agent_id, conversation_id, invocation_id, provider, "
                         + "model, round_index, input_tokens, output_tokens, total_tokens, finish_reason) "

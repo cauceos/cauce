@@ -191,6 +191,21 @@ class AggregationTest {
     }
 
     @Test
+    void aScenarioWithLongWrites_andNoLongWritePrice_hasNoCost() {
+        PriceTable.Price shortOnly = new PriceTable.Price("anthropic", "m", 2.0, 2.5, null, 0.1, 10.0, "2026-10-23");
+        Aggregation.Meta meta = new Aggregation.Meta("2026-10-23T08:00Z", "abc", false, "anthropic/m", "ninguno",
+                "pendiente de juez", "f", 1, "G1", true, null, null, "2026-10-23", shortOnly);
+        Scenario s = scenario("G1", Level.BLOCKING, "00-anclaje");
+        List<ScenarioRun> runs = List.of(new ScenarioRun(s, 1, List.of(CheckResult.pass("turno 1 · herramientas", "")),
+                "", new RunSummary.ScenarioTokens(10_000, 0, 5_000, 5_000, 100, 1)));
+
+        RunSummary summary = Aggregation.summarize(runs, List.of(), 0.9, meta);
+
+        assertThat(summary.scenarios().get(0).tokens().cacheWriteLong()).isEqualTo(5_000);
+        assertThat(summary.scenarios().get(0).costUsd()).isNull();
+    }
+
+    @Test
     void aSummaryWrittenBeforeTheScenarioTokens_stillReads(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
             throws Exception {
         java.nio.file.Files.writeString(dir.resolve("2026-10-22T1340Z-m.json"), """
