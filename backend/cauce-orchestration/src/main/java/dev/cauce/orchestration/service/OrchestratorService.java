@@ -38,6 +38,7 @@ import dev.cauce.orchestration.usage.LlmUsageRecorder;
 import dev.cauce.tools.spi.Tool;
 import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
 import dev.cauce.tools.spi.ToolRegistry;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -113,6 +114,7 @@ public class OrchestratorService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectProvider<AgentReplyDispatcher> replyDispatcher;
     private final AgenticLoopProperties loopProperties;
+    private final Clock clock;
 
     public OrchestratorService(ConversationGateway conversationGateway,
                                LlmProviderRegistry llmProviderRegistry,
@@ -123,7 +125,8 @@ public class OrchestratorService {
                                LlmUsageRecorder usageRecorder,
                                ApplicationEventPublisher eventPublisher,
                                ObjectProvider<AgentReplyDispatcher> replyDispatcher,
-                               AgenticLoopProperties loopProperties) {
+                               AgenticLoopProperties loopProperties,
+                               Clock clock) {
         this.conversationGateway = conversationGateway;
         this.llmProviderRegistry = llmProviderRegistry;
         this.contextBuilder = contextBuilder;
@@ -134,6 +137,7 @@ public class OrchestratorService {
         this.eventPublisher = eventPublisher;
         this.replyDispatcher = replyDispatcher;
         this.loopProperties = loopProperties;
+        this.clock = clock;
     }
 
     /**
@@ -197,7 +201,7 @@ public class OrchestratorService {
             // observable; a failure here fails the invocation rather than losing usage.
             usageRecorder.record(LlmUsageRecord.create(agent.tenantId(), agent.id(),
                     conversationId, invocationId, provider.id(), agent.modelName(), iteration,
-                    response.usage(), response.finishReason().name()));
+                    response.usage(), response.finishReason().name(), clock.instant()));
             eventPublisher.publishEvent(new LlmResponded(invocationId, provider.id(),
                     agent.modelName(), iteration, response.finishReason().name(),
                     response.usage().inputTokens(), response.usage().outputTokens(),

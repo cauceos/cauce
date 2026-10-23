@@ -73,6 +73,7 @@ class OrchestratorServiceTest {
     private static final String MODEL = "claude-sonnet-4-7";
     private static final String PROVIDER = "anthropic";
     private static final Instant FIXED = Instant.parse("2026-06-13T10:15:30Z");
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-23T10:00:00Z"), ZoneOffset.UTC);
 
     private final UUID invocationId = UUID.randomUUID();
     private final UUID conversationId = UUID.randomUUID();
@@ -532,6 +533,8 @@ class OrchestratorServiceTest {
         assertThat(record.outputTokens()).isEqualTo(5);
         assertThat(record.totalTokens()).isEqualTo(10);
         assertThat(record.finishReason()).isEqualTo("STOP");
+        // ADR 0008: the day and month a call is billed to come from the application clock.
+        assertThat(record.createdAt()).isEqualTo(CLOCK.instant());
     }
 
     @Test
@@ -696,7 +699,7 @@ class OrchestratorServiceTest {
         loop.setMaxIterations(maxIterations);
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
                 new MockEnvironment(), errorRecorder, usageRecorder, eventPublisher,
-                replyDispatcherProvider, loop);
+                replyDispatcherProvider, loop, CLOCK);
     }
 
     /** All lifecycle events published so far, in publication order. */

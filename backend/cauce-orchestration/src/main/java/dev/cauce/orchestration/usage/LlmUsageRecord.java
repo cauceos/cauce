@@ -64,14 +64,18 @@ public record LlmUsageRecord(UUID id,
         }
     }
 
-    /** Mints a new record for one LLM call, stamping a UUIDv7 id and the current instant. */
+    /**
+     * Mints a new record for one LLM call, stamping a UUIDv7 id. {@code now} comes from the
+     * application clock, the database's (ADR 0008): the day and month a call is billed to, and
+     * the spend limit, are judged on it.
+     */
     public static LlmUsageRecord create(UUID tenantId, UUID agentId, UUID conversationId,
                                         UUID invocationId, String provider, String model,
-                                        int roundIndex, LlmUsage usage, String finishReason) {
+                                        int roundIndex, LlmUsage usage, String finishReason, Instant now) {
         Objects.requireNonNull(usage, "usage must not be null");
         return new LlmUsageRecord(UuidGenerator.newV7(), tenantId, agentId, conversationId,
                 invocationId, provider, model, roundIndex, usage.inputTokens(),
                 usage.outputTokens(), usage.totalTokens(), usage.cacheReadTokens(), usage.cacheWriteTokens(),
-                finishReason, Instant.now());
+                finishReason, now);
     }
 }

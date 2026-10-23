@@ -4,10 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.cauce.llm.model.LlmUsage;
 import dev.cauce.orchestration.usage.LlmUsageRecord;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LlmUsageRecordMapperTest {
+
+    private static final Instant NOW = Instant.parse("2026-10-23T10:00:00Z");
 
     private final LlmUsageRecordMapper mapper = new LlmUsageRecordMapper();
 
@@ -15,7 +18,7 @@ class LlmUsageRecordMapperTest {
     void roundTrip_preservesAllFields() {
         LlmUsageRecord original = LlmUsageRecord.create(UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), "mistral", "mistral-large-latest", 3,
-                LlmUsage.of(120, 45, 80, 20), "TOOL_USE");
+                LlmUsage.of(120, 45, 80, 20), "TOOL_USE", NOW);
 
         LlmUsageRecord roundTripped = mapper.toDomain(mapper.toEntity(original));
 
@@ -26,7 +29,7 @@ class LlmUsageRecordMapperTest {
     void toEntity_mapsEveryColumn() {
         LlmUsageRecord record = LlmUsageRecord.create(UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-4-7", 0,
-                LlmUsage.of(7, 9, 4, 2), "STOP");
+                LlmUsage.of(7, 9, 4, 2), "STOP", NOW);
 
         LlmUsageRecordEntity entity = mapper.toEntity(record);
 
