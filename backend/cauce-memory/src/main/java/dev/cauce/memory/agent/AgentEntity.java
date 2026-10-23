@@ -65,6 +65,10 @@ public class AgentEntity {
     @Column(name = "tool_names", nullable = false, columnDefinition = "text[]")
     private String[] toolNames = new String[0];
 
+    /** Whether earlier turns' lookup results are left out of the context (V45, deferred R1). */
+    @Column(name = "elide_past_lookups", nullable = false)
+    private boolean elidePastLookups;
+
     protected AgentEntity() {
         // for JPA
     }
@@ -87,6 +91,15 @@ public class AgentEntity {
                        String modelName, Double temperature, Integer maxResponseTokens,
                        AgentStatus status, String fallbackReply, String[] toolNames, Instant createdAt,
                        Instant updatedAt) {
+        this(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature, maxResponseTokens,
+                status, fallbackReply, toolNames, false, createdAt, updatedAt);
+    }
+
+    public AgentEntity(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
+                       String modelName, Double temperature, Integer maxResponseTokens,
+                       AgentStatus status, String fallbackReply, String[] toolNames, boolean elidePastLookups,
+                       Instant createdAt, Instant updatedAt) {
+        this.elidePastLookups = elidePastLookups;
         this.fallbackReply = fallbackReply;
         this.toolNames = toolNames;
         this.id = id;
@@ -144,6 +157,10 @@ public class AgentEntity {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public boolean isElidePastLookups() {
+        return elidePastLookups;
     }
 
     public String getFallbackReply() {

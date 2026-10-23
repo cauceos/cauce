@@ -93,6 +93,7 @@ public final class AdminAuditEvents {
                 "change", "configuration",
                 "prompt_hash", AuditContentHash.of(agent.tenantId(), agent.systemPrompt()),
                 "prompt_length", agent.systemPrompt().length(),
+                "elide_past_lookups", agent.elidesPastLookups(),
                 "actor_tenant_id", actorTenantId.toString()));
     }
 

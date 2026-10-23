@@ -1,6 +1,7 @@
 package dev.cauce.api;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -90,6 +91,29 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.status").value("DRAFT"))
                 .andExpect(jsonPath("$.tenant_id").value(clientId.toString()))
                 .andExpect(jsonPath("$.fallback_reply").value((Object) null));
+    }
+
+    @Test
+    void patchAgent_turnsElidingPastLookupsOnAndOff_andLeavesTheRestAsItWas() throws Exception {
+        UUID partnerId = createPartner();
+        UUID clientId = createClient(bearerFor(partnerId), partnerId);
+        String clientAuth = bearerFor(clientId);
+        String body = mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null, null)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.elide_past_lookups").value(false))
+                .andReturn().getResponse().getContentAsString();
+        String agentPath = "/v1/agents/" + objectMapper.readTree(body).get("id").asText();
+
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("elide_past_lookups", true)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.elide_past_lookups").value(true))
+                .andExpect(jsonPath("$.name").value("Bot"));
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("name", "Otro")))
+                .andExpect(jsonPath("$.elide_past_lookups").value(true));
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("elide_past_lookups", false)))
+                .andExpect(jsonPath("$.elide_past_lookups").value(false))
+                .andExpect(jsonPath("$.name").value("Otro"));
     }
 
     @Test
@@ -277,6 +301,13 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
 
     private MockHttpServletRequestBuilder postAs(String auth, String path, Object body) throws Exception {
         return post(path)
+                .header(HttpHeaders.AUTHORIZATION, auth)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body));
+    }
+
+    private MockHttpServletRequestBuilder patchAs(String auth, String path, Object body) throws Exception {
+        return patch(path)
                 .header(HttpHeaders.AUTHORIZATION, auth)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(body));

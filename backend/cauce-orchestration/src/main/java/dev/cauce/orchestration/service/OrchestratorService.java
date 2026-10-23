@@ -42,6 +42,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -160,6 +161,8 @@ public class OrchestratorService {
                         + agent.modelProvider() + "' (is its API key configured?). Available: "
                         + llmProviderRegistry.availableProviders()));
         List<ToolDefinition> toolDefinitions = toolDefinitions(agent);
+        // Deferred R1, behind a per-agent switch: earlier turns' lookups the agent can repeat.
+        Set<String> elidedLookups = agent.elidesPastLookups() ? toolRegistry.lookupTools() : Set.of();
         // ADR 0007, B3: who the tools act for is decided here, never by the model.
         ToolExecutionContext toolContext = new ToolExecutionContext(agent.tenantId(), agent.id(),
                 conversationId, loaded.conversation().identityId(), triggerMessageId, invocationId);
@@ -170,7 +173,7 @@ public class OrchestratorService {
         int alreadyUsed = roundsAlreadyUsed(loaded.messages(), triggerMessageId);
         for (int iteration = alreadyUsed; iteration < maxIterations; iteration++) {
             LlmInvocationContext context =
-                    contextBuilder.build(messages, agent.modelName(), agent.systemPrompt());
+                    contextBuilder.build(messages, agent.modelName(), agent.systemPrompt(), elidedLookups);
             eventPublisher.publishEvent(new ContextAssembled(invocationId, iteration,
                     agent.modelName(), context.messages().size(), context.estimatedTokens(),
                     context.contextWindowLimit(), Instant.now()));

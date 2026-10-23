@@ -39,6 +39,18 @@ class ToolRegistryTest {
     }
 
     @Test
+    void lookupTools_areTheProfileTheMenuAndAvailability_neverAnAction() {
+        ToolRegistry business = new ToolRegistry(List.of(clock,
+                new dev.cauce.tools.business.GetBusinessInfoTool(() -> null),
+                new dev.cauce.tools.business.SearchCatalogTool(() -> null),
+                dev.cauce.tools.business.BookingTools.checkAvailability(() -> null),
+                dev.cauce.tools.business.BookingTools.proposeBooking(() -> null, Clock.systemUTC())));
+
+        assertThat(business.lookupTools()).containsExactlyInAnyOrder("get_business_info", "search_catalog",
+                "check_availability");
+    }
+
+    @Test
     void availableTools_listsRegisteredNames() {
         assertThat(registry.availableTools()).containsExactly("get_current_time");
     }

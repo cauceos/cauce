@@ -56,4 +56,10 @@ public class ToolRegistry implements ToolCatalog {
     public Set<String> availableTools() {
         return toolsByName.keySet();
     }
+
+    /** The registered tools that are lookups ({@link Tool#lookup()}): their past results may be elided. */
+    public Set<String> lookupTools() {
+        return toolsByName.values().stream().filter(Tool::lookup).map(tool -> tool.definition().name())
+                .collect(Collectors.toUnmodifiableSet());
+    }
 }

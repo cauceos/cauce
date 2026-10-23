@@ -41,6 +41,11 @@ public final class GetBusinessInfoTool implements Tool {
     }
 
     @Override
+    public boolean lookup() {
+        return true;
+    }
+
+    @Override
     public ToolResult execute(ToolCall call, ToolExecutionContext context) {
         BusinessProfileSource source = profiles.get();
         Optional<BusinessProfile> profile = source == null ? Optional.empty() : source.findProfile(context.tenantId());

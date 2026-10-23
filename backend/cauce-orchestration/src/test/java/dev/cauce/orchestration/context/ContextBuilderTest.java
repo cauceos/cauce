@@ -260,4 +260,33 @@ class ContextBuilderTest {
         assertThat(context.estimatedTokens())
                 .isEqualTo(TokenEstimator.estimate("Hello") + TokenEstimator.estimate("Hello again"));
     }
+
+    @Test
+    void build_elidingPastLookups_keepsEveryCallAndPair_butOnlyEarlierTurnsLookupResultsLoseTheirContent() {
+        String menu = "{\"items\":[" + "{\"name\":\"Patatas bravas\",\"price\":\"5.50\",\"alergenos\":[]},".repeat(8)
+                + "{\"name\":\"Flan de huevo\",\"price\":\"4.50\"}]}";
+        List<Message> messages = List.of(
+                Message.from(CONVERSATION, MessageRole.USER, "¿Qué tenéis de tapas?"),
+                Message.toolCall(CONVERSATION, new ToolCall("c1", "search_catalog", Map.of("query", "tapas"))),
+                Message.toolResult(CONVERSATION, ToolResult.success("c1", "search_catalog", menu)),
+                Message.toolCall(CONVERSATION, new ToolCall("c2", "propose_booking", Map.of())),
+                Message.toolResult(CONVERSATION, ToolResult.success("c2", "propose_booking", "{\"code\":\"DCK66M\"}")),
+                Message.from(CONVERSATION, MessageRole.AGENT, "Bravas a 5,50 €. ¿La confirmo?"),
+                Message.from(CONVERSATION, MessageRole.USER, "Sí, ¿y las bravas pican?"),
+                Message.toolCall(CONVERSATION, new ToolCall("c3", "search_catalog", Map.of("query", "bravas"))),
+                Message.toolResult(CONVERSATION, ToolResult.success("c3", "search_catalog", menu)));
+
+        LlmInvocationContext elided = builder.build(messages, MODEL, SYSTEM_PROMPT, java.util.Set.of("search_catalog"));
+        LlmInvocationContext full = builder.build(messages, MODEL, SYSTEM_PROMPT);
+
+        List<String> results = elided.messages().stream().filter(m -> m.toolContent() instanceof ToolResult)
+                .map(m -> ((ToolResult) m.toolContent()).output()).toList();
+        // The earlier turn's menu goes; its action (the booking code) and the current turn's menu stay.
+        assertThat(results).containsExactly(ContextBuilder.ELIDED_RESULT, "{\"code\":\"DCK66M\"}", menu);
+        assertThat(elided.messages()).hasSize(messages.size());
+        assertThat(elided.messages()).filteredOn(m -> m.toolContent() instanceof ToolCall).hasSize(3);
+        assertThat(elided.estimatedTokens()).isLessThan(full.estimatedTokens());
+        assertThat(full.messages().stream().filter(m -> m.toolContent() instanceof ToolResult)
+                .map(m -> ((ToolResult) m.toolContent()).output())).doesNotContain(ContextBuilder.ELIDED_RESULT);
+    }
 }

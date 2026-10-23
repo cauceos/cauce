@@ -50,6 +50,11 @@ public final class BookingTools {
                         + "local date of the business (get_current_time gives today's).",
                 schema(Map.of("date", dateProperty()), List.of("date")))) {
             @Override
+            public boolean lookup() {
+                return true;
+            }
+
+            @Override
             Map<String, Object> run(BookingProvider bookings, ToolArguments args, ToolExecutionContext context) {
                 LocalDate date = date(args, "date");
                 Agenda agenda = agenda(bookings, context);

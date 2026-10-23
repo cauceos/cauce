@@ -56,6 +56,16 @@ class AgentMapperTest {
     }
 
     @Test
+    void roundTrip_preservesWhetherTheAgentElidesPastLookups() {
+        Agent plain = Agent.create(UUID.randomUUID(), "Bot", "prompt", "anthropic", "claude-sonnet-5-5");
+        Agent eliding = plain.withPastLookupsElided(true);
+
+        assertThat(mapper.toDomain(mapper.toEntity(plain)).elidesPastLookups()).isFalse();
+        assertThat(mapper.toDomain(mapper.toEntity(eliding)).elidesPastLookups()).isTrue();
+        assertThat(mapper.toEntity(eliding).isElidePastLookups()).isTrue();
+    }
+
+    @Test
     void toDomain_whenEntityLlmConfigIsNull_leavesTemperatureUnset_andDefaultsTheReplyBound() {
         // A pre-V7 row: temperature and max_response_tokens are NULL in the database.
         Instant now = Instant.now();

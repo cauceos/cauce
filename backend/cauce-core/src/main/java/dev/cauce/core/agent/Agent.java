@@ -29,6 +29,11 @@ import java.util.UUID;
  * default applies, and a model that does not accept the parameter at all keeps working.
  * {@code maxResponseTokens} is always set ({@link #DEFAULT_MAX_RESPONSE_TOKENS} when null):
  * providers require a bound on the reply.
+ *
+ * <p>{@code elidePastLookups}, off by default, leaves out of the model's context the results of
+ * lookups made in earlier turns (the profile, the menu, availability), keeping each call and a
+ * marker in its place: the agent looks them up again when it needs them. An experiment measured
+ * with the eval harness before it becomes a default (deferred R1).
  */
 public final class Agent {
 
@@ -49,12 +54,14 @@ public final class Agent {
     private final AgentStatus status;
     private final String fallbackReply; // null: the platform default (ADR 0005, C3)
     private final List<String> toolNames; // the granted tools; empty by default (ADR 0005, C4)
+    private final boolean elidePastLookups; // off: the full history, as always
     private final Instant createdAt;
     private final Instant updatedAt;
 
     private Agent(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
                   String modelName, Double temperature, int maxResponseTokens, AgentStatus status,
-                  String fallbackReply, List<String> toolNames, Instant createdAt, Instant updatedAt) {
+                  String fallbackReply, List<String> toolNames, boolean elidePastLookups, Instant createdAt,
+                  Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
@@ -66,6 +73,7 @@ public final class Agent {
         this.status = status;
         this.fallbackReply = fallbackReply;
         this.toolNames = toolNames;
+        this.elidePastLookups = elidePastLookups;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -98,6 +106,7 @@ public final class Agent {
                 AgentStatus.DRAFT,
                 null,
                 List.of(),
+                false,
                 now,
                 now);
     }
@@ -110,8 +119,8 @@ public final class Agent {
      */
     public Agent withFallbackReply(String fallbackReply) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, validatedFallbackReply(fallbackReply), toolNames, createdAt,
-                updatedAt);
+                maxResponseTokens, status, validatedFallbackReply(fallbackReply), toolNames, elidePastLookups,
+                createdAt, updatedAt);
     }
 
     /**
@@ -122,13 +131,24 @@ public final class Agent {
      */
     public Agent withTools(Collection<String> tools) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, fallbackReply, validatedToolNames(tools), createdAt, updatedAt);
+                maxResponseTokens, status, fallbackReply, validatedToolNames(tools), elidePastLookups, createdAt,
+                updatedAt);
     }
 
     /** {@link #withTools} as a modification of an existing agent: {@code updatedAt} moves to now. */
     public Agent retooled(Collection<String> tools) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, fallbackReply, validatedToolNames(tools), createdAt, Instant.now());
+                maxResponseTokens, status, fallbackReply, validatedToolNames(tools), elidePastLookups, createdAt,
+                Instant.now());
+    }
+
+    /**
+     * Returns a copy of this agent that elides past lookups, or not ({@code updatedAt} moves to now):
+     * see the class description.
+     */
+    public Agent withPastLookupsElided(boolean elide) {
+        return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, fallbackReply, toolNames, elide, createdAt, Instant.now());
     }
 
     /**
@@ -143,7 +163,7 @@ public final class Agent {
                 systemPrompt == null ? this.systemPrompt : systemPrompt,
                 modelProvider, modelName, temperature, maxResponseTokens, status,
                 fallbackReply == null ? this.fallbackReply : validatedFallbackReply(fallbackReply),
-                toolNames, createdAt, Instant.now());
+                toolNames, elidePastLookups, createdAt, Instant.now());
     }
 
     /**
@@ -161,13 +181,23 @@ public final class Agent {
     }
 
     /**
-     * Rebuilds an agent with its full configuration: the fallback reply ({@code null}: platform
-     * default) and the granted tool names.
+     * Rebuilds an agent with its fallback reply ({@code null}: platform default) and granted tool
+     * names, eliding no past lookups.
      */
     public static Agent rehydrate(UUID id, UUID tenantId, String name, String systemPrompt,
                                   String modelProvider, String modelName, Double temperature,
                                   Integer maxResponseTokens, AgentStatus status, String fallbackReply,
                                   List<String> toolNames, Instant createdAt, Instant updatedAt) {
+        return rehydrate(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, fallbackReply, toolNames, false, createdAt, updatedAt);
+    }
+
+    /** Rebuilds an agent with its full configuration, including whether it elides past lookups. */
+    public static Agent rehydrate(UUID id, UUID tenantId, String name, String systemPrompt,
+                                  String modelProvider, String modelName, Double temperature,
+                                  Integer maxResponseTokens, AgentStatus status, String fallbackReply,
+                                  List<String> toolNames, boolean elidePastLookups, Instant createdAt,
+                                  Instant updatedAt) {
         return new Agent(
                 Objects.requireNonNull(id, "id"),
                 Objects.requireNonNull(tenantId, "tenantId"),
@@ -180,6 +210,7 @@ public final class Agent {
                 Objects.requireNonNull(status, "status"),
                 fallbackReply, // nullable; the V28 CHECK guarantees its shape
                 List.copyOf(Objects.requireNonNull(toolNames, "toolNames")),
+                elidePastLookups,
                 Objects.requireNonNull(createdAt, "createdAt"),
                 Objects.requireNonNull(updatedAt, "updatedAt"));
     }
@@ -282,6 +313,11 @@ public final class Agent {
     /** The tools this agent may use, in grant order; empty means none (ADR 0005, C4). */
     public List<String> toolNames() {
         return toolNames;
+    }
+
+    /** Whether earlier turns' lookup results are left out of the model's context (deferred R1). */
+    public boolean elidesPastLookups() {
+        return elidePastLookups;
     }
 
     public AgentStatus status() {

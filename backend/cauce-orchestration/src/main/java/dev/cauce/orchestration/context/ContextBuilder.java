@@ -10,6 +10,7 @@ import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Builds the message list sent to an LLM for one invocation, honouring the target model's
@@ -37,6 +38,9 @@ public final class ContextBuilder {
     /** 8K reserved for the model's response plus a 2K safety buffer. */
     static final int RESERVED_FOR_RESPONSE = 10_000;
 
+    /** What stands in for a past lookup's result when the agent elides them (deferred R1). */
+    public static final String ELIDED_RESULT = "resultado omitido; vuelve a consultar si lo necesitas";
+
     /**
      * Builds the invocation context for {@code modelName} from {@code conversationMessages}
      * (assumed chronological, oldest first).
@@ -46,6 +50,21 @@ public final class ContextBuilder {
      */
     public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
                                       String systemPrompt) {
+        return build(conversationMessages, modelName, systemPrompt, Set.of());
+    }
+
+    /**
+     * {@link #build(List, String, String)}, eliding past lookups (deferred R1): before the latest
+     * USER message — in earlier turns — the result of every call to a tool in {@code elidedLookups}
+     * is replaced by {@link #ELIDED_RESULT}. The call stays, and so does its paired result, as every
+     * provider requires; only its content goes. The current turn is never elided: the loop is still
+     * working on it.
+     */
+    public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
+                                      String systemPrompt, Set<String> elidedLookups) {
+        if (!elidedLookups.isEmpty()) {
+            conversationMessages = elidePastLookups(conversationMessages, elidedLookups);
+        }
         int contextWindow = ModelContextWindow.contextWindowFor(modelName);
         int effectiveWindow = contextWindow - RESERVED_FOR_RESPONSE;
 
@@ -94,6 +113,29 @@ public final class ContextBuilder {
                 .toList();
         return new LlmInvocationContext(
                 window, systemPrompt, runningTokens, contextWindow, RESERVED_FOR_RESPONSE);
+    }
+
+    private static List<Message> elidePastLookups(List<Message> messages, Set<String> elidedLookups) {
+        int currentTurn = messages.size();
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            if (messages.get(i).role() == MessageRole.USER) {
+                currentTurn = i;
+                break;
+            }
+        }
+        List<Message> view = new ArrayList<>(messages.size());
+        for (int i = 0; i < messages.size(); i++) {
+            Message message = messages.get(i);
+            if (i < currentTurn && message.toolContent().orElse(null) instanceof ToolResult result
+                    && elidedLookups.contains(result.toolName())) {
+                ToolResult elided = new ToolResult(result.toolCallId(), result.toolName(), ELIDED_RESULT, false);
+                view.add(Message.rehydrate(message.id(), message.conversationId(), MessageRole.TOOL_RESULT,
+                        ELIDED_RESULT, elided, message.createdAt()));
+            } else {
+                view.add(message);
+            }
+        }
+        return view;
     }
 
     /**

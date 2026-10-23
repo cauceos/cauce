@@ -22,6 +22,7 @@ public record AgentResponse(
         AgentStatus status,
         String fallbackReply,
         List<String> tools,
+        boolean elidePastLookups,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -38,6 +39,7 @@ public record AgentResponse(
                 agent.status(),
                 agent.fallbackReply().orElse(null),
                 agent.toolNames(),
+                agent.elidesPastLookups(),
                 agent.createdAt(),
                 agent.updatedAt());
     }

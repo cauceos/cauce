@@ -34,4 +34,14 @@ public interface Tool {
      * the model; any other exception reaches it only as a sanitized failure (ADR 0005, C6).
      */
     ToolResult execute(ToolCall call, ToolExecutionContext context);
+
+    /**
+     * Whether this tool is a lookup: it changes nothing, and calling it again gives what the agent
+     * needs now. An agent that elides past lookups (deferred R1) leaves earlier turns' results of
+     * such tools out of the model's context. An action is never a lookup: its result (a booking's
+     * code, a case's id) is what later turns build on. False unless a tool says otherwise.
+     */
+    default boolean lookup() {
+        return false;
+    }
 }

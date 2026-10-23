@@ -24,6 +24,7 @@ public final class AgentMapper {
                 agent.status(),
                 agent.fallbackReply().orElse(null),
                 agent.toolNames().toArray(String[]::new),
+                agent.elidesPastLookups(),
                 agent.createdAt(),
                 agent.updatedAt());
     }
@@ -41,6 +42,7 @@ public final class AgentMapper {
                 entity.getStatus(),
                 entity.getFallbackReply(),
                 List.of(entity.getToolNames()),
+                entity.isElidePastLookups(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt());
     }

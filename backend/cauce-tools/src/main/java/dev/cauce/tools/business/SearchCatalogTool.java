@@ -62,6 +62,11 @@ public final class SearchCatalogTool implements Tool {
     }
 
     @Override
+    public boolean lookup() {
+        return true;
+    }
+
+    @Override
     public ToolResult execute(ToolCall call, ToolExecutionContext context) {
         ToolArguments args = ToolArguments.of(call);
         CatalogSource source = catalogs.get();

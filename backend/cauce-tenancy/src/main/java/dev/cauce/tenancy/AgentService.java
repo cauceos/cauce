@@ -140,9 +140,22 @@ public class AgentService {
      */
     @Transactional
     public Agent updateAgent(UUID agentId, String name, String systemPrompt, String fallbackReply) {
+        return updateAgent(agentId, name, systemPrompt, fallbackReply, null);
+    }
+
+    /**
+     * {@link #updateAgent(UUID, String, String, String)}, plus whether the agent elides past
+     * lookups ({@code null} keeps it; deferred R1).
+     */
+    @Transactional
+    public Agent updateAgent(UUID agentId, String name, String systemPrompt, String fallbackReply,
+                             Boolean elidePastLookups) {
         Agent current = agentRepository.findById(agentId).map(agentMapper::toDomain).orElseThrow(() ->
                 new AgentNotFoundException("No agent found for id " + agentId));
         Agent edited = current.edited(name, systemPrompt, fallbackReply);
+        if (elidePastLookups != null) {
+            edited = edited.withPastLookupsElided(elidePastLookups);
+        }
         Agent saved = agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(edited)));
         auditRecorder.record(AdminAuditEvents.agentConfigurationUpdated(
                 saved, TenantContext.getCurrentTenantId().orElseThrow()));

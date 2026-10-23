@@ -22,6 +22,19 @@ class AgentTest {
     }
 
     @Test
+    void withPastLookupsElided_isOffByDefault_andSurvivesTheOtherEdits() {
+        Agent agent = newAgent();
+        Agent eliding = agent.withPastLookupsElided(true);
+
+        assertThat(agent.elidesPastLookups()).isFalse();
+        assertThat(eliding.elidesPastLookups()).isTrue();
+        assertThat(eliding.updatedAt()).isAfterOrEqualTo(agent.updatedAt());
+        assertThat(eliding.edited("Otro", null, null).elidesPastLookups()).isTrue();
+        assertThat(eliding.retooled(java.util.List.of("search_catalog")).elidesPastLookups()).isTrue();
+        assertThat(eliding.withPastLookupsElided(false).elidesPastLookups()).isFalse();
+    }
+
+    @Test
     void create_assignsFieldsAndTimestamps() {
         Agent agent = Agent.create(TENANT, "DentalBot", "You are a dentist receptionist.",
                 "anthropic", "claude-sonnet-4-7");
