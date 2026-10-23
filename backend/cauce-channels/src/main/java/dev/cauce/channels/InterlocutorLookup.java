@@ -40,7 +40,7 @@ public class InterlocutorLookup {
      */
     @Transactional(readOnly = true)
     public Optional<Instant> lastMessageAt(UUID conversationId) {
-        return messageRepository.findFirstByConversationIdAndRoleOrderByCreatedAtDesc(conversationId, MessageRole.USER)
+        return messageRepository.findFirstByConversationIdAndRoleOrderBySeqDesc(conversationId, MessageRole.USER)
                 .map(MessageEntity::getCreatedAt);
     }
 

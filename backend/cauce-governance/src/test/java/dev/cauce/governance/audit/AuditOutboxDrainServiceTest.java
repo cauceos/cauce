@@ -63,7 +63,7 @@ class AuditOutboxDrainServiceTest {
     }
 
     private void stubPending(AuditOutboxEntryEntity... entities) {
-        when(outboxRepository.findByTenantIdAndDrainStatusOrderByCreatedAtAscIdAsc(
+        when(outboxRepository.findByTenantIdAndDrainStatusOrderBySeqAsc(
                 eq(tenantId), eq(DrainStatus.PENDING), any(Limit.class)))
                 .thenReturn(List.of(entities));
     }
@@ -166,7 +166,7 @@ class AuditOutboxDrainServiceTest {
 
     @Test
     void drainBatch_noPendingRows_returnsZeroWithoutTouchingLedgerOrHead() {
-        when(outboxRepository.findByTenantIdAndDrainStatusOrderByCreatedAtAscIdAsc(
+        when(outboxRepository.findByTenantIdAndDrainStatusOrderBySeqAsc(
                 eq(tenantId), eq(DrainStatus.PENDING), any(Limit.class))).thenReturn(List.of());
 
         int drained = service.drainBatch(tenantId, 10);
@@ -180,13 +180,13 @@ class AuditOutboxDrainServiceTest {
 
     @Test
     void drainBatch_passesBatchSizeAsQueryLimit() {
-        when(outboxRepository.findByTenantIdAndDrainStatusOrderByCreatedAtAscIdAsc(
+        when(outboxRepository.findByTenantIdAndDrainStatusOrderBySeqAsc(
                 eq(tenantId), eq(DrainStatus.PENDING), any(Limit.class))).thenReturn(List.of());
 
         service.drainBatch(tenantId, 42);
 
         ArgumentCaptor<Limit> captor = ArgumentCaptor.forClass(Limit.class);
-        verify(outboxRepository).findByTenantIdAndDrainStatusOrderByCreatedAtAscIdAsc(
+        verify(outboxRepository).findByTenantIdAndDrainStatusOrderBySeqAsc(
                 eq(tenantId), eq(DrainStatus.PENDING), captor.capture());
         assertThat(captor.getValue().max()).isEqualTo(42);
     }

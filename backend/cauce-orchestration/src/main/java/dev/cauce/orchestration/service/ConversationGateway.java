@@ -111,7 +111,7 @@ public class ConversationGateway {
                 new ConversationNotFoundException("No conversation found for id " + conversationId));
 
         // Single read of the history: serves both trigger validation and context building.
-        List<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)
+        List<Message> messages = messageRepository.findByConversationIdOrderBySeqAsc(conversationId)
                 .stream().map(messageMapper::toDomain).toList();
 
         Message trigger = messages.stream()

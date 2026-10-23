@@ -52,6 +52,13 @@ public class MessageEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /**
+     * The message's position in its conversation, 1, 2, 3… assigned by the database on insert
+     * (V44), never by a clock: what every read orders a conversation by.
+     */
+    @Column(name = "seq", insertable = false, updatable = false)
+    private Long seq;
+
     protected MessageEntity() {
         // for JPA
     }
@@ -104,5 +111,10 @@ public class MessageEntity {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    /** Null on an entity not yet read back from the database (the trigger assigns it on insert). */
+    public Long getSeq() {
+        return seq;
     }
 }

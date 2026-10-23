@@ -57,10 +57,10 @@ public class MessageService {
     }
 
     /**
-     * Lists up to {@code maxRows} of a conversation's messages ordered by id — for UUIDv7 ids
-     * that is insertion order — starting after {@code afterId} when non-null (keyset
-     * pagination). RLS filters by visibility. Context assembly does not use this: it reads
-     * the full thread via {@code ConversationGateway} (ordered by {@code created_at}).
+     * Lists up to {@code maxRows} of a conversation's messages in conversation order ({@code seq},
+     * assigned by the database on insert, V44), starting after the message {@code afterId} when
+     * non-null (keyset pagination). RLS filters by visibility. Context assembly does not use this:
+     * it reads the full thread via {@code ConversationGateway}, in the same order.
      *
      * <p>This is the public listing, so SYSTEM messages are left out (ADR 0005, C3): they are the
      * orchestrator's internal error records and can carry provider detail. The interlocutor's
@@ -69,10 +69,9 @@ public class MessageService {
     @Transactional
     public List<Message> listMessages(UUID conversationId, UUID afterId, int maxRows) {
         List<MessageEntity> page = afterId == null
-                ? messageRepository.findByConversationIdAndRoleNotOrderByIdAsc(
+                ? messageRepository.findByConversationIdAndRoleNotOrderBySeqAsc(
                         conversationId, MessageRole.SYSTEM, Limit.of(maxRows))
-                : messageRepository.findByConversationIdAndIdGreaterThanAndRoleNotOrderByIdAsc(
-                        conversationId, afterId, MessageRole.SYSTEM, Limit.of(maxRows));
+                : messageRepository.findPageAfter(conversationId, afterId, MessageRole.SYSTEM, Limit.of(maxRows));
         return page.stream().map(messageMapper::toDomain).toList();
     }
 }

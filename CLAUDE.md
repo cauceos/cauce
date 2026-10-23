@@ -393,7 +393,9 @@ what the cauce-api integration tests assert. The rules every endpoint follows:
   uuid-creator's default factory is monotonic within the same millisecond per JVM, and Postgres
   compares `uuid` bytewise), so a full walk never skips or duplicates rows and rows appended
   mid-walk show up at the end. The `id > cursor` comparison always runs in Postgres (Java's
-  `UUID.compareTo` is signed and disagrees).
+  `UUID.compareTo` is signed and disagrees). **Messages are the exception, and so is every read of
+  a conversation:** they order by `seq`, the position the database assigns on insert (V44), never
+  by a clock or a clock-minted id; their cursor still names a message.
 - **The messaging endpoint stamps the reserved channel type `api` server-side**, and the identity
   kind `CLIENT_REFERENCE` with it; the request body carries only `external_identity_ref` and
   `content`, so the client chooses neither. Ingest is one transaction (`InboundMessageService`):

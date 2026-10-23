@@ -189,8 +189,8 @@ final class EvalWorld {
 
     private TurnTrace trace(String message, UUID conversationId, UUID messageId) throws Exception {
         List<Map<String, Object>> rows = s.admin().queryForList("SELECT role, content, tool_content::text AS tool "
-                + "FROM messages WHERE conversation_id = ? AND id > ? AND role <> 'USER' ORDER BY id", conversationId,
-                messageId);
+                + "FROM messages WHERE conversation_id = ? AND role <> 'USER' "
+                + "AND seq > (SELECT seq FROM messages WHERE id = ?) ORDER BY seq", conversationId, messageId);
         List<ToolUse> tools = new ArrayList<>();
         Map<String, Integer> callIndex = new HashMap<>();
         String reply = "";

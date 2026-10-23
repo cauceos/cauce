@@ -114,6 +114,22 @@ The sites this decision converted, all of which compare a stored date with "now"
   `postgres` user so its shared-memory semaphore is usable), tag it locally as the image the
   Testcontainers setups use, run the full build, and restore the original tag.
 
+## Amendment (2026-10-23): a clock tells time, never order
+
+One source of time is not enough to order by time: the database's wall clock can step back too
+(an NTP correction, a VM resuming). On 2026-10-23 it did, on the development machine after it
+resumed from sleep: a conversation read `ORDER BY created_at` put the person's "Sí" before the
+agent's previous reply, the request ended on the agent's turn, and the provider refused it.
+
+- **The order of a conversation is its `seq`** (V44): a position assigned on insert from a
+  per-conversation counter, under the conversation's row lock, so it follows the order of commits.
+  Every read of a conversation orders by it, and the public listing keys its pages on it.
+- **The audit outbox drains in `seq` order** (an identity), so the chain follows the order the
+  facts were written.
+- `created_at` stays a time, for what compares times (windows, cutoffs, expiries). Claims that
+  pick due rows by `created_at` only decide who goes first, and their processing order was never
+  guaranteed; they are left as they are.
+
 ## References
 
 - `backend/cauce-memory/src/main/java/dev/cauce/memory/time/DatabaseClock.java`

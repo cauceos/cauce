@@ -90,7 +90,7 @@ public class AuditOutboxDrainService {
     @Transactional
     public int drainBatch(UUID tenantId, int batchSize) {
         List<AuditOutboxEntryEntity> pending =
-                outboxRepository.findByTenantIdAndDrainStatusOrderByCreatedAtAscIdAsc(
+                outboxRepository.findByTenantIdAndDrainStatusOrderBySeqAsc(
                         tenantId, DrainStatus.PENDING, Limit.of(batchSize));
         if (pending.isEmpty()) {
             return 0;

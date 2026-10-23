@@ -124,7 +124,7 @@ class MessageToolContentPersistenceIT {
                 messageMapper.toEntity(Message.toolResult(conversation.id(), result)));
 
         List<Message> messages = messageRepository
-                .findByConversationIdOrderByCreatedAtAsc(conversation.id())
+                .findByConversationIdOrderBySeqAsc(conversation.id())
                 .stream()
                 .map(messageMapper::toDomain)
                 .toList();

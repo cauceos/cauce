@@ -16,10 +16,10 @@ import org.springframework.data.jpa.repository.Query;
 public interface AuditOutboxEntryRepository extends JpaRepository<AuditOutboxEntryEntity, UUID> {
 
     /**
-     * The oldest pending rows of one tenant, in capture order ({@code created_at} with the
-     * UUIDv7 {@code id} as deterministic tiebreaker), limited to the drain batch.
+     * The oldest pending rows of one tenant, in capture order ({@code seq}, an identity assigned
+     * on insert, V44: never a clock that can step back), limited to the drain batch.
      */
-    List<AuditOutboxEntryEntity> findByTenantIdAndDrainStatusOrderByCreatedAtAscIdAsc(
+    List<AuditOutboxEntryEntity> findByTenantIdAndDrainStatusOrderBySeqAsc(
             UUID tenantId, DrainStatus drainStatus, Limit limit);
 
     /**

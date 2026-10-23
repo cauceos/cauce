@@ -224,6 +224,22 @@ class AuditChainIT extends AbstractGovernanceIntegrationTest {
         assertThat(verifyAs(clientA.id()).valid()).isTrue();
     }
 
+    @Test
+    void drain_whenTheClockSteppedBack_chainsInTheOrderTheFactsWereWritten() {
+        seedEvents(clientA.id(), "e.one", "e.two", "e.three");
+        // As if the database clock had stepped back between the writes: by created_at they reverse.
+        jdbc.update("UPDATE audit_outbox SET created_at = now() - make_interval(secs => "
+                + "CASE event_type WHEN 'e.one' THEN 0 WHEN 'e.two' THEN 60 ELSE 120 END) WHERE tenant_id = ?",
+                clientA.id());
+
+        drainBatchAs(clientA.id(), properties.getBatchSize());
+
+        assertThat(jdbc.queryForList("SELECT event_type FROM audit_log_entries WHERE tenant_id = ? "
+                + "AND event_type LIKE 'e.%' ORDER BY sequence_number", String.class, clientA.id()))
+                .containsExactly("e.one", "e.two", "e.three");
+        assertThat(verifyAs(clientA.id()).valid()).isTrue();
+    }
+
     // === PRE-CHAIN LEGACY EDGE ===
 
     @Test

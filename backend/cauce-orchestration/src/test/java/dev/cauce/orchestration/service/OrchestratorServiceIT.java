@@ -186,7 +186,7 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
         assertThat(reply.content()).isEqualTo("The current time has been retrieved.");
 
         List<String> roles = jdbc.queryForList(
-                "SELECT role FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, id ASC",
+                "SELECT role FROM messages WHERE conversation_id = ? ORDER BY seq",
                 String.class, conversation.id());
         assertThat(roles).containsExactly("USER", "TOOL_CALL", "TOOL_RESULT", "AGENT");
 
@@ -219,11 +219,41 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
         assertThat(sent.get(94).content()).startsWith("MSG99:");
     }
 
+    @Test
+    void respondToMessage_whenTheClockSteppedBack_sendsTheHistoryInTheOrderItWasWritten() {
+        // The eval run of 2026-10-23 (H3.10): the database clock stepped back between the agent's
+        // question and the person's "Sí", so by created_at the "Sí" came first, the request ended on
+        // the agent's turn and the provider refused it (no prefill). The order is now the database's
+        // sequence, which no clock moves.
+        Instant now = clock.instant();
+        jdbc.update("INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'AGENT', ?, ?)",
+                UUID.randomUUID(), conversation.id(), "¿La confirmo?", Timestamp.from(now.plusSeconds(60)));
+        UUID yes = UUID.randomUUID();
+        jdbc.update("INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'USER', ?, ?)",
+                yes, conversation.id(), "Sí", Timestamp.from(now.minusSeconds(60)));
+        List<List<String>> sent = new ArrayList<>();
+        mockLlmProvider.respondWith(invocation -> {
+            sent.add(invocation.messages().stream().map(m -> m.role() + ":" + m.content()).toList());
+            return new LlmResponse("Hecho.", List.of(), FinishReason.STOP, LlmUsage.of(1, 1));
+        });
+
+        respondAs(clientA.id(), yes);
+
+        assertThat(sent).singleElement().satisfies(messages ->
+                assertThat(messages).containsExactly("USER:Hola", "ASSISTANT:¿La confirmo?", "USER:Sí"));
+        assertThat(jdbc.queryForList("SELECT content FROM messages WHERE conversation_id = ? ORDER BY seq",
+                String.class, conversation.id())).containsExactly("Hola", "¿La confirmo?", "Sí", "Hecho.");
+    }
+
     private Message respondAs(UUID context) {
+        return respondAs(context, triggerMessage.id());
+    }
+
+    private Message respondAs(UUID context, UUID trigger) {
         TenantContext.setCurrentTenantId(context);
         try {
             return orchestratorService.respondToMessage(
-                    UUID.randomUUID(), conversation.id(), triggerMessage.id());
+                    UUID.randomUUID(), conversation.id(), trigger);
         } finally {
             TenantContext.clear();
         }
@@ -244,7 +274,7 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
 
     private UUID lastUserMessageId() {
         return jdbc.queryForObject(
-                "SELECT id FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1",
+                "SELECT id FROM messages WHERE conversation_id = ? ORDER BY seq DESC LIMIT 1",
                 UUID.class, conversation.id());
     }
 

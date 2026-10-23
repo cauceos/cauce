@@ -89,7 +89,7 @@ public class HandoffService implements HandoffSink {
     private void requireQuoted(UUID conversationId, String quote) {
         String words = normalized(quote);
         boolean theirs = !words.isEmpty() && messageRepository
-                .findByConversationIdOrderByCreatedAtAsc(conversationId).stream()
+                .findByConversationIdOrderBySeqAsc(conversationId).stream()
                 .filter(message -> message.getRole() == MessageRole.USER)
                 .anyMatch(message -> normalized(message.getContent()).contains(words));
         if (!theirs) {

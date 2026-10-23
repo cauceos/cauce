@@ -84,7 +84,7 @@ class MessageServiceTest {
         Message m1 = Message.from(conversationId, MessageRole.USER, "first");
         Message m2 = Message.from(conversationId, MessageRole.AGENT, "second");
         MessageMapper mapper = new MessageMapper();
-        when(messageRepository.findByConversationIdAndRoleNotOrderByIdAsc(
+        when(messageRepository.findByConversationIdAndRoleNotOrderBySeqAsc(
                 conversationId, MessageRole.SYSTEM, Limit.of(10)))
                 .thenReturn(List.of(mapper.toEntity(m1), mapper.toEntity(m2)));
 
@@ -99,8 +99,7 @@ class MessageServiceTest {
         Message m2 = Message.from(conversationId, MessageRole.AGENT, "second");
         MessageMapper mapper = new MessageMapper();
         UUID afterId = UUID.randomUUID();
-        when(messageRepository.findByConversationIdAndIdGreaterThanAndRoleNotOrderByIdAsc(
-                conversationId, afterId, MessageRole.SYSTEM, Limit.of(10)))
+        when(messageRepository.findPageAfter(conversationId, afterId, MessageRole.SYSTEM, Limit.of(10)))
                 .thenReturn(List.of(mapper.toEntity(m2)));
 
         List<Message> messages = service.listMessages(conversationId, afterId, 10);

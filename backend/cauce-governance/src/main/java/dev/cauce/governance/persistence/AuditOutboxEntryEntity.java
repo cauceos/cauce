@@ -44,6 +44,10 @@ public class AuditOutboxEntryEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Capture order, from an identity (V44): the drainer chains a tenant's rows in it, not by clock. */
+    @Column(name = "seq", insertable = false, updatable = false)
+    private Long seq;
+
     protected AuditOutboxEntryEntity() {
         // for JPA
     }

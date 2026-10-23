@@ -159,7 +159,7 @@ class ConversationGatewayTest {
     }
 
     private void stubHistory(MessageEntity... history) {
-        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId))
+        when(messageRepository.findByConversationIdOrderBySeqAsc(conversationId))
                 .thenReturn(List.of(history));
     }
 
