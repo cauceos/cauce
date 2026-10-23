@@ -237,6 +237,21 @@ Con la conversación media de la batería (1,74 mensajes):
   S10): la parte que llega dentro de la hora es la que lee su historial de la caché en vez de
   volver a escribirlo. Hasta entonces, b) es una estimación.
 
+### Comprobada: la caché de 1 hora se registra y se cobra a su precio
+
+[`1543Z`](historial/2026-10-23T1543Z-claude-sonnet-5-5.json), con el agente de clientes en `LONG`
+(el valor del paquete, ADR 0010, S9), N = 1, G1, H3.1 y H4.1: los tres al 100 %, 7 mensajes.
+
+| Entrada | Leída de caché | Escrita en caché | De ella, para 1 hora | Salida | Coste |
+|---|---|---|---|---|---|
+| 82.482 | 74.540 | 7.898 | 7.898 | 1.853 | 0,0577 US$ |
+
+- Todas las escrituras quedaron como de 1 hora (`cache_escritura_larga`), en los tres escenarios.
+- El coste coincide exactamente con la fórmula de los precios (2,00 entrada, 0,10 leída, 4,00
+  escrita para 1 hora, 10,00 salida): 0,057664 US$. Con la escritura de 5 minutos habría sido
+  0,045817: la escritura de 1 hora cuesta lo previsto, y en el arnés no ahorra nada, porque la caché
+  no se enfría entre mensajes (ver arriba).
+
 ## Línea base anterior · 2026-10-23T0914Z · 100 %
 
 | Commit | Huella del prompt | Turnos de modelo | Coste |

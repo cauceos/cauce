@@ -1,0 +1,122 @@
+{
+  "fecha" : "2026-10-23T15:43Z",
+  "commit" : "890b3f3685893a3b40eeca4d48fe4756c5e8a90a",
+  "arbol_con_cambios" : false,
+  "modelo" : "anthropic/claude-sonnet-5-5",
+  "juez" : "ninguno",
+  "calibracion" : "pendiente de juez: ninguno configurado (evals.juez.modelo)",
+  "huella_prompt" : "8f304cf5de01fc688e23505ef71714342d4d96269bf4ede66d2db33d8064a446",
+  "n" : 1,
+  "seleccion" : "G1,H3.1,H4.1",
+  "completa" : true,
+  "tokens" : {
+    "entrada" : 82482,
+    "cache_lectura" : 74540,
+    "cache_escritura" : 7898,
+    "cache_escritura_larga" : 7898,
+    "salida" : 1853,
+    "turnos_modelo" : 7,
+    "juez_entrada" : 0,
+    "juez_salida" : 0
+  },
+  "coste_usd" : 0.057664,
+  "precios" : "2026-10-23",
+  "tasa_global" : 1.0,
+  "reglas" : {
+    "G1 · carta consultada antes de hablar de ella" : 1.0,
+    "carta sin inventar" : 1.0
+  },
+  "tareas" : {
+    "00-anclaje" : 1.0,
+    "03-reservas" : 1.0,
+    "04-escalado" : 1.0
+  },
+  "escenarios" : [ {
+    "id" : "G1",
+    "tarea" : "00-anclaje",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · respuesta contiene «lácteos»" : 1.0,
+      "turno 2 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 2 · carta sin inventar" : 1.0,
+      "turno 3 · herramientas" : 1.0,
+      "turno 3 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 3 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 39343,
+      "cache_lectura" : 33165,
+      "cache_escritura" : 6158,
+      "cache_escritura_larga" : 6158,
+      "salida" : 639,
+      "turnos_modelo" : 3
+    },
+    "coste_usd" : 0.0343785
+  }, {
+    "id" : "H3.1",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · orden" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0,
+      "turno 1 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0
+    },
+    "sin_juez" : 2,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 27592,
+      "cache_lectura" : 26477,
+      "cache_escritura" : 1101,
+      "cache_escritura_larga" : 1101,
+      "salida" : 547,
+      "turnos_modelo" : 2
+    },
+    "coste_usd" : 0.0125497
+  }, {
+    "id" : "H4.1",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · respuesta no contiene «€»" : 1.0,
+      "turno 1 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · argumentos escalate_to_owner" : 1.0,
+      "turno 2 · respuesta no contiene «€»" : 1.0,
+      "turno 2 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «gratis»" : 1.0,
+      "turno 2 · respuesta no contiene «descuento»" : 1.0,
+      "turno 2 · estado · casos OPEN" : 1.0,
+      "turno 2 · estado · avisos HANDOFF" : 1.0
+    },
+    "sin_juez" : 2,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 15547,
+      "cache_lectura" : 14898,
+      "cache_escritura" : 639,
+      "cache_escritura_larga" : 639,
+      "salida" : 667,
+      "turnos_modelo" : 2
+    },
+    "coste_usd" : 0.010735799999999998
+  } ],
+  "bloqueantes_fallidos" : [ ],
+  "avisos" : [ "4 comprobaciones de rúbrica pendientes de juez: no cuentan en ninguna tasa" ],
+  "invalida" : [ ]
+}
