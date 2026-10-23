@@ -41,7 +41,7 @@ H3.13 → **100 %** (`0914Z`). El experimento R1 (`0941Z`) no cambia la línea b
 - Mismo prompt y misma batería que `0914Z`: lo que cambió es el sistema (consumo y límites por
   tenant, ADR 0010), que no toca la conversación del agente. Coste y tokens, dentro del ruido
   (+0,5 %).
-- Sin caché, las mismas llamadas habrían costado 7,8238 US$: la caché ahorró un **79 %**, un techo
+- Sin caché, las mismas llamadas habrían costado 7,8238 US$: la caché ahorró un **79 %** (un 84 % con la lectura de caché a 0,10, el precio vigente), un techo
   por lo mismo que en las líneas base anteriores.
 
 ### Tasas
@@ -77,8 +77,15 @@ ejecución que el umbral, falla y no se escribe en el historial.
 
 Con los tokens por escenario de `1138Z`: 31 escenarios de conversación, 155 conversaciones (N = 5) y
 270 mensajes de cliente, **1,74 mensajes por conversación** de media. Precios de `precios.yaml`,
-versión 2026-10-22 (`claude-sonnet-5-5`: 2,00 US$ por millón de entrada, 0,20 leída de caché, 2,50
+versión 2026-10-23 (`claude-sonnet-5-5`: 2,00 US$ por millón de entrada, 0,10 leída de caché, 2,50
 escrita, 10,00 de salida). El coste de cada escenario suma exactamente el de la ejecución.
+
+> **Recalculado el 2026-10-23 con el precio vigente.** Al comprobar los precios en la documentación
+> de Anthropic, la lectura de caché de Sonnet 5.5 cuesta 0,10 US$ por millón (0,05 × entrada), no
+> 0,20 como en la versión 2026-10-22 de `precios.yaml`, con la que se calculó al principio: la
+> ejecución costó **1,2779 US$**, no 1,6253 (el resumen de `1138Z` conserva la cifra con los precios
+> de entonces). Con los anteriores, la media era 0,0105 US$ por conversación con caché caliente y
+> 0,0371 con caché fría. La caché fría apenas cambia, porque en ella casi todo se escribe.
 
 ### Medido: caché caliente
 
@@ -87,22 +94,22 @@ En el arnés, los mensajes de una conversación van seguidos y la caché no cadu
 
 | | Media | Más barato | Más caro |
 |---|---|---|---|
-| Por conversación | **0,0105 US$** | 0,0030 US$ (H2.5, 1 mensaje) | 0,0713 US$ (G3, 10 mensajes) |
-| Por mensaje | **0,0060 US$** | 0,0030 US$ (H2.5) | 0,0117 US$ (H3.8) |
+| Por conversación | **0,0082 US$** | 0,0020 US$ (H2.5, 1 mensaje) | 0,0532 US$ (G3, 10 mensajes) |
+| Por mensaje | **0,0047 US$** | 0,0020 US$ (H2.5) | 0,0102 US$ (H3.8) |
 
 ### Estimado: caché fría
 
 **No está medido.** Supone el peor caso de un bar real: entre mensaje y mensaje del cliente pasan más
 de los 5 minutos que dura la caché, así que cada mensaje empieza con la caché vacía. La primera
 llamada al modelo de cada mensaje escribe en caché todo su prompt (2,50 US$ por millón en vez de
-0,20) y las siguientes del mismo mensaje lo leen. Se supone que esa primera llamada lleva la mitad de
+0,10) y las siguientes del mismo mensaje lo leen. Se supone que esa primera llamada lleva la mitad de
 la entrada del mensaje (unas dos llamadas por mensaje, medido el 2026-10-22). El techo es sin caché
 ninguna (toda la entrada a 2,00 US$ por millón).
 
 | | Media | Más barato | Más caro | Techo sin caché |
 |---|---|---|---|---|
-| Por conversación | **0,0371 US$** | 0,0146 US$ (H2.5) | 0,2860 US$ (G3) | 0,0505 US$ |
-| Por mensaje | **0,0213 US$** | 0,0146 US$ (H2.5) | 0,0310 US$ (H3.8) | 0,0290 US$ |
+| Por conversación | **0,0360 US$** | 0,0141 US$ (H2.5) | 0,2772 US$ (G3) | 0,0505 US$ |
+| Por mensaje | **0,0207 US$** | 0,0141 US$ (H2.5) | 0,0303 US$ (H3.8) | 0,0290 US$ |
 
 ### Proyección mensual, estimada
 
@@ -110,9 +117,9 @@ Con la conversación media de la batería (1,74 mensajes):
 
 | Conversaciones al mes | Caché caliente | Caché fría | Techo sin caché |
 |---|---|---|---|
-| 300 | 3,15 US$ | 11,13 US$ | 15,14 US$ |
-| 900 | 9,44 US$ | 33,39 US$ | 45,43 US$ |
-| 1.500 | 15,73 US$ | 55,65 US$ | 75,71 US$ |
+| 300 | 2,47 US$ | 10,80 US$ | 15,14 US$ |
+| 900 | 7,42 US$ | 32,41 US$ | 45,43 US$ |
+| 1.500 | 12,37 US$ | 54,02 US$ | 75,71 US$ |
 
 - **Lo que más mueve la cifra es la longitud de la conversación**, no el número de conversaciones:
   el coste por mensaje crece con el historial (G3, diez mensajes, lleva 18.666 tokens de entrada por
