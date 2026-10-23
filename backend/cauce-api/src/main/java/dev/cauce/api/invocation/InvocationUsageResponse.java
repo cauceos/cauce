@@ -14,7 +14,8 @@ import java.util.List;
  *
  * <p>Tokens only. No cost, in any currency: prices change, differ per provider and per model,
  * and a monetary number computed here would be exactly the kind of figure someone later bills
- * from. Cost will be a view over these facts and a versioned price table, never a column.
+ * from. Cost is a view over these facts and the versioned price table (ADR 0010), never a
+ * column.
  *
  * @param calls        every recorded provider call, oldest first; never empty (the whole
  *                     object is absent when nothing was recorded)

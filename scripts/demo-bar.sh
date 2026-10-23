@@ -7,7 +7,8 @@
 #   1. Finds the business "Bar La Esquina" under a partner "Demo Hostelería" of this operator,
 #      or creates them: a run never makes a second business on the same instance.
 #   2. Loads its sheet, menu and agenda from examples/hosteleria/bar-ejemplo.
-#   3. Finds or creates the customer agent (prompt + tool grant of the pack) and the owner agent.
+#   3. Finds or creates the customer agent (prompt + tool grant of the pack) and the owner agent,
+#      and adds the price of their model to the operator's price table when it has none.
 #   4. With TELEGRAM_CUSTOMER_BOT_TOKEN / TELEGRAM_OWNER_BOT_TOKEN (and PUBLIC_URL): binds each
 #      bot to its agent once and, on every run, renews its webhook secret, registers the webhook
 #      with Telegram and checks with getWebhookInfo that it took. Any failure stops the script.
@@ -19,6 +20,9 @@
 #   CAUCE_OPERATOR_ID   the operator tenant id; default: from .quickstart.env, else GET /v1/me
 #   MODEL_PROVIDER      default anthropic   (needs ANTHROPIC_API_KEY on the instance)
 #   MODEL_NAME          default claude-sonnet-5-5
+#   MODEL_PRICE_INPUT, MODEL_PRICE_OUTPUT, MODEL_PRICE_CACHE_READ, MODEL_PRICE_CACHE_WRITE
+#                       US$ per million tokens; default: claude-sonnet-5-5's list price, none for
+#                       another model (its usage is then reported unpriced)
 #   TELEGRAM_CUSTOMER_BOT_TOKEN, TELEGRAM_OWNER_BOT_TOKEN   from @BotFather (optional)
 #   PUBLIC_URL          public https URL that reaches the instance, e.g. a tunnel (required with a token)
 #   TELEGRAM_API_URL    default https://api.telegram.org (a stub, for testing this script)
@@ -66,12 +70,15 @@ if command -v python3 >/dev/null 2>&1 && python3 -c '' >/dev/null 2>&1; then
     # Python ends lines with CR LF, and the shell drops only the last CR). The name
     # is a JSON string so that "Hostelería" travels as \u00ed: argv is re-encoded on Windows.
     json_named()  { python3 -c 'import json,sys; n=json.loads(sys.argv[1]); print(" ".join(x["id"] for x in json.load(sys.stdin)["data"] if x.get("name") == n))' "$1"; }
+    # json_priced PROVIDER MODEL: "yes" when a price of .data is for that provider and model.
+    json_priced() { python3 -c 'import json,sys; print("yes" if any(x["provider"] == sys.argv[1] and x["model"] == sys.argv[2] for x in json.load(sys.stdin)["data"]) else "")' "$1" "$2"; }
 elif command -v jq >/dev/null 2>&1; then
     json_get()    { jq -r ".$1"; }
     json_opt()    { jq -r ".$1 // \"\""; }
     json_string() { jq -Rs .; }
     json_list()   { jq -c ".$2" "$1"; }
     json_named()  { jq -r --argjson n "$1" '[.data[] | select(.name == $n) | .id] | join(" ")'; }
+    json_priced() { jq -r --arg p "$1" --arg m "$2" 'if any(.data[]; .provider == $p and .model == $m) then "yes" else "" end'; }
 else
     fail "python3 or jq is required"
 fi
@@ -207,6 +214,45 @@ else
 fi
 echo "   Customer agent: $CUSTOMER_AGENT_ID"
 echo "   Owner agent:    $OWNER_AGENT_ID"
+
+# --- 3b. the model's price ----------------------------------------------------
+
+# Usage is priced from the operator's price table (ADR 0010, S1). The demo adds the price of the
+# model its agents use, once: a price is never changed, a new one is a new row.
+if [ "$MODEL_PROVIDER/$MODEL_NAME" = "anthropic/claude-sonnet-5-5" ]; then
+    # The list price checked in examples/hosteleria/evals/precios.yaml.
+    default_in=2.00 default_out=10.00 default_read=0.20 default_write=2.50
+else
+    default_in="" default_out="" default_read="" default_write=""
+fi
+PRICE_IN="$(read_knob MODEL_PRICE_INPUT "$default_in")"
+PRICE_OUT="$(read_knob MODEL_PRICE_OUTPUT "$default_out")"
+PRICE_READ="$(read_knob MODEL_PRICE_CACHE_READ "$default_read")"
+PRICE_WRITE="$(read_knob MODEL_PRICE_CACHE_WRITE "$default_write")"
+has_price() { # every page of the price table
+    local cursor="" page
+    while :; do
+        page=$(api GET "/v1/llm-prices?limit=200${cursor:+&cursor=$cursor}")
+        if [ -n "$(printf '%s' "$page" | json_priced "$MODEL_PROVIDER" "$MODEL_NAME")" ]; then
+            return 0
+        fi
+        cursor=$(printf '%s' "$page" | json_opt next_cursor)
+        [ -n "$cursor" ] || return 1
+    done
+}
+if has_price; then
+    echo "   $MODEL_PROVIDER / $MODEL_NAME already has a price."
+elif [ -z "$PRICE_IN" ] || [ -z "$PRICE_OUT" ]; then
+    echo "   $MODEL_PROVIDER / $MODEL_NAME has no price: its usage is reported unpriced, and a spend"
+    echo "   limit would refuse it. Set MODEL_PRICE_INPUT and MODEL_PRICE_OUTPUT (US\$ per million tokens)."
+else
+    say "Adding the price of $MODEL_PROVIDER / $MODEL_NAME..."
+    api POST /v1/llm-prices "$(printf '{"provider":"%s","model":"%s","input_usd_per_mtok":%s,"output_usd_per_mtok":%s%s%s}' \
+        "$MODEL_PROVIDER" "$MODEL_NAME" "$PRICE_IN" "$PRICE_OUT" \
+        "${PRICE_READ:+,\"cache_read_usd_per_mtok\":$PRICE_READ}" \
+        "${PRICE_WRITE:+,\"cache_write_usd_per_mtok\":$PRICE_WRITE}")" > /dev/null
+    echo "   Added."
+fi
 
 # --- 4. Telegram bots --------------------------------------------------------
 

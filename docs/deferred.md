@@ -44,7 +44,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 ## Usage and cost
 
 - **No usage aggregation by tenant.** Per-invocation usage is exposed on the invocation endpoint; there is no query across invocations.
-- **No price table and no cost view.** Deliberate: cost must be derivable from the usage facts and a versioned price table, never stored (see the design rules in `CLAUDE.md`).
 
 ## Audit trail (governance)
 
