@@ -103,11 +103,17 @@ per type. The script is idempotent: re-run it to change the bot or after editing
 | `cauce-audit-chain-behind` | audit events have waited over 5 min to be chained | ERROR logs of `AuditOutboxDrainer` in the logs stream |
 | `cauce-spend-limit-reached` | a client's agents are refused for its spend limit | `cauce_spend_month` for that `tenant_id`; raise or keep the limit |
 
-The rules are evaluated every minute; once one fires it stays silent for a while (30 min to
-12 h, by rule) so a long outage is one message, not one a minute. Each message carries the alert's
-name, its value and the series that fired (provider, or tenant and agent ids). Find a tenant by id
-through the API, never in the alert. OpenObserve attaches every rule to the `cauce_queue_pending`
-stream, which exists once the application has exported once: provision after that.
+The rules are evaluated every minute, and each series alerts on its own: a provider, an agent, a
+client. Once a series fires it stays silent for a while (30 min to 12 h, by rule), so a long outage
+is one message, not one a minute — and one bar's alert never silences another's. Each message
+carries the alert's name, one line per series that fired with its ids and a readable value
+("Proveedor anthropic: 100 % de las llamadas fallaron", "… : 100 % de respaldo"), and the time in
+UTC. Find a tenant by id through the API, never in the alert. OpenObserve attaches every rule to
+the `cauce_queue_pending` stream, which exists once the application has exported once: provision
+after that. Re-provisioning re-creates the rules, so a series still in its window fires again.
+
+After changing a rule, run `scripts/observability/test-alerts.sh`: against a throwaway OpenObserve,
+it checks that two agents get one alert each, none repeated, readable (about two minutes, Docker).
 
 ## 4. A server that is down: Healthchecks
 

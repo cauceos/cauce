@@ -47,9 +47,10 @@ upsert() { # collection name json
 }
 
 # --- The message: ids and counts only (ADR 0011, L2) ----------------------------------------------
+# The time is written in UTC, said so: OpenObserve's {alert_trigger_time_str} carries no zone.
 TEMPLATE_BODY=$(python3 - "$CHAT_ID" <<'PY'
 import json, sys
-text = "Cauce: {alert_name}\n{alert_description}\nValor: {alert_agg_value}\n{rows}\n{alert_trigger_time_str}"
+text = "Cauce: {alert_name}\n{alert_description}\n{rows}\n{alert_trigger_time_str} UTC"
 print(json.dumps({"chat_id": sys.argv[1], "text": text}))
 PY
 )
@@ -58,10 +59,13 @@ upsert destinations "$DESTINATION" "$(python3 -c 'import json,sys; print(json.du
 
 # --- The rules ---------------------------------------------------------------------------------------
 # Each is a PromQL expression over the metrics the application exports: a series it returns is a
-# firing condition. Counters arrive as deltas (one point per export step), so a window's count is
-# sum_over_time. Evaluated every minute; once fired, silent for `silence` minutes. OpenObserve
-# attaches an alert to a stream that must exist: cauce_queue_pending, which the application exports
-# every minute from its start. Run this once the application has been exporting for a minute or two.
+# firing condition, and its value is what the message says (a percentage, seconds, a count).
+# Counters arrive as deltas (one point per export step), so a window's count is sum_over_time.
+#
+# Every series alerts on its own (promql_multi_alert): one agent's alert never silences another's.
+# Evaluated every minute; once a series fired, that series is silent for `silence` minutes.
+# OpenObserve attaches an alert to a stream that must exist: cauce_queue_pending, which the
+# application exports every minute from its start. Run this once it has exported for a minute.
 alert() { # name period_minutes silence_minutes description promql row_template
   local existing body
   existing=$(api GET "/api/v2/$OO_ORG/alerts" | json "' '.join(a.get('alert_id') or a.get('id') or '' for a in d.get('list', []) if a.get('name') == '$1')")
@@ -72,12 +76,12 @@ name, period, silence, description, promql, row, destination = sys.argv[1:8]
 print(json.dumps({
     "name": name, "description": description, "enabled": True, "is_real_time": False,
     "stream_type": "metrics", "stream_name": "cauce_queue_pending",
-    "query_condition": {"type": "promql", "promql": promql,
+    "query_condition": {"type": "promql", "promql": promql, "promql_multi_alert": True,
                         "promql_condition": {"column": "value", "operator": ">", "value": 0}},
     "trigger_condition": {"period": int(period), "frequency": 1, "frequency_type": "minutes",
                           "operator": ">=", "threshold": 1, "silence": int(silence)},
     "destinations": [destination],
-    # One line per series that fired: its labels, ids only.
+    # One line per series that fired: its labels (ids only) and its value.
     "row_template": row, "row_template_type": "String",
 }))
 PY
@@ -88,23 +92,28 @@ PY
 
 alert "${PREFIX}provider-down" 5 30 \
   "Más de la mitad de las llamadas a un proveedor fallaron en 5 minutos (al menos 3 llamadas)." \
-  'sum by (provider) (sum_over_time(cauce_orchestration_llm_failures[5m])) / sum by (provider) (sum_over_time(cauce_orchestration_llm_calls[5m])) > 0.5 and sum by (provider) (sum_over_time(cauce_orchestration_llm_calls[5m])) >= 3'   'proveedor {provider}'
+  'round(100 * sum by (provider) (sum_over_time(cauce_orchestration_llm_failures[5m])) / sum by (provider) (sum_over_time(cauce_orchestration_llm_calls[5m]))) > 50 and sum by (provider) (sum_over_time(cauce_orchestration_llm_calls[5m])) >= 3' \
+  'Proveedor {provider}: {value} % de las llamadas fallaron'
 
 alert "${PREFIX}fallback-rate" 15 60 \
   "Un agente respondió con el mensaje de respaldo a más del 20 % de los mensajes en 15 minutos (al menos 5)." \
-  'sum by (tenant_id, agent_id) (sum_over_time(cauce_orchestration_fallbacks[15m])) / sum by (tenant_id, agent_id) (sum_over_time(cauce_orchestration_invocations_requested[15m])) > 0.2 and sum by (tenant_id, agent_id) (sum_over_time(cauce_orchestration_invocations_requested[15m])) >= 5'   'cliente {tenant_id} agente {agent_id}'
+  'round(100 * sum by (tenant_id, agent_id) (sum_over_time(cauce_orchestration_fallbacks[15m])) / sum by (tenant_id, agent_id) (sum_over_time(cauce_orchestration_invocations_requested[15m]))) > 20 and sum by (tenant_id, agent_id) (sum_over_time(cauce_orchestration_invocations_requested[15m])) >= 5' \
+  'Cliente {tenant_id}, agente {agent_id}: {value} % de respaldo'
 
 alert "${PREFIX}queue-stuck" 5 15 \
   "La invocación más antigua de la cola lleva más de 2 minutos esperando: el worker no avanza." \
-  'max(cauce_queue_oldest_due_age) > 120'   ''
+  'round(max(cauce_queue_oldest_due_age)) > 120' \
+  'La más antigua lleva {value} s esperando'
 
 alert "${PREFIX}audit-chain-behind" 10 30 \
   "Hay eventos de auditoría sin encadenar desde hace más de 5 minutos: la cadena no se está escribiendo." \
-  'max(cauce_audit_outbox_oldest_age) > 300'   ''
+  'round(max(cauce_audit_outbox_oldest_age)) > 300' \
+  'El más antiguo lleva {value} s sin encadenar'
 
 alert "${PREFIX}spend-limit-reached" 15 720 \
   "Un cliente alcanzó su límite de gasto: sus agentes responden con el mensaje de respaldo." \
-  'sum by (tenant_id) (sum_over_time(cauce_orchestration_fallbacks{failure_type="SPEND_LIMIT_REACHED"}[15m])) > 0'   'cliente {tenant_id}'
+  'sum by (tenant_id) (sum_over_time(cauce_orchestration_fallbacks{failure_type="SPEND_LIMIT_REACHED"}[15m])) > 0' \
+  'Cliente {tenant_id}: {value} mensajes rechazados en 15 min'
 
 # --- The dashboard -----------------------------------------------------------------------------------
 DASHBOARD="$(dirname "$0")/dashboard.json"
