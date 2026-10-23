@@ -472,6 +472,8 @@ This project uses Conventional Commits in English.
 
 Commits are atomic: one logical change per commit. First line ≤72 characters, imperative mood, no trailing period. Bodies are wrapped at 72 characters.
 
+**Push immediately after every commit** (each one already gated by a green full build): `main` never stays ahead of `origin`. If a push fails, stop and report it before making any further commit.
+
 Breaking changes use `!` after the scope and a `BREAKING CHANGE:` footer.
 
 **Attribution**: Commits are attributed exclusively to the human author. Never add `Co-Authored-By` trailers or credit AI tools (Claude Code, IDE assistants, autocomplete) as co-authors, unless the user explicitly requests it for a specific commit.
