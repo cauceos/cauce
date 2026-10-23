@@ -17,6 +17,12 @@ One container on the API's server: traces, metrics, logs and alerts, about 300â€
 docker compose --profile observability up -d
 ```
 
+OpenObserve refuses to start with a weak password: 8 to 128 characters, with an upper-case and a
+lower-case letter, a digit and a symbol (the container exits; `docker logs cauce-openobserve` says
+so). The first user is created on the first start and kept in the `cauce_observedata` volume:
+changing the password in `.env` afterwards changes nothing until the volume is recreated, or the
+password is changed in the UI.
+
 The UI is on `http://<server>:5080`. Do not publish that port to the internet: reach it through an
 SSH tunnel (`ssh -L 5080:localhost:5080 <server>`) or a VPN. The application talks to it on the
 server's private network.
@@ -108,6 +114,11 @@ stream, which exists once the application has exported once: provision after tha
 An application that is down cannot send its own alert, and neither can an OpenObserve on the same
 server. A cron on the server pings [Healthchecks](https://healthchecks.io) while the API answers;
 when the pings stop, Healthchecks notifies (Telegram is one of its integrations).
+
+**Status: configured, paused.** There is no Cauce server yet, and a development PC is not on 24
+hours a day: an active check would page every night. The check exists in Healthchecks, paused;
+when the server exists, install the cron below on it and resume the check. Until then, step 2
+is not done anywhere.
 
 1. Create a check with a period of 1 minute and a grace of 3; copy its ping URL.
 2. On the server, `crontab -e`:
