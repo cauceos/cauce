@@ -60,7 +60,7 @@ class OrchestrationEventTest {
 
     @Test
     void invocationCompleted_nullFinalMessageId_throws() {
-        assertThatThrownBy(() -> new InvocationCompleted(ID, 1, null, TS))
+        assertThatThrownBy(() -> new InvocationCompleted(ID, ID, ID, 1, null, null, TS))
                 .isInstanceOf(NullPointerException.class).hasMessageContaining("finalMessageId");
     }
 
@@ -82,8 +82,9 @@ class OrchestrationEventTest {
                 new LlmResponded(ID, "anthropic", "m", 0, "STOP", 5, 7, 12, TS),
                 new ToolCallRequested(ID, 0, "get_current_time", "call-1", TS),
                 new ToolExecuted(ID, 0, "get_current_time", "call-1", false, 3, TS),
-                new InvocationCompleted(ID, 1, ID, TS),
-                new InvocationFailed(ID, InvocationFailureType.SETUP_ERROR, "boom", TS)}) {
+                new InvocationCompleted(ID, ID, ID, 1, ID, java.time.Duration.ofSeconds(4), TS),
+                new InvocationFailed(ID, InvocationFailureType.SETUP_ERROR, "boom", TS),
+                new FallbackSent(ID, ID, ID, InvocationFailureType.LLM_ERROR, TS)}) {
             assertThat(event.invocationId()).isEqualTo(ID);
             assertThat(event.occurredAt()).isEqualTo(TS);
         }

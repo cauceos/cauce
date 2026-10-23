@@ -44,6 +44,8 @@ dependencies {
     implementation("io.opentelemetry:opentelemetry-exporter-otlp")
     // ADR 0011, T1: the log lines, with their ids, over OTLP too (only when an endpoint is set).
     implementation(libs.opentelemetry.logback.appender)
+    // ADR 0011, M: metrics over OTLP, pushed only when enabled (management.otlp.metrics.export.*).
+    implementation("io.micrometer:micrometer-registry-otlp")
 
     runtimeOnly("org.postgresql:postgresql")
 

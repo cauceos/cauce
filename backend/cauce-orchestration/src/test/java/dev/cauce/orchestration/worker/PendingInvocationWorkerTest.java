@@ -207,7 +207,7 @@ class PendingInvocationWorkerTest {
         verify(pendingInvocationService, never())
                 .releaseForRetry(any(), anyString(), anyLong());
         assertThat(publishedFailure().failureType()).isEqualTo(InvocationFailureType.LLM_ERROR);
-        verify(failureFallbackService).sendFallback(claimed.conversationId(), InvocationFailureType.LLM_ERROR);
+        verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(), InvocationFailureType.LLM_ERROR);
     }
 
     @Test
@@ -225,7 +225,7 @@ class PendingInvocationWorkerTest {
         verify(pendingInvocationService, never()).markFailed(any(), anyString(), any());
         assertThat(publishedFailure().failureType())
                 .isEqualTo(InvocationFailureType.LLM_RETRIES_EXHAUSTED);
-        verify(failureFallbackService).sendFallback(claimed.conversationId(),
+        verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
                 InvocationFailureType.LLM_RETRIES_EXHAUSTED);
     }
 
@@ -272,7 +272,7 @@ class PendingInvocationWorkerTest {
         verify(pendingInvocationService).markFailed(
                 eq(claimed.id()), anyString(), eq(InvocationFailureType.SPEND_LIMIT_REACHED));
         verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
-        verify(failureFallbackService).sendFallback(claimed.conversationId(),
+        verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
                 InvocationFailureType.SPEND_LIMIT_REACHED);
     }
 
@@ -286,7 +286,7 @@ class PendingInvocationWorkerTest {
 
         verify(pendingInvocationService).markFailed(
                 eq(claimed.id()), anyString(), eq(InvocationFailureType.AGENT_CONFIGURATION));
-        verify(failureFallbackService).sendFallback(claimed.conversationId(),
+        verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
                 InvocationFailureType.AGENT_CONFIGURATION);
     }
 
@@ -302,7 +302,7 @@ class PendingInvocationWorkerTest {
                 eq(claimed.id()), anyString(), eq(InvocationFailureType.EMPTY_REPLY));
         verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
         assertThat(publishedFailure().failureType()).isEqualTo(InvocationFailureType.EMPTY_REPLY);
-        verify(failureFallbackService).sendFallback(claimed.conversationId(), InvocationFailureType.EMPTY_REPLY);
+        verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(), InvocationFailureType.EMPTY_REPLY);
     }
 
     @Test

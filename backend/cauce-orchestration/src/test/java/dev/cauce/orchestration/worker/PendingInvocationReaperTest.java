@@ -112,7 +112,7 @@ class PendingInvocationReaperTest {
         ArgumentCaptor<InvocationFailed> captor = ArgumentCaptor.forClass(InvocationFailed.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().invocationId()).isEqualTo(orphan.id());
-        verify(failureFallbackService).sendFallback(orphan.conversationId(),
+        verify(failureFallbackService).sendFallback(orphan.id(), orphan.conversationId(),
                 InvocationFailureType.REAPER_ABANDONED);
         assertThat(captor.getValue().failureType())
                 .isEqualTo(InvocationFailureType.REAPER_ABANDONED);

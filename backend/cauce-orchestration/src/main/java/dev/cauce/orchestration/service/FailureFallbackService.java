@@ -3,12 +3,15 @@ package dev.cauce.orchestration.service;
 import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.message.Message;
 import dev.cauce.orchestration.LogSafe;
+import dev.cauce.orchestration.events.FallbackSent;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.service.ConversationGateway.ConversationAgent;
+import java.time.Instant;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 /**
@@ -30,17 +33,23 @@ public class FailureFallbackService {
     private final ConversationGateway conversationGateway;
     private final FallbackReplyProperties properties;
     private final ObjectProvider<AgentReplyDispatcher> replyDispatcher;
+    private final ApplicationEventPublisher eventPublisher;
 
     public FailureFallbackService(ConversationGateway conversationGateway,
                                   FallbackReplyProperties properties,
-                                  ObjectProvider<AgentReplyDispatcher> replyDispatcher) {
+                                  ObjectProvider<AgentReplyDispatcher> replyDispatcher,
+                                  ApplicationEventPublisher eventPublisher) {
         this.conversationGateway = conversationGateway;
         this.properties = properties;
         this.replyDispatcher = replyDispatcher;
+        this.eventPublisher = eventPublisher;
     }
 
-    /** Sends the fallback for a terminal failure of {@code failureType} in {@code conversationId}. */
-    public void sendFallback(UUID conversationId, InvocationFailureType failureType) {
+    /**
+     * Sends the fallback for a terminal failure of {@code failureType} of {@code invocationId} in
+     * {@code conversationId}; once it is recorded, publishes {@link FallbackSent}.
+     */
+    public void sendFallback(UUID invocationId, UUID conversationId, InvocationFailureType failureType) {
         Message fallback;
         ConversationAgent target;
         try {
@@ -53,6 +62,8 @@ public class FailureFallbackService {
             log.debug("Fallback failure detail", e);
             return;
         }
+        eventPublisher.publishEvent(new FallbackSent(invocationId, target.agent().tenantId(), target.agent().id(),
+                failureType, Instant.now()));
         AgentReplyDispatcher dispatcher = replyDispatcher.getIfAvailable();
         if (dispatcher == null) {
             return;

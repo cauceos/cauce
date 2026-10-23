@@ -16,6 +16,7 @@ import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.TenantService;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.UUID;
@@ -126,8 +127,9 @@ class OrchestrationMetricsIT extends AbstractApiIntegrationTest {
         assertThat(tokenCounter("output")).isEqualTo(outputTokensBefore + 1);
     }
 
+    /** The sum over every series of {@code name} matching {@code tags}: tenants and agents included. */
     private double counter(String name, String... tags) {
-        return meterRegistry.counter(name, tags).count();
+        return meterRegistry.find(name).tags(tags).counters().stream().mapToDouble(Counter::count).sum();
     }
 
     private double tokenCounter(String kind) {

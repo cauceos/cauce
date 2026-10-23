@@ -45,6 +45,7 @@ import dev.cauce.tools.spi.Tool;
 import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
 import dev.cauce.tools.spi.ToolRegistry;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -159,6 +160,21 @@ public class OrchestratorService {
     }
 
     /**
+     * From the person's message to the reply (ADR 0011, M1): both stamped by the database clock when
+     * appended (ADR 0008), so the turn's latency never mixes clocks. Null when a stamp is missing.
+     */
+    static Duration turnLatency(List<Message> messages, UUID triggerMessageId, Message reply) {
+        return messages.stream()
+                .filter(message -> message.id().equals(triggerMessageId))
+                .map(Message::createdAt)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .filter(asked -> reply.createdAt() != null)
+                .map(asked -> Duration.between(asked, reply.createdAt()))
+                .orElse(null);
+    }
+
+    /**
      * Drives the agent's reply to {@code triggerMessageId} in {@code conversationId}, executing
      * any requested tools, and returns the persisted final AGENT message.
      *
@@ -264,8 +280,9 @@ public class OrchestratorService {
                 Message finalMessage = conversationGateway.appendAudited(reply,
                         ConductAuditEvents.agentResponded(agent.tenantId(), invocationId,
                                 agent.id(), reply, response.finishReason().name(), iteration + 1));
-                eventPublisher.publishEvent(new InvocationCompleted(invocationId, iteration + 1,
-                        finalMessage.id(), Instant.now()));
+                eventPublisher.publishEvent(new InvocationCompleted(invocationId, agent.tenantId(), agent.id(),
+                        iteration + 1, finalMessage.id(), turnLatency(loaded.messages(), triggerMessageId, finalMessage),
+                        Instant.now()));
                 dispatchReply(loaded.conversation(), finalMessage);
                 return finalMessage;
             }

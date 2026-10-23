@@ -16,6 +16,7 @@ import dev.cauce.orchestration.InboundMessageService;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.ContextAssembled;
+import dev.cauce.orchestration.events.FallbackSent;
 import dev.cauce.orchestration.events.InvocationCompleted;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
@@ -181,7 +182,7 @@ class OrchestrationEventFlowIT extends AbstractOrchestrationIntegrationTest {
 
         List<OrchestrationEvent> events = recordedEvents();
         assertThat(events).hasExactlyElementsOfTypes(InvocationRequested.class,
-                ContextAssembled.class, LlmInvoked.class, InvocationFailed.class);
+                ContextAssembled.class, LlmInvoked.class, InvocationFailed.class, FallbackSent.class);
 
         InvocationFailed failed = (InvocationFailed) events.get(3);
         assertThat(failed.invocationId()).isEqualTo(result.invocationId());

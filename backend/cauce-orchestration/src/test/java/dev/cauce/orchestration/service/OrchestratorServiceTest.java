@@ -837,4 +837,24 @@ class OrchestratorServiceTest {
             }
         };
     }
+    @Test
+    void turnLatency_isFromThePersonsMessageToTheReply_byTheirDatabaseStamps() {
+        UUID conversationId = UUID.randomUUID();
+        Message asked = Message.from(conversationId, MessageRole.USER, "hola")
+                .stampedAt(Instant.parse("2026-10-23T10:00:00Z"));
+        Message reply = Message.from(conversationId, MessageRole.AGENT, "buenas")
+                .stampedAt(Instant.parse("2026-10-23T10:00:07.250Z"));
+
+        assertThat(OrchestratorService.turnLatency(List.of(asked), asked.id(), reply))
+                .isEqualTo(java.time.Duration.ofMillis(7250));
+    }
+
+    @Test
+    void turnLatency_whenThePersonsMessageIsNotLoaded_isNull() {
+        UUID conversationId = UUID.randomUUID();
+        Message reply = Message.from(conversationId, MessageRole.AGENT, "buenas")
+                .stampedAt(Instant.parse("2026-10-23T10:00:07Z"));
+
+        assertThat(OrchestratorService.turnLatency(List.of(), UUID.randomUUID(), reply)).isNull();
+    }
 }

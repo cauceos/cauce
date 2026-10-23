@@ -234,7 +234,7 @@ public class PendingInvocationWorker {
         eventPublisher.publishEvent(
                 new InvocationFailed(invocation.id(), failureType, detail, Instant.now()));
         // ADR 0005, C3: the terminal transition committed, so the interlocutor gets the fallback.
-        failureFallbackService.sendFallback(invocation.conversationId(), failureType);
+        failureFallbackService.sendFallback(invocation.id(), invocation.conversationId(), failureType);
     }
 
     private void safeMark(Runnable action, PendingInvocation invocation, String label) {

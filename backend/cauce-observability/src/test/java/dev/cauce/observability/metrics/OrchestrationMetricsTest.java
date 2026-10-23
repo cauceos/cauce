@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import dev.cauce.orchestration.events.ContextAssembled;
+import dev.cauce.orchestration.events.FallbackSent;
 import dev.cauce.orchestration.events.InvocationCompleted;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
@@ -28,6 +29,8 @@ import org.junit.jupiter.api.Test;
 class OrchestrationMetricsTest {
 
     private static final UUID INVOCATION_ID = UUID.randomUUID();
+    private static final UUID TENANT_ID = UUID.randomUUID();
+    private static final UUID AGENT_ID = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-07-04T10:00:00Z");
 
     private SimpleMeterRegistry registry;
@@ -44,7 +47,7 @@ class OrchestrationMetricsTest {
         metrics.on(new InvocationRequested(INVOCATION_ID, UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), NOW));
 
-        assertThat(registry.counter(OrchestrationMetrics.INVOCATIONS_REQUESTED).count())
+        assertThat(registry.get(OrchestrationMetrics.INVOCATIONS_REQUESTED).counter().count())
                 .isEqualTo(1.0);
     }
 
@@ -56,23 +59,55 @@ class OrchestrationMetricsTest {
                     UUID.randomUUID(), UUID.randomUUID(), NOW, gap));
         }
 
-        assertThat(registry.counter(OrchestrationMetrics.CUSTOMER_MESSAGES, "since_previous", "first").count())
+        assertThat(customerMessages("first"))
                 .isEqualTo(1.0);
-        assertThat(registry.counter(OrchestrationMetrics.CUSTOMER_MESSAGES, "since_previous", "within_5m").count())
+        assertThat(customerMessages("within_5m"))
                 .isEqualTo(2.0);
-        assertThat(registry.counter(OrchestrationMetrics.CUSTOMER_MESSAGES, "since_previous", "within_1h").count())
+        assertThat(customerMessages("within_1h"))
                 .isEqualTo(2.0);
-        assertThat(registry.counter(OrchestrationMetrics.CUSTOMER_MESSAGES, "since_previous", "over_1h").count())
+        assertThat(customerMessages("over_1h"))
                 .isEqualTo(1.0);
         assertThat(registry.timer(OrchestrationMetrics.CUSTOMER_MESSAGE_GAP).count()).isEqualTo(5);
     }
 
     @Test
     void on_invocationCompleted_incrementsCompletedCounter() {
-        metrics.on(new InvocationCompleted(INVOCATION_ID, 2, UUID.randomUUID(), NOW));
+        metrics.on(new InvocationCompleted(INVOCATION_ID, TENANT_ID, AGENT_ID, 2, UUID.randomUUID(),
+                Duration.ofSeconds(4), NOW));
 
-        assertThat(registry.counter(OrchestrationMetrics.INVOCATIONS_COMPLETED).count())
-                .isEqualTo(1.0);
+        assertThat(registry.counter(OrchestrationMetrics.INVOCATIONS_COMPLETED,
+                "tenant_id", TENANT_ID.toString(), "agent_id", AGENT_ID.toString()).count()).isEqualTo(1.0);
+        Timer latency = registry.get(OrchestrationMetrics.TURN_LATENCY)
+                .tag("tenant_id", TENANT_ID.toString()).tag("agent_id", AGENT_ID.toString()).timer();
+        assertThat(latency.count()).isEqualTo(1);
+        assertThat(latency.totalTime(TimeUnit.SECONDS)).isEqualTo(4.0);
+    }
+
+    @Test
+    void on_invocationCompleted_withoutALatency_countsButTimesNothing() {
+        metrics.on(new InvocationCompleted(INVOCATION_ID, TENANT_ID, AGENT_ID, 1, UUID.randomUUID(), null, NOW));
+
+        assertThat(registry.get(OrchestrationMetrics.INVOCATIONS_COMPLETED).counter().count()).isEqualTo(1.0);
+        assertThat(registry.find(OrchestrationMetrics.TURN_LATENCY).timer()).isNull();
+    }
+
+    @Test
+    void on_invocationRequested_tagsTheTenantAndTheAgent_neverTheConversation() {
+        UUID conversationId = UUID.randomUUID();
+        metrics.on(new InvocationRequested(INVOCATION_ID, TENANT_ID, AGENT_ID, conversationId, UUID.randomUUID(), NOW));
+
+        assertThat(registry.counter(OrchestrationMetrics.INVOCATIONS_REQUESTED,
+                "tenant_id", TENANT_ID.toString(), "agent_id", AGENT_ID.toString()).count()).isEqualTo(1.0);
+        assertThat(registry.getMeters()).allSatisfy(meter -> assertThat(meter.getId().getTags())
+                .noneMatch(tag -> tag.getValue().equals(conversationId.toString())));
+    }
+
+    @Test
+    void on_fallbackSent_countsByTenantAgentAndFailureType() {
+        metrics.on(new FallbackSent(INVOCATION_ID, TENANT_ID, AGENT_ID, InvocationFailureType.LLM_RETRIES_EXHAUSTED, NOW));
+
+        assertThat(registry.counter(OrchestrationMetrics.FALLBACKS, "tenant_id", TENANT_ID.toString(),
+                "agent_id", AGENT_ID.toString(), "failure_type", "LLM_RETRIES_EXHAUSTED").count()).isEqualTo(1.0);
     }
 
     @Test
@@ -163,5 +198,10 @@ class OrchestrationMetricsTest {
     private double tokenCount(String kind) {
         return registry.counter(OrchestrationMetrics.LLM_TOKENS,
                 "provider", "anthropic", "model", "claude-sonnet-4-7", "kind", kind).count();
+    }
+
+    private double customerMessages(String sincePrevious) {
+        return registry.get(OrchestrationMetrics.CUSTOMER_MESSAGES).tag("since_previous", sincePrevious)
+                .counters().stream().mapToDouble(io.micrometer.core.instrument.Counter::count).sum();
     }
 }

@@ -7,7 +7,8 @@ import java.util.UUID;
  * An observable step in the life of one queued LLM invocation, from enqueue
  * ({@link InvocationRequested}) through the agentic loop's rounds ({@link ContextAssembled},
  * {@link LlmInvoked}, {@link LlmResponded}, {@link ToolCallRequested}, {@link ToolExecuted})
- * to a terminal outcome ({@link InvocationCompleted} or {@link InvocationFailed}).
+ * to a terminal outcome ({@link InvocationCompleted} or {@link InvocationFailed}, the latter
+ * followed by {@link FallbackSent} when the person got the fallback reply).
  *
  * <p>Events are emitted synchronously via Spring's {@code ApplicationEventPublisher} at the
  * point where the step's effects are already durable (each loop round commits through short
@@ -17,7 +18,7 @@ import java.util.UUID;
  */
 public sealed interface OrchestrationEvent
         permits InvocationRequested, ContextAssembled, LlmInvoked, LlmResponded,
-        ToolCallRequested, ToolExecuted, InvocationCompleted, InvocationFailed {
+        ToolCallRequested, ToolExecuted, InvocationCompleted, InvocationFailed, FallbackSent {
 
     /** The id of the queued invocation ({@code pending_invocations} row) this event belongs to. */
     UUID invocationId();

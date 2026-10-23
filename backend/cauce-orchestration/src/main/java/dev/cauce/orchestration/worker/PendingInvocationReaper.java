@@ -90,7 +90,7 @@ public class PendingInvocationReaper {
                     log.warn("Reaper abandoned invocation {} after exhausting {} attempt(s)",
                             invocation.id(), invocation.maxAttempts());
                     // ADR 0005, C3: a terminal failure — the interlocutor gets the fallback.
-                    failureFallbackService.sendFallback(invocation.conversationId(),
+                    failureFallbackService.sendFallback(invocation.id(), invocation.conversationId(),
                             InvocationFailureType.REAPER_ABANDONED);
                 } else {
                     pendingInvocationService.releaseForRetry(invocation.id(), REAP_ERROR, base);
