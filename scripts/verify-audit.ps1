@@ -85,8 +85,8 @@ try {
     [Console]::OutputEncoding = $previousEncoding
 }
 Write-Host '   .quickstart\audit-dump.json and .quickstart\audit-keys.json written.'
-Write-Host '   The dump may hold one entry more than step 1 counted: asking for a verification is'
-Write-Host '   itself recorded in the chain it verified.'
+Write-Host '   The dump may hold a few entries more than step 1 counted: entries reach the chain'
+Write-Host '   asynchronously, and asking for a verification is itself recorded in the chain it verified.'
 
 # --- 3. the independent verifier ---------------------------------------------
 
@@ -94,7 +94,8 @@ Say '3. The independent verifier (tools\audit-chain-verifier, no Cauce code) rec
 $verifyCmd = 'node tools\audit-chain-verifier\verify.mjs .quickstart\audit-dump.json .quickstart\audit-keys.json'
 $nodeMajor = 0
 if (Get-Command node -ErrorAction SilentlyContinue) {
-    $nodeMajor = [int](& node -p 'process.versions.node.split(".")[0]')
+    # Single quotes inside: PowerShell 5.1 strips the double quotes of a native argument.
+    $nodeMajor = [int](& node -p "process.versions.node.split('.')[0]")
 }
 if ($nodeMajor -lt 18) {
     Write-Host "   Node 18 or later is needed for this step (found: $(if ($nodeMajor) { $nodeMajor } else { 'none' }))."

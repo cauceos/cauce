@@ -17,11 +17,12 @@ signed, hash-chained audit log, which the last step checks with an independent v
 | **B. Your own Ollama** | [Ollama](https://ollama.com/download) installed, `ollama pull qwen2.5:3b` done | **under 10 minutes** |
 | **C. Ollama in Docker** | nothing else: no key, no cost, nothing leaves your machine | **≈5 GB to download** (Ollama image + model): the time is your connection's |
 
-The time of A and B is the app image build (Gradle inside Docker, a few minutes) plus the
-smaller images. C adds ≈5 GB on the first run: about 13 minutes measured clone → answer on a
-laptop with 8 cores and 8 GB for Docker; on a slow connection, budget 20–40 minutes.
-Afterwards every path starts in under a minute: images, the model and the database are kept in
-Docker volumes.
+Measured cold (empty Docker, fresh clone, nothing cached) on a laptop with 8 cores and 8 GB
+for Docker, clone → agent answer: **A ≈3 minutes, B ≈3.5 minutes** — most of it the app image
+build (Gradle inside Docker) and the smaller images. **C took between 8 and 17 minutes** on the
+same machine in three runs: the ≈5 GB download is all the difference, so on a slow connection
+budget 30–40 minutes. Afterwards every path starts in under a minute: images, the model and
+the database are kept in Docker volumes.
 
 ## Requirements
 
@@ -131,8 +132,9 @@ Expected (ids and hashes are yours):
    signatures: 7 verified · 0 unsigned · 0 unverifiable
 ```
 
-The dump may hold one entry more than the instance counted in step 1: asking for a
-verification is itself recorded in the chain it verified.
+The dump may hold a few entries more than the instance counted in step 1: entries reach the
+chain asynchronously, a moment after the action, and asking for a verification is itself
+recorded in the chain it verified.
 
 What a VALID establishes — and what it does not (an actor holding the signing key, a chain cut
 back to an earlier state) — is in the verifier's guide:

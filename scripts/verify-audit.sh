@@ -67,8 +67,8 @@ if ! docker compose exec -T cauce-api cat /app/audit-keys/registry.json > "$OUT/
     echo '{ "registry_version": 1, "keys": [] }' > "$OUT/audit-keys.json"
 fi
 echo "   $OUT/audit-dump.json and $OUT/audit-keys.json written."
-echo "   The dump may hold one entry more than step 1 counted: asking for a verification is"
-echo "   itself recorded in the chain it verified."
+echo "   The dump may hold a few entries more than step 1 counted: entries reach the chain"
+echo "   asynchronously, and asking for a verification is itself recorded in the chain it verified."
 
 # --- 3. the independent verifier ---------------------------------------------
 
