@@ -4,6 +4,10 @@ How an operator watches a Cauce instance that answers bars' customers unattended
 once, what each alert means, and how to follow one message. The decisions are
 [ADR 0011](../adr/0011-observability-for-unattended-operation.md).
 
+**Status: verified end to end on 2026-10-23, locally** (alerts to Telegram, a message's trace, the
+dashboard; ADR 0011, Verification). Not yet on a server: §4 (Healthchecks) is paused and §5 (the
+nightly chain verification) is not scheduled anywhere until there is one.
+
 What leaves the application is ids, counts and closed vocabularies: never a message's text, an
 identity's value, a prompt or a provider's error detail (ADR 0011, L2, T3). The tools below never
 see what a customer said.

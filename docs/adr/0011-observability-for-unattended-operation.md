@@ -88,6 +88,24 @@ endpoint, unauthenticated, answers the status only, never details.
 - Logs lose the provider's error text; whoever needs it reads the invocation's record.
 - Tags by tenant and agent are a cost that grows with the bars; M1 says when to look again.
 
+## Verification
+
+Verified end to end on 2026-10-23, locally (there is no Cauce server yet), against OpenObserve
+v1.0.4 and the operator's own Telegram bot: a provider down (an invalid key) raised
+`cauce-provider-down` and `cauce-fallback-rate`; a high fallback rate with the provider healthy (a
+client with a limit and an unpriced model) raised only `cauce-fallback-rate`, one alert per bar; a
+message's trace was one trace from the request to the model call, its logs carried its ids, and the
+dashboard showed it. No message text reached traces, logs or alerts.
+
+What the check changed, recorded in the commits and the runbook: failed model calls are counted
+directly (`LlmFailed`), since OpenObserve's PromQL returns nothing for a missing series; counters are
+exported as deltas and summed over a window, since `increase()` reads zero for a series that appears
+already counting; scheduled jobs are not traced; and each series alerts and is silenced on its own,
+so one bar's alert never silences another's (`scripts/observability/test-alerts.sh`).
+
+Pending until a server exists: the Healthchecks check (A3), configured and paused, and the nightly
+run of the audit chain verifier (A2), both in the runbook.
+
 ## References
 
 - ADR 0001 — RLS escape hatches (M2)
