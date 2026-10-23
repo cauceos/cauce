@@ -1,12 +1,14 @@
 package dev.cauce.business.owner;
 
-import dev.cauce.core.business.owner.OwnerNotifier;
+import dev.cauce.core.LogKeys;
 import dev.cauce.core.business.owner.OwnerNotifier.Delivery;
+import dev.cauce.core.business.owner.OwnerNotifier;
 import dev.cauce.core.tenant.TenantContext;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -50,6 +52,7 @@ public class OwnerNotificationDispatcher {
                 properties.getLeaseSeconds());
         for (OwnerNotificationRepository.Claim claim : claims) {
             TenantContext.setCurrentTenantId(claim.getTenantId());
+            MDC.put(LogKeys.TENANT_ID, claim.getTenantId().toString()); // ADR 0011, L1
             try {
                 Optional<OwnerNotificationService.Send> send = notifications.prepare(claim.getId());
                 if (send.isPresent()) {
@@ -64,6 +67,7 @@ public class OwnerNotificationDispatcher {
                         claim.getId(), e.toString(), e);
             } finally {
                 TenantContext.clear();
+                MDC.remove(LogKeys.TENANT_ID);
             }
         }
         return claims.size();

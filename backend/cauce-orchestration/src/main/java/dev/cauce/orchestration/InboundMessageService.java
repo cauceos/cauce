@@ -1,5 +1,6 @@
 package dev.cauce.orchestration;
 
+import dev.cauce.core.LogKeys;
 import dev.cauce.core.UuidGenerator;
 import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.Conversation;
@@ -17,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -119,6 +121,20 @@ public class InboundMessageService {
     public InboundMessageResult ingest(UUID agentId, String channelType, UUID channelConfigId,
                                        IdentityKind identityKind, String identityValue,
                                        String content, String idempotencyKey) {
+        // ADR 0011, L1: the ingest's log lines carry the agent and, once resolved, the conversation.
+        MDC.put(LogKeys.AGENT_ID, agentId.toString());
+        try {
+            return ingestLogged(agentId, channelType, channelConfigId, identityKind, identityValue, content,
+                    idempotencyKey);
+        } finally {
+            MDC.remove(LogKeys.AGENT_ID);
+            MDC.remove(LogKeys.CONVERSATION_ID);
+        }
+    }
+
+    private InboundMessageResult ingestLogged(UUID agentId, String channelType, UUID channelConfigId,
+                                              IdentityKind identityKind, String identityValue,
+                                              String content, String idempotencyKey) {
         if (idempotencyKey != null) {
             requireValidKey(idempotencyKey);
             // Fast-path replay of a committed ingest. Deliberately BEFORE resolving the
@@ -154,6 +170,7 @@ public class InboundMessageService {
             }
         }
 
+        MDC.put(LogKeys.CONVERSATION_ID, conversation.id().toString());
         // ADR 0010, S10: how long the person took since their previous message, for the cache retention.
         Optional<Instant> previousMessageAt = messageService.lastMessageAt(conversation.id(), MessageRole.USER);
         Message userMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, content);

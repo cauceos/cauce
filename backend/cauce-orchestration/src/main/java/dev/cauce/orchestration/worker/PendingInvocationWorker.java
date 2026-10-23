@@ -1,23 +1,26 @@
 package dev.cauce.orchestration.worker;
 
+import dev.cauce.core.LogKeys;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.llm.exception.LlmParameterRejectedException;
 import dev.cauce.llm.exception.LlmProviderException;
+import dev.cauce.orchestration.LogSafe;
 import dev.cauce.orchestration.OrchestrationConfig;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.EmptyReplyException;
+import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
-import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
@@ -93,7 +96,8 @@ public class PendingInvocationWorker {
                     workerIdentity.getId(), properties.getBatchSize());
         } catch (RuntimeException e) {
             // A claim failure must not kill the scheduler thread; the next tick retries.
-            log.warn("Worker {} failed to claim a batch: {}", workerIdentity.getId(), e.toString(), e);
+            log.warn("Worker {} failed to claim a batch: {}", workerIdentity.getId(), LogSafe.describe(e));
+            log.debug("Claim failure detail", e);
             return;
         }
         if (claimed.isEmpty()) {
@@ -115,6 +119,10 @@ public class PendingInvocationWorker {
      */
     public void processInvocation(PendingInvocation invocation) {
         TenantContext.setCurrentTenantId(invocation.tenantId());
+        // ADR 0011, L1: every log line of this invocation carries its ids.
+        MDC.put(LogKeys.TENANT_ID, invocation.tenantId().toString());
+        MDC.put(LogKeys.INVOCATION_ID, invocation.id().toString());
+        MDC.put(LogKeys.CONVERSATION_ID, invocation.conversationId().toString());
         try {
             try {
                 orchestratorService.respondToMessage(invocation.id(),
@@ -129,7 +137,8 @@ public class PendingInvocationWorker {
                 // provider not configured, unknown model, context too large, etc.) are
                 // not transient — failing the row is the correct action.
                 log.warn("Worker {} failing invocation {} due to non-LLM error: {}",
-                        workerIdentity.getId(), invocation.id(), e.toString(), e);
+                        workerIdentity.getId(), invocation.id(), LogSafe.describe(e));
+                log.debug("Invocation failure detail", e);
                 InvocationFailureType failureType = failureTypeOf(e);
                 safeMark(() -> {
                     pendingInvocationService.markFailed(invocation.id(), e.toString(), failureType);
@@ -138,6 +147,10 @@ public class PendingInvocationWorker {
             }
         } finally {
             TenantContext.clear();
+            MDC.remove(LogKeys.TENANT_ID);
+            MDC.remove(LogKeys.INVOCATION_ID);
+            MDC.remove(LogKeys.CONVERSATION_ID);
+            MDC.remove(LogKeys.AGENT_ID);
         }
     }
 
@@ -159,10 +172,11 @@ public class PendingInvocationWorker {
     }
 
     private void handleLlmFailure(PendingInvocation invocation, LlmProviderException error) {
-        String errorSummary = error.toString();
+        String errorSummary = error.toString(); // stored with the invocation, never logged (ADR 0011, L2)
+        String logged = LogSafe.describe(error);
         if (!LlmErrorClassifier.isRetryable(error)) {
             log.warn("Worker {} failing invocation {} due to non-retryable LLM error: {}",
-                    workerIdentity.getId(), invocation.id(), errorSummary);
+                    workerIdentity.getId(), invocation.id(), logged);
             // A model rejecting what the agent configures is the agent's configuration to fix.
             InvocationFailureType type = error instanceof LlmParameterRejectedException
                     ? InvocationFailureType.AGENT_CONFIGURATION
@@ -178,7 +192,7 @@ public class PendingInvocationWorker {
         // release with backoff.
         if (invocation.attemptCount() >= invocation.maxAttempts()) {
             log.warn("Worker {} abandoning invocation {} after exhausting {} attempt(s): {}",
-                    workerIdentity.getId(), invocation.id(), invocation.maxAttempts(), errorSummary);
+                    workerIdentity.getId(), invocation.id(), invocation.maxAttempts(), logged);
             safeMark(() -> {
                 pendingInvocationService.markAbandoned(invocation.id(), errorSummary,
                         InvocationFailureType.LLM_RETRIES_EXHAUSTED);
@@ -188,7 +202,7 @@ public class PendingInvocationWorker {
         }
         log.info("Worker {} releasing invocation {} for retry (attempt {}/{}): {}",
                 workerIdentity.getId(), invocation.id(), invocation.attemptCount(),
-                invocation.maxAttempts(), errorSummary);
+                invocation.maxAttempts(), logged);
         safeMark(() -> pendingInvocationService.releaseForRetry(
                         invocation.id(), errorSummary, properties.getRetryBaseIntervalSeconds()),
                 invocation, "RELEASED");
@@ -215,7 +229,8 @@ public class PendingInvocationWorker {
             // If marking the row fails (DB outage, lost RLS context, etc.) the reaper
             // will eventually pick the row up as orphaned. Log loudly and move on.
             log.error("Worker {} failed to mark invocation {} as {}: {}",
-                    workerIdentity.getId(), invocation.id(), label, e.toString(), e);
+                    workerIdentity.getId(), invocation.id(), label, LogSafe.describe(e));
+            log.debug("Mark failure detail", e);
         }
     }
 }

@@ -4,6 +4,7 @@ import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelAdapterRegistry;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
+import dev.cauce.core.LogKeys;
 import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.identity.Identity;
@@ -13,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
@@ -87,6 +89,8 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
     private void deliverUnderTenant(UUID tenantId, UUID configId, Conversation conversation,
                                     Message agentReply) {
         TenantContext.setCurrentTenantId(tenantId);
+        MDC.put(LogKeys.TENANT_ID, tenantId.toString()); // ADR 0011, L1
+        MDC.put(LogKeys.CONVERSATION_ID, conversation.id().toString());
         try {
             Optional<ChannelConfig> config = channelConfigService.findActiveConfig(configId);
             if (config.isEmpty()) {
@@ -121,6 +125,8 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
                     conversation.id(), configId, e.toString(), e);
         } finally {
             TenantContext.clear();
+            MDC.remove(LogKeys.TENANT_ID);
+            MDC.remove(LogKeys.CONVERSATION_ID);
         }
     }
 }

@@ -1,5 +1,6 @@
 package dev.cauce.orchestration.service;
 
+import dev.cauce.core.LogKeys;
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.conversation.AgentReplyDispatcher;
@@ -19,6 +20,7 @@ import dev.cauce.llm.spi.LlmCredential;
 import dev.cauce.llm.spi.LlmProvider;
 import dev.cauce.llm.spi.LlmProviderRegistry;
 import dev.cauce.llm.spi.SystemDefaultLlmCredential;
+import dev.cauce.orchestration.LogSafe;
 import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.context.ContextBuilder;
 import dev.cauce.orchestration.context.LlmInvocationContext;
@@ -28,9 +30,9 @@ import dev.cauce.orchestration.events.LlmInvoked;
 import dev.cauce.orchestration.events.LlmResponded;
 import dev.cauce.orchestration.events.ToolCallRequested;
 import dev.cauce.orchestration.events.ToolExecuted;
+import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
-import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
@@ -50,6 +52,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.env.Environment;
@@ -170,6 +173,7 @@ public class OrchestratorService {
     public Message respondToMessage(UUID invocationId, UUID conversationId, UUID triggerMessageId) {
         LoadedConversation loaded = conversationGateway.load(conversationId, triggerMessageId);
         Agent agent = loaded.agent();
+        MDC.put(LogKeys.AGENT_ID, agent.id().toString()); // ADR 0011, L1; the worker clears it
         List<Message> messages = new ArrayList<>(loaded.messages());
         checkSpend(agent, conversationId);
 
@@ -334,7 +338,8 @@ public class OrchestratorService {
         } catch (LlmProviderException e) {
             log.warn("LLM invocation failed: conversation={} agent={} model={} latencyMs={} error={}",
                     conversationId, agent.id(), agent.modelName(), elapsedMillis(startNanos),
-                    e.toString(), e);
+                    LogSafe.describe(e));
+            log.debug("LLM invocation failure detail", e);
             errorRecorder.recordError(conversationId, formatError(e));
             throw e;
         }
@@ -361,7 +366,9 @@ public class OrchestratorService {
             // The tool's own account of a malformed argument: written for the model to correct.
             return ToolResult.error(call.toolCallId(), call.toolName(), "Invalid arguments: " + e.getMessage());
         } catch (RuntimeException e) {
-            log.warn("Tool '{}' execution failed: {}", call.toolName(), e.toString(), e);
+            // A tool's exception may echo its arguments: its type only (ADR 0011, L2).
+            log.warn("Tool '{}' execution failed: {}", call.toolName(), LogSafe.type(e));
+            log.debug("Tool failure detail", e);
             return ToolResult.error(call.toolCallId(), call.toolName(), TOOL_FAILURE_OUTPUT);
         }
     }

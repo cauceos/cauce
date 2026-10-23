@@ -118,6 +118,24 @@ class PendingInvocationWorkerTest {
     }
 
     @Test
+    void processInvocation_putsTheInvocationsIdsInTheLoggingContext_andTakesThemOutAfter() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        java.util.Map<String, String> seen = new java.util.HashMap<>();
+        Mockito.doAnswer(call -> {
+            seen.putAll(org.slf4j.MDC.getCopyOfContextMap());
+            return null;
+        }).when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        assertThat(seen).containsEntry(dev.cauce.core.LogKeys.INVOCATION_ID, claimed.id().toString())
+                .containsEntry(dev.cauce.core.LogKeys.TENANT_ID, claimed.tenantId().toString())
+                .containsEntry(dev.cauce.core.LogKeys.CONVERSATION_ID, claimed.conversationId().toString());
+        assertThat(org.slf4j.MDC.get(dev.cauce.core.LogKeys.INVOCATION_ID)).isNull();
+        assertThat(org.slf4j.MDC.get(dev.cauce.core.LogKeys.TENANT_ID)).isNull();
+    }
+
+    @Test
     void processInvocation_whenTheModelRejectsTheAgentsParameter_failsAsAConfigurationError_withoutRetry() {
         PendingInvocation claimed = claimedFirstAttempt();
         Mockito.doThrow(new LlmParameterRejectedException("anthropic", "claude-sonnet-5-5", "temperature",

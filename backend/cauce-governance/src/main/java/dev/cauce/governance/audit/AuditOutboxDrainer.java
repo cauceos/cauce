@@ -1,10 +1,12 @@
 package dev.cauce.governance.audit;
 
+import dev.cauce.core.LogKeys;
 import dev.cauce.core.tenant.TenantContext;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -42,6 +44,7 @@ public class AuditOutboxDrainer {
         List<UUID> tenants = drainService.pendingTenants();
         for (UUID tenantId : tenants) {
             TenantContext.setCurrentTenantId(tenantId);
+            MDC.put(LogKeys.TENANT_ID, tenantId.toString()); // ADR 0011, L1
             try {
                 int drained = drainService.drainBatch(tenantId, properties.getBatchSize());
                 if (drained > 0) {
@@ -52,6 +55,7 @@ public class AuditOutboxDrainer {
                         + "be retried", tenantId, e);
             } finally {
                 TenantContext.clear();
+                MDC.remove(LogKeys.TENANT_ID);
             }
         }
     }

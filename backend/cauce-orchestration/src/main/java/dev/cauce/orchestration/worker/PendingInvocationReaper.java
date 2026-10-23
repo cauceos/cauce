@@ -1,11 +1,12 @@
 package dev.cauce.orchestration.worker;
 
 import dev.cauce.core.tenant.TenantContext;
-import dev.cauce.orchestration.service.FailureFallbackService;
+import dev.cauce.orchestration.LogSafe;
 import dev.cauce.orchestration.PendingInvocation;
 import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
+import dev.cauce.orchestration.service.FailureFallbackService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -67,7 +68,8 @@ public class PendingInvocationReaper {
         try {
             orphans = pendingInvocationService.findOrphanedSince(threshold);
         } catch (RuntimeException e) {
-            log.warn("Reaper failed to scan for orphaned invocations: {}", e.toString(), e);
+            log.warn("Reaper failed to scan for orphaned invocations: {}", LogSafe.describe(e));
+            log.debug("Reaper scan failure detail", e);
             return;
         }
         if (orphans.isEmpty()) {
@@ -97,7 +99,8 @@ public class PendingInvocationReaper {
                 }
             } catch (RuntimeException e) {
                 log.error("Reaper failed to recover invocation {}: {}",
-                        invocation.id(), e.toString(), e);
+                        invocation.id(), LogSafe.describe(e));
+                log.debug("Reaper recovery failure detail", e);
             } finally {
                 TenantContext.clear();
             }

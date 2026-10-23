@@ -273,7 +273,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(LlmRateLimitException.class)
     public ResponseEntity<ErrorResponse> handleRateLimit(LlmRateLimitException ex) {
-        log.error("{} [{}]: {}", codeFor(ex), HttpStatus.SERVICE_UNAVAILABLE.value(), ex.getMessage(), ex);
+        log.error("{} [{}]: {}", codeFor(ex), HttpStatus.SERVICE_UNAVAILABLE.value(), ex.getClass().getSimpleName());
+        log.debug("Rate limit detail", ex);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(DEFAULT_RETRY_AFTER_SECONDS))
                 .body(ErrorResponse.of(codeFor(ex), GENERIC_503_MESSAGE));
@@ -311,7 +312,9 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ErrorResponse> serverError(HttpStatus status, RuntimeException ex, String publicMessage) {
         String code = codeFor(ex);
-        log.error("{} [{}]: {}", code, status.value(), ex.getMessage(), ex);
+        // A provider's error can echo the prompt: the type in the log, the detail at DEBUG (ADR 0011, L2).
+        log.error("{} [{}]: {}", code, status.value(), ex.getClass().getSimpleName());
+        log.debug("Server error detail", ex);
         return ResponseEntity.status(status).body(ErrorResponse.of(code, publicMessage));
     }
 

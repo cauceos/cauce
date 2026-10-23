@@ -2,6 +2,7 @@ package dev.cauce.orchestration.service;
 
 import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.message.Message;
+import dev.cauce.orchestration.LogSafe;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.service.ConversationGateway.ConversationAgent;
 import java.util.UUID;
@@ -48,7 +49,8 @@ public class FailureFallbackService {
             fallback = conversationGateway.append(Message.fallback(conversationId, text, failureType.name()));
         } catch (RuntimeException e) {
             log.warn("Could not record the fallback reply for conversation {} ({}): {}",
-                    conversationId, failureType, e.toString(), e);
+                    conversationId, failureType, LogSafe.describe(e));
+            log.debug("Fallback failure detail", e);
             return;
         }
         AgentReplyDispatcher dispatcher = replyDispatcher.getIfAvailable();
@@ -58,7 +60,8 @@ public class FailureFallbackService {
         try {
             dispatcher.dispatchAgentReply(target.conversation(), fallback);
         } catch (RuntimeException e) {
-            log.warn("Fallback dispatch failed for conversation {}: {}", conversationId, e.toString(), e);
+            log.warn("Fallback dispatch failed for conversation {}: {}", conversationId, LogSafe.describe(e));
+            log.debug("Fallback dispatch failure detail", e);
         }
     }
 }

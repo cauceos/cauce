@@ -1,5 +1,6 @@
 package dev.cauce.business.digest;
 
+import dev.cauce.core.LogKeys;
 import dev.cauce.core.tenant.TenantContext;
 import java.time.Clock;
 import java.time.DateTimeException;
@@ -7,6 +8,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -58,6 +60,7 @@ public class DailyDigestScheduler {
             }
             due++;
             TenantContext.setCurrentTenantId(candidate.getTenantId());
+            MDC.put(LogKeys.TENANT_ID, candidate.getTenantId().toString()); // ADR 0011, L1
             try {
                 digests.runToday(candidate.getTenantId());
             } catch (RuntimeException e) {
@@ -65,6 +68,7 @@ public class DailyDigestScheduler {
                         candidate.getTenantId(), e.toString(), e);
             } finally {
                 TenantContext.clear();
+                MDC.remove(LogKeys.TENANT_ID);
             }
         }
         return due;
