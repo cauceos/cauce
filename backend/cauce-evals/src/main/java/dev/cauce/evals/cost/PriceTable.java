@@ -21,21 +21,31 @@ public record PriceTable(@JsonProperty("version") String version, @JsonProperty(
         prices = prices == null ? List.of() : List.copyOf(prices);
     }
 
-    /** One model's prices, US$ per million tokens. */
+    /**
+     * One model's prices, US$ per million tokens. {@code cacheWriteLong} prices the writes made for a
+     * long retention (an hour on Anthropic); absent, they are priced as input, like the core's table.
+     */
     public record Price(
             @JsonProperty("proveedor") String provider,
             @JsonProperty("modelo") String model,
             @JsonProperty("entrada") double input,
             @JsonProperty("cache_escritura") double cacheWrite,
+            @JsonProperty("cache_escritura_larga") Double cacheWriteLong,
             @JsonProperty("cache_lectura") double cacheRead,
             @JsonProperty("salida") double output,
             @JsonProperty("comprobado") String checkedOn) {
 
         /** The cost of the given tokens; {@code input} is the whole prompt, cached parts within it. */
         public double cost(long input, long cacheRead, long cacheWrite, long output) {
+            return cost(input, cacheRead, cacheWrite, 0, output);
+        }
+
+        /** As {@link #cost(long, long, long, long)}, {@code cacheWriteLong} of the writes for a long retention. */
+        public double cost(long input, long cacheRead, long cacheWrite, long cacheWriteLong, long output) {
             long uncached = input - cacheRead - cacheWrite;
-            return (uncached * this.input + cacheRead * this.cacheRead + cacheWrite * this.cacheWrite
-                    + output * this.output) / 1_000_000;
+            double longPrice = this.cacheWriteLong == null ? this.input : this.cacheWriteLong;
+            return (uncached * this.input + cacheRead * this.cacheRead + (cacheWrite - cacheWriteLong) * this.cacheWrite
+                    + cacheWriteLong * longPrice + output * this.output) / 1_000_000;
         }
     }
 

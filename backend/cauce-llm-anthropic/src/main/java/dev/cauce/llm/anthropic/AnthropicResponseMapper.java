@@ -79,16 +79,26 @@ final class AnthropicResponseMapper {
             @JsonProperty("input_tokens") int inputTokens,
             @JsonProperty("output_tokens") int outputTokens,
             @JsonProperty("cache_creation_input_tokens") Integer cacheCreationInputTokens,
-            @JsonProperty("cache_read_input_tokens") Integer cacheReadInputTokens) {
+            @JsonProperty("cache_read_input_tokens") Integer cacheReadInputTokens,
+            @JsonProperty("cache_creation") CacheCreation cacheCreation) {
 
         /**
          * Anthropic's {@code input_tokens} is only the part of the prompt after the last cache
-         * breakpoint; the neutral input is the whole prompt, the cached parts within it.
+         * breakpoint; the neutral input is the whole prompt, the cached parts within it. Of the
+         * writes, those for the one-hour cache are the long-retention ones.
          */
         LlmUsage toNeutral() {
             int written = cacheCreationInputTokens == null ? 0 : cacheCreationInputTokens;
             int read = cacheReadInputTokens == null ? 0 : cacheReadInputTokens;
-            return LlmUsage.of(inputTokens + written + read, outputTokens, read, written);
+            int writtenLong = cacheCreation == null || cacheCreation.oneHour() == null ? 0 : cacheCreation.oneHour();
+            return LlmUsage.of(inputTokens + written + read, outputTokens, read, written, writtenLong);
         }
+    }
+
+    /** The cache writes by lifetime; absent when the response does not break them down. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record CacheCreation(
+            @JsonProperty("ephemeral_5m_input_tokens") Integer fiveMinutes,
+            @JsonProperty("ephemeral_1h_input_tokens") Integer oneHour) {
     }
 }

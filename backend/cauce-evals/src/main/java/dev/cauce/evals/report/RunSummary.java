@@ -46,11 +46,16 @@ public record RunSummary(
         return invalidity.isEmpty();
     }
 
-    /** Tokens of the run, the agent's and the judge's. {@code entrada} includes the cached parts. */
+    /**
+     * Tokens of the run, the agent's and the judge's. {@code entrada} includes the cached parts;
+     * {@code cache_escritura_larga} is the part of the writes made for a long retention (0 in summaries
+     * written before it existed).
+     */
     public record Tokens(
             @JsonProperty("entrada") long input,
             @JsonProperty("cache_lectura") long cacheRead,
             @JsonProperty("cache_escritura") long cacheWrite,
+            @JsonProperty("cache_escritura_larga") long cacheWriteLong,
             @JsonProperty("salida") long output,
             @JsonProperty("turnos_modelo") int modelTurns,
             @JsonProperty("juez_entrada") long judgeInput,
@@ -65,14 +70,15 @@ public record RunSummary(
             @JsonProperty("entrada") long input,
             @JsonProperty("cache_lectura") long cacheRead,
             @JsonProperty("cache_escritura") long cacheWrite,
+            @JsonProperty("cache_escritura_larga") long cacheWriteLong,
             @JsonProperty("salida") long output,
             @JsonProperty("turnos_modelo") int modelTurns) {
 
-        public static final ScenarioTokens NONE = new ScenarioTokens(0, 0, 0, 0, 0);
+        public static final ScenarioTokens NONE = new ScenarioTokens(0, 0, 0, 0, 0, 0);
 
         public ScenarioTokens plus(ScenarioTokens other) {
             return new ScenarioTokens(input + other.input, cacheRead + other.cacheRead, cacheWrite + other.cacheWrite,
-                    output + other.output, modelTurns + other.modelTurns);
+                    cacheWriteLong + other.cacheWriteLong, output + other.output, modelTurns + other.modelTurns);
         }
     }
 

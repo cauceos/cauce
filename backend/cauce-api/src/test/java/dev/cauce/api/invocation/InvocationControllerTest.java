@@ -250,7 +250,7 @@ class InvocationControllerTest {
     private static LlmUsageRecord usageRecord(int roundIndex, int inputTokens, int outputTokens) {
         return new LlmUsageRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-4-7",
-                roundIndex, inputTokens, outputTokens, inputTokens + outputTokens, 0, 0, "STOP",
+                roundIndex, inputTokens, outputTokens, inputTokens + outputTokens, 0, 0, 0, "STOP",
                 Instant.now());
     }
 

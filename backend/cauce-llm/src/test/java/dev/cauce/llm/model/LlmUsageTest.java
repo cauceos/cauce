@@ -24,4 +24,14 @@ class LlmUsageTest {
         assertThatThrownBy(() -> LlmUsage.of(100, 1, -1, 0)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> LlmUsage.of(100, 1, 80, 30)).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void longRetentionWrites_arePartOfTheWrites() {
+        LlmUsage usage = LlmUsage.of(4000, 100, 3500, 300, 200);
+
+        assertThat(usage.cacheWriteLongTokens()).isEqualTo(200);
+        assertThat(LlmUsage.of(4000, 100, 3500, 300).cacheWriteLongTokens()).isZero();
+        assertThatThrownBy(() -> LlmUsage.of(4000, 100, 3500, 300, 301)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> LlmUsage.of(4000, 100, 3500, 300, -1)).isInstanceOf(IllegalArgumentException.class);
+    }
 }

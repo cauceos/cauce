@@ -30,7 +30,7 @@ public interface LlmUsageRecordRepository extends JpaRepository<LlmUsageRecordEn
      * The usage of {@code root} and its descendants from {@code from} to {@code to} (inclusive dates
      * in {@code zone}), per period ({@code unit}: {@code day} or {@code month}, cut in {@code zone}),
      * tenant and agent, in that order. Each row: period ({@code yyyy-MM-dd}, the period's first
-     * day), tenant id, agent id, input, cache read, cache write and output tokens, calls,
+     * day), tenant id, agent id, input, cache read, cache write, long-retention cache write and output tokens, calls,
      * conversations, cost of the priced calls (null when none was priced) and unpriced calls.
      * Descendants are found through {@code tenants} under RLS, so a tenant outside the caller's
      * hierarchy contributes nothing even if it were named.
@@ -42,6 +42,7 @@ public interface LlmUsageRecordRepository extends JpaRepository<LlmUsageRecordEn
                    sum(c.input_tokens),
                    sum(c.cache_read_tokens),
                    sum(c.cache_write_tokens),
+                   sum(c.cache_write_long_tokens),
                    sum(c.output_tokens),
                    count(*),
                    count(DISTINCT c.conversation_id),

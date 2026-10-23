@@ -39,5 +39,16 @@ class PriceTableTest {
         assertThat(haiku.cost(1_000_000, 0, 1_000_000, 0)).isCloseTo(0.125, org.assertj.core.data.Offset.offset(1e-12));
         assertThat(haiku.cost(0, 0, 0, 1_000_000)).isCloseTo(0.50, org.assertj.core.data.Offset.offset(1e-12));
         assertThat(table.priceOf("anthropic", "claude-sonnet-5-5").orElseThrow().cacheRead()).isCloseTo(0.10, org.assertj.core.data.Offset.offset(1e-12));
+        // A million long-retention writes (one hour): 2 × input.
+        assertThat(haiku.cost(1_000_000, 0, 1_000_000, 1_000_000, 0)).isCloseTo(0.20, org.assertj.core.data.Offset.offset(1e-12));
+        assertThat(table.priceOf("anthropic", "claude-sonnet-5-5").orElseThrow().cost(1_000_000, 0, 1_000_000,
+                600_000, 0)).isCloseTo(0.4 * 2.50 + 0.6 * 4.00, org.assertj.core.data.Offset.offset(1e-9));
+    }
+
+    @Test
+    void aPriceWithoutTheLongWrite_pricesLongWritesAsInput() {
+        PriceTable.Price price = new PriceTable.Price("anthropic", "m", 2.0, 2.5, null, 0.1, 10.0, "2026-10-23");
+
+        assertThat(price.cost(1_000_000, 0, 1_000_000, 1_000_000, 0)).isCloseTo(2.0, org.assertj.core.data.Offset.offset(1e-9));
     }
 }

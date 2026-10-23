@@ -124,8 +124,8 @@ public class LlmUsageQueryService {
         Map<String, Row> merged = new LinkedHashMap<>();
         for (Row row : byAgent) {
             Row tenantRow = new Row(row.period(), row.tenantId(), null, row.inputTokens(), row.cacheReadTokens(),
-                    row.cacheWriteTokens(), row.outputTokens(), row.calls(), row.conversations(), row.costUsd(),
-                    row.unpricedCalls());
+                    row.cacheWriteTokens(), row.cacheWriteLongTokens(), row.outputTokens(), row.calls(),
+                    row.conversations(), row.costUsd(), row.unpricedCalls());
             merged.merge(row.period() + "/" + row.tenantId(), tenantRow, Row::plus);
         }
         return new ArrayList<>(merged.values());
@@ -135,7 +135,7 @@ public class LlmUsageQueryService {
         String day = (String) r[0];
         String period = granularity == Granularity.MONTH ? day.substring(0, 7) : day;
         return new Row(period, (UUID) r[1], (UUID) r[2], number(r[3]), number(r[4]), number(r[5]), number(r[6]),
-                number(r[7]), number(r[8]), (BigDecimal) r[9], number(r[10]));
+                number(r[7]), number(r[8]), number(r[9]), (BigDecimal) r[10], number(r[11]));
     }
 
     private static long number(Object value) {

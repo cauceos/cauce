@@ -3,7 +3,8 @@
 # Cada fila lleva la fecha en que se comprobó el precio publicado. Si el precio cambia, se añade
 # una fila nueva con su fecha: el historial dice con qué precios se estimó cada ejecución. Para un
 # modelo, vale la fila comprobada más recientemente.
-# Fuente: https://platform.claude.com/docs/en/about-claude/pricing (caché de 5 minutos).
+# Fuente: https://platform.claude.com/docs/en/about-claude/pricing. cache_escritura es la de 5
+# minutos; cache_escritura_larga, la de 1 hora (2 × entrada). Sin ella, se cobra como entrada.
 version: 2026-10-23
 precios:
   - proveedor: anthropic
@@ -18,6 +19,7 @@ precios:
     modelo: claude-sonnet-5-5
     entrada: 2.00
     cache_escritura: 2.50
+    cache_escritura_larga: 4.00
     cache_lectura: 0.10
     salida: 10.00
     comprobado: 2026-10-23
@@ -28,6 +30,7 @@ precios:
     modelo: claude-haiku-5-5
     entrada: 0.10
     cache_escritura: 0.125
+    cache_escritura_larga: 0.20
     cache_lectura: 0.01
     salida: 0.50
     comprobado: 2026-10-23

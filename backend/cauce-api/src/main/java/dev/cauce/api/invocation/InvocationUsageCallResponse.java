@@ -19,6 +19,7 @@ import java.time.Instant;
  * @param inputTokens  the whole prompt of the call, cached or not
  * @param cacheReadTokens  the part of the prompt the provider served from its prompt cache
  * @param cacheWriteTokens the part of the prompt the provider wrote to its prompt cache
+ * @param cacheWriteLongTokens the part of those writes made for a long retention (dearer)
  * @param finishReason why the provider stopped, verbatim from the SPI vocabulary
  */
 public record InvocationUsageCallResponse(int roundIndex,
@@ -29,6 +30,7 @@ public record InvocationUsageCallResponse(int roundIndex,
                                           int totalTokens,
                                           int cacheReadTokens,
                                           int cacheWriteTokens,
+                                          int cacheWriteLongTokens,
                                           String finishReason,
                                           Instant recordedAt) {
 
@@ -42,6 +44,7 @@ public record InvocationUsageCallResponse(int roundIndex,
                 record.totalTokens(),
                 record.cacheReadTokens(),
                 record.cacheWriteTokens(),
+                record.cacheWriteLongTokens(),
                 record.finishReason(),
                 record.createdAt());
     }

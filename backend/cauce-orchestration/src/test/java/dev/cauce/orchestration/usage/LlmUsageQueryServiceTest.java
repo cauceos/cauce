@@ -80,8 +80,8 @@ class LlmUsageQueryServiceTest {
                 Granularity.DAY, Grouping.TENANT, "UTC");
 
         assertThat(report.rows()).containsExactly(
-                new Row("2026-10-01", clientId, null, 150, 0, 0, 15, 3, 3, new BigDecimal("0.10"), 1),
-                new Row("2026-10-02", clientId, null, 10, 0, 0, 1, 1, 1, new BigDecimal("0.01"), 0));
+                new Row("2026-10-01", clientId, null, 150, 0, 0, 0, 15, 3, 3, new BigDecimal("0.10"), 1),
+                new Row("2026-10-02", clientId, null, 10, 0, 0, 0, 1, 1, 1, new BigDecimal("0.01"), 0));
     }
 
     @Test
@@ -152,7 +152,7 @@ class LlmUsageQueryServiceTest {
 
     /** A row as the repository returns it: one agent, {@code input} tokens, {@code input / 10} out. */
     private Object[] row(String day, UUID agentId, long input, long calls, String cost, long unpriced) {
-        return new Object[] {day, clientId, agentId, input, 0L, 0L, input / 10, calls, calls,
+        return new Object[] {day, clientId, agentId, input, 0L, 0L, 0L, input / 10, calls, calls,
                 cost == null ? null : new BigDecimal(cost), unpriced};
     }
 }

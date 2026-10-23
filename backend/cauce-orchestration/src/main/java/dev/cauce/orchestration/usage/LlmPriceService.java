@@ -54,7 +54,8 @@ public class LlmPriceService {
      */
     @Transactional
     public LlmPrice addPrice(String provider, String model, BigDecimal inputUsdPerMtok, BigDecimal outputUsdPerMtok,
-                             BigDecimal cacheReadUsdPerMtok, BigDecimal cacheWriteUsdPerMtok) {
+                             BigDecimal cacheReadUsdPerMtok, BigDecimal cacheWriteUsdPerMtok,
+                             BigDecimal cacheWriteLongUsdPerMtok) {
         UUID actorId = TenantContext.getCurrentTenantId().orElseThrow();
         Tenant actor = tenantService.getTenant(actorId);
         if (actor.tier() != Tier.OPERATOR) {
@@ -64,7 +65,7 @@ public class LlmPriceService {
             throw new IllegalArgumentException("Unsupported model provider: " + provider);
         }
         LlmPrice price = LlmPrice.create(actorId, provider, model, inputUsdPerMtok, outputUsdPerMtok,
-                cacheReadUsdPerMtok, cacheWriteUsdPerMtok, clock.instant());
+                cacheReadUsdPerMtok, cacheWriteUsdPerMtok, cacheWriteLongUsdPerMtok, clock.instant());
         LlmPrice saved = mapper.toDomain(repository.save(mapper.toEntity(price)));
         auditRecorder.record(UsageAuditEvents.llmPriceAdded(saved, actorId));
         return saved;

@@ -125,7 +125,7 @@ class AggregationTest {
     void theReports_giveTheInputTokensPerModelTurn_whatR1IsMeantToLower() {
         Aggregation.Meta meta = new Aggregation.Meta("2026-10-23T08:00Z", "abc", false, "anthropic/m", "ninguno",
                 "pendiente de juez", "f", 5, "batería completa · R1: consultas pasadas omitidas", true,
-                new RunSummary.Tokens(26_000, 20_000, 1_000, 500, 2, 0, 0), 0.01, "2026-10-22", null);
+                new RunSummary.Tokens(26_000, 20_000, 1_000, 0, 500, 2, 0, 0), 0.01, "2026-10-22", null);
         Scenario s = scenario("G3", Level.WARNING, "00-anclaje");
         List<ScenarioRun> runs = List.of(run(s, 1, CheckResult.pass("turno 1 · herramientas", "")));
         RunSummary summary = Aggregation.summarize(runs, List.of(), 0.9, meta);
@@ -136,23 +136,23 @@ class AggregationTest {
 
     @Test
     void eachScenario_sumsTheTokensOfItsRepetitions_andPricesThem() {
-        PriceTable.Price price = new PriceTable.Price("anthropic", "m", 2.0, 2.5, 0.2, 10.0, "2026-10-22");
+        PriceTable.Price price = new PriceTable.Price("anthropic", "m", 2.0, 2.5, null, 0.2, 10.0, "2026-10-22");
         Aggregation.Meta meta = new Aggregation.Meta("2026-10-23T08:00Z", "abc", false, "anthropic/m", "ninguno",
                 "pendiente de juez", "f", 2, "batería completa", true, null, null, "2026-10-22", price);
         Scenario s = scenario("H3.1", Level.WARNING, "03-reservas");
         Scenario digest = scenario("H5.1", Level.WARNING, "05-resumen");
         List<ScenarioRun> runs = List.of(
                 new ScenarioRun(s, 1, List.of(CheckResult.pass("turno 1 · herramientas", "")), "",
-                        new RunSummary.ScenarioTokens(600_000, 500_000, 50_000, 10_000, 2)),
+                        new RunSummary.ScenarioTokens(600_000, 500_000, 50_000, 0, 10_000, 2)),
                 new ScenarioRun(s, 2, List.of(CheckResult.pass("turno 1 · herramientas", "")), "",
-                        new RunSummary.ScenarioTokens(400_000, 300_000, 50_000, 10_000, 2)),
+                        new RunSummary.ScenarioTokens(400_000, 300_000, 50_000, 0, 10_000, 2)),
                 run(digest, 1, CheckResult.pass("resumen", "")));
 
         RunSummary summary = Aggregation.summarize(runs, List.of(), 0.9, meta);
 
         RunSummary.ScenarioRate rate = summary.scenarios().stream().filter(r -> r.id().equals("H3.1")).findFirst()
                 .orElseThrow();
-        assertThat(rate.tokens()).isEqualTo(new RunSummary.ScenarioTokens(1_000_000, 800_000, 100_000, 20_000, 4));
+        assertThat(rate.tokens()).isEqualTo(new RunSummary.ScenarioTokens(1_000_000, 800_000, 100_000, 0, 20_000, 4));
         // 100k uncached × 2 + 800k read × 0.2 + 100k written × 2.5 + 20k out × 10, per million.
         assertThat(rate.costUsd()).isCloseTo(0.2 + 0.16 + 0.25 + 0.2, org.assertj.core.data.Offset.offset(1e-9));
         // One repetition is one conversation: 0.81 over two.

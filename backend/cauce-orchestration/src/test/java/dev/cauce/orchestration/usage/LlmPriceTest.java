@@ -47,7 +47,7 @@ class LlmPriceTest {
     void equalsAndHashCode_areByValue() {
         LlmPrice price = LlmPrice.create(operatorId, "anthropic", "m", BigDecimal.ONE, BigDecimal.TEN, null, null, NOW);
         LlmPrice same = new LlmPrice(price.id(), operatorId, "anthropic", "m", BigDecimal.ONE, BigDecimal.TEN,
-                null, null, NOW);
+                null, null, null, NOW);
 
         assertThat(same).isEqualTo(price).hasSameHashCodeAs(price);
     }

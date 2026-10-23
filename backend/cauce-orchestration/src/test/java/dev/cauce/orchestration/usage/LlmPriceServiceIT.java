@@ -70,7 +70,7 @@ class LlmPriceServiceIT extends AbstractOrchestrationIntegrationTest {
         Instant before = clock.instant();
 
         LlmPrice price = priceService.addPrice("anthropic", "claude-sonnet-5-5", new BigDecimal("2.00"),
-                new BigDecimal("10.00"), new BigDecimal("0.20"), null);
+                new BigDecimal("10.00"), new BigDecimal("0.20"), null, null);
 
         Map<String, Object> row = jdbc.queryForMap("SELECT * FROM llm_prices WHERE id = ?", price.id());
         assertThat(row.get("tenant_id")).isEqualTo(operator.id());
@@ -85,10 +85,10 @@ class LlmPriceServiceIT extends AbstractOrchestrationIntegrationTest {
     @Test
     void addPrice_byAPartnerOrAClient_isRefused() {
         TenantContext.setCurrentTenantId(partner.id());
-        assertThatThrownBy(() -> priceService.addPrice("anthropic", "m", BigDecimal.ONE, BigDecimal.ONE, null, null))
+        assertThatThrownBy(() -> priceService.addPrice("anthropic", "m", BigDecimal.ONE, BigDecimal.ONE, null, null, null))
                 .isInstanceOf(InvalidTenantTierException.class);
         TenantContext.setCurrentTenantId(client.id());
-        assertThatThrownBy(() -> priceService.addPrice("anthropic", "m", BigDecimal.ONE, BigDecimal.ONE, null, null))
+        assertThatThrownBy(() -> priceService.addPrice("anthropic", "m", BigDecimal.ONE, BigDecimal.ONE, null, null, null))
                 .isInstanceOf(InvalidTenantTierException.class);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM llm_prices", Integer.class)).isZero();
     }
@@ -96,7 +96,7 @@ class LlmPriceServiceIT extends AbstractOrchestrationIntegrationTest {
     @Test
     void prices_areReadByTheWholeHierarchy_andNeverChangedOrRemoved() {
         TenantContext.setCurrentTenantId(operator.id());
-        LlmPrice price = priceService.addPrice("anthropic", "m", BigDecimal.ONE, BigDecimal.TEN, null, null);
+        LlmPrice price = priceService.addPrice("anthropic", "m", BigDecimal.ONE, BigDecimal.TEN, null, null, null);
 
         assertThat(countAs("llm_prices", operator.id())).isEqualTo(1);
         assertThat(countAs("llm_prices", partner.id())).isEqualTo(1);
@@ -129,6 +129,22 @@ class LlmPriceServiceIT extends AbstractOrchestrationIntegrationTest {
         assertThat(costs.get(firstVersion)).isEqualByComparingTo("2.10");
         // 500k uncached × 3.00 + 400k read × 0.30 + 100k written × 3.75 + 10k out × 15.00, per million.
         assertThat(costs.get(secondVersion)).isEqualByComparingTo("2.145");
+    }
+
+    @Test
+    void costView_pricesLongRetentionWritesAtTheirOwnPrice() {
+        jdbc.update("INSERT INTO llm_prices (id, tenant_id, provider, model, input_usd_per_mtok, output_usd_per_mtok, "
+                        + "cache_read_usd_per_mtok, cache_write_usd_per_mtok, cache_write_long_usd_per_mtok, valid_from) "
+                        + "VALUES (?, ?, 'anthropic', 'claude-sonnet-5-5', 2.00, 10.00, 0.10, 2.50, 4.00, ?)",
+                UuidGenerator.newV7(), operator.id(), Timestamp.from(Instant.parse("2026-10-05T00:00:00Z")));
+        UUID call = insertUsage(client.id(), "2026-10-10T12:00:00Z", 1_000_000, 0, 600_000, 0);
+        jdbc.update("UPDATE llm_usage_records SET cache_write_long_tokens = 400000 WHERE id = ?", call);
+
+        // 400k uncached × 2.00 + 200k short writes × 2.50 + 400k long writes × 4.00, per million.
+        assertThat(costsAs(client.id()).get(call)).isEqualByComparingTo("2.90");
+        // The long writes are part of the writes (V49's CHECK).
+        assertThatThrownBy(() -> jdbc.update("UPDATE llm_usage_records SET cache_write_long_tokens = 700000 WHERE id = ?",
+                call)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
     @Test

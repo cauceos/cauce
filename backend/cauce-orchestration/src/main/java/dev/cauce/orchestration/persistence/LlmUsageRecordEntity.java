@@ -58,6 +58,9 @@ public class LlmUsageRecordEntity {
     @Column(name = "cache_write_tokens", nullable = false, updatable = false)
     private int cacheWriteTokens;
 
+    @Column(name = "cache_write_long_tokens", nullable = false, updatable = false)
+    private int cacheWriteLongTokens;
+
     @Column(name = "finish_reason", nullable = false, updatable = false, length = 20)
     private String finishReason;
 
@@ -71,7 +74,8 @@ public class LlmUsageRecordEntity {
     public LlmUsageRecordEntity(UUID id, UUID tenantId, UUID agentId, UUID conversationId,
                                 UUID invocationId, String provider, String model, int roundIndex,
                                 int inputTokens, int outputTokens, int totalTokens,
-                                int cacheReadTokens, int cacheWriteTokens, String finishReason, Instant createdAt) {
+                                int cacheReadTokens, int cacheWriteTokens, int cacheWriteLongTokens, String finishReason,
+                                Instant createdAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.agentId = agentId;
@@ -85,6 +89,7 @@ public class LlmUsageRecordEntity {
         this.totalTokens = totalTokens;
         this.cacheReadTokens = cacheReadTokens;
         this.cacheWriteTokens = cacheWriteTokens;
+        this.cacheWriteLongTokens = cacheWriteLongTokens;
         this.finishReason = finishReason;
         this.createdAt = createdAt;
     }
@@ -139,6 +144,10 @@ public class LlmUsageRecordEntity {
 
     public int getCacheWriteTokens() {
         return cacheWriteTokens;
+    }
+
+    public int getCacheWriteLongTokens() {
+        return cacheWriteLongTokens;
     }
 
     public String getFinishReason() {

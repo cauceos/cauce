@@ -90,8 +90,19 @@ class LlmUsageRecordTest {
     void constructor_whenNegativeTokens_throwsIllegalArgument() {
         assertThatThrownBy(() -> new LlmUsageRecord(UUID.randomUUID(), tenantId, agentId,
                 conversationId, invocationId, "anthropic", "claude-sonnet-4-7", 0,
-                -1, 0, 0, 0, 0, "STOP", NOW))
+                -1, 0, 0, 0, 0, 0, "STOP", NOW))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("token");
+    }
+
+    @Test
+    void create_copiesTheLongRetentionWrites_andTheyCannotExceedTheWrites() {
+        LlmUsageRecord record = LlmUsageRecord.create(tenantId, agentId, conversationId, invocationId, "anthropic",
+                "claude-sonnet-5-5", 0, LlmUsage.of(6000, 50, 0, 5000, 5000), "STOP", NOW);
+
+        assertThat(record.cacheWriteLongTokens()).isEqualTo(5000);
+        assertThatThrownBy(() -> new LlmUsageRecord(UUID.randomUUID(), tenantId, agentId, conversationId,
+                invocationId, "anthropic", "claude-sonnet-5-5", 0, 6000, 50, 6050, 0, 100, 101, "STOP", NOW))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

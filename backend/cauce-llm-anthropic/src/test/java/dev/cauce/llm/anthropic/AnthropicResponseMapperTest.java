@@ -45,6 +45,23 @@ class AnthropicResponseMapperTest {
         assertThat(response.usage().cacheReadTokens()).isEqualTo(3800);
         assertThat(response.usage().cacheWriteTokens()).isEqualTo(200);
         assertThat(response.usage().totalTokens()).isEqualTo(4150);
+        assertThat(response.usage().cacheWriteLongTokens()).isZero();
+    }
+
+    @Test
+    void toDomain_takesTheOneHourWrites_asTheLongRetentionPartOfTheWrites() throws Exception {
+        String body = """
+                {"content":[{"type":"text","text":"Hola"}],"stop_reason":"end_turn",
+                 "usage":{"input_tokens":120,"output_tokens":30,
+                          "cache_creation_input_tokens":5000,"cache_read_input_tokens":0,
+                          "cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":5000}}}
+                """;
+
+        LlmResponse response = mapper.toDomain(body);
+
+        assertThat(response.usage().cacheWriteTokens()).isEqualTo(5000);
+        assertThat(response.usage().cacheWriteLongTokens()).isEqualTo(5000);
+        assertThat(response.usage().inputTokens()).isEqualTo(5120);
     }
 
     @Test

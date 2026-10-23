@@ -11,7 +11,8 @@ import java.util.UUID;
  * The provider's list price of one model, in US$ per million tokens, in force from
  * {@code validFrom} until a later price of the same provider and model (ADR 0010, S1). Never
  * changed once added: a new price is a new row, so a tariff change never reprices past calls. The
- * cache prices are optional; absent, cached tokens are priced as input. Owned by the operator
+ * cache prices are optional; absent, cached tokens are priced as input. {@code cacheWriteLongUsdPerMtok}
+ * prices the writes made for a long retention (an hour on Anthropic, V49). Owned by the operator
  * tenant.
  *
  * <p>{@code provider} is a {@code String}: its vocabulary is the cauce-llm SPI's.
@@ -24,6 +25,7 @@ public record LlmPrice(UUID id,
                        BigDecimal outputUsdPerMtok,
                        BigDecimal cacheReadUsdPerMtok,
                        BigDecimal cacheWriteUsdPerMtok,
+                       BigDecimal cacheWriteLongUsdPerMtok,
                        Instant validFrom) {
 
     public LlmPrice {
@@ -44,6 +46,7 @@ public record LlmPrice(UUID id,
         requireNotNegative(outputUsdPerMtok, "outputUsdPerMtok");
         requireNotNegative(cacheReadUsdPerMtok, "cacheReadUsdPerMtok");
         requireNotNegative(cacheWriteUsdPerMtok, "cacheWriteUsdPerMtok");
+        requireNotNegative(cacheWriteLongUsdPerMtok, "cacheWriteLongUsdPerMtok");
     }
 
     /**
@@ -53,8 +56,17 @@ public record LlmPrice(UUID id,
     public static LlmPrice create(UUID tenantId, String provider, String model, BigDecimal inputUsdPerMtok,
                                   BigDecimal outputUsdPerMtok, BigDecimal cacheReadUsdPerMtok,
                                   BigDecimal cacheWriteUsdPerMtok, Instant now) {
+        return create(tenantId, provider, model, inputUsdPerMtok, outputUsdPerMtok, cacheReadUsdPerMtok,
+                cacheWriteUsdPerMtok, null, now);
+    }
+
+    /** As {@link #create(UUID, String, String, BigDecimal, BigDecimal, BigDecimal, BigDecimal, Instant)}, with the long-retention write price. */
+    public static LlmPrice create(UUID tenantId, String provider, String model, BigDecimal inputUsdPerMtok,
+                                  BigDecimal outputUsdPerMtok, BigDecimal cacheReadUsdPerMtok,
+                                  BigDecimal cacheWriteUsdPerMtok, BigDecimal cacheWriteLongUsdPerMtok,
+                                  Instant now) {
         return new LlmPrice(UuidGenerator.newV7(), tenantId, provider, model, inputUsdPerMtok, outputUsdPerMtok,
-                cacheReadUsdPerMtok, cacheWriteUsdPerMtok, now);
+                cacheReadUsdPerMtok, cacheWriteUsdPerMtok, cacheWriteLongUsdPerMtok, now);
     }
 
     public Optional<BigDecimal> cacheRead() {
@@ -63,6 +75,10 @@ public record LlmPrice(UUID id,
 
     public Optional<BigDecimal> cacheWrite() {
         return Optional.ofNullable(cacheWriteUsdPerMtok);
+    }
+
+    public Optional<BigDecimal> cacheWriteLong() {
+        return Optional.ofNullable(cacheWriteLongUsdPerMtok);
     }
 
     private static void requireNotNegative(BigDecimal value, String name) {

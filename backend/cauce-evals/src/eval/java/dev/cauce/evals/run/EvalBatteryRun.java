@@ -215,11 +215,13 @@ class EvalBatteryRun {
         // Report.
         Map<String, Object> usage = admin.queryForMap("SELECT coalesce(sum(input_tokens), 0) AS i, "
                 + "coalesce(sum(cache_read_tokens), 0) AS r, coalesce(sum(cache_write_tokens), 0) AS w, "
+                + "coalesce(sum(cache_write_long_tokens), 0) AS l, "
                 + "coalesce(sum(output_tokens), 0) AS o, count(DISTINCT invocation_id) AS t FROM llm_usage_records");
         RunSummary.Tokens tokens = new RunSummary.Tokens(num(usage, "i"), num(usage, "r"), num(usage, "w"),
-                num(usage, "o"), (int) num(usage, "t"), judge.map(LlmJudge::inputTokens).orElse(0L),
+                num(usage, "l"), num(usage, "o"), (int) num(usage, "t"), judge.map(LlmJudge::inputTokens).orElse(0L),
                 judge.map(LlmJudge::outputTokens).orElse(0L));
-        Double cost = agentPrice.map(p -> p.cost(tokens.input(), tokens.cacheRead(), tokens.cacheWrite(), tokens.output())
+        Double cost = agentPrice.map(p -> p.cost(tokens.input(), tokens.cacheRead(), tokens.cacheWrite(), tokens.cacheWriteLong(),
+                        tokens.output())
                 + judgePrice.map(j -> j.cost(tokens.judgeInput(), 0, 0, tokens.judgeOutput())).orElse(0.0)).orElse(null);
         String now = clock.instant().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm'Z'"));
         String[] git = git();
@@ -342,9 +344,10 @@ class EvalBatteryRun {
         }
         Map<String, Object> u = admin.queryForMap("SELECT coalesce(sum(input_tokens), 0) AS i, "
                 + "coalesce(sum(cache_read_tokens), 0) AS r, coalesce(sum(cache_write_tokens), 0) AS w, "
+                + "coalesce(sum(cache_write_long_tokens), 0) AS l, "
                 + "coalesce(sum(output_tokens), 0) AS o FROM llm_usage_records WHERE invocation_id = ANY (?::uuid[])",
                 (Object) invocationIds.toArray(String[]::new));
-        return new RunSummary.ScenarioTokens(num(u, "i"), num(u, "r"), num(u, "w"), num(u, "o"),
+        return new RunSummary.ScenarioTokens(num(u, "i"), num(u, "r"), num(u, "w"), num(u, "l"), num(u, "o"),
                 invocationIds.size());
     }
 
@@ -352,8 +355,9 @@ class EvalBatteryRun {
                          Optional<PriceTable.Price> judgePrice) {
         Map<String, Object> u = admin.queryForMap("SELECT coalesce(sum(input_tokens), 0) AS i, "
                 + "coalesce(sum(cache_read_tokens), 0) AS r, coalesce(sum(cache_write_tokens), 0) AS w, "
+                + "coalesce(sum(cache_write_long_tokens), 0) AS l, "
                 + "coalesce(sum(output_tokens), 0) AS o FROM llm_usage_records");
-        double agent = agentPrice.map(p -> p.cost(num(u, "i"), num(u, "r"), num(u, "w"), num(u, "o"))).orElse(0.0);
+        double agent = agentPrice.map(p -> p.cost(num(u, "i"), num(u, "r"), num(u, "w"), num(u, "l"), num(u, "o"))).orElse(0.0);
         double judging = judge.flatMap(j -> judgePrice.map(p -> p.cost(j.inputTokens(), 0, 0, j.outputTokens())))
                 .orElse(0.0);
         return agent + judging;

@@ -51,7 +51,7 @@ class LlmPriceServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         LlmPrice price = service.addPrice("anthropic", "claude-sonnet-5-5", new BigDecimal("2.00"),
-                new BigDecimal("10.00"), new BigDecimal("0.20"), new BigDecimal("2.50"));
+                new BigDecimal("10.00"), new BigDecimal("0.10"), new BigDecimal("2.50"), new BigDecimal("4.00"));
 
         assertThat(price.tenantId()).isEqualTo(operator.id());
         assertThat(price.validFrom()).isEqualTo(NOW);
@@ -62,6 +62,7 @@ class LlmPriceServiceTest {
         assertThat(audit.getValue().tenantId()).isEqualTo(operator.id());
         assertThat(audit.getValue().payload()).containsEntry("model", "claude-sonnet-5-5")
                 .containsEntry("input_usd_per_mtok", "2.00")
+                .containsEntry("cache_write_long_usd_per_mtok", "4.00")
                 .containsEntry("actor_tenant_id", operator.id().toString());
     }
 
@@ -70,7 +71,7 @@ class LlmPriceServiceTest {
         TenantContext.setCurrentTenantId(partner.id());
         when(tenantService.getTenant(partner.id())).thenReturn(partner);
 
-        assertThatThrownBy(() -> service.addPrice("anthropic", "m", BigDecimal.ONE, BigDecimal.ONE, null, null))
+        assertThatThrownBy(() -> service.addPrice("anthropic", "m", BigDecimal.ONE, BigDecimal.ONE, null, null, null))
                 .isInstanceOf(InvalidTenantTierException.class);
         verifyNoInteractions(repository, auditRecorder);
     }
@@ -80,7 +81,7 @@ class LlmPriceServiceTest {
         TenantContext.setCurrentTenantId(operator.id());
         when(tenantService.getTenant(operator.id())).thenReturn(operator);
 
-        assertThatThrownBy(() -> service.addPrice("acme", "m", BigDecimal.ONE, BigDecimal.ONE, null, null))
+        assertThatThrownBy(() -> service.addPrice("acme", "m", BigDecimal.ONE, BigDecimal.ONE, null, null, null))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("acme");
         verifyNoInteractions(repository, auditRecorder);
     }

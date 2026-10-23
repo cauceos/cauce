@@ -17,7 +17,8 @@ public record UsageResponse(UUID tenantId, LocalDate from, LocalDate to, String 
 
     /** One period of one tenant, or of one of its agents ({@code agent_id} null when grouped by tenant). */
     public record Row(String period, UUID tenantId, UUID agentId, long inputTokens, long cacheReadTokens,
-                      long cacheWriteTokens, long outputTokens, long calls, long conversations, BigDecimal costUsd,
+                      long cacheWriteTokens, long cacheWriteLongTokens, long outputTokens, long calls,
+                      long conversations, BigDecimal costUsd,
                       long unpricedCalls) {
     }
 
@@ -25,7 +26,8 @@ public record UsageResponse(UUID tenantId, LocalDate from, LocalDate to, String 
         return new UsageResponse(report.tenantId(), report.from(), report.to(),
                 report.granularity().name().toLowerCase(Locale.ROOT), report.grouping().name().toLowerCase(Locale.ROOT),
                 report.zone().getId(), "USD", report.rows().stream().map(r -> new Row(r.period(), r.tenantId(),
-                        r.agentId(), r.inputTokens(), r.cacheReadTokens(), r.cacheWriteTokens(), r.outputTokens(),
+                        r.agentId(), r.inputTokens(), r.cacheReadTokens(), r.cacheWriteTokens(), r.cacheWriteLongTokens(),
+                        r.outputTokens(),
                         r.calls(), r.conversations(), r.costUsd(), r.unpricedCalls())).toList());
     }
 }

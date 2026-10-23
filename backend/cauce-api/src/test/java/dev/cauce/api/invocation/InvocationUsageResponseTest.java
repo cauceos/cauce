@@ -107,16 +107,30 @@ class InvocationUsageResponseTest {
         assertThat(view.recordedAt()).isEqualTo(call.createdAt());
     }
 
+    @Test
+    void from_sumsTheLongRetentionWrites_apartFromTheWrites() {
+        LlmUsageRecord longWrites = new LlmUsageRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-5-5", 0, 6000, 10, 6010, 0, 5000,
+                5000, "STOP", Instant.now());
+
+        InvocationUsageResponse usage = InvocationUsageResponse.from(List.of(longWrites, cached(1, 7000, 5000, 900)),
+                true);
+
+        assertThat(usage.cacheWriteTokens()).isEqualTo(5900);
+        assertThat(usage.cacheWriteLongTokens()).isEqualTo(5000);
+        assertThat(usage.calls().get(0).cacheWriteLongTokens()).isEqualTo(5000);
+    }
+
     private static LlmUsageRecord cached(int roundIndex, int inputTokens, int cacheRead, int cacheWrite) {
         return new LlmUsageRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-5-5",
-                roundIndex, inputTokens, 10, inputTokens + 10, cacheRead, cacheWrite, "STOP", Instant.now());
+                roundIndex, inputTokens, 10, inputTokens + 10, cacheRead, cacheWrite, 0, "STOP", Instant.now());
     }
 
     private static LlmUsageRecord record(int roundIndex, int inputTokens, int outputTokens) {
         return new LlmUsageRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-4-7",
-                roundIndex, inputTokens, outputTokens, inputTokens + outputTokens, 0, 0, "STOP",
+                roundIndex, inputTokens, outputTokens, inputTokens + outputTokens, 0, 0, 0, "STOP",
                 Instant.now());
     }
 }

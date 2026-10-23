@@ -116,6 +116,20 @@ reason `AGENT_MISCONFIGURED`): a limit that cannot price what it limits would be
 - Margins, other currencies and limits on partners are not built; a limit on a partner would need to
   sum usage across clients the worker cannot see, a SECURITY DEFINER function (ADR 0001).
 
+## Amendment of 2026-10-23: two cache retentions
+
+Measuring the bar's cost showed that most of each call is a prefix shared by every customer (the
+tools and the prompt, about 4,900 tokens) and that, with the 5-minute cache, a person who answers
+after five minutes makes the whole history be written again. The provider also offers a cache that
+lives an hour, whose writes cost more (2 × input against 1.25 ×). Decided: build it.
+
+**S8 — Long-retention writes are their own fact.** `llm_usage_records.cache_write_long_tokens` (V49)
+is the part of the cache writes made for the long retention, read from the provider's breakdown of
+its writes by lifetime; `llm_prices.cache_write_long_usd_per_mtok` prices them, and the cost view
+charges short and long writes each at its own price. Absent, a long write is priced as input, the
+rule of the other cache prices. The usage endpoint and the invocation's usage report it, and the
+eval harness records it per run and per scenario (`cache_escritura_larga`).
+
 ## References
 
 - ADR 0001 — RLS escape hatches

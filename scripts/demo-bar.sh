@@ -20,7 +20,8 @@
 #   CAUCE_OPERATOR_ID   the operator tenant id; default: from .quickstart.env, else GET /v1/me
 #   MODEL_PROVIDER      default anthropic   (needs ANTHROPIC_API_KEY on the instance)
 #   MODEL_NAME          default claude-sonnet-5-5
-#   MODEL_PRICE_INPUT, MODEL_PRICE_OUTPUT, MODEL_PRICE_CACHE_READ, MODEL_PRICE_CACHE_WRITE
+#   MODEL_PRICE_INPUT, MODEL_PRICE_OUTPUT, MODEL_PRICE_CACHE_READ, MODEL_PRICE_CACHE_WRITE,
+#   MODEL_PRICE_CACHE_WRITE_LONG (the one-hour write)
 #                       US$ per million tokens; default: the list price of claude-sonnet-5-5 or
 #                       claude-haiku-5-5, none for
 #                       another model (its usage is then reported unpriced)
@@ -222,14 +223,15 @@ echo "   Owner agent:    $OWNER_AGENT_ID"
 # model its agents use, once: a price is never changed, a new one is a new row.
 # The list prices checked in examples/hosteleria/evals/precios.yaml (Haiku's, for prompts up to 100K).
 case "$MODEL_PROVIDER/$MODEL_NAME" in
-    anthropic/claude-sonnet-5-5) default_in=2.00 default_out=10.00 default_read=0.10 default_write=2.50 ;;
-    anthropic/claude-haiku-5-5)  default_in=0.10 default_out=0.50  default_read=0.01 default_write=0.125 ;;
-    *)                           default_in="" default_out="" default_read="" default_write="" ;;
+    anthropic/claude-sonnet-5-5) default_in=2.00 default_out=10.00 default_read=0.10 default_write=2.50 default_long=4.00 ;;
+    anthropic/claude-haiku-5-5)  default_in=0.10 default_out=0.50  default_read=0.01 default_write=0.125 default_long=0.20 ;;
+    *)                           default_in="" default_out="" default_read="" default_write="" default_long="" ;;
 esac
 PRICE_IN="$(read_knob MODEL_PRICE_INPUT "$default_in")"
 PRICE_OUT="$(read_knob MODEL_PRICE_OUTPUT "$default_out")"
 PRICE_READ="$(read_knob MODEL_PRICE_CACHE_READ "$default_read")"
 PRICE_WRITE="$(read_knob MODEL_PRICE_CACHE_WRITE "$default_write")"
+PRICE_LONG="$(read_knob MODEL_PRICE_CACHE_WRITE_LONG "$default_long")"
 has_price() { # every page of the price table
     local cursor="" page
     while :; do
@@ -248,10 +250,11 @@ elif [ -z "$PRICE_IN" ] || [ -z "$PRICE_OUT" ]; then
     echo "   limit would refuse it. Set MODEL_PRICE_INPUT and MODEL_PRICE_OUTPUT (US\$ per million tokens)."
 else
     say "Adding the price of $MODEL_PROVIDER / $MODEL_NAME..."
-    api POST /v1/llm-prices "$(printf '{"provider":"%s","model":"%s","input_usd_per_mtok":%s,"output_usd_per_mtok":%s%s%s}' \
+    api POST /v1/llm-prices "$(printf '{"provider":"%s","model":"%s","input_usd_per_mtok":%s,"output_usd_per_mtok":%s%s%s%s}' \
         "$MODEL_PROVIDER" "$MODEL_NAME" "$PRICE_IN" "$PRICE_OUT" \
         "${PRICE_READ:+,\"cache_read_usd_per_mtok\":$PRICE_READ}" \
-        "${PRICE_WRITE:+,\"cache_write_usd_per_mtok\":$PRICE_WRITE}")" > /dev/null
+        "${PRICE_WRITE:+,\"cache_write_usd_per_mtok\":$PRICE_WRITE}" \
+        "${PRICE_LONG:+,\"cache_write_long_usd_per_mtok\":$PRICE_LONG}")" > /dev/null
     echo "   Added."
 fi
 

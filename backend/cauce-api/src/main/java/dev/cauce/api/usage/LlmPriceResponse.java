@@ -14,11 +14,12 @@ public record LlmPriceResponse(UUID id,
                                BigDecimal outputUsdPerMtok,
                                BigDecimal cacheReadUsdPerMtok,
                                BigDecimal cacheWriteUsdPerMtok,
+                               BigDecimal cacheWriteLongUsdPerMtok,
                                Instant validFrom) {
 
     public static LlmPriceResponse from(LlmPrice price) {
         return new LlmPriceResponse(price.id(), price.tenantId(), price.provider(), price.model(),
                 price.inputUsdPerMtok(), price.outputUsdPerMtok(), price.cacheReadUsdPerMtok(),
-                price.cacheWriteUsdPerMtok(), price.validFrom());
+                price.cacheWriteUsdPerMtok(), price.cacheWriteLongUsdPerMtok(), price.validFrom());
     }
 }

@@ -42,6 +42,9 @@ public class LlmPriceEntity {
     @Column(name = "cache_write_usd_per_mtok", updatable = false, precision = 12, scale = 6)
     private BigDecimal cacheWriteUsdPerMtok;
 
+    @Column(name = "cache_write_long_usd_per_mtok", updatable = false, precision = 12, scale = 6)
+    private BigDecimal cacheWriteLongUsdPerMtok;
+
     @Column(name = "valid_from", nullable = false, updatable = false)
     private Instant validFrom;
 
@@ -51,7 +54,7 @@ public class LlmPriceEntity {
 
     public LlmPriceEntity(UUID id, UUID tenantId, String provider, String model, BigDecimal inputUsdPerMtok,
                           BigDecimal outputUsdPerMtok, BigDecimal cacheReadUsdPerMtok,
-                          BigDecimal cacheWriteUsdPerMtok, Instant validFrom) {
+                          BigDecimal cacheWriteUsdPerMtok, BigDecimal cacheWriteLongUsdPerMtok, Instant validFrom) {
         this.id = id;
         this.tenantId = tenantId;
         this.provider = provider;
@@ -60,6 +63,7 @@ public class LlmPriceEntity {
         this.outputUsdPerMtok = outputUsdPerMtok;
         this.cacheReadUsdPerMtok = cacheReadUsdPerMtok;
         this.cacheWriteUsdPerMtok = cacheWriteUsdPerMtok;
+        this.cacheWriteLongUsdPerMtok = cacheWriteLongUsdPerMtok;
         this.validFrom = validFrom;
     }
 
@@ -93,6 +97,10 @@ public class LlmPriceEntity {
 
     public BigDecimal getCacheWriteUsdPerMtok() {
         return cacheWriteUsdPerMtok;
+    }
+
+    public BigDecimal getCacheWriteLongUsdPerMtok() {
+        return cacheWriteLongUsdPerMtok;
     }
 
     public Instant getValidFrom() {

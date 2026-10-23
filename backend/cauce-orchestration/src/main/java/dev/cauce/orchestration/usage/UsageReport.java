@@ -40,15 +40,15 @@ public record UsageReport(UUID tenantId, LocalDate from, LocalDate to, Granulari
     /**
      * The usage of one tenant (or one of its agents) in one period. {@code period} is
      * {@code yyyy-MM-dd} for a day and {@code yyyy-MM} for a month. {@code inputTokens} includes the
-     * cached parts. A conversation counts in a period when the model was called in it during that
+     * cached parts, and {@code cacheWriteLongTokens} is the part of the writes made for a long retention. A conversation counts in a period when the model was called in it during that
      * period. {@code costUsd} is the cost of the priced calls, null when none was priced;
      * {@code unpricedCalls} are the calls with no price in force when they were made.
      *
      * @param agentId null when the report is grouped by tenant
      */
     public record Row(String period, UUID tenantId, UUID agentId, long inputTokens, long cacheReadTokens,
-                      long cacheWriteTokens, long outputTokens, long calls, long conversations, BigDecimal costUsd,
-                      long unpricedCalls) {
+                      long cacheWriteTokens, long cacheWriteLongTokens, long outputTokens, long calls,
+                      long conversations, BigDecimal costUsd, long unpricedCalls) {
 
         public Row {
             Objects.requireNonNull(period, "period");
@@ -61,7 +61,7 @@ public record UsageReport(UUID tenantId, LocalDate from, LocalDate to, Granulari
                     : other.costUsd == null ? costUsd : costUsd.add(other.costUsd);
             return new Row(period, tenantId, null, inputTokens + other.inputTokens,
                     cacheReadTokens + other.cacheReadTokens, cacheWriteTokens + other.cacheWriteTokens,
-                    outputTokens + other.outputTokens, calls + other.calls, conversations + other.conversations, cost,
+                    cacheWriteLongTokens + other.cacheWriteLongTokens, outputTokens + other.outputTokens, calls + other.calls, conversations + other.conversations, cost,
                     unpricedCalls + other.unpricedCalls);
         }
     }

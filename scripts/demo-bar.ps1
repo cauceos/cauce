@@ -15,7 +15,8 @@
 # Settings (environment or .env): CAUCE_API_URL (default http://localhost:8080), CAUCE_API_KEY
 # (default: the quickstart's, from .quickstart.env), CAUCE_OPERATOR_ID, MODEL_PROVIDER (default
 # anthropic), MODEL_NAME (default claude-sonnet-5-5), MODEL_PRICE_INPUT, MODEL_PRICE_OUTPUT,
-# MODEL_PRICE_CACHE_READ, MODEL_PRICE_CACHE_WRITE (US$ per million tokens; default:
+# MODEL_PRICE_CACHE_READ, MODEL_PRICE_CACHE_WRITE, MODEL_PRICE_CACHE_WRITE_LONG (the one-hour write;
+# US$ per million tokens; default:
 # the list price of claude-sonnet-5-5 or claude-haiku-5-5, none for another model), TELEGRAM_CUSTOMER_BOT_TOKEN,
 # TELEGRAM_OWNER_BOT_TOKEN, PUBLIC_URL (required with a token), TELEGRAM_API_URL (a stub, for
 # testing this script). Re-running reuses the ids saved in .demo-bar.env
@@ -211,14 +212,15 @@ Write-Host "   Owner agent:    $OwnerAgentId"
 # model its agents use, once: a price is never changed, a new one is a new row.
 # The list prices checked in examples/hosteleria/evals/precios.yaml (Haiku's, for prompts up to 100K).
 switch ("$ModelProvider/$ModelName") {
-    'anthropic/claude-sonnet-5-5' { $defaults = @('2.00', '10.00', '0.10', '2.50') }
-    'anthropic/claude-haiku-5-5'  { $defaults = @('0.10', '0.50', '0.01', '0.125') }
-    default                       { $defaults = @('', '', '', '') }
+    'anthropic/claude-sonnet-5-5' { $defaults = @('2.00', '10.00', '0.10', '2.50', '4.00') }
+    'anthropic/claude-haiku-5-5'  { $defaults = @('0.10', '0.50', '0.01', '0.125', '0.20') }
+    default                       { $defaults = @('', '', '', '', '') }
 }
 $priceIn    = Get-Setting 'MODEL_PRICE_INPUT' $defaults[0]
 $priceOut   = Get-Setting 'MODEL_PRICE_OUTPUT' $defaults[1]
 $priceRead  = Get-Setting 'MODEL_PRICE_CACHE_READ' $defaults[2]
 $priceWrite = Get-Setting 'MODEL_PRICE_CACHE_WRITE' $defaults[3]
+$priceLong  = Get-Setting 'MODEL_PRICE_CACHE_WRITE_LONG' $defaults[4]
 function Test-Price {
     $cursor = $null
     do {
@@ -242,6 +244,7 @@ if (Test-Price) {
         output_usd_per_mtok = [decimal]::Parse($priceOut, [Globalization.CultureInfo]::InvariantCulture) }
     if ($priceRead) { $price.cache_read_usd_per_mtok = [decimal]::Parse($priceRead, [Globalization.CultureInfo]::InvariantCulture) }
     if ($priceWrite) { $price.cache_write_usd_per_mtok = [decimal]::Parse($priceWrite, [Globalization.CultureInfo]::InvariantCulture) }
+    if ($priceLong) { $price.cache_write_long_usd_per_mtok = [decimal]::Parse($priceLong, [Globalization.CultureInfo]::InvariantCulture) }
     Invoke-Api POST '/v1/llm-prices' ($price | ConvertTo-Json) | Out-Null
     Write-Host "   Added."
 }
