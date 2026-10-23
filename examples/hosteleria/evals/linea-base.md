@@ -1,8 +1,9 @@
 # Línea base del agente de clientes del bar
 
-**Vigente:** la batería completa [`2026-10-23T0914Z`](historial/2026-10-23T0914Z-claude-sonnet-5-5.json)
-con el prompt vigente, N = 5: **100 %** global en sus 40 escenarios y **todos los bloqueantes al
-100 %**.
+**Vigente:** la batería completa [`2026-10-23T1138Z`](historial/2026-10-23T1138Z-claude-sonnet-5-5.json)
+con el prompt vigente, N = 5: **99 %** global en sus 40 escenarios y **todos los bloqueantes al
+100 %**. Es la primera con tokens y coste por escenario: de ella sale el
+[coste por conversación del bar](#coste-por-conversación-del-bar).
 
 **Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `8f304cf5de01` · **Juez:** ninguno
 
@@ -22,9 +23,106 @@ arreglos de comprobación y prompt → **97 %**, bloqueantes al 100 % (`1543Z`) 
 H3.8** (100 % → 20 %), provocada por el prompt nuevo → corrección del prompt → **H3.8 al 100 %**
 sin romper G1, G2, H4.1, H4.4, H4.6 ni H4.7 (`1559Z`) → **98 %** con la batería completa sobre el
 prompt corregido (`0732Z`) → arreglos del arnés y del orden de los mensajes, y escenarios G3 y
-H3.13 → **100 %** (`0914Z`). El experimento R1 (`0941Z`) no cambia la línea base: se rechazó.
+H3.13 → **100 %** (`0914Z`). El experimento R1 (`0941Z`) no cambia la línea base: se rechazó. →
+**99 %** (`1138Z`), mismo prompt, con tokens por escenario: H3.13 al 80 %, variabilidad.
 
-## Línea base vigente · 2026-10-23T0914Z
+## Línea base vigente · 2026-10-23T1138Z
+
+| Commit | Huella del prompt | Turnos de modelo | Coste |
+|---|---|---|---|
+| `80e1da0`¹ | `8f304cf5de01` | 270 | 1,6253 US$ |
+
+¹ Con cambios sin commitear: solo un resumen inválido en `historial/` (ver abajo), apartado después.
+
+| Entrada | Leída de caché | Escrita en caché | Salida |
+|---|---|---|---|
+| 3.587.111 | 3.474.394 (96,9 %) | 110.957 | 64.955 |
+
+- Mismo prompt y misma batería que `0914Z`: lo que cambió es el sistema (consumo y límites por
+  tenant, ADR 0010), que no toca la conversación del agente. Coste y tokens, dentro del ruido
+  (+0,5 %).
+- Sin caché, las mismas llamadas habrían costado 7,8238 US$: la caché ahorró un **79 %**, un techo
+  por lo mismo que en las líneas base anteriores.
+
+### Tasas
+
+**Global: 99 %** (159 de 160 repeticiones con todas sus comprobaciones en verde).
+
+| Tarea | Tasa |
+|---|---|
+| 00 · anclaje | 100 % |
+| 01 · información | 100 % |
+| 02 · carta | 100 % |
+| 03 · reservas | 98 % |
+| 04 · escalado | 100 % |
+| 05 · resumen | 100 % |
+
+Reglas generales (G1 y carta sin inventar), al 100 %. **Bloqueantes por debajo del 100 %:** ninguno.
+**Avisos bajo el umbral del 90 %:** H3.13, al 80 %. 110 comprobaciones de rúbrica, pendientes de juez.
+
+**H3.13 · variabilidad observada, sin cambio de prompt.** En la repetición 3, a «Mesa para 4 el
+viernes para cenar, soy Ana, 600 123 456» dicho un viernes, el agente consultó hoy y el viernes
+siguiente y propuso la reserva de hoy (`propose_booking`, plazas retenidas) con los datos leídos
+para que Ana confirmase, en vez de preguntar antes cuál de los dos era. No confirmó nada: la retención
+caduca si no se confirma. Uno de cinco y en un escenario de aviso; en `0914Z` estaba al 100 %. Se
+anota y no se toca el prompt.
+
+**Un resumen inválido apartado.** Una ejecución anterior del mismo día (`1109Z`) se hizo con una
+clave rechazada (HTTP 401): ningún turno llegó al modelo y el arnés, que deja fuera de las tasas los
+fallos de ejecución, la registró como completa al 100 %. No se commitea. Desde este cambio, un 401
+para la ejecución en el primer turno y una ejecución sin repeticiones válidas, o con más fallos de
+ejecución que el umbral, falla y no se escribe en el historial.
+
+## Coste por conversación del bar
+
+Con los tokens por escenario de `1138Z`: 31 escenarios de conversación, 155 conversaciones (N = 5) y
+270 mensajes de cliente, **1,74 mensajes por conversación** de media. Precios de `precios.yaml`,
+versión 2026-10-22 (`claude-sonnet-5-5`: 2,00 US$ por millón de entrada, 0,20 leída de caché, 2,50
+escrita, 10,00 de salida). El coste de cada escenario suma exactamente el de la ejecución.
+
+### Medido: caché caliente
+
+En el arnés, los mensajes de una conversación van seguidos y la caché no caduca entre ellos: el
+96,9 % de la entrada se leyó de caché.
+
+| | Media | Más barato | Más caro |
+|---|---|---|---|
+| Por conversación | **0,0105 US$** | 0,0030 US$ (H2.5, 1 mensaje) | 0,0713 US$ (G3, 10 mensajes) |
+| Por mensaje | **0,0060 US$** | 0,0030 US$ (H2.5) | 0,0117 US$ (H3.8) |
+
+### Estimado: caché fría
+
+**No está medido.** Supone el peor caso de un bar real: entre mensaje y mensaje del cliente pasan más
+de los 5 minutos que dura la caché, así que cada mensaje empieza con la caché vacía. La primera
+llamada al modelo de cada mensaje escribe en caché todo su prompt (2,50 US$ por millón en vez de
+0,20) y las siguientes del mismo mensaje lo leen. Se supone que esa primera llamada lleva la mitad de
+la entrada del mensaje (unas dos llamadas por mensaje, medido el 2026-10-22). El techo es sin caché
+ninguna (toda la entrada a 2,00 US$ por millón).
+
+| | Media | Más barato | Más caro | Techo sin caché |
+|---|---|---|---|---|
+| Por conversación | **0,0371 US$** | 0,0146 US$ (H2.5) | 0,2860 US$ (G3) | 0,0505 US$ |
+| Por mensaje | **0,0213 US$** | 0,0146 US$ (H2.5) | 0,0310 US$ (H3.8) | 0,0290 US$ |
+
+### Proyección mensual, estimada
+
+Con la conversación media de la batería (1,74 mensajes):
+
+| Conversaciones al mes | Caché caliente | Caché fría | Techo sin caché |
+|---|---|---|---|
+| 300 | 3,15 US$ | 11,13 US$ | 15,14 US$ |
+| 900 | 9,44 US$ | 33,39 US$ | 45,43 US$ |
+| 1.500 | 15,73 US$ | 55,65 US$ | 75,71 US$ |
+
+- **Lo que más mueve la cifra es la longitud de la conversación**, no el número de conversaciones:
+  el coste por mensaje crece con el historial (G3, diez mensajes, lleva 18.666 tokens de entrada por
+  mensaje frente a unos 10.000 en los escenarios de uno). Las conversaciones de la batería son cortas
+  a propósito; con datos de producción, la longitud media real sustituye a la de 1,74.
+- La realidad de un bar queda entre caliente y fría: los mensajes seguidos de una misma persona
+  (en menos de 5 minutos) leen de caché.
+- Es el coste de proveedor a precio de lista (ADR 0010), sin el juez, sin canales y sin margen.
+
+## Línea base anterior · 2026-10-23T0914Z · 100 %
 
 | Commit | Huella del prompt | Turnos de modelo | Coste |
 |---|---|---|---|
