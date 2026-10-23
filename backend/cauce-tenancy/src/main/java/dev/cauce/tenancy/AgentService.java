@@ -56,6 +56,15 @@ public class AgentService {
         this.toolCatalog = toolCatalog;
     }
 
+    /**
+     * The provider ids an agent's {@code model_provider} may name on this instance: the set
+     * {@code createAgent} validates against. Whether each is configured (its adapter registered)
+     * is the LLM registry's to say, not this set's.
+     */
+    public Set<String> supportedProviders() {
+        return SUPPORTED_PROVIDERS;
+    }
+
     /** Creates an agent with the default LLM configuration. */
     @Transactional
     public Agent createAgent(UUID tenantId, String name, String systemPrompt,

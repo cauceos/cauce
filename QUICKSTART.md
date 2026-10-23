@@ -201,7 +201,8 @@ Agents live under a CLIENT tenant, so the chain is operator → partner → clie
 KEY=<bootstrap key>   OP=<operator uuid from the same log line>
 BASE=http://localhost:8080
 
-# 0. Which providers this instance has configured (an agent on another one cannot answer)
+# 0. The providers an agent may name, each with "configured": true/false on this instance
+#    (an agent on an unconfigured one cannot answer)
 curl -s $BASE/v1/llm-providers -H "Authorization: Bearer $KEY"
 
 # 1. Tenant chain

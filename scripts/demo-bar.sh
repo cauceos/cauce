@@ -128,7 +128,7 @@ save() { echo "$1=$2" >> "$STATE_FILE"; }
 # The agents' provider must be configured on the instance, or every message they get fails: ask
 # it before creating anything.
 providers=$(api GET /v1/llm-providers)
-printf '%s' "$providers" | grep -q "\"id\":\"$MODEL_PROVIDER\"" || fail "The instance has no '$MODEL_PROVIDER' provider configured (it answered: $providers).
+printf '%s' "$providers" | grep -q "\"id\":\"$MODEL_PROVIDER\",\"configured\":true" || fail "The instance has no '$MODEL_PROVIDER' provider configured (it answered: $providers).
        anthropic on the quickstart's stack: put ANTHROPIC_API_KEY in .env and recreate the app,
        docker compose --profile api up -d. Or the local model (small, a weaker waiter):
        MODEL_PROVIDER=ollama MODEL_NAME=qwen2.5:3b ./scripts/demo-bar.sh"

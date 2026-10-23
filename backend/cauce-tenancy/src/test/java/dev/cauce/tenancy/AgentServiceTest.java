@@ -64,6 +64,11 @@ class AgentServiceTest {
     }
 
     @Test
+    void supportedProviders_isTheSetCreateAgentAccepts() {
+        assertThat(service.supportedProviders()).containsExactlyInAnyOrder("openai", "anthropic", "mistral", "ollama");
+    }
+
+    @Test
     void createAgent_whenTenantNotFound_throwsTenantNotFound() {
         UUID tenantId = UUID.randomUUID();
         when(tenantRepository.findById(tenantId)).thenReturn(Optional.empty());

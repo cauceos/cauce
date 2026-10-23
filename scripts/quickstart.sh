@@ -164,7 +164,7 @@ fi
 # The agent's provider must be one the instance has configured: ask it, instead of letting the
 # first message fail. A key added to .env reaches the app only when compose recreates it.
 providers=$(api GET /v1/llm-providers)
-printf '%s' "$providers" | grep -q "\"id\":\"$PROVIDER\"" || fail "This instance has no '$PROVIDER' provider configured (it answered: $providers).
+printf '%s' "$providers" | grep -q "\"id\":\"$PROVIDER\",\"configured\":true" || fail "This instance has no '$PROVIDER' provider configured (it answered: $providers).
        anthropic: put ANTHROPIC_API_KEY in .env, then recreate the app: docker compose --profile api up -d --build"
 
 # A state file written before the client was saved: the client is the existing agent's tenant.

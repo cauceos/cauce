@@ -101,7 +101,7 @@ if (-not $OperatorId) { $OperatorId = (Invoke-Api GET '/v1/me').tenant_id }
 
 # The agents' provider must be configured on the instance, or every message they get fails: ask
 # it before creating anything.
-$providers = @((Invoke-Api GET '/v1/llm-providers').data | ForEach-Object { $_.id })
+$providers = @((Invoke-Api GET '/v1/llm-providers').data | Where-Object { $_.configured } | ForEach-Object { $_.id })
 if ($providers -notcontains $ModelProvider) {
     Fail ("The instance has no '$ModelProvider' provider configured (it has: $($providers -join ', ')). " +
         "anthropic on the quickstart's stack: put ANTHROPIC_API_KEY in .env and recreate the app, " +

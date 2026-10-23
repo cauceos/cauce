@@ -174,7 +174,7 @@ $script:ApiKey = $state['CAUCE_API_KEY']
 
 # The agent's provider must be one the instance has configured: ask it, instead of letting the
 # first message fail. A key added to .env reaches the app only when compose recreates it.
-$providers = @((Invoke-Api GET '/v1/llm-providers').data | ForEach-Object { $_.id })
+$providers = @((Invoke-Api GET '/v1/llm-providers').data | Where-Object { $_.configured } | ForEach-Object { $_.id })
 if ($providers -notcontains $Provider) {
     Fail "This instance has no '$Provider' provider configured (it has: $($providers -join ', ')). anthropic: put ANTHROPIC_API_KEY in .env, then recreate the app: docker compose --profile api up -d --build"
 }
