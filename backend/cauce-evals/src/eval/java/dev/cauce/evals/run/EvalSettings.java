@@ -24,11 +24,13 @@ import java.util.Optional;
  * @param judgeModel the judge's model ({@code evals.juez.modelo}); without it there is no judge
  * @param rehearsal a run against {@link RehearsalProvider} instead of the model ({@code evals.simulacro}):
  *        no tokens, nothing written to the history
+ * @param elidePastLookups the customer agent leaves earlier turns' lookups out of its context
+ *        ({@code evals.r1=true}; deferred R1, off by default): the run is marked R1 in the report
  */
 public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<String> scenarioIds,
                            int repetitions, double limitUsd, boolean confirmed, double warningThreshold,
                            String agentProvider, String agentModel, Optional<String> judgeProvider,
-                           Optional<String> judgeModel, boolean rehearsal) {
+                           Optional<String> judgeModel, boolean rehearsal, boolean elidePastLookups) {
 
     public static EvalSettings fromSystemProperties() {
         String root = System.getProperty("evals.raiz");
@@ -46,7 +48,8 @@ public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<
                 property("evals.modelo").orElse("claude-sonnet-5-5"),
                 property("evals.juez.proveedor"),
                 property("evals.juez.modelo"),
-                property("evals.simulacro").map(Boolean::parseBoolean).orElse(false));
+                property("evals.simulacro").map(Boolean::parseBoolean).orElse(false),
+                property("evals.r1").map(Boolean::parseBoolean).orElse(false));
     }
 
     public Path packDir() {
@@ -57,15 +60,17 @@ public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<
         return packDir().resolve("evals");
     }
 
-    /** How the scenarios were selected, for the report. */
+    /** How the scenarios were selected, for the report, and whether the run measures R1. */
     public String selection() {
+        String selected;
         if (!scenarioIds.isEmpty()) {
-            return String.join(",", scenarioIds);
+            selected = String.join(",", scenarioIds);
+        } else if (!tasks.isEmpty()) {
+            selected = (tasks.size() == 1 ? "tarea " : "tareas ") + String.join(",", tasks);
+        } else {
+            selected = "batería completa";
         }
-        if (!tasks.isEmpty()) {
-            return (tasks.size() == 1 ? "tarea " : "tareas ") + String.join(",", tasks);
-        }
-        return "batería completa";
+        return elidePastLookups ? selected + " · R1: consultas pasadas omitidas" : selected;
     }
 
     private static List<String> list(String name) {

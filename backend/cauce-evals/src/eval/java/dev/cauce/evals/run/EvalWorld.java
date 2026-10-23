@@ -2,6 +2,7 @@ package dev.cauce.evals.run;
 
 import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
@@ -97,7 +98,7 @@ final class EvalWorld {
 
     /** A new business for {@code scenario} under {@code partnerId}, with its {@code previo} seeded. */
     static EvalWorld create(Services s, Scenario scenario, UUID partnerId, int repetition, String agentProvider,
-                            String agentModel) throws Exception {
+                            String agentModel, boolean elidePastLookups) throws Exception {
         UUID tenantId = asTenant(partnerId, () -> s.tenants().createClient(scenario.id() + " #" + repetition, partnerId)
                 .id());
         String auth = "Bearer " + asTenant(tenantId, () -> s.apiKeys().createApiKey(tenantId, "eval").plaintextKey());
@@ -109,6 +110,16 @@ final class EvalWorld {
         JsonNode fallbacks = s.json().readTree(read(s.packDir().resolve("respaldo.json")));
         UUID customer = createAgent(s, auth, tenantId, "Camarero", read(s.packDir().resolve("agente-clientes.prompt.md")),
                 names(grants.get("agente_clientes")), fallbacks.get("agente_clientes").asText(), agentProvider, agentModel);
+        if (elidePastLookups) {
+            // Deferred R1, measured: the customer agent leaves earlier turns' lookups out of its context.
+            String patched = s.mockMvc().perform(patch("/v1/agents/" + customer).header(HttpHeaders.AUTHORIZATION, auth)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(s.json().writeValueAsString(Map.of("elide_past_lookups", true))))
+                    .andReturn().getResponse().getContentAsString();
+            if (!s.json().readTree(patched).path("elide_past_lookups").asBoolean(false)) {
+                throw new IllegalStateException("Could not turn R1 on for the customer agent: " + patched);
+            }
+        }
         UUID owner = createAgent(s, auth, tenantId, "Canal del dueño", read(s.packDir().resolve("agente-dueno.prompt.md")),
                 names(grants.get("agente_dueno")), fallbacks.get("agente_dueno").asText(), agentProvider, agentModel);
         EvalWorld world = new EvalWorld(s, scenario, tenantId, auth, customer);

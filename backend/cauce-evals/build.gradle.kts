@@ -57,6 +57,7 @@ dependencies {
 
 // ./gradlew :cauce-evals:eval [-Pevals.tarea=03 | -Pevals.tarea=01,02] [-Pevals.escenarios=H3.10,H3.11] [-Pevals.n=5]
 //     [-Pevals.limite=10] [-Pevals.confirmar=true] [-Pevals.juez.proveedor=openai -Pevals.juez.modelo=...]
+//     [-Pevals.r1=true]
 val evalTask = tasks.register<Test>("eval") {
     description = "Runs the sector agents' scenarios against the real model (ADR 0009). Spends tokens."
     group = "verification"

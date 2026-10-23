@@ -14,6 +14,7 @@ cd backend
 ./gradlew :cauce-evals:eval -Pevals.confirmar=true           # acepta una estimación sobre el límite
 ./gradlew :cauce-evals:eval -Pevals.juez.proveedor=openai -Pevals.juez.modelo=<modelo>   # el juez
 ./gradlew :cauce-evals:eval -Pevals.simulacro=true -Pevals.n=1   # sin modelo ni coste: prueba la fontanería
+./gradlew :cauce-evals:eval -Pevals.r1=true                     # el agente omite las consultas de turnos anteriores (R1)
 ```
 
 Necesita la clave del modelo del agente (`ANTHROPIC_API_KEY`). El juez (E6) es opcional: sin él, o

@@ -82,13 +82,19 @@ public final class Report {
         s.warnings().forEach(w -> out.append("Aviso: ").append(w).append("\n"));
         if (s.tokens() != null) {
             RunSummary.Tokens t = s.tokens();
-            out.append(String.format("Tokens: %d de entrada (%s leídos de caché), %d de salida, en %d turnos de modelo\n",
+            out.append(String.format("Tokens: %d de entrada (%s leídos de caché), %d de salida, en %d turnos de modelo"
+                            + " (%d de entrada por turno)\n",
                     t.input(), t.input() == 0 ? "0 %" : Aggregation.percent((double) t.cacheRead() / t.input()),
-                    t.output(), t.modelTurns()));
+                    t.output(), t.modelTurns(), perTurn(t)));
         }
         out.append("Coste: ").append(s.costUsd() == null ? "sin precio en precios.yaml"
                 : String.format("%.4f US$", s.costUsd())).append("\n");
         return out.toString();
+    }
+
+    /** Input tokens per model turn: what eliding past lookups (R1) is meant to lower. */
+    static long perTurn(RunSummary.Tokens t) {
+        return t.modelTurns() == 0 ? 0 : Math.round((double) t.input() / t.modelTurns());
     }
 
     public static String markdown(RunSummary s, Optional<RunSummary> previous, List<ScenarioRun> runs) {
@@ -103,7 +109,8 @@ public final class Report {
         if (s.tokens() != null) {
             md.append("- Tokens: ").append(s.tokens().input()).append(" de entrada (").append(s.tokens().cacheRead())
                     .append(" leídos de caché), ").append(s.tokens().output()).append(" de salida, en ")
-                    .append(s.tokens().modelTurns()).append(" turnos; juez ").append(s.tokens().judgeInput()).append(" / ")
+                    .append(s.tokens().modelTurns()).append(" turnos (").append(perTurn(s.tokens()))
+                    .append(" de entrada por turno); juez ").append(s.tokens().judgeInput()).append(" / ")
                     .append(s.tokens().judgeOutput()).append("\n");
         }
         md.append("- Coste estimado: ").append(s.costUsd() == null ? "sin precio en precios.yaml"

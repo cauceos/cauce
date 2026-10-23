@@ -120,6 +120,19 @@ class AggregationTest {
                 .contains("EXECUTION_FAILURE · turno 2 · fallo de ejecución: " + cause);
     }
 
+    @Test
+    void theReports_giveTheInputTokensPerModelTurn_whatR1IsMeantToLower() {
+        Aggregation.Meta meta = new Aggregation.Meta("2026-10-23T08:00Z", "abc", false, "anthropic/m", "ninguno",
+                "pendiente de juez", "f", 5, "batería completa · R1: consultas pasadas omitidas", true,
+                new RunSummary.Tokens(26_000, 20_000, 1_000, 500, 2, 0, 0), 0.01, "2026-10-22");
+        Scenario s = scenario("G3", Level.WARNING, "00-anclaje");
+        List<ScenarioRun> runs = List.of(run(s, 1, CheckResult.pass("turno 1 · herramientas", "")));
+        RunSummary summary = Aggregation.summarize(runs, List.of(), 0.9, meta);
+
+        assertThat(Report.console(summary)).contains("(13000 de entrada por turno)").contains("R1: consultas pasadas omitidas");
+        assertThat(Report.markdown(summary, Optional.empty(), runs)).contains("2 turnos (13000 de entrada por turno)");
+    }
+
     private static double rate(RunSummary summary, String id) {
         return summary.scenarios().stream().filter(r -> r.id().equals(id)).findFirst().orElseThrow().rate();
     }
