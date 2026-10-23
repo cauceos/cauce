@@ -76,6 +76,10 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Fine-grained authorization.** API keys carry no scopes or roles (empty authorities); deferred until a concrete need exists. Authorization is tenant scoping via RLS only.
 - **Backend CORS configuration.** The API has no CORS config, so browsers block cross-origin calls; the playground bridges it with its dev-server proxy. When a browser client must target instances without the proxy, add property-driven CORS to cauce-api (`cauce.api.cors.allowed-origins`, default empty = disabled) as its own unit.
 
+## Row-level security
+
+- **Set-based visibility beyond the usage ledger, only when a measurement asks for it.** V47 replaced the per-row visibility function of `llm_usage_records` with `tenant_id IN (SELECT visible_tenant_ids())`, evaluated once per query: the same subtree, from 10-30 s to 2 s for a partner's month over 400,000 rows. Every other table still calls its `<entity>_is_visible` function per row. A table moves to the pattern when a measured read of it is slow, never by default, and its migration comes with a test of equivalent visibility: operator, partner and client see the row, a sibling and no context do not (`LlmUsageRecordingIT` is the ledger's). Candidates, by volume: `messages`, the audit tables (`audit_outbox`, `audit_log_entries`), `bookings`.
+
 ## Observability
 
 - **Events outside the invocation path.** Tenancy and API operations emit no `OrchestrationEvent`-style events.
