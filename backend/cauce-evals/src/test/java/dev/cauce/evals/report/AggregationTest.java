@@ -166,6 +166,31 @@ class AggregationTest {
     }
 
     @Test
+    void aRunIsComparedWithTheLastOfItsModel_orTheLastOfAnyTheFirstTime(@org.junit.jupiter.api.io.TempDir
+                                                                         java.nio.file.Path dir) throws Exception {
+        java.nio.file.Files.writeString(dir.resolve("2026-10-23T1138Z-claude-sonnet-5-5.json"), """
+                {"fecha": "2026-10-23T11:38Z", "modelo": "anthropic/claude-sonnet-5-5", "n": 5, "completa": true,
+                 "tasa_global": 0.99, "arbol_con_cambios": false, "escenarios": []}
+                """);
+        java.nio.file.Files.writeString(dir.resolve("2026-10-22T1340Z-claude-haiku-5-5.json"), """
+                {"fecha": "2026-10-22T13:40Z", "modelo": "anthropic/claude-haiku-5-5", "n": 5, "completa": true,
+                 "tasa_global": 0.9, "arbol_con_cambios": false, "escenarios": []}
+                """);
+
+        assertThat(Report.previous(dir, "anthropic/claude-haiku-5-5")).get()
+                .extracting(RunSummary::date).isEqualTo("2026-10-22T13:40Z");
+        assertThat(Report.previous(dir, "anthropic/claude-opus-5-5")).get()
+                .extracting(RunSummary::date).isEqualTo("2026-10-23T11:38Z");
+        Aggregation.Meta haiku = new Aggregation.Meta("2026-10-24T09:00Z", "abc", false, "anthropic/claude-opus-5-5",
+                "ninguno", "pendiente de juez", "f", 5, "batería completa", true, null, null, "2026-10-23", null);
+        List<ScenarioRun> runs = List.of(run(scenario("G1", Level.BLOCKING, "00-anclaje"), 1,
+                CheckResult.pass("turno 1 · herramientas", "")));
+        assertThat(Report.markdown(Aggregation.summarize(runs, List.of(), 0.9, haiku),
+                Report.previous(dir, "anthropic/claude-opus-5-5"), runs))
+                .contains("- Comparada con `2026-10-23T11:38Z` · `anthropic/claude-sonnet-5-5` (otro modelo)");
+    }
+
+    @Test
     void aSummaryWrittenBeforeTheScenarioTokens_stillReads(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
             throws Exception {
         java.nio.file.Files.writeString(dir.resolve("2026-10-22T1340Z-m.json"), """

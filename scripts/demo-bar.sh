@@ -21,7 +21,8 @@
 #   MODEL_PROVIDER      default anthropic   (needs ANTHROPIC_API_KEY on the instance)
 #   MODEL_NAME          default claude-sonnet-5-5
 #   MODEL_PRICE_INPUT, MODEL_PRICE_OUTPUT, MODEL_PRICE_CACHE_READ, MODEL_PRICE_CACHE_WRITE
-#                       US$ per million tokens; default: claude-sonnet-5-5's list price, none for
+#                       US$ per million tokens; default: the list price of claude-sonnet-5-5 or
+#                       claude-haiku-5-5, none for
 #                       another model (its usage is then reported unpriced)
 #   TELEGRAM_CUSTOMER_BOT_TOKEN, TELEGRAM_OWNER_BOT_TOKEN   from @BotFather (optional)
 #   PUBLIC_URL          public https URL that reaches the instance, e.g. a tunnel (required with a token)
@@ -219,12 +220,12 @@ echo "   Owner agent:    $OWNER_AGENT_ID"
 
 # Usage is priced from the operator's price table (ADR 0010, S1). The demo adds the price of the
 # model its agents use, once: a price is never changed, a new one is a new row.
-if [ "$MODEL_PROVIDER/$MODEL_NAME" = "anthropic/claude-sonnet-5-5" ]; then
-    # The list price checked in examples/hosteleria/evals/precios.yaml.
-    default_in=2.00 default_out=10.00 default_read=0.20 default_write=2.50
-else
-    default_in="" default_out="" default_read="" default_write=""
-fi
+# The list prices checked in examples/hosteleria/evals/precios.yaml (Haiku's, for prompts up to 100K).
+case "$MODEL_PROVIDER/$MODEL_NAME" in
+    anthropic/claude-sonnet-5-5) default_in=2.00 default_out=10.00 default_read=0.10 default_write=2.50 ;;
+    anthropic/claude-haiku-5-5)  default_in=0.10 default_out=0.50  default_read=0.01 default_write=0.125 ;;
+    *)                           default_in="" default_out="" default_read="" default_write="" ;;
+esac
 PRICE_IN="$(read_knob MODEL_PRICE_INPUT "$default_in")"
 PRICE_OUT="$(read_knob MODEL_PRICE_OUTPUT "$default_out")"
 PRICE_READ="$(read_knob MODEL_PRICE_CACHE_READ "$default_read")"

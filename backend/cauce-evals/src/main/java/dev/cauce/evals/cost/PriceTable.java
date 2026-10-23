@@ -48,8 +48,12 @@ public record PriceTable(@JsonProperty("version") String version, @JsonProperty(
         }
     }
 
-    /** The prices of {@code model} by {@code provider}, if the table has them. */
+    /**
+     * The prices of {@code model} by {@code provider}, if the table has them: of several rows, the
+     * one checked last (a price change is a new row with its date).
+     */
     public Optional<Price> priceOf(String provider, String model) {
-        return prices.stream().filter(p -> p.provider().equals(provider) && p.model().equals(model)).findFirst();
+        return prices.stream().filter(p -> p.provider().equals(provider) && p.model().equals(model))
+                .max(java.util.Comparator.comparing(Price::checkedOn));
     }
 }

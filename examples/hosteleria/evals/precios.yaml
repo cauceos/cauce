@@ -1,8 +1,10 @@
 # Precios por millón de tokens, en US$, para estimar el coste de una ejecución (ADR 0009, E10).
 # El coste se calcula en el informe a partir de los tokens medidos; nunca se guarda como dato.
 # Cada fila lleva la fecha en que se comprobó el precio publicado. Si el precio cambia, se añade
-# una fila nueva con su fecha: el historial dice con qué precios se estimó cada ejecución.
-version: 2026-10-22
+# una fila nueva con su fecha: el historial dice con qué precios se estimó cada ejecución. Para un
+# modelo, vale la fila comprobada más recientemente.
+# Fuente: https://platform.claude.com/docs/en/about-claude/pricing (caché de 5 minutos).
+version: 2026-10-23
 precios:
   - proveedor: anthropic
     modelo: claude-sonnet-5-5
@@ -11,3 +13,21 @@ precios:
     cache_lectura: 0.20
     salida: 10.00
     comprobado: 2026-10-22
+  # La lectura de caché bajó a 0,05 × entrada (nota 2 de la página de precios).
+  - proveedor: anthropic
+    modelo: claude-sonnet-5-5
+    entrada: 2.00
+    cache_escritura: 2.50
+    cache_lectura: 0.10
+    salida: 10.00
+    comprobado: 2026-10-23
+  # Precio para prompts de hasta 100.000 tokens. Por encima, una llamada paga 0,50 / 0,625 / 0,05 /
+  # 2,50 (cinco veces más): el arnés no lo modela, porque suma tokens de toda la ejecución. En esta batería
+  # la entrada media por mensaje más alta es la de G3, 18.666 tokens con Sonnet (1138Z).
+  - proveedor: anthropic
+    modelo: claude-haiku-5-5
+    entrada: 0.10
+    cache_escritura: 0.125
+    cache_lectura: 0.01
+    salida: 0.50
+    comprobado: 2026-10-23

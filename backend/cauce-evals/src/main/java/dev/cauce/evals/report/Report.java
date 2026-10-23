@@ -37,21 +37,35 @@ public final class Report {
 
     /** The most recent summary in {@code history} (files sort by date), if any. */
     public static Optional<RunSummary> previous(Path history) {
+        return previous(history, null);
+    }
+
+    /**
+     * The summary a run of {@code agentModel} (provider/model) is compared with: the most recent of the
+     * same model, or, the first time a model runs, the most recent of any. The report names it.
+     */
+    public static Optional<RunSummary> previous(Path history, String agentModel) {
         if (!Files.isDirectory(history)) {
             return Optional.empty();
         }
         try (Stream<Path> files = Files.list(history)) {
-            Optional<Path> latest = files.filter(f -> f.toString().endsWith(".json"))
-                    .max(Comparator.comparing(f -> f.getFileName().toString()));
-            return latest.map(file -> {
-                try {
-                    return JSON.readValue(file.toFile(), RunSummary.class);
-                } catch (IOException e) {
-                    throw new UncheckedIOException("Cannot read " + file, e);
-                }
-            });
+            List<RunSummary> newestFirst = files.filter(f -> f.toString().endsWith(".json"))
+                    .sorted(Comparator.comparing((Path f) -> f.getFileName().toString()).reversed())
+                    .map(Report::read)
+                    .toList();
+            return newestFirst.stream().filter(s -> agentModel != null && agentModel.equals(s.agentModel()))
+                    .findFirst()
+                    .or(() -> newestFirst.stream().findFirst());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    private static RunSummary read(Path file) {
+        try {
+            return JSON.readValue(file.toFile(), RunSummary.class);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Cannot read " + file, e);
         }
     }
 
@@ -105,6 +119,8 @@ public final class Report {
                 .append(s.calibration()).append(")\n");
         md.append("- Commit `").append(s.commit()).append(s.dirtyTree() ? "` con cambios sin commitear" : "`")
                 .append(" · huella del prompt `").append(abbreviate(s.promptFootprint())).append("`\n");
+        previous.ifPresent(p -> md.append("- Comparada con `").append(p.date()).append("` · `").append(p.agentModel())
+                .append("`").append(java.util.Objects.equals(s.agentModel(), p.agentModel()) ? "" : " (otro modelo)").append("\n"));
         md.append("- N = ").append(s.repetitions()).append(" · selección: ").append(s.selection())
                 .append(s.complete() ? "" : " · **incompleta: se alcanzó el límite de coste**").append("\n");
         if (s.tokens() != null) {

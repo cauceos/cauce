@@ -16,8 +16,8 @@ class CostEstimateTest {
     void thePacksPrices_load_andPriceCachedPartsApart() {
         PriceTable.Price sonnet = PRICES.priceOf("anthropic", "claude-sonnet-5-5").orElseThrow();
 
-        // 1M input of which 800k read and 100k written, 10k output.
-        assertThat(sonnet.cost(1_000_000, 800_000, 100_000, 10_000)).isCloseTo(0.2 + 0.16 + 0.25 + 0.1, within(1e-9));
+        // 1M input of which 800k read (0.10 since 2026-10-23) and 100k written, 10k output.
+        assertThat(sonnet.cost(1_000_000, 800_000, 100_000, 10_000)).isCloseTo(0.2 + 0.08 + 0.25 + 0.1, within(1e-9));
         assertThat(PRICES.priceOf("openai", "otro")).isEmpty();
     }
 
