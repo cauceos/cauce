@@ -78,6 +78,7 @@ class InvocationApiIT extends AbstractApiIntegrationTest {
     private UUID operatorId;
     private String operatorAuth;
     private String clientAuth;
+    private UUID clientId;
     private UUID agentId;
 
     @BeforeEach
@@ -90,7 +91,7 @@ class InvocationApiIT extends AbstractApiIntegrationTest {
         operatorId = tenantService.bootstrapOperator("Operator").id();
         operatorAuth = bearerFor(operatorId);
         UUID partnerId = createPartner();
-        UUID clientId = createClient(bearerFor(partnerId), partnerId);
+        clientId = createClient(bearerFor(partnerId), partnerId);
         clientAuth = bearerFor(clientId);
         agentId = createAgent(clientAuth, clientId);
     }
@@ -156,6 +157,33 @@ class InvocationApiIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
                 .andExpect(jsonPath("$.failure_reason").value((Object) null))
                 .andExpect(jsonPath("$.completed_at").exists());
+    }
+
+    @Test
+    void getInvocation_agentOnAnUnconfiguredProvider_failsAsAgentMisconfigured() throws Exception {
+        // mistral is a provider id the service accepts, but no adapter registers it here: off by default.
+        String created = mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "mistral",
+                                "mistral-large-latest", null, null, null, null)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID mistralAgentId = UUID.fromString(objectMapper.readTree(created).get("id").asText());
+        String accepted = mockMvc.perform(postAs(clientAuth, "/v1/agents/" + mistralAgentId + "/messages",
+                        new PostMessageRequest("user-1", "Hola")))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
+        UUID invocationId = UUID.fromString(objectMapper.readTree(accepted).get("invocation_id").asText());
+
+        worker.pollAndProcess();
+        awaitTerminalStatus(invocationId, "FAILED");
+
+        // The instance's setup, not a provider outage: never INTERNAL_ERROR nor PROVIDER_UNAVAILABLE.
+        mockMvc.perform(getAs(clientAuth, "/v1/invocations/" + invocationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failure_reason").value("AGENT_MISCONFIGURED"));
+        assertThat(jdbc.queryForObject(
+                "SELECT last_error FROM pending_invocations WHERE id = ?", String.class, invocationId))
+                .contains("'mistral' is not configured on this instance");
     }
 
     @Test

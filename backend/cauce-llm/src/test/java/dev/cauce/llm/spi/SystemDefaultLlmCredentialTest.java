@@ -25,6 +25,11 @@ class SystemDefaultLlmCredentialTest {
     }
 
     @Test
+    void apiKeyVariable_isTheVariableTheCredentialReads() {
+        assertThat(SystemDefaultLlmCredential.apiKeyVariable("anthropic")).isEqualTo("ANTHROPIC_API_KEY");
+    }
+
+    @Test
     void getOrganizationId_emptyWhenAbsent() {
         SystemDefaultLlmCredential credential =
                 new SystemDefaultLlmCredential("anthropic", new MockEnvironment());

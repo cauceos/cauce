@@ -21,6 +21,7 @@ import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.EmptyReplyException;
+import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
@@ -288,6 +289,21 @@ class PendingInvocationWorkerTest {
                 eq(claimed.id()), anyString(), eq(InvocationFailureType.AGENT_CONFIGURATION));
         verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
                 InvocationFailureType.AGENT_CONFIGURATION);
+    }
+
+    @Test
+    void processInvocation_whenTheProviderIsNotConfigured_marksFailedAsAgentConfiguration() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new LlmProviderNotAvailableException("LLM provider 'anthropic' is not configured"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        // Setup, not an outage: never SETUP_ERROR (INTERNAL_ERROR) nor a provider failure.
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.AGENT_CONFIGURATION));
+        verify(pendingInvocationService, never()).markAbandoned(any(), anyString(), any());
+        verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
     }
 
     @Test

@@ -80,6 +80,8 @@ class OrchestratorServiceTest {
     private static final Instant FIXED = Instant.parse("2026-06-13T10:15:30Z");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-23T10:00:00Z"), ZoneOffset.UTC);
 
+    private final MockEnvironment environment = new MockEnvironment();
+
     private final UUID invocationId = UUID.randomUUID();
     private final UUID conversationId = UUID.randomUUID();
     private final UUID tenantId = UUID.randomUUID();
@@ -420,8 +422,25 @@ class OrchestratorServiceTest {
 
         assertThatThrownBy(() ->
                 serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId))
-                .isInstanceOf(LlmProviderNotAvailableException.class);
+                .isInstanceOf(LlmProviderNotAvailableException.class)
+                .hasMessageContaining("'anthropic' is not configured")
+                .hasMessageContaining("ANTHROPIC_API_KEY is not set");
         verifyNoInteractions(errorRecorder);
+    }
+
+    @Test
+    void respondToMessage_whenKeyIsSetButNoProviderRegistered_saysSoInsteadOfAMissingKey() {
+        stubLoadAndEchoAppend();
+        environment.setProperty("ANTHROPIC_API_KEY", "sk-ant-test");
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.empty());
+        when(registry.availableProviders()).thenReturn(Set.of("ollama"));
+
+        assertThatThrownBy(() ->
+                serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId))
+                .isInstanceOf(LlmProviderNotAvailableException.class)
+                .hasMessageContaining("ANTHROPIC_API_KEY is set, but no adapter registered")
+                .hasMessageNotContaining("sk-ant-test")
+                .hasMessageContaining("[ollama]");
     }
 
     @Test
@@ -756,7 +775,7 @@ class OrchestratorServiceTest {
         AgenticLoopProperties loop = new AgenticLoopProperties();
         loop.setMaxIterations(maxIterations);
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
-                new MockEnvironment(), errorRecorder, usageRecorder, eventPublisher,
+                environment, errorRecorder, usageRecorder, eventPublisher,
                 replyDispatcherProvider, loop, spendGuard,
                 dev.cauce.orchestration.tracing.MessageTracing.noop(), CLOCK);
     }

@@ -13,8 +13,9 @@ public enum FailureReason {
     /** The LLM provider rejected the request with a non-retryable error. */
     PROVIDER_ERROR,
     /**
-     * The model rejected a parameter the agent configures (e.g. a sampling temperature): fix the
-     * agent's configuration.
+     * The agent's configuration cannot be served: the model rejected a parameter it configures
+     * (e.g. a sampling temperature), it names a provider this instance has not configured, or its
+     * model has no price under a spend limit. Fix the agent or the instance; not a provider outage.
      */
     AGENT_MISCONFIGURED,
     /** The LLM provider kept failing transiently until the retry budget ran out. */

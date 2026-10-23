@@ -199,10 +199,8 @@ public class OrchestratorService {
         checkSpend(agent, conversationId);
 
         LlmCredential credential = new SystemDefaultLlmCredential(agent.modelProvider(), environment);
-        LlmProvider provider = llmProviderRegistry.getProvider(agent.modelProvider()).orElseThrow(() ->
-                new LlmProviderNotAvailableException("No LLM provider available for '"
-                        + agent.modelProvider() + "' (is its API key configured?). Available: "
-                        + llmProviderRegistry.availableProviders()));
+        LlmProvider provider = llmProviderRegistry.getProvider(agent.modelProvider())
+                .orElseThrow(() -> providerNotConfigured(agent.modelProvider()));
         List<ToolDefinition> toolDefinitions = toolDefinitions(agent);
         // Deferred R1, behind a per-agent switch: earlier turns' lookups the agent can repeat.
         Set<String> elidedLookups = agent.elidesPastLookups() ? toolRegistry.lookupTools() : Set.of();
@@ -328,6 +326,22 @@ public class OrchestratorService {
         log.warn("Conversation {} hit the tool-iteration cap ({})", conversationId, maxIterations);
         errorRecorder.recordError(conversationId, error);
         throw new MaxToolIterationsExceededException(error);
+    }
+
+    /**
+     * No provider registered under the agent's {@code model_provider}: this instance's setup, not
+     * the provider being down. The reason names the setting the system credential reads, so the
+     * fix is in the message (adapters register only when configured; the id stays opaque here).
+     */
+    private LlmProviderNotAvailableException providerNotConfigured(String providerId) {
+        String keyVariable = SystemDefaultLlmCredential.apiKeyVariable(providerId);
+        String keyValue = environment.getProperty(keyVariable);
+        String cause = keyValue == null || keyValue.isBlank()
+                ? keyVariable + " is not set"
+                : keyVariable + " is set, but no adapter registered that provider id (a typo, or the provider disabled?)";
+        return new LlmProviderNotAvailableException("LLM provider '" + providerId
+                + "' is not configured on this instance: " + cause
+                + ". Available: " + llmProviderRegistry.availableProviders());
     }
 
     /** ADR 0010, S6, S7: the client's spend limit, checked before the model is called at all. */

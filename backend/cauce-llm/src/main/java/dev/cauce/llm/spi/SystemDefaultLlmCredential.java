@@ -19,11 +19,17 @@ public final class SystemDefaultLlmCredential implements LlmCredential {
     private final Environment environment;
 
     public SystemDefaultLlmCredential(String providerId, Environment environment) {
-        String prefix = Objects.requireNonNull(providerId, "providerId")
-                .toUpperCase(Locale.ROOT);
-        this.apiKeyVar = prefix + "_API_KEY";
-        this.organizationVar = prefix + "_ORG_ID";
+        this.apiKeyVar = apiKeyVariable(providerId);
+        this.organizationVar = providerId.toUpperCase(Locale.ROOT) + "_ORG_ID";
         this.environment = Objects.requireNonNull(environment, "environment");
+    }
+
+    /**
+     * The variable this credential reads the key of {@code providerId} from: {@code <PROVIDER>_API_KEY}.
+     * Public so that a provider found missing can be reported by the setting it lacks.
+     */
+    public static String apiKeyVariable(String providerId) {
+        return Objects.requireNonNull(providerId, "providerId").toUpperCase(Locale.ROOT) + "_API_KEY";
     }
 
     @Override

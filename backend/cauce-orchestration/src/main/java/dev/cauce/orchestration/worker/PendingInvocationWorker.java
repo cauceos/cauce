@@ -11,6 +11,7 @@ import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.EmptyReplyException;
+import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
@@ -178,6 +179,10 @@ public class PendingInvocationWorker {
         }
         if (e instanceof SpendLimitReachedException) {
             return InvocationFailureType.SPEND_LIMIT_REACHED;
+        }
+        if (e instanceof LlmProviderNotAvailableException) {
+            // The agent names a provider this instance has not configured: setup, not an outage.
+            return InvocationFailureType.AGENT_CONFIGURATION;
         }
         if (e instanceof UnpricedModelException) {
             // ADR 0010, S7: a limit that cannot price the agent's model is the agent's configuration to fix.
