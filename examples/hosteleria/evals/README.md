@@ -16,6 +16,7 @@ cd backend
 ./gradlew :cauce-evals:eval -Pevals.simulacro=true -Pevals.n=1   # sin modelo ni coste: prueba la fontanería
 ./gradlew :cauce-evals:eval -Pevals.r1=true                     # el agente omite las consultas de turnos anteriores (R1)
 ./gradlew :cauce-evals:eval -Pevals.modelo=claude-haiku-5-5     # otro modelo del agente (-Pevals.proveedor, anthropic por defecto)
+./gradlew :cauce-evals:eval -Pevals.retencion=SHORT             # otra caché que la del paquete (retencion-cache.json)
 ```
 
 Necesita la clave del modelo del agente (`ANTHROPIC_API_KEY`). El modelo del agente es el de la demo

@@ -22,6 +22,20 @@ class AgentTest {
     }
 
     @Test
+    void promptCacheRetention_isShortByDefault_andSurvivesTheOtherEdits() {
+        Agent agent = Agent.create(UUID.randomUUID(), "Camarero", "Eres el camarero.", "anthropic", "claude-sonnet-5-5");
+        Agent long_ = agent.withPromptCacheRetention(PromptCacheRetention.LONG);
+
+        assertThat(agent.promptCacheRetention()).isEqualTo(PromptCacheRetention.SHORT);
+        assertThat(long_.promptCacheRetention()).isEqualTo(PromptCacheRetention.LONG);
+        assertThat(long_.edited("Otro", null, null).promptCacheRetention()).isEqualTo(PromptCacheRetention.LONG);
+        assertThat(long_.withPastLookupsElided(true).promptCacheRetention()).isEqualTo(PromptCacheRetention.LONG);
+        assertThat(long_.retooled(java.util.List.of("search_catalog")).promptCacheRetention())
+                .isEqualTo(PromptCacheRetention.LONG);
+        assertThatThrownBy(() -> agent.withPromptCacheRetention(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
     void withPastLookupsElided_isOffByDefault_andSurvivesTheOtherEdits() {
         Agent agent = newAgent();
         Agent eliding = agent.withPastLookupsElided(true);

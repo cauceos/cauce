@@ -128,7 +128,26 @@ class OrchestratorServiceTest {
         // Empty registry => no tools offered: the request is byte-identical to the single-shot path.
         assertThat(captor.getValue().tools()).isEmpty();
         assertThat(captor.getValue().messages()).extracting(LlmMessage::content).containsExactly("Hola");
+        assertThat(captor.getValue().cacheRetention()).isEqualTo(dev.cauce.core.agent.PromptCacheRetention.SHORT);
         verifyNoInteractions(errorRecorder);
+    }
+
+    @Test
+    void respondToMessage_asksForTheAgentsPromptCacheRetention() {
+        stubLoadAndEchoAppend();
+        agent = agent.withPromptCacheRetention(dev.cauce.core.agent.PromptCacheRetention.LONG);
+        when(gateway.load(conversationId, triggerId))
+                .thenReturn(new LoadedConversation(conversation, agent,
+                        List.of(Message.from(conversationId, MessageRole.USER, "Hola"))));
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(reply("ok"));
+
+        serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId);
+
+        ArgumentCaptor<LlmInvocation> captor = ArgumentCaptor.forClass(LlmInvocation.class);
+        verify(provider).invoke(captor.capture());
+        assertThat(captor.getValue().cacheablePrefix()).isTrue();
+        assertThat(captor.getValue().cacheRetention()).isEqualTo(dev.cauce.core.agent.PromptCacheRetention.LONG);
     }
 
     @Test

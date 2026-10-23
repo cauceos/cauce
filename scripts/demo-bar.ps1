@@ -6,7 +6,8 @@
 #      or creates them: a run never makes a second business on the same instance.
 #   2. Loads its sheet, menu and agenda from examples/hosteleria/bar-ejemplo.
 #   3. Finds or creates the customer agent (prompt + tool grant of the pack) and the owner agent,
-#      and adds the price of their model to the operator's price table when it has none.
+#      applies their prompt cache retention (retencion-cache.json), and adds the price of their
+#      model to the operator's price table when it has none.
 #   4. With TELEGRAM_CUSTOMER_BOT_TOKEN / TELEGRAM_OWNER_BOT_TOKEN (and PUBLIC_URL): binds each
 #      bot to its agent once and, on every run, renews its webhook secret, registers the webhook
 #      with Telegram and checks with getWebhookInfo that it took. Any failure stops the script.
@@ -203,6 +204,10 @@ if (-not $CustomerAgentId -or -not $OwnerAgentId) {
     Invoke-Api PATCH "/v1/agents/$OwnerAgentId" (@{ system_prompt = $ownerPrompt
         fallback_reply = $fallbacks.agente_dueno } | ConvertTo-Json) | Out-Null
 }
+# How long each agent asks the provider to keep its prompt cached (retencion-cache.json, ADR 0010 S9).
+$retention = Read-Utf8 "$Pack/retencion-cache.json" | ConvertFrom-Json
+Invoke-Api PATCH "/v1/agents/$CustomerAgentId" (@{ prompt_cache_retention = $retention.agente_clientes } | ConvertTo-Json) | Out-Null
+Invoke-Api PATCH "/v1/agents/$OwnerAgentId" (@{ prompt_cache_retention = $retention.agente_dueno } | ConvertTo-Json) | Out-Null
 Write-Host "   Customer agent: $CustomerAgentId"
 Write-Host "   Owner agent:    $OwnerAgentId"
 

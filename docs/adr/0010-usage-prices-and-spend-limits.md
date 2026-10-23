@@ -130,6 +130,15 @@ charges short and long writes each at its own price. Absent, a long write is pri
 rule of the other cache prices. The usage endpoint and the invocation's usage report it, and the
 eval harness records it per run and per scenario (`cache_escritura_larga`).
 
+**S9 — The retention is a neutral hint, per agent.** The LLM SPI carries `PromptCacheRetention`
+(`SHORT`, minutes, the default; `LONG`, about an hour) next to `cacheablePrefix`; each adapter maps it
+to what its provider offers, and the Anthropic one asks for `"ttl": "1h"` on both of its breakpoints,
+the prefix and the conversation. It is an agent's setting (`agents.prompt_cache_retention`, V50,
+`PATCH /v1/agents/{id}`, audited with the configuration); a pack states it per agent
+(`retencion-cache.json`). The hospitality pack's customer agent uses `LONG`: its customers answer
+minutes apart. How many answers arrive within the hour is measured in production by the gap
+between a person's messages (S10).
+
 ## References
 
 - ADR 0001 — RLS escape hatches

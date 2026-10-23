@@ -113,7 +113,7 @@ class AgentControllerTest {
     void updateAgent_passesOnlyThePresentFields_andReturnsTheEditedAgent() throws Exception {
         UUID id = UUID.randomUUID();
         Agent agent = Agent.create(UUID.randomUUID(), "Bot", "Be brief.", "anthropic", "claude-opus-4-8");
-        given(agentService.updateAgent(id, null, "Be brief.", null, null)).willReturn(agent);
+        given(agentService.updateAgent(id, null, "Be brief.", null, null, null)).willReturn(agent);
 
         mockMvc.perform(patch("/v1/agents/" + id)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"system_prompt\":\"Be brief.\"}"))
@@ -131,7 +131,7 @@ class AgentControllerTest {
     @Test
     void updateAgent_notVisible_returns404() throws Exception {
         UUID id = UUID.randomUUID();
-        given(agentService.updateAgent(eq(id), any(), any(), any(), any()))
+        given(agentService.updateAgent(eq(id), any(), any(), any(), any(), any()))
                 .willThrow(new AgentNotFoundException("No agent found for id " + id));
 
         mockMvc.perform(patch("/v1/agents/" + id)

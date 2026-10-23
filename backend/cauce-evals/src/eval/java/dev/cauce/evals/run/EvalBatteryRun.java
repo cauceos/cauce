@@ -242,7 +242,8 @@ class EvalBatteryRun {
     private ScenarioRun conversation(EvalWorld.Services services, Scenario scenario, UUID partnerId, int rep, Menu menu,
                                      Optional<Judge> judge) throws Exception {
         EvalWorld world = EvalWorld.create(services, scenario, partnerId, rep, SETTINGS.agentProvider(),
-                SETTINGS.agentModel(), SETTINGS.elidePastLookups());
+                SETTINGS.agentModel(), SETTINGS.elidePastLookups(),
+                SETTINGS.cacheRetention());
         Checker checker = new Checker(world.codes(), world::resolveDate);
         List<CheckResult> results = new ArrayList<>();
         List<String> invocations = new ArrayList<>();
@@ -292,7 +293,8 @@ class EvalBatteryRun {
 
     private ScenarioRun digest(EvalWorld.Services services, Scenario scenario, UUID partnerId) throws Exception {
         EvalWorld world = EvalWorld.create(services, scenario, partnerId, 1, SETTINGS.agentProvider(),
-                SETTINGS.agentModel(), SETTINGS.elidePastLookups());
+                SETTINGS.agentModel(), SETTINGS.elidePastLookups(),
+                SETTINGS.cacheRetention());
         TurnTrace trace = world.dailyDigest(scenario.times() == null ? 1 : scenario.times());
         List<CheckResult> results = scenario.expectation() == null ? List.of()
                 : new Checker(world.codes(), world::resolveDate).check("resumen", scenario.expectation(), trace);

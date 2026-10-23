@@ -2,6 +2,7 @@ package dev.cauce.tenancy;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentNotFoundException;
+import dev.cauce.core.agent.PromptCacheRetention;
 import dev.cauce.core.agent.UnknownToolException;
 import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.tenant.InvalidTenantTierException;
@@ -150,11 +151,24 @@ public class AgentService {
     @Transactional
     public Agent updateAgent(UUID agentId, String name, String systemPrompt, String fallbackReply,
                              Boolean elidePastLookups) {
+        return updateAgent(agentId, name, systemPrompt, fallbackReply, elidePastLookups, null);
+    }
+
+    /**
+     * {@link #updateAgent(UUID, String, String, String, Boolean)}, plus how long the provider keeps the
+     * agent's prompt prefix cached ({@code null} keeps it; ADR 0010, S9).
+     */
+    @Transactional
+    public Agent updateAgent(UUID agentId, String name, String systemPrompt, String fallbackReply,
+                             Boolean elidePastLookups, PromptCacheRetention promptCacheRetention) {
         Agent current = agentRepository.findById(agentId).map(agentMapper::toDomain).orElseThrow(() ->
                 new AgentNotFoundException("No agent found for id " + agentId));
         Agent edited = current.edited(name, systemPrompt, fallbackReply);
         if (elidePastLookups != null) {
             edited = edited.withPastLookupsElided(elidePastLookups);
+        }
+        if (promptCacheRetention != null) {
+            edited = edited.withPromptCacheRetention(promptCacheRetention);
         }
         Agent saved = agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(edited)));
         auditRecorder.record(AdminAuditEvents.agentConfigurationUpdated(

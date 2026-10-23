@@ -62,6 +62,11 @@ class AgentMapperTest {
 
         assertThat(mapper.toDomain(mapper.toEntity(plain)).elidesPastLookups()).isFalse();
         assertThat(mapper.toDomain(mapper.toEntity(eliding)).elidesPastLookups()).isTrue();
+        assertThat(mapper.toDomain(mapper.toEntity(plain)).promptCacheRetention())
+                .isEqualTo(dev.cauce.core.agent.PromptCacheRetention.SHORT);
+        assertThat(mapper.toDomain(mapper.toEntity(plain.withPromptCacheRetention(
+                dev.cauce.core.agent.PromptCacheRetention.LONG))).promptCacheRetention())
+                .isEqualTo(dev.cauce.core.agent.PromptCacheRetention.LONG);
         assertThat(mapper.toEntity(eliding).isElidePastLookups()).isTrue();
     }
 

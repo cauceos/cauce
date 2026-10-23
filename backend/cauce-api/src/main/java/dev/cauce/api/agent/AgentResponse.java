@@ -2,6 +2,7 @@ package dev.cauce.api.agent;
 
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentStatus;
+import dev.cauce.core.agent.PromptCacheRetention;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -23,6 +24,7 @@ public record AgentResponse(
         String fallbackReply,
         List<String> tools,
         boolean elidePastLookups,
+        PromptCacheRetention promptCacheRetention,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -40,6 +42,7 @@ public record AgentResponse(
                 agent.fallbackReply().orElse(null),
                 agent.toolNames(),
                 agent.elidesPastLookups(),
+                agent.promptCacheRetention(),
                 agent.createdAt(),
                 agent.updatedAt());
     }

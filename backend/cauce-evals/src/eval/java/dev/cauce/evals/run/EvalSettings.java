@@ -29,12 +29,15 @@ import java.util.Optional;
  *        no tokens, nothing written to the history
  * @param elidePastLookups the customer agent leaves earlier turns' lookups out of its context
  *        ({@code evals.r1=true}; deferred R1, off by default): the run is marked R1 in the report
+ * @param cacheRetention the customer agent's prompt cache retention when it is not the pack's
+ *        ({@code evals.retencion=SHORT|LONG}); empty: the pack's {@code retencion-cache.json}
  */
 public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<String> scenarioIds,
                            int repetitions, double limitUsd, boolean confirmed, double warningThreshold,
                            double maxExecutionFailures,
                            String agentProvider, String agentModel, Optional<String> judgeProvider,
-                           Optional<String> judgeModel, boolean rehearsal, boolean elidePastLookups) {
+                           Optional<String> judgeModel, boolean rehearsal, boolean elidePastLookups,
+                           Optional<String> cacheRetention) {
 
     public static EvalSettings fromSystemProperties() {
         String root = System.getProperty("evals.raiz");
@@ -55,7 +58,8 @@ public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<
                 property("evals.juez.proveedor"),
                 property("evals.juez.modelo"),
                 property("evals.simulacro").map(Boolean::parseBoolean).orElse(false),
-                property("evals.r1").map(Boolean::parseBoolean).orElse(false));
+                property("evals.r1").map(Boolean::parseBoolean).orElse(false),
+                property("evals.retencion").map(value -> value.toUpperCase(java.util.Locale.ROOT)));
     }
 
     public Path packDir() {
@@ -76,7 +80,9 @@ public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<
         } else {
             selected = "batería completa";
         }
-        return elidePastLookups ? selected + " · R1: consultas pasadas omitidas" : selected;
+        String withRetention = cacheRetention.map(r -> selected + " · caché " + r + " (no la del paquete)")
+                .orElse(selected);
+        return elidePastLookups ? withRetention + " · R1: consultas pasadas omitidas" : withRetention;
     }
 
     private static List<String> list(String name) {

@@ -151,6 +151,28 @@ class AnthropicMessageMapperTest {
     }
 
     @Test
+    void toRequestJson_theLongRetention_asksForTheOneHourCache_onThePrefixAndTheConversation() throws Exception {
+        LlmInvocation invocation = baseInvocation()
+                .systemPrompt("Eres el asistente de un bar.")
+                .messages(List.of(LlmMessage.user("Hola")))
+                .tools(List.of(new ToolDefinition("search_catalog", "Busca en la carta.",
+                        Map.of("type", "object", "properties", Map.of()))))
+                .cacheablePrefix(true)
+                .cacheRetention(dev.cauce.core.agent.PromptCacheRetention.LONG)
+                .build();
+
+        String json = mapper.toRequestJson(invocation, 4096);
+
+        assertThat(json).contains("\"system\":[{\"type\":\"text\",\"text\":\"Eres el asistente de un bar.\","
+                + "\"cache_control\":{\"ttl\":\"1h\",\"type\":\"ephemeral\"}}]");
+        assertThat(json).endsWith(",\"cache_control\":{\"ttl\":\"1h\",\"type\":\"ephemeral\"}}");
+        // Without the cacheable prefix the retention says nothing: no marker at all.
+        assertThat(mapper.toRequestJson(baseInvocation().messages(List.of(LlmMessage.user("Hola")))
+                .cacheRetention(dev.cauce.core.agent.PromptCacheRetention.LONG).build(), 4096))
+                .doesNotContain("cache_control");
+    }
+
+    @Test
     void toRequestJson_aCacheablePrefix_marksTheEndOfThePrompt_andCachesTheConversationAutomatically()
             throws Exception {
         LlmInvocation invocation = baseInvocation()
@@ -168,6 +190,7 @@ class AnthropicMessageMapperTest {
                 + "\"cache_control\":{\"type\":\"ephemeral\"}},"
                 + "{\"type\":\"text\",\"text\":\"[orchestration_error] x\"}]");
         assertThat(json).endsWith(",\"cache_control\":{\"type\":\"ephemeral\"}}");
+        assertThat(json).doesNotContain("ttl");
         // Map keys sorted (records keep their declared order): the same bytes on every call.
         assertThat(json).contains("\"input_schema\":{\"properties\":{},\"type\":\"object\"}");
     }

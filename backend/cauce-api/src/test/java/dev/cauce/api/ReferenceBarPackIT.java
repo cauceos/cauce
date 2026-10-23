@@ -53,6 +53,10 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
                     .andExpect(jsonPath("$.fallback_reply").value(fallbacks.get(agent).asText()));
         }
         assertThat(grants.get("agente_clientes")).hasSize(11);
+        JsonNode retention = objectMapper.readTree(read("retencion-cache.json"));
+        assertThat(retention.get("agente_clientes").asText()).isEqualTo("LONG");
+        assertThat(dev.cauce.core.agent.PromptCacheRetention.valueOf(retention.get("agente_dueno").asText()))
+                .isNotNull();
     }
 
     private static String read(String file) throws Exception {

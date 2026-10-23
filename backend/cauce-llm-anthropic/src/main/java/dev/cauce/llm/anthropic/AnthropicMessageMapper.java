@@ -9,6 +9,7 @@ import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolContent;
 import dev.cauce.core.tool.ToolDefinition;
 import dev.cauce.core.tool.ToolResult;
+import dev.cauce.core.agent.PromptCacheRetention;
 import dev.cauce.llm.model.LlmInvocation;
 import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmRole;
@@ -40,7 +41,9 @@ import java.util.Map;
  * together; without a prompt the breakpoint goes on the last tool), and the request asks for
  * automatic caching of the conversation, which then reads back everything earlier calls wrote.
  * SYSTEM messages of the conversation follow the breakpoint in a block of their own. Without the
- * hint the request is exactly as before.
+ * hint the request is exactly as before. With the long retention, both markers ask for the one-hour
+ * cache ({@code "ttl": "1h"}); the API wants longer lifetimes before shorter ones, and here they are
+ * all the same.
  */
 final class AnthropicMessageMapper {
 
@@ -100,17 +103,19 @@ final class AnthropicMessageMapper {
         // before the system prompt, so a marker on the prompt caches both), and automatic caching
         // for the conversation, which only grows. SYSTEM messages of the conversation go after the
         // marker: they are not part of the agent's stable prefix.
+        // The long retention is the one-hour cache, for the prefix and the conversation alike.
+        Map<String, String> marker = invocation.cacheRetention() == PromptCacheRetention.LONG ? EPHEMERAL_1H : EPHEMERAL;
         List<AnthropicContentBlock> system = new ArrayList<>();
         if (agentPrompt != null) {
-            system.add(AnthropicContentBlock.text(agentPrompt).cached());
+            system.add(AnthropicContentBlock.text(agentPrompt).cached(marker));
         } else if (tools != null) {
-            tools.set(tools.size() - 1, tools.get(tools.size() - 1).cached());
+            tools.set(tools.size() - 1, tools.get(tools.size() - 1).cached(marker));
         }
         if (!systemMessages.isEmpty()) {
             system.add(AnthropicContentBlock.text(String.join("\n\n", systemMessages)));
         }
         return new AnthropicMessagesRequest(invocation.modelName(), maxTokens, system.isEmpty() ? null : system,
-                messages, invocation.temperature(), tools, EPHEMERAL);
+                messages, invocation.temperature(), tools, marker);
     }
 
     /**
@@ -155,6 +160,9 @@ final class AnthropicMessageMapper {
     /** The marker of a cache breakpoint, with the default (5-minute) lifetime. */
     static final Map<String, String> EPHEMERAL = Map.of("type", "ephemeral");
 
+    /** The marker of a cache breakpoint with the one-hour lifetime (a write costs 2 × input). */
+    static final Map<String, String> EPHEMERAL_1H = Map.of("type", "ephemeral", "ttl", "1h");
+
     // null system/temperature/tools/cache_control are omitted from the JSON payload. {@code system}
     // is a String, or a list of text blocks when part of it carries a cache breakpoint; a top-level
     // {@code cache_control} asks the API to cache the conversation up to its last block.
@@ -176,8 +184,8 @@ final class AnthropicMessageMapper {
             @JsonProperty("input_schema") Map<String, Object> inputSchema,
             @JsonProperty("cache_control") Map<String, String> cacheControl) {
 
-        AnthropicTool cached() {
-            return new AnthropicTool(name, description, inputSchema, EPHEMERAL);
+        AnthropicTool cached(Map<String, String> marker) {
+            return new AnthropicTool(name, description, inputSchema, marker);
         }
     }
 
@@ -214,9 +222,9 @@ final class AnthropicMessageMapper {
                     "tool_result", null, null, null, null, toolUseId, content, isError, null);
         }
 
-        /** This block as the end of a cached prefix. */
-        AnthropicContentBlock cached() {
-            return new AnthropicContentBlock(type, text, id, name, input, toolUseId, content, isError, EPHEMERAL);
+        /** This block as the end of a cached prefix, with {@code marker}'s lifetime. */
+        AnthropicContentBlock cached(Map<String, String> marker) {
+            return new AnthropicContentBlock(type, text, id, name, input, toolUseId, content, isError, marker);
         }
     }
 }

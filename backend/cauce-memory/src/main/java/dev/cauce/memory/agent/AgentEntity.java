@@ -1,6 +1,7 @@
 package dev.cauce.memory.agent;
 
 import dev.cauce.core.agent.AgentStatus;
+import dev.cauce.core.agent.PromptCacheRetention;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -69,6 +70,11 @@ public class AgentEntity {
     @Column(name = "elide_past_lookups", nullable = false)
     private boolean elidePastLookups;
 
+    /** How long the provider keeps the agent's prompt prefix cached (V50). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "prompt_cache_retention", nullable = false, length = 10)
+    private PromptCacheRetention promptCacheRetention = PromptCacheRetention.SHORT;
+
     protected AgentEntity() {
         // for JPA
     }
@@ -99,7 +105,16 @@ public class AgentEntity {
                        String modelName, Double temperature, Integer maxResponseTokens,
                        AgentStatus status, String fallbackReply, String[] toolNames, boolean elidePastLookups,
                        Instant createdAt, Instant updatedAt) {
+        this(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature, maxResponseTokens,
+                status, fallbackReply, toolNames, elidePastLookups, PromptCacheRetention.SHORT, createdAt, updatedAt);
+    }
+
+    public AgentEntity(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
+                       String modelName, Double temperature, Integer maxResponseTokens,
+                       AgentStatus status, String fallbackReply, String[] toolNames, boolean elidePastLookups,
+                       PromptCacheRetention promptCacheRetention, Instant createdAt, Instant updatedAt) {
         this.elidePastLookups = elidePastLookups;
+        this.promptCacheRetention = promptCacheRetention;
         this.fallbackReply = fallbackReply;
         this.toolNames = toolNames;
         this.id = id;
@@ -161,6 +176,10 @@ public class AgentEntity {
 
     public boolean isElidePastLookups() {
         return elidePastLookups;
+    }
+
+    public PromptCacheRetention getPromptCacheRetention() {
+        return promptCacheRetention;
     }
 
     public String getFallbackReply() {

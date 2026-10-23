@@ -1,5 +1,6 @@
 package dev.cauce.llm.model;
 
+import dev.cauce.core.agent.PromptCacheRetention;
 import dev.cauce.core.tool.ToolDefinition;
 import dev.cauce.llm.spi.LlmCredential;
 import java.util.List;
@@ -18,7 +19,9 @@ import java.util.Objects;
  * tools and the system prompt are the same on every call of this conversation and that the
  * messages only grow at the end. A provider that caches prompt prefixes may then cache them; one
  * that does not ignores it. It never changes what the model is sent, only how it may be billed,
- * and what was cached shows in {@link LlmUsage}.
+ * and what was cached shows in {@link LlmUsage}. {@code cacheRetention} says how long that prefix
+ * will be reused: {@link PromptCacheRetention#SHORT} (minutes, the default) or
+ * {@link PromptCacheRetention#LONG} (about an hour); a provider with one lifetime ignores it.
  */
 public record LlmInvocation(
         String modelName,
@@ -28,7 +31,8 @@ public record LlmInvocation(
         Integer maxTokens,
         Double temperature,
         LlmCredential credential,
-        boolean cacheablePrefix) {
+        boolean cacheablePrefix,
+        PromptCacheRetention cacheRetention) {
 
     public LlmInvocation {
         if (modelName == null || modelName.isBlank()) {
@@ -37,6 +41,7 @@ public record LlmInvocation(
         messages = List.copyOf(Objects.requireNonNull(messages, "messages"));
         tools = tools == null ? List.of() : List.copyOf(tools);
         Objects.requireNonNull(credential, "credential");
+        cacheRetention = cacheRetention == null ? PromptCacheRetention.SHORT : cacheRetention;
         if (maxTokens != null && maxTokens <= 0) {
             throw new IllegalArgumentException("maxTokens must be positive when set");
         }
@@ -59,6 +64,7 @@ public record LlmInvocation(
         private Double temperature;
         private LlmCredential credential;
         private boolean cacheablePrefix;
+        private PromptCacheRetention cacheRetention = PromptCacheRetention.SHORT;
 
         private Builder() {
         }
@@ -104,9 +110,15 @@ public record LlmInvocation(
             return this;
         }
 
+        /** See {@link LlmInvocation}: how long the cacheable prefix will be reused. */
+        public Builder cacheRetention(PromptCacheRetention cacheRetention) {
+            this.cacheRetention = cacheRetention;
+            return this;
+        }
+
         public LlmInvocation build() {
             return new LlmInvocation(modelName, messages, systemPrompt, tools, maxTokens, temperature, credential,
-                    cacheablePrefix);
+                    cacheablePrefix, cacheRetention);
         }
     }
 }

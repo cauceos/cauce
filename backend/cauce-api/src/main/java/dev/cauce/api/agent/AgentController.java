@@ -53,13 +53,13 @@ public class AgentController {
     }
 
     /**
-     * Edits the agent's name, system prompt, fallback reply and whether it elides past lookups; an
-     * absent field is unchanged. An agent outside the caller's scope is a 404.
+     * Edits the agent's name, system prompt, fallback reply, whether it elides past lookups and its
+     * prompt cache retention; an absent field is unchanged. An agent outside the caller's scope is a 404.
      */
     @PatchMapping("/v1/agents/{id}")
     public AgentResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateAgentRequest request) {
         return AgentResponse.from(agentService.updateAgent(id, request.name(), request.systemPrompt(),
-                request.fallbackReply(), request.elidePastLookups()));
+                request.fallbackReply(), request.elidePastLookups(), request.promptCacheRetention()));
     }
 
     @GetMapping("/v1/agents/{id}")

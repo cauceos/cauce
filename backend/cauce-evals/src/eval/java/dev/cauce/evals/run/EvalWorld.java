@@ -98,7 +98,8 @@ final class EvalWorld {
 
     /** A new business for {@code scenario} under {@code partnerId}, with its {@code previo} seeded. */
     static EvalWorld create(Services s, Scenario scenario, UUID partnerId, int repetition, String agentProvider,
-                            String agentModel, boolean elidePastLookups) throws Exception {
+                            String agentModel, boolean elidePastLookups, Optional<String> cacheRetention)
+            throws Exception {
         UUID tenantId = asTenant(partnerId, () -> s.tenants().createClient(scenario.id() + " #" + repetition, partnerId)
                 .id());
         String auth = "Bearer " + asTenant(tenantId, () -> s.apiKeys().createApiKey(tenantId, "eval").plaintextKey());
@@ -110,6 +111,16 @@ final class EvalWorld {
         JsonNode fallbacks = s.json().readTree(read(s.packDir().resolve("respaldo.json")));
         UUID customer = createAgent(s, auth, tenantId, "Camarero", read(s.packDir().resolve("agente-clientes.prompt.md")),
                 names(grants.get("agente_clientes")), fallbacks.get("agente_clientes").asText(), agentProvider, agentModel);
+        // How long the customer agent asks the provider to keep its prompt cached: the pack's, or the run's.
+        String retention = cacheRetention.orElse(s.json().readTree(read(s.packDir().resolve("retencion-cache.json")))
+                .get("agente_clientes").asText());
+        String retained = s.mockMvc().perform(patch("/v1/agents/" + customer).header(HttpHeaders.AUTHORIZATION, auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(s.json().writeValueAsString(Map.of("prompt_cache_retention", retention))))
+                .andReturn().getResponse().getContentAsString();
+        if (!retention.equals(s.json().readTree(retained).path("prompt_cache_retention").asText())) {
+            throw new IllegalStateException("Could not set the customer agent's cache retention: " + retained);
+        }
         if (elidePastLookups) {
             // Deferred R1, measured: the customer agent leaves earlier turns' lookups out of its context.
             String patched = s.mockMvc().perform(patch("/v1/agents/" + customer).header(HttpHeaders.AUTHORIZATION, auth)

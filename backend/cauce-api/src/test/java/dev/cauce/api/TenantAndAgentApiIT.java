@@ -117,6 +117,28 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
     }
 
     @Test
+    void patchAgent_setsThePromptCacheRetention_shortByDefault_andRejectsAnUnknownOne() throws Exception {
+        UUID partnerId = createPartner();
+        UUID clientId = createClient(bearerFor(partnerId), partnerId);
+        String clientAuth = bearerFor(clientId);
+        String body = mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null, null)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.prompt_cache_retention").value("SHORT"))
+                .andReturn().getResponse().getContentAsString();
+        String agentPath = "/v1/agents/" + objectMapper.readTree(body).get("id").asText();
+
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("prompt_cache_retention", "LONG")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.prompt_cache_retention").value("LONG"))
+                .andExpect(jsonPath("$.name").value("Bot"));
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("name", "Otro")))
+                .andExpect(jsonPath("$.prompt_cache_retention").value("LONG"));
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("prompt_cache_retention", "FOREVER")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void createAgent_withFallbackReply_storesIt_andRejectsAnOverlongOne() throws Exception {
         UUID partnerId = createPartner();
         UUID clientId = createClient(bearerFor(partnerId), partnerId);
