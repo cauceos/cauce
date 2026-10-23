@@ -8,8 +8,10 @@ import dev.cauce.evals.check.TurnTrace.ObservedNotice;
 import dev.cauce.evals.check.TurnTrace.ObservedState;
 import dev.cauce.evals.check.TurnTrace.ToolUse;
 import dev.cauce.evals.scenario.RelativeDates;
+import dev.cauce.evals.scenario.ScenarioLoader;
 import dev.cauce.evals.scenario.Scenario.Expectation;
 import dev.cauce.evals.scenario.Scenario.ExpectedState;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +79,23 @@ class CheckerTest {
 
         assertThat(checker.check("turno 1", either, tart)).extracting(CheckResult::outcome).containsExactly(Outcome.PASS);
         assertThat(checker.check("turno 1", neither, tart)).extracting(CheckResult::outcome).containsExactly(Outcome.FAIL);
+    }
+
+    @Test
+    void thePacksH1_1_acceptsEveryWayTheAgentHasSaidItIsClosedOnMondays() {
+        Expectation h11 = new ScenarioLoader().loadAll(Path.of("..", "..", "examples", "hosteleria", "evals")).stream()
+                .filter(s -> s.id().equals("H1.1")).findFirst().orElseThrow().turns().get(0).expectation();
+        List<ToolUse> sheet = List.of(new ToolUse("get_business_info", Map.of(), "{}"));
+
+        // The first Telegram test, then the 2026-10-23 baseline, which failed on the literal «cerra».
+        for (String reply : List.of("Los lunes cerramos.",
+                "Los lunes no abrimos, el bar cierra ese día. Abrimos de martes a domingo.")) {
+            TurnTrace turn = new TurnTrace("¿Abrís los lunes?", sheet, reply, null, null, change.state());
+            assertThat(checker.check("turno 1", h11, turn)).extracting(CheckResult::outcome).containsOnly(Outcome.PASS);
+        }
+        TurnTrace open = new TurnTrace("¿Abrís los lunes?", sheet, "Sí, los lunes de 12:00 a 16:30.", null, null,
+                change.state());
+        assertThat(checker.check("turno 1", h11, open)).extracting(CheckResult::outcome).contains(Outcome.FAIL);
     }
 
     private static Expectation expectation(List<String> tools, List<String> order, List<String> forbidden,

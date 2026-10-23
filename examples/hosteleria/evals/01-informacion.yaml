@@ -8,8 +8,8 @@
     - cliente: "¿Abrís los lunes?"
       espera:
         herramientas: [get_business_info]
-        # «cerramos» o «cerrado»: la prueba real respondió «Los lunes cerramos».
-        respuesta_contiene: ["cerra"]
+        # «cerramos» o «cerrado» (la prueba real), «cierra» o «no abrimos» (la línea base del 2026-10-23).
+        respuesta_contiene: ["cerra | cierra | no abrimos"]
 
 - id: H1.2
   titulo: Lo que no está en la ficha no se sabe, y queda registrado
