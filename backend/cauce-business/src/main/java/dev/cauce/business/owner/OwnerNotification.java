@@ -12,7 +12,7 @@ import java.util.UUID;
  * transaction of the fact it reports, sent later by the dispatcher, and kept with what happened to
  * it. NOT_SENT and FAILED are final and say why; the record stays readable whatever the channel did.
  *
- * @param subjectId the handoff or the digest the notice reports
+ * @param subjectId the handoff, the digest or the spend alert the notice reports
  */
 public record OwnerNotification(UUID id, UUID tenantId, Kind kind, UUID subjectId, String content, Status status,
                                 String reason, int attempts, Instant nextAttemptAt, Instant sentAt,
@@ -21,7 +21,11 @@ public record OwnerNotification(UUID id, UUID tenantId, Kind kind, UUID subjectI
     /** What the notice reports. */
     public enum Kind {
         HANDOFF,
-        DAILY_DIGEST
+        DAILY_DIGEST,
+        /** The business reached 80 % of its monthly spend limit (ADR 0010, S6). */
+        SPEND_WARNING,
+        /** The business reached its monthly spend limit: customers get the fallback reply. */
+        SPEND_LIMIT_REACHED
     }
 
     /** Where the notice is. */

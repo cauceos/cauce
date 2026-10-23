@@ -35,6 +35,12 @@ public enum InvocationFailureType {
     SETUP_ERROR,
 
     /**
+     * The client spent its monthly spend limit (ADR 0010, S6): the model is not called and the
+     * person gets the fallback reply until the month ends or the limit is raised — row FAILED.
+     */
+    SPEND_LIMIT_REACHED,
+
+    /**
      * The reaper abandoned an orphaned claim (worker died mid-processing) whose attempt
      * budget was exhausted — row ABANDONED.
      */

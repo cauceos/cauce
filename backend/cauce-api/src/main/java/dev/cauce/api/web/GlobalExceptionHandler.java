@@ -39,6 +39,7 @@ import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxRetriesExceededException;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
+import dev.cauce.orchestration.usage.OwnSpendLimitException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -120,6 +121,8 @@ public class GlobalExceptionHandler {
             Map.entry(ApiKeyAlreadyRevokedException.class, "api_key_already_revoked"),
             Map.entry(MaxRetriesExceededException.class, "max_retries_exceeded"),
             Map.entry(InvalidPendingInvocationTransitionException.class, "invalid_pending_invocation_transition"),
+            // 403 FORBIDDEN
+            Map.entry(OwnSpendLimitException.class, "spend_limit_set_by_ancestor"),
             // 422 UNPROCESSABLE_ENTITY
             Map.entry(InvalidTenantTierException.class, "invalid_tenant_tier"),
             Map.entry(UnknownToolException.class, "unknown_tool"),
@@ -233,6 +236,11 @@ public class GlobalExceptionHandler {
         // (set by ApiKeyAuthenticationFilter from the validated key). Reaching here is a server
         // bug — return a generic 500 with no internals, and log the full detail server-side.
         return serverError(HttpStatus.INTERNAL_SERVER_ERROR, ex, GENERIC_500_MESSAGE);
+    }
+
+    @ExceptionHandler(OwnSpendLimitException.class)
+    public ResponseEntity<ErrorResponse> handleForbidden(RuntimeException ex) {
+        return clientError(HttpStatus.FORBIDDEN, ex);
     }
 
     @ExceptionHandler({

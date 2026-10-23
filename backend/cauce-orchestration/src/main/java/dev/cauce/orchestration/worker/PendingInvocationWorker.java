@@ -9,6 +9,8 @@ import dev.cauce.orchestration.PendingInvocationService;
 import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.EmptyReplyException;
+import dev.cauce.orchestration.exception.SpendLimitReachedException;
+import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
@@ -145,6 +147,13 @@ public class PendingInvocationWorker {
         }
         if (e instanceof EmptyReplyException) {
             return InvocationFailureType.EMPTY_REPLY;
+        }
+        if (e instanceof SpendLimitReachedException) {
+            return InvocationFailureType.SPEND_LIMIT_REACHED;
+        }
+        if (e instanceof UnpricedModelException) {
+            // ADR 0010, S7: a limit that cannot price the agent's model is the agent's configuration to fix.
+            return InvocationFailureType.AGENT_CONFIGURATION;
         }
         return InvocationFailureType.SETUP_ERROR;
     }

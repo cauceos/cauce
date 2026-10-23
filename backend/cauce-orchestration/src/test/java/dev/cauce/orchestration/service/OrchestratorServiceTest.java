@@ -3,6 +3,7 @@ package dev.cauce.orchestration.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -45,9 +46,12 @@ import dev.cauce.orchestration.events.ToolExecuted;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
+import dev.cauce.orchestration.exception.SpendLimitReachedException;
+import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
 import dev.cauce.orchestration.usage.LlmUsageRecord;
 import dev.cauce.orchestration.usage.LlmUsageRecorder;
+import dev.cauce.orchestration.usage.SpendGuard;
 import dev.cauce.tools.clock.ClockTool;
 import dev.cauce.tools.spi.Tool;
 import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
@@ -84,6 +88,7 @@ class OrchestratorServiceTest {
     private LlmProviderRegistry registry;
     private OrchestrationErrorRecorder errorRecorder;
     private LlmUsageRecorder usageRecorder;
+    private SpendGuard spendGuard;
     private LlmProvider provider;
     private ApplicationEventPublisher eventPublisher;
     private AgentReplyDispatcher replyDispatcher;
@@ -98,6 +103,8 @@ class OrchestratorServiceTest {
         registry = Mockito.mock(LlmProviderRegistry.class);
         errorRecorder = Mockito.mock(OrchestrationErrorRecorder.class);
         usageRecorder = Mockito.mock(LlmUsageRecorder.class);
+        spendGuard = Mockito.mock(SpendGuard.class);
+        when(spendGuard.check(any())).thenReturn(SpendGuard.Verdict.ALLOWED);
         provider = Mockito.mock(LlmProvider.class);
         when(provider.id()).thenReturn(PROVIDER);
         eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
@@ -509,6 +516,35 @@ class OrchestratorServiceTest {
                 .hasExactlyElementsOfTypes(ContextAssembled.class, LlmInvoked.class);
     }
 
+    // === SPEND LIMIT (ADR 0010, S6, S7: checked before the model is called) ===
+
+    @Test
+    void respondToMessage_whenTheSpendLimitIsReached_recordsAnErrorAndNeverCallsTheModel() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(spendGuard.check(any())).thenReturn(SpendGuard.Verdict.LIMIT_REACHED);
+
+        assertThatThrownBy(() -> serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId))
+                .isInstanceOf(SpendLimitReachedException.class);
+
+        verify(provider, never()).invoke(any());
+        verify(errorRecorder).recordError(eq(conversationId), contains("spend limit"));
+        verifyNoInteractions(usageRecorder);
+    }
+
+    @Test
+    void respondToMessage_whenTheModelHasNoPriceUnderALimit_recordsAnErrorAndNeverCallsTheModel() {
+        stubLoadAndEchoAppend();
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(spendGuard.check(any())).thenReturn(SpendGuard.Verdict.UNPRICED_MODEL);
+
+        assertThatThrownBy(() -> serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId))
+                .isInstanceOf(UnpricedModelException.class);
+
+        verify(provider, never()).invoke(any());
+        verify(errorRecorder).recordError(eq(conversationId), contains(MODEL));
+    }
+
     // === USAGE RECORDING (per LLM call, before the LlmResponded event) ===
 
     @Test
@@ -699,7 +735,7 @@ class OrchestratorServiceTest {
         loop.setMaxIterations(maxIterations);
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
                 new MockEnvironment(), errorRecorder, usageRecorder, eventPublisher,
-                replyDispatcherProvider, loop, CLOCK);
+                replyDispatcherProvider, loop, spendGuard, CLOCK);
     }
 
     /** All lifecycle events published so far, in publication order. */

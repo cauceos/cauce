@@ -26,7 +26,9 @@ public enum FailureReason {
     /** A non-provider setup error (missing conversation/agent, misconfiguration, ...). */
     INTERNAL_ERROR,
     /** Processing stalled and the claim timed out. */
-    TIMEOUT;
+    TIMEOUT,
+    /** The client spent its monthly spend limit (ADR 0010, S6): the model was not called. */
+    SPEND_LIMIT_REACHED;
 
     /** Maps the internal failure taxonomy to the public vocabulary. */
     public static FailureReason from(InvocationFailureType type) {
@@ -38,6 +40,7 @@ public enum FailureReason {
             case EMPTY_REPLY -> EMPTY_REPLY;
             case SETUP_ERROR -> INTERNAL_ERROR;
             case REAPER_ABANDONED -> TIMEOUT;
+            case SPEND_LIMIT_REACHED -> SPEND_LIMIT_REACHED;
         };
     }
 }

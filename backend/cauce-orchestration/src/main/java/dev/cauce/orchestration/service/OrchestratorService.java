@@ -32,9 +32,12 @@ import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
+import dev.cauce.orchestration.exception.SpendLimitReachedException;
+import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
 import dev.cauce.orchestration.usage.LlmUsageRecord;
 import dev.cauce.orchestration.usage.LlmUsageRecorder;
+import dev.cauce.orchestration.usage.SpendGuard;
 import dev.cauce.tools.spi.Tool;
 import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
 import dev.cauce.tools.spi.ToolRegistry;
@@ -73,6 +76,11 @@ import org.springframework.stereotype.Service;
  * provider failure ({@link LlmProviderException}) is recorded and re-thrown (the worker retries
  * or fails it as before); exceeding the per-message cap ({@link AgenticLoopProperties}) records a SYSTEM error and
  * throws {@link MaxToolIterationsExceededException} (the worker fails the invocation).
+ *
+ * <p><b>Spend limit:</b> before the first model call, {@link SpendGuard} compares the client's
+ * spend this month with its limit (ADR 0010, S6): a reached limit, or a limit with the agent's model
+ * unpriced (S7), records a SYSTEM error and throws, so the worker fails the invocation and the
+ * person gets the fallback reply. Checked once per invocation, never between rounds.
  *
  * <p><b>Usage:</b> every provider response writes one row to the per-tenant usage ledger via
  * {@link LlmUsageRecorder}, synchronously and before the {@code LlmResponded} event, so the
@@ -114,6 +122,7 @@ public class OrchestratorService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectProvider<AgentReplyDispatcher> replyDispatcher;
     private final AgenticLoopProperties loopProperties;
+    private final SpendGuard spendGuard;
     private final Clock clock;
 
     public OrchestratorService(ConversationGateway conversationGateway,
@@ -126,6 +135,7 @@ public class OrchestratorService {
                                ApplicationEventPublisher eventPublisher,
                                ObjectProvider<AgentReplyDispatcher> replyDispatcher,
                                AgenticLoopProperties loopProperties,
+                               SpendGuard spendGuard,
                                Clock clock) {
         this.conversationGateway = conversationGateway;
         this.llmProviderRegistry = llmProviderRegistry;
@@ -137,6 +147,7 @@ public class OrchestratorService {
         this.eventPublisher = eventPublisher;
         this.replyDispatcher = replyDispatcher;
         this.loopProperties = loopProperties;
+        this.spendGuard = spendGuard;
         this.clock = clock;
     }
 
@@ -153,11 +164,14 @@ public class OrchestratorService {
      * @throws LlmProviderNotAvailableException if no provider is registered for the agent's model
      * @throws LlmProviderException if a provider invocation fails (the error is recorded first)
      * @throws MaxToolIterationsExceededException if the tool-iteration cap is hit
+     * @throws SpendLimitReachedException if the client spent its monthly limit
+     * @throws UnpricedModelException if the client has a limit and the agent's model no price
      */
     public Message respondToMessage(UUID invocationId, UUID conversationId, UUID triggerMessageId) {
         LoadedConversation loaded = conversationGateway.load(conversationId, triggerMessageId);
         Agent agent = loaded.agent();
         List<Message> messages = new ArrayList<>(loaded.messages());
+        checkSpend(agent, conversationId);
 
         LlmCredential credential = new SystemDefaultLlmCredential(agent.modelProvider(), environment);
         LlmProvider provider = llmProviderRegistry.getProvider(agent.modelProvider()).orElseThrow(() ->
@@ -263,6 +277,25 @@ public class OrchestratorService {
         log.warn("Conversation {} hit the tool-iteration cap ({})", conversationId, maxIterations);
         errorRecorder.recordError(conversationId, error);
         throw new MaxToolIterationsExceededException(error);
+    }
+
+    /** ADR 0010, S6, S7: the client's spend limit, checked before the model is called at all. */
+    private void checkSpend(Agent agent, UUID conversationId) {
+        switch (spendGuard.check(agent)) {
+            case ALLOWED -> {
+            }
+            case LIMIT_REACHED -> {
+                String error = ERROR_PREFIX + "The client's monthly spend limit is reached";
+                errorRecorder.recordError(conversationId, error);
+                throw new SpendLimitReachedException(error);
+            }
+            case UNPRICED_MODEL -> {
+                String error = ERROR_PREFIX + "The client has a spend limit and the model '" + agent.modelProvider()
+                        + "/" + agent.modelName() + "' has no price in force";
+                errorRecorder.recordError(conversationId, error);
+                throw new UnpricedModelException(error);
+            }
+        }
     }
 
     /**

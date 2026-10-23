@@ -16,6 +16,12 @@ class FailureReasonTest {
     }
 
     @Test
+    void from_spendLimitReached_isItsOwnPublicReason() {
+        assertThat(FailureReason.from(InvocationFailureType.SPEND_LIMIT_REACHED))
+                .isEqualTo(FailureReason.SPEND_LIMIT_REACHED);
+    }
+
+    @Test
     void from_emptyReply_isItsOwnPublicReason() {
         assertThat(FailureReason.from(InvocationFailureType.EMPTY_REPLY)).isEqualTo(FailureReason.EMPTY_REPLY);
     }

@@ -129,6 +129,10 @@ Decisions recorded in earlier units that constrain later ones. Each is enforced 
   application's single `Clock` bean (`DatabaseClock`, a `clock_timestamp()` reading). The domain
   takes `now` as an argument; nothing compares a stored date with the JVM's `Instant.now()`, tests
   included. Local monotonic durations (timeouts, a cache entry's remaining lifetime) are allowed.
+- **A client's spend limit is set from above.** The one exception to ADR 0002's "authority is
+  visibility": only a strict ancestor sets, changes or removes it, enforced by the service and by
+  the `tenant_spend_limits` policies; the client reads it. Reached, an invocation fails with the
+  fallback reply and the owner is told, never silence (ADR 0010).
 - **Micrometer now, OTLP later, is a bridge, not a migration.**
 - **Verification of the audit chain is on demand only.** Each call records itself in the chain it verified; nothing may attach it to a scheduler or to a write path.
 

@@ -22,6 +22,8 @@ import dev.cauce.orchestration.events.InvocationFailed;
 import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
+import dev.cauce.orchestration.exception.SpendLimitReachedException;
+import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
 import java.time.Instant;
@@ -239,6 +241,35 @@ class PendingInvocationWorkerTest {
                 eq(claimed.id()), anyString(), eq(InvocationFailureType.MAX_TOOL_ITERATIONS));
         assertThat(publishedFailure().failureType())
                 .isEqualTo(InvocationFailureType.MAX_TOOL_ITERATIONS);
+    }
+
+    @Test
+    void processInvocation_whenTheSpendLimitIsReached_marksFailed_andSendsTheFallback() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new SpendLimitReachedException("limit"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.SPEND_LIMIT_REACHED));
+        verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
+        verify(failureFallbackService).sendFallback(claimed.conversationId(),
+                InvocationFailureType.SPEND_LIMIT_REACHED);
+    }
+
+    @Test
+    void processInvocation_whenTheModelHasNoPriceUnderALimit_marksFailedAsAgentConfiguration() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new UnpricedModelException("unpriced"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.AGENT_CONFIGURATION));
+        verify(failureFallbackService).sendFallback(claimed.conversationId(),
+                InvocationFailureType.AGENT_CONFIGURATION);
     }
 
     @Test
