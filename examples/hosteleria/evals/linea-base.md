@@ -1,24 +1,9 @@
 # Línea base del agente de clientes del bar
 
-**Vigente:** la batería completa [`2026-10-22T1543Z`](historial/2026-10-22T1543Z-claude-sonnet-5-5.json)
-con N = 5 (**97 %** global, **todos los bloqueantes al 100 %**), más la corrección de H3.8
-verificada en [`2026-10-22T1559Z`](historial/2026-10-22T1559Z-claude-sonnet-5-5.json): H3.8 y los
-seis escenarios que tocan su arreglo, al 100 %.
+**Vigente:** la batería completa [`2026-10-23T0732Z`](historial/2026-10-23T0732Z-claude-sonnet-5-5.json)
+con el prompt vigente, N = 5: **98 %** global y **todos los bloqueantes al 100 %**.
 
-**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt vigente:** huella `8f304cf5de01` (commit
-`b942ed3`) · **Juez:** ninguno
-
-> **El prompt vigente no ha pasado entero la batería.** La batería completa corrió con el prompt
-> `e41d7a6698af`; la corrección de H3.8 cambió una frase del escalado y se verificó con los siete
-> escenarios de `1559Z`, no con los 38. La próxima batería completa confirma o corrige esta línea
-> base.
-
-## El ciclo, en una línea
-
-**85 %** (línea base inicial) → diagnóstico: tres fallos de la comprobación y tres del agente →
-arreglos de comprobación y prompt → **97 %**, bloqueantes al 100 % (`1543Z`) → **regresión en
-H3.8** (100 % → 20 %), provocada por el prompt nuevo → corrección del prompt → **H3.8 al 100 %**
-sin romper G1, G2, H4.1, H4.4, H4.6 ni H4.7 (`1559Z`).
+**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `8f304cf5de01` · **Juez:** ninguno
 
 > **Es una línea base determinista.** Solo cuentan las comprobaciones de traza, estado y texto.
 > Las comprobaciones de rúbrica (105 por batería) quedaron «pendiente de juez»: no entran en
@@ -29,7 +14,76 @@ sin romper G1, G2, H4.1, H4.4, H4.6 ni H4.7 (`1559Z`).
 Los resultados son los de las ejecuciones tal cual, fallos incluidos. Cuando cambia la línea base
 vigente, la anterior se conserva más abajo con su diagnóstico y los cambios que salieron de ella.
 
-## Línea base vigente · 2026-10-22T1543Z
+## El ciclo, en una línea
+
+**85 %** (línea base inicial) → diagnóstico: tres fallos de la comprobación y tres del agente →
+arreglos de comprobación y prompt → **97 %**, bloqueantes al 100 % (`1543Z`) → **regresión en
+H3.8** (100 % → 20 %), provocada por el prompt nuevo → corrección del prompt → **H3.8 al 100 %**
+sin romper G1, G2, H4.1, H4.4, H4.6 ni H4.7 (`1559Z`) → **98 %** con la batería completa sobre el
+prompt corregido (`0732Z`).
+
+## Línea base vigente · 2026-10-23T0732Z
+
+| Commit | Huella del prompt | Turnos de modelo | Coste |
+|---|---|---|---|
+| `49762f3` | `8f304cf5de01` | 214 | 1,2359 US$ |
+
+| Entrada | Leída de caché | Escrita en caché | Salida |
+|---|---|---|---|
+| 2.634.107 | 2.554.619 (97,0 %) | 78.072 | 52.701 |
+
+- Sin caché, las mismas llamadas habrían costado 5,7952 US$: la caché ahorró un **79 %**.
+- **Ese ahorro es un techo.** En el arnés, las llamadas de una conversación van seguidas y la caché
+  no caduca. En un bar real, entre mensaje y mensaje de un cliente pueden pasar más de los 5 minutos
+  que dura la caché, y solo seguirían en caché las herramientas y el prompt.
+- Coste medio: **0,0058 US$ por turno de modelo**. Precios de `precios.yaml`, versión 2026-10-22;
+  es el cálculo con los tokens que devolvió el proveedor, no la factura.
+- 214 turnos y no 215: el turno que acabó en el mensaje de respaldo (H3.10, abajo) no registró uso.
+
+### Tasas
+
+**Global: 98 %** (147 de 150 repeticiones con todas sus comprobaciones en verde).
+
+| Tarea | Tasa |
+|---|---|
+| 00 · anclaje | 100 % |
+| 01 · información | 96 % |
+| 02 · carta | 100 % |
+| 03 · reservas | 96 % |
+| 04 · escalado | 100 % |
+| 05 · resumen | 100 % |
+
+| Regla general | Tasa |
+|---|---|
+| G1 · carta consultada antes de hablar de ella | 100 % |
+| Carta sin inventar | 100 % |
+
+**Bloqueantes por debajo del 100 %:** ninguno. **Avisos bajo el umbral del 90 %:** H1.1, H3.8 y
+H3.10, los tres al 80 % (un fallo en cinco). Todos los demás escenarios ejecutados, al 100 %; H3.7,
+H4.5, H5.4 y H5.5 siguen cubiertos por sus IT.
+
+### Los tres fallos
+
+| Escenario | Qué pasó | Clase | Qué se hizo |
+|---|---|---|---|
+| H1.1 | «¿Abrís los lunes?» → «Los lunes no abrimos, el bar cierra ese día.» Correcto; la comprobación buscaba «cerra» (cerramos, cerrado) y no reconoce «cierra» | Comprobación demasiado literal | Acepta «cerra \| cierra \| no abrimos», con su test |
+| H3.8 | «Somos 12 para cenar el viernes…» La ejecución fue un viernes: el agente dijo que lo pasaba al dueño y preguntó si era hoy, 23, o el 30. Duda real, sin promesa | Ni agente ni comprobación: el escenario depende del día en que se ejecuta | Anotado; propuesta abajo |
+| H3.10 | Leyó bien la reserva de las 21:30 y pidió confirmación; al «Sí», la respuesta fue el mensaje de respaldo («Perdona, ahora mismo no puedo responderte…»): la invocación falló y no registró uso | Fallo de ejecución (proveedor o tiempo de espera), no del agente | Anotado como variabilidad observada |
+
+**Variabilidad observada, sin cambio de prompt.** Ninguno de los tres es un patrón del agente que
+se repita en varios escenarios, y no se toca el prompt por un fallo en cinco:
+
+- **H3.8** no muestra un fallo del agente: con «el viernes» dicho un viernes, la fecha es ambigua
+  de verdad. Lo mismo puede pasar en cualquier escenario que nombre un día de la semana si la
+  batería se ejecuta ese día (los del sábado, en sábado). **Propuesta, sin aplicar:** que el texto
+  del cliente pueda llevar fechas relativas que el arnés escriba al ejecutar (por ejemplo, «el
+  viernes 30»), con la misma notación que `previo` y `estado` (`proximo_viernes`).
+- **H3.10** dice algo del sistema, no del agente: el cliente habría recibido el mensaje de
+  respaldo, como manda el ADR 0005 (C3). **Propuesta, sin aplicar:** que el arnés distinga un turno
+  que acabó en respaldo, con su motivo, de un fallo del agente, para que no se confundan en las
+  tasas.
+
+## Línea base anterior · 2026-10-22T1543Z · 97 %
 
 | Commit | Huella del prompt | Turnos de modelo | Coste |
 |---|---|---|---|
@@ -114,7 +168,7 @@ Los escenarios de la tarea 05 son deterministas (el resumen no usa modelo) y se 
 
 ### Regresión en H3.8, corregida
 
-Con la línea base anterior, H3.8 estaba al 100 %; en esta, al 20 %. A «Somos 12 para cenar el
+En la línea base inicial, H3.8 estaba al 100 %; en la del 97 %, al 20 %. A «Somos 12 para cenar el
 viernes, me llamo Jorge, 633 333 333», en cuatro de cinco repeticiones el agente consultó la hora
 y la ficha, dijo que los grupos de más de 8 los gestiona el dueño y **ofreció** pasarle la petición
 («Puedo pasarle tu petición. ¿Me confirmas estos datos?»), pidiendo que confirmara lo que ya había
@@ -132,7 +186,7 @@ G2, H4.1, H4.4, H4.6 y H4.7, **todos al 100 %**; las reglas G1 y «carta sin inv
 0,4225 US$ en 75 turnos de modelo, 96,0 % de la entrada leída de caché. 30 comprobaciones de
 rúbrica, pendientes de juez.
 
-## Línea base anterior · 85 %
+## Línea base inicial · 85 %
 
 Ejecuciones `2026-10-22T1431Z` (tarea 03, commit `44217d0`) y `2026-10-22T1501Z` (tareas 00, 01,
 02, 04 y 05, commit `f1e74b9`), con el prompt de huella `579475a27ef1`: **85 %** global (127 de 150),
@@ -177,4 +231,4 @@ entrada pasa de 2.437.667 a 2.644.602 tokens (+8 %).
 
 - [`2026-10-22T1522Z`](historial/2026-10-22T1522Z-claude-sonnet-5-5.json): solo los seis
   escenarios afectados (G1, G2, H2.2, H4.4, H4.6, H4.7), N = 5: **los seis al 100 %**, 0,3519 US$.
-- `2026-10-22T1543Z`: la batería completa con el prompt nuevo, la línea base vigente de arriba.
+- `2026-10-22T1543Z`: la batería completa con el prompt nuevo, la línea base del 97 % de arriba.
