@@ -23,7 +23,10 @@ sin calibrar, la ejecución es solo de las comprobaciones deterministas y cada r
 estima el coste y, si supera `-Pevals.limite` (10 US$ por defecto), se para hasta que se confirme.
 El informe queda en `backend/cauce-evals/build/evals/` (con las trazas completas, fuera de git), y el
 resumen de cada ejecución en `historial/`, para commitearlo. No forma parte de `./gradlew build` ni
-de CI. El simulacro sustituye el modelo por uno de guion: sus tasas no dicen nada del agente y no
+de CI. Una ejecución que no dice nada del agente falla y no va al historial: si el proveedor rechaza la
+clave (401), se para en el primer turno; si un escenario no tiene ninguna repetición válida, o las
+repeticiones con fallo de ejecución superan `-Pevals.umbral_fallos` (10 % por defecto), queda
+inválida. El simulacro sustituye el modelo por uno de guion: sus tasas no dicen nada del agente y no
 escribe en el historial.
 
 ## Formato (v2)

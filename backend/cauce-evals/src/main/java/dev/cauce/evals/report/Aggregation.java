@@ -20,7 +20,9 @@ import java.util.function.Predicate;
  * a blocking scenario, or a general rule, under 100 %. Warning: any other scenario under the
  * threshold. Neither a rubric pending a judge nor a harness error ever counts as passed: a run
  * without a judge is a run of the deterministic checks. Each scenario's tokens are the sum of its
- * repetitions', priced with the agent's price when the table has one.
+ * repetitions', priced with the agent's price when the table has one. A run that says nothing
+ * about the agent — a scenario with no valid repetition, or too many execution failures
+ * ({@link RunValidity}) — is invalid, and an invalid run blocks.
  */
 public final class Aggregation {
 
@@ -35,6 +37,12 @@ public final class Aggregation {
 
     public static RunSummary summarize(List<ScenarioRun> runs, List<Scenario> coveredByIt, double warningThreshold,
                                        Meta meta) {
+        return summarize(runs, coveredByIt, warningThreshold, RunValidity.DEFAULT_MAX_EXECUTION_FAILURES, meta);
+    }
+
+    /** As {@link #summarize(List, List, double, Meta)}, with the run's own share of tolerated execution failures. */
+    public static RunSummary summarize(List<ScenarioRun> runs, List<Scenario> coveredByIt, double warningThreshold,
+                                       double maxExecutionFailures, Meta meta) {
         Map<String, List<ScenarioRun>> byScenario = new LinkedHashMap<>();
         runs.forEach(run -> byScenario.computeIfAbsent(run.scenario().id(), id -> new ArrayList<>()).add(run));
 
@@ -122,12 +130,12 @@ public final class Aggregation {
         return new RunSummary(meta.date(), meta.commit(), meta.dirtyTree(), meta.agentModel(), meta.judge(),
                 meta.calibration(), meta.promptFootprint(), meta.repetitions(), meta.selection(), meta.complete(),
                 meta.tokens(), meta.costUsd(), meta.priceVersion(), overall == null ? 0.0 : overall, rules, tasks,
-                scenarios, blocking, warnings);
+                scenarios, blocking, warnings, RunValidity.reasons(runs, maxExecutionFailures));
     }
 
-    /** Whether the run blocks: a blocking scenario or a general rule under 100 %. */
+    /** Whether the run blocks: invalid, or a blocking scenario or a general rule under 100 %. */
     public static boolean blocks(RunSummary summary) {
-        return !summary.blockingFailures().isEmpty();
+        return !summary.valid() || !summary.blockingFailures().isEmpty();
     }
 
     private static Double rate(List<ScenarioRun> reps) {

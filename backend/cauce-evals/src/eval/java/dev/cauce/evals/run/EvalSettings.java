@@ -1,5 +1,6 @@
 package dev.cauce.evals.run;
 
+import dev.cauce.evals.report.RunValidity;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
@@ -17,6 +18,8 @@ import java.util.Optional;
  * @param limitUsd the estimate that needs confirmation ({@code evals.limite}, default 10 US$)
  * @param confirmed the estimate over the limit is accepted ({@code evals.confirmar=true})
  * @param warningThreshold the rate under which a warning scenario warns ({@code evals.umbral}, 0.9)
+ * @param maxExecutionFailures the share of repetitions with an execution failure over which the run
+ *        is invalid ({@code evals.umbral_fallos}, 0.10)
  * @param agentProvider and {@code agentModel}: the customer agent's model ({@code evals.proveedor},
  *        {@code evals.modelo}, default anthropic / claude-sonnet-5-5, as the pack's demo)
  * @param judgeProvider the judge's provider ({@code evals.juez.proveedor}); by default the first
@@ -29,6 +32,7 @@ import java.util.Optional;
  */
 public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<String> scenarioIds,
                            int repetitions, double limitUsd, boolean confirmed, double warningThreshold,
+                           double maxExecutionFailures,
                            String agentProvider, String agentModel, Optional<String> judgeProvider,
                            Optional<String> judgeModel, boolean rehearsal, boolean elidePastLookups) {
 
@@ -44,6 +48,8 @@ public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<
                 property("evals.limite").map(Double::parseDouble).orElse(10.0),
                 property("evals.confirmar").map(Boolean::parseBoolean).orElse(false),
                 property("evals.umbral").map(Double::parseDouble).orElse(0.9),
+                property("evals.umbral_fallos").map(Double::parseDouble)
+                        .orElse(RunValidity.DEFAULT_MAX_EXECUTION_FAILURES),
                 property("evals.proveedor").orElse("anthropic"),
                 property("evals.modelo").orElse("claude-sonnet-5-5"),
                 property("evals.juez.proveedor"),

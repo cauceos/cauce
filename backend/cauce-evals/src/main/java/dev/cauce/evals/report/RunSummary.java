@@ -30,7 +30,21 @@ public record RunSummary(
         @JsonProperty("tareas") Map<String, Double> tasks,
         @JsonProperty("escenarios") List<ScenarioRate> scenarios,
         @JsonProperty("bloqueantes_fallidos") List<String> blockingFailures,
-        @JsonProperty("avisos") List<String> warnings) {
+        @JsonProperty("avisos") List<String> warnings,
+        @JsonProperty("invalida") List<String> invalidity) {
+
+    /**
+     * {@code invalidity}: why the run says nothing about the agent ({@link RunValidity}); empty for a
+     * valid run, and for summaries written before it existed.
+     */
+    public RunSummary {
+        invalidity = invalidity == null ? List.of() : List.copyOf(invalidity);
+    }
+
+    /** Whether the run says anything about the agent. */
+    public boolean valid() {
+        return invalidity.isEmpty();
+    }
 
     /** Tokens of the run, the agent's and the judge's. {@code entrada} includes the cached parts. */
     public record Tokens(

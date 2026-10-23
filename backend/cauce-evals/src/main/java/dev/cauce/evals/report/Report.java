@@ -77,6 +77,7 @@ public final class Report {
                     .forEach(c -> out.append("  ").append(rate.id()).append(" · ").append(c.getKey()).append(": ")
                             .append(Aggregation.percent(c.getValue())).append("\n"));
         }
+        s.invalidity().forEach(reason -> out.append("EJECUCIÓN INVÁLIDA: ").append(reason).append("\n"));
         out.append(s.blockingFailures().isEmpty() ? "Sin bloqueantes fallidos.\n"
                 : "Bloqueantes por debajo del 100 %: " + String.join(", ", s.blockingFailures()) + "\n");
         s.warnings().forEach(w -> out.append("Aviso: ").append(w).append("\n"));
@@ -116,6 +117,11 @@ public final class Report {
         md.append("- Coste estimado: ").append(s.costUsd() == null ? "sin precio en precios.yaml"
                 : String.format("%.4f US$ (precios %s)", s.costUsd(), s.priceVersion())).append("\n\n");
 
+        if (!s.valid()) {
+            md.append("**Ejecución inválida: no dice nada del agente y no va al historial.**\n");
+            s.invalidity().forEach(reason -> md.append("- ").append(reason).append("\n"));
+            md.append("\n");
+        }
         md.append(s.blockingFailures().isEmpty() ? "**Sin bloqueantes fallidos.**\n\n"
                 : "**Bloqueantes por debajo del 100 %:** " + String.join(", ", s.blockingFailures()) + "\n\n");
         if (!s.warnings().isEmpty()) {

@@ -20,6 +20,7 @@ import dev.cauce.evals.judge.Judge;
 import dev.cauce.evals.judge.LlmJudge;
 import dev.cauce.evals.report.Aggregation;
 import dev.cauce.evals.report.Report;
+import dev.cauce.evals.report.RunValidity;
 import dev.cauce.evals.report.RunSummary;
 import dev.cauce.evals.report.ScenarioRun;
 import dev.cauce.evals.scenario.Scenario;
@@ -221,7 +222,8 @@ class EvalBatteryRun {
                 + judgePrice.map(j -> j.cost(tokens.judgeInput(), 0, 0, tokens.judgeOutput())).orElse(0.0)).orElse(null);
         String now = clock.instant().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm'Z'"));
         String[] git = git();
-        RunSummary summary = Aggregation.summarize(runs, covered, SETTINGS.warningThreshold(), new Aggregation.Meta(
+        RunSummary summary = Aggregation.summarize(runs, covered, SETTINGS.warningThreshold(),
+                SETTINGS.maxExecutionFailures(), new Aggregation.Meta(
                 now, git[0], Boolean.parseBoolean(git[1]), SETTINGS.agentProvider() + "/" + SETTINGS.agentModel(),
                 judge.map(LlmJudge::describe).orElse("ninguno"), calibrationText, footprint(), n, SETTINGS.selection(),
                 complete, tokens, cost, prices.version(), agentPrice.orElse(null)));
@@ -229,6 +231,7 @@ class EvalBatteryRun {
         if (SETTINGS.rehearsal()) {
             return; // a rehearsal's verdict says nothing about the agent
         }
+        assertThat(summary.invalidity()).as("ejecución inválida, nada escrito en el historial").isEmpty();
         assertThat(Aggregation.blocks(summary)).as("bloqueantes por debajo del 100 %%: %s", summary.blockingFailures())
                 .isFalse();
     }
@@ -252,6 +255,13 @@ class EvalBatteryRun {
             transcript.append("Cliente: ").append(message).append('\n');
             trace.tools().forEach(t -> transcript.append("  [").append(t.name()).append("] ").append(t.input()).append('\n'));
             transcript.append("Agente: ").append(trace.reply()).append("\n\n");
+            if (played.executionFailure().isPresent()
+                    && RunValidity.refusedCredentials(played.executionFailure().get())) {
+                // Every later turn would fail the same way: stop here, before anything is written.
+                throw new AssertionError("El proveedor rechaza la clave del modelo del agente (" + scenario.id()
+                        + ", turno " + (i + 1) + "): " + played.executionFailure().get()
+                        + ". Nada escrito en el historial.");
+            }
             if (played.executionFailure().isPresent()) {
                 // The later turns build on this one: the repetition ends here, outside the agent's rates.
                 results.add(new CheckResult(prefix + " · fallo de ejecución", Outcome.EXECUTION_FAILURE,
@@ -364,6 +374,8 @@ class EvalBatteryRun {
         System.out.println("Informe: " + out.resolve("informe.md"));
         if (SETTINGS.rehearsal()) {
             System.out.println("Simulacro: nada escrito en el historial.");
+        } else if (!summary.valid()) {
+            System.out.println("Ejecución inválida: nada escrito en el historial.");
         } else {
             Path history = SETTINGS.evalsDir().resolve("historial");
             Files.createDirectories(history);
