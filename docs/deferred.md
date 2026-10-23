@@ -43,7 +43,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 ## Usage and cost
 
-- **No usage aggregation by tenant.** Per-invocation usage is exposed on the invocation endpoint; there is no query across invocations.
+- **Roll-ups of the usage ledger.** The usage endpoint and the spend check aggregate `llm_usage_records` on the fly over `(tenant_id, created_at)`, through a set-based RLS policy and a cost view that joins prices by validity range (V47, ADR 0010). Measured on 2026-10-23 with one partner, 100 clients and 4,000 calls each (400,000 rows), after V47: one client's month in 9 ms (the spend check), the partner's month in about 2 s. Daily roll-ups are a pure add when a partner's volume makes the read slow.
 
 ## Audit trail (governance)
 

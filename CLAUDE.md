@@ -396,6 +396,8 @@ what the cauce-api integration tests assert. The rules every endpoint follows:
   `UUID.compareTo` is signed and disagrees). **Messages are the exception, and so is every read of
   a conversation:** they order by `seq`, the position the database assigns on insert (V44), never
   by a clock or a clock-minted id; their cursor still names a message.
+  The usage of a tenant (`GET /v1/tenants/{id}/usage`) is the one aggregate response outside the
+  contract: it is bounded by its date range (at most 366 days), not paginated (ADR 0010).
 - **The messaging endpoint stamps the reserved channel type `api` server-side**, and the identity
   kind `CLIENT_REFERENCE` with it; the request body carries only `external_identity_ref` and
   `content`, so the client chooses neither. Ingest is one transaction (`InboundMessageService`):

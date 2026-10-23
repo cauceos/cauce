@@ -132,6 +132,15 @@ class LlmPriceServiceIT extends AbstractOrchestrationIntegrationTest {
     }
 
     @Test
+    void costView_withTwoPricesFromTheSameInstant_usesTheOneAddedLast() {
+        insertPrice("2026-10-05T00:00:00Z", "2.00", "10.00", null, null);
+        insertPrice("2026-10-05T00:00:00Z", "4.00", "10.00", null, null);
+        UUID call = insertUsage(client.id(), "2026-10-10T12:00:00Z", 1_000_000, 0, 0, 0);
+
+        assertThat(costsAs(client.id()).get(call)).isEqualByComparingTo("4.00");
+    }
+
+    @Test
     void costView_followsTheLedgersVisibility() {
         insertPrice("2026-10-05T00:00:00Z", "2.00", "10.00", null, null);
         insertUsage(client.id(), "2026-10-10T12:00:00Z", 1_000, 0, 0, 0);

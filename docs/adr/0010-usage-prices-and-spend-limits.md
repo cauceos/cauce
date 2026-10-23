@@ -108,7 +108,9 @@ reason `AGENT_MISCONFIGURED`): a limit that cannot price what it limits would be
 - Cost is always derivable and never stale; a price added late prices only what comes after it.
 - The usage query and the spend check scan the ledger on the fly over `(tenant_id, created_at)`.
   For one bar this is a few thousand rows a month; the RLS function runs once per row, so a partner
-  with many clients is the case to measure before adding roll-ups.
+  with many clients is the case to measure before adding roll-ups. *Measured on 2026-10-23 (100
+  clients, 400,000 calls): 10-30 s for the partner's month, 250 ms for a client's. V47 made the
+  ledger's policy set based and the view join prices by validity range: 2 s and 9 ms.*
 - A blocked client's customers are answered and its owner is told; the partner sees the state of
   the limit over the API.
 - Margins, other currencies and limits on partners are not built; a limit on a partner would need to
