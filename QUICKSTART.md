@@ -340,7 +340,10 @@ docker compose --profile api --profile transcription up -d --build   # or with -
 ```
 
 The first start downloads the image (≈850 MB) and the model `Systran/faster-whisper-small` (≈500
-MB, kept in a volume). On a laptop CPU a 10-second note takes about 5 seconds to transcribe.
+MB, kept in a volume). On a laptop CPU a 10-second note takes about 5 seconds to transcribe. The
+small model mishears much of conversational Spanish; the hospitality pack uses
+`TRANSCRIPTION_MODEL=deepdml/faster-whisper-large-v3-turbo-ct2` (≈1.6 GB, about 20 seconds a note on
+a CPU): see [examples/hosteleria/README.md](examples/hosteleria/README.md).
 Notes over 2 minutes or 20 MB are not transcribed: the person is asked for a shorter one or a
 written message. The bytes are never stored; the transcript is, in the message, like a text.
 

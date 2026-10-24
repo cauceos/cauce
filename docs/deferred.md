@@ -60,6 +60,18 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 ## Channels
 
+- **A paid European transcriber, measured on the same ten voice notes (November).** The local Whisper
+  is the only transcriber (ADR 0012, V3). The reference a paid adapter must beat, measured on
+  2026-10-24 with ten real voice notes of the hospitality pack (`-Pevals.voz`, Spanish, laptop CPU):
+
+  | Model | Word error | Critical data heard right | Transcription per note |
+  |---|---|---|---|
+  | `Systran/faster-whisper-small` (quickstart) | 46.7 % | 13 of 21 | 4.8 s |
+  | `deepdml/faster-whisper-large-v3-turbo-ct2` (hospitality pack) | 29.9 % | 19 of 21 | 21.1 s |
+
+  Lands as a second OpenAI-compatible (or own) transcriber with its audio price, measured with the
+  same notes and harness before it is offered.
+
 - **Delivery guarantee.** Outbound delivery is best-effort: fire-and-forget on the `channelOutboundExecutor`, no outbox, no retries, no delivery dedup; failures are logged and the reply stays readable by polling. The `AgentReplyDispatcher` port carries the TODO: persist the delivery intent behind the same port and drain it from a scheduled dispatcher, additively.
 - **Channel-config list and disable endpoints.** Only creation exists. Without the list, the demo-bar scripts, which find the business and its agents again by name when `.demo-bar.env` is lost, bind the bots anew (the previous config of the same bot stays active, unused).
 - **`SUPPORTED_CHANNELS` by SPI.** `ConversationService` validates `channel_type` against a hardcoded set; replacing it with the adapter registry needs a port, since a direct dependency would be a cycle.
