@@ -22,7 +22,12 @@ public interface BookingProvider {
     /** The agenda of the business, if one is loaded and visible. */
     Optional<Agenda> findAgenda(UUID tenantId);
 
-    /** What remains to book on {@code date}. */
+    /**
+     * What remains to book on {@code date}.
+     *
+     * @throws BookingRefusedException {@code PAST} if {@code date} is before today in the business's
+     *     time zone, with today in its message
+     */
     DayAvailability availability(UUID tenantId, LocalDate date);
 
     /** Proposes a new booking, holding capacity until the person confirms it. */

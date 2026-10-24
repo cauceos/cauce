@@ -15,7 +15,7 @@ public record BookingRefusal(Reason reason, String message) {
         INVALID,
         /** The date is closed, or the shift does not run that day. */
         CLOSED,
-        /** The shift has already started. */
+        /** The date is before today, or the shift has already started. */
         PAST,
         /** The date is beyond how far ahead the business books. */
         TOO_FAR,

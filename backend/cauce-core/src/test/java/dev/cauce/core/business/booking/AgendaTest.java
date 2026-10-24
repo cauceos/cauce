@@ -48,6 +48,22 @@ class AgendaTest {
     }
 
     @Test
+    void refusalFor_aDateBeforeToday_isPast_andSaysWhatDayTodayIs() {
+        // Monday 2026-10-19, before Tuesday 2026-10-20: past whatever else is wrong with it.
+        Optional<BookingRefusal> refusal = agenda.refusalFor(LocalDate.of(2026, 10, 19), CENA, 12, NOW, MADRID);
+
+        assertThat(refusal).hasValueSatisfying(r -> {
+            assertThat(r.reason()).isEqualTo(Reason.PAST);
+            assertThat(r.message()).contains("2026-10-19 (monday) is a past date",
+                    "today is 2026-10-20 (tuesday) in Europe/Madrid");
+        });
+        assertThat(Agenda.pastDate(LocalDate.of(2026, 10, 20), NOW, MADRID)).isEmpty();
+        // 23:30 UTC on the 19th is already the 20th in Madrid: the 19th is past there.
+        assertThat(Agenda.pastDate(LocalDate.of(2026, 10, 19), Instant.parse("2026-10-19T23:30:00Z"), MADRID))
+                .isPresent();
+    }
+
+    @Test
     void settings_rejectInvalidShiftsAndBounds() {
         assertThatThrownBy(() -> new Shift("x", Set.of(DayOfWeek.MONDAY), LocalTime.NOON, LocalTime.NOON, 1))
                 .isInstanceOf(IllegalArgumentException.class);

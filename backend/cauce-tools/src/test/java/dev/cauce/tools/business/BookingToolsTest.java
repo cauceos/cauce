@@ -138,6 +138,17 @@ class BookingToolsTest {
     }
 
     @Test
+    void checkAvailability_ofAPastDate_answersTheRefusal_forTheModelToAskAgain() {
+        when(provider.availability(context.tenantId(), date)).thenThrow(Agenda.pastDate(date,
+                Instant.parse("2026-11-04T10:00:00Z"), java.time.ZoneId.of("Europe/Madrid")).orElseThrow().toException());
+
+        String output = run(BookingTools.checkAvailability(() -> provider), Map.of("date", "2026-11-03"));
+
+        assertThat(output).contains("\"ok\":false", "\"reason\":\"PAST\"",
+                "today is 2026-11-04 (wednesday) in Europe/Madrid");
+    }
+
+    @Test
     void aMalformedDate_andABlankName_areArgumentsTheModelMustFix() {
         assertThatThrownBy(() -> run(BookingTools.checkAvailability(() -> provider), Map.of("date", "martes")))
                 .isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("YYYY-MM-DD");

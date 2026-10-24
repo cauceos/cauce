@@ -142,6 +142,20 @@ class BookingIT extends AbstractBusinessIntegrationTest {
     }
 
     @Test
+    void availability_ofADateBeforeToday_isRefusedAsPast_withToday() {
+        LocalDate today = LocalDate.now(clock.withZone(MADRID));
+
+        assertThatThrownBy(() -> asA(() -> bookings.availability(f.clientA().id(), today.minusDays(1))))
+                .isInstanceOfSatisfying(BookingRefusedException.class, e -> {
+                    assertThat(e.refusal().reason()).isEqualTo(Reason.PAST);
+                    assertThat(e.refusal().message()).contains("today is " + today);
+                });
+        assertThat(asA(() -> bookings.availability(f.clientA().id(), today))).isNotNull();
+        assertRefused(() -> bookings.propose(requester(other, UUID.randomUUID()),
+                new Booking.Details(today.minusDays(1), "cena", null, 2, "Ana", "600123456", null)), Reason.PAST);
+    }
+
+    @Test
     void concurrentProposalsForTheLastPlaces_neverOverbook() throws Exception {
         confirm(f.conversation(), details(6)); // 4 places left
         ExecutorService pool = Executors.newFixedThreadPool(4);

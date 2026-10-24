@@ -195,6 +195,10 @@ public final class Agenda {
      * {@code now} without counting capacity: the reason it may not, or empty when it may.
      */
     public Optional<BookingRefusal> refusalFor(LocalDate date, Shift shift, int partySize, Instant now, ZoneId zone) {
+        Optional<BookingRefusal> past = pastDate(date, now, zone);
+        if (past.isPresent()) {
+            return past;
+        }
         if (partySize < 1) {
             return Optional.of(new BookingRefusal(BookingRefusal.Reason.INVALID, "the party size must be at least 1"));
         }
@@ -216,6 +220,26 @@ public final class Agenda {
                     "bookings are taken at most " + horizonDays + " days ahead"));
         }
         return Optional.empty();
+    }
+
+    /**
+     * A refusal of {@code date} if it is before today in {@code zone}: {@code PAST}, with today's date
+     * and weekday in the message, so that the agent works the date out again from today instead of
+     * from memory or an earlier turn of a long conversation.
+     */
+    public static Optional<BookingRefusal> pastDate(LocalDate date, Instant now, ZoneId zone) {
+        LocalDate today = LocalDate.ofInstant(now, zone);
+        if (!date.isBefore(today)) {
+            return Optional.empty();
+        }
+        return Optional.of(new BookingRefusal(BookingRefusal.Reason.PAST, date + " (" + weekday(date)
+                + ") is a past date: today is " + today + " (" + weekday(today) + ") in " + zone.getId()
+                + ". Work dates out from today, never from memory or an earlier turn, and ask the person "
+                + "which date they mean if unsure"));
+    }
+
+    private static String weekday(LocalDate date) {
+        return date.getDayOfWeek().name().toLowerCase(java.util.Locale.ROOT);
     }
 
     public UUID id() {

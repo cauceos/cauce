@@ -79,6 +79,12 @@ public class BookingService implements BookingProvider {
         Agenda agenda = findAgenda(tenantId).orElseThrow(() -> noAgenda(tenantId));
         Instant now = clock.instant();
         ZoneId zone = zoneOf(tenantId);
+        // A past date is refused, not answered as a day with nothing bookable: the agent asked for it
+        // because it got today wrong, and the refusal tells it what today is.
+        Optional<BookingRefusal> past = Agenda.pastDate(date, now, zone);
+        if (past.isPresent()) {
+            throw past.get().toException();
+        }
         List<ShiftAvailability> shifts = new ArrayList<>();
         for (Shift shift : agenda.shiftsOn(date)) {
             int remaining = Math.max(0, shift.capacity() - used(tenantId, date, shift, now, Set.of()));
