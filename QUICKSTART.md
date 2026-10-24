@@ -162,10 +162,10 @@ with its sheet, menu and agenda, a waiter agent for customers and an agent for t
 Its agents use Anthropic (`claude-sonnet-5-5`) by default, so it needs path A's key; the script
 checks the instance has the provider before creating anything. With path B or C,
 `MODEL_PROVIDER=ollama MODEL_NAME=qwen2.5:3b ./scripts/demo-bar.sh` works, with a noticeably
-weaker waiter. Give it room with `OLLAMA_CONTEXT_LENGTH=16384` in `.env` (and, with your own
-Ollama, the same on the server): the waiter's prompt and tools alone are about 4,000 tokens, so
-on Ollama's default 4096 every message fails at once as `AGENT_MISCONFIGURED`, saying so,
-rather than reaching the model cut. It ends with a ready-made `curl` to talk to the waiter, and
+weaker waiter. Give it room with `OLLAMA_CONTEXT_LENGTH=32768` in `.env` (and, with your own
+Ollama, the same on the server): the waiter's prompt and tools alone are about 4,000 tokens, and
+each turn adds the menu and the agenda it looks up. On Ollama's default 4096 every message fails
+at once as `AGENT_MISCONFIGURED`, saying so, rather than reaching the model cut. It ends with a ready-made `curl` to talk to the waiter, and
 optionally connects two Telegram bots: see [examples/hosteleria/README.md](examples/hosteleria/README.md).
 
 ## Your API key (read this)
@@ -258,7 +258,8 @@ Copy `.env.example` to `.env` to override defaults:
 - `OLLAMA_BASE_URL` — your own Ollama instead of the containerized one (path B).
 - `OLLAMA_CONTEXT_LENGTH` (default `4096`, Ollama's own) — the context length Ollama serves. Compose
   gives it to the containerized Ollama and to the app, which sizes its requests to it; with your
-  own Ollama, it must equal what that server is started with. 16384 takes ≈0.5 GB more RAM.
+  own Ollama, it must equal what that server is started with. 16384 takes ≈0.5 GB more RAM
+  (measured with `qwen2.5:3b`); 32768, the hospitality pack's setting, about twice that.
 - `API_PORT` (default `8080`), `OLLAMA_PORT` (default `11434`) — host ports, next to the
   existing `POSTGRES_PORT=5433`, `REDIS_PORT=6379`, `ADMINER_PORT=8081`.
 - `COMPOSE_PROJECT_NAME` — only to tell apart two clones in directories of the same name.
