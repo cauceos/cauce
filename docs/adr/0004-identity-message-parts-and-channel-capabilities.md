@@ -1,6 +1,7 @@
 # ADR 0004: Interlocutor identity, message parts, and channel capabilities
 
-Status: Accepted. Unit 1 (identity) implemented; units 2 and 3 not yet.
+Status: Accepted. Unit 1 (identity) implemented; unit 2 cut in four by the amendment of 2026-10-24
+(2a, the parts, being implemented; 2b–2d, audio, per ADR 0012); unit 3 not yet.
 
 ## Context
 
@@ -318,6 +319,28 @@ concurrent first messages in parallel.
 **`ConversationResponse`.** No `channel_type`. It nests the identity (`id`,
 `channel_type`, `kind`, `value`) and carries `channel_config_id`. The value may
 appear in the API, where RLS protects it; PC-3 constrains the audit chain only.
+
+## Amendment (2026-10-24): unit 2 cut in four
+
+Unit 2 is cut so that the change of shape lands without a change of behaviour, and audio after it:
+
+- **2a — parts, with no change of behaviour.** The sealed part types (text, tool call, tool
+  result), the `parts` column with its backfill and the drop of `content` and `tool_content`, the
+  content hash v2 and its informative definition in the specification, together, as decided
+  above. Every message reads and behaves as before.
+- **2b–2d — audio** (the audio part, transcription, the channels), decided in ADR 0012.
+
+What 2a settles beyond the decision:
+
+- **The domain keeps derived accessors.** `Message.content()` and `Message.toolContent()` are
+  computed from the parts, never stored, so the readers that only want text (context assembly, the
+  LLM mappers, the conduct emitter) do not change in 2a; each moves to the parts when it has to
+  read a part that is not text. The database has one source of truth, as decided.
+- **The REST input keeps `content`.** `POST /v1/agents/{agentId}/messages` still takes
+  `content`, stored as one text part. The output changes shape: a message carries `parts`;
+  `tool_content` goes; `content` stays, derived. Recorded in `CHANGELOG.md`.
+- **The hash says its version.** A payload hashed under v2 carries `content_hash_version: 2` next
+  to `content_hash`; one without it is v1. Nothing recorded before is recomputed.
 
 ## Notes
 
