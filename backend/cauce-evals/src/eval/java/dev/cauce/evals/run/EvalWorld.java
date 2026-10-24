@@ -18,7 +18,10 @@ import dev.cauce.core.business.booking.Booking;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.inbound.InboundMessageInterceptor.InboundText;
 import dev.cauce.core.message.MessagePart;
+import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolResult;
 import dev.cauce.evals.check.TurnTrace;
 import dev.cauce.evals.check.TurnTrace.ObservedBooking;
 import dev.cauce.evals.check.TurnTrace.ObservedCase;
@@ -33,15 +36,19 @@ import dev.cauce.orchestration.InboundMessageService;
 import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.ConversationService;
+import dev.cauce.tenancy.MessageService;
 import dev.cauce.tenancy.TenantService;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Date;
 import java.sql.Time;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -82,7 +89,7 @@ final class EvalWorld {
     record Services(MockMvc mockMvc, ObjectMapper json, TenantService tenants, ApiKeyService apiKeys,
                     ConversationService conversations, OwnerService owners, OwnerNotificationDispatcher dispatcher,
                     PendingInvocationWorker worker, BookingService bookings, DataSource adminDataSource, Clock clock,
-                    Path packDir, InboundMessageService inbound) {
+                    Path packDir, InboundMessageService inbound, MessageService messages) {
 
         JdbcTemplate admin() {
             return new JdbcTemplate(adminDataSource);
@@ -95,7 +102,10 @@ final class EvalWorld {
         this.tenantId = tenantId;
         this.auth = auth;
         this.customerAgentId = customerAgentId;
-        this.zone = asTenant(tenantId, () -> s.bookings().zoneOf(tenantId));
+        // The business's zone as loaded, read past RLS: BookingService#zoneOf outside a transaction
+        // would not see the profile and fall back to UTC, a day off around midnight.
+        this.zone = ZoneId.of(s.admin().queryForObject("SELECT time_zone FROM business_profiles WHERE tenant_id = ?",
+                String.class, tenantId));
         this.today = LocalDate.ofInstant(s.clock().instant(), zone);
     }
 
@@ -318,7 +328,10 @@ final class EvalWorld {
                 IdentityKind.PROVIDER_USER_ID, "eval-owner", code)));
     }
 
-    /** Seeds the {@code previo}: bookings, open cases and noted questions, straight into the tables. */
+    /**
+     * Seeds the {@code previo}: bookings, open cases and noted questions straight into the tables,
+     * and an earlier thread through the messages service, backdated.
+     */
     private void seed() {
         if (scenario.setup().isEmpty()) {
             return;
@@ -327,6 +340,9 @@ final class EvalWorld {
         Conversation person = conversationOf(PERSON);
         Conversation other = conversationOf(OTHER_PERSON);
         for (Setup setup : scenario.setup()) {
+            if (setup.earlierThread() != null) {
+                seedEarlierThread(admin, person, setup.earlierThread());
+            }
             if (setup.booking() != null) {
                 Scenario.SetupBooking b = setup.booking();
                 Conversation owner = Boolean.FALSE.equals(b.sameCustomer()) ? other : person;
@@ -360,6 +376,44 @@ final class EvalWorld {
                         setup.question());
             }
         }
+    }
+
+    /**
+     * The person's thread as it was {@code hace_dias} days ago at 10:00 in the business's zone: their
+     * message, that day's clock lookup as {@code get_current_time} answers it, and the agent's reply.
+     * Appended in order (so {@code seq} follows it), then backdated with the conversation's last
+     * message, as if nobody had written since.
+     */
+    private void seedEarlierThread(JdbcTemplate admin, Conversation person, Scenario.SetupThread thread) {
+        LocalDate day = today.minusDays(thread.daysAgo());
+        Instant at = day.atTime(10, 0).atZone(zone).toInstant();
+        java.util.function.Function<String, LocalDate> thatDay = spec -> RelativeDates.resolve(spec, day);
+        List<Map.Entry<MessageRole, List<MessagePart>>> written = new ArrayList<>();
+        written.add(Map.entry(MessageRole.USER,
+                List.of(new MessagePart.Text(RelativeDates.render(thread.customer(), thatDay)))));
+        if (thread.hasClockLookup()) {
+            String callId = "seed_" + UuidGenerator.newV7();
+            LocalDateTime local = LocalDateTime.ofInstant(at.plusSeconds(2), zone);
+            String reading = "{\"local_date\":\"" + local.toLocalDate() + "\",\"local_time\":\"" + local.toLocalTime()
+                    + "\",\"time_zone\":\"" + zone.getId() + "\",\"utc\":\"" + at.plusSeconds(2) + "\",\"weekday\":\""
+                    + local.getDayOfWeek().name().toLowerCase(java.util.Locale.ROOT) + "\"}";
+            written.add(Map.entry(MessageRole.TOOL_CALL, List.of(new MessagePart.ToolCallPart(
+                    new ToolCall(callId, "get_current_time", Map.of())))));
+            written.add(Map.entry(MessageRole.TOOL_RESULT, List.of(new MessagePart.ToolResultPart(
+                    new ToolResult(callId, "get_current_time", reading, false)))));
+        }
+        written.add(Map.entry(MessageRole.AGENT,
+                List.of(new MessagePart.Text(RelativeDates.render(thread.agent(), thatDay)))));
+        Instant last = at;
+        for (int i = 0; i < written.size(); i++) {
+            Map.Entry<MessageRole, List<MessagePart>> message = written.get(i);
+            UUID id = asTenant(tenantId, () -> s.messages().appendMessage(person.id(), message.getKey(),
+                    message.getValue())).id();
+            last = at.plusSeconds(2L * i);
+            admin.update("UPDATE messages SET created_at = ? WHERE id = ?", Timestamp.from(last), id);
+        }
+        admin.update("UPDATE conversations SET started_at = ?, last_message_at = ? WHERE id = ?",
+                Timestamp.from(at), Timestamp.from(last), person.id());
     }
 
     private record Conversation(UUID id, UUID identityId) {

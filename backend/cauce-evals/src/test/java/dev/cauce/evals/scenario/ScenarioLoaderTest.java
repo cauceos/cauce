@@ -45,6 +45,35 @@ class ScenarioLoaderTest {
     }
 
     @Test
+    void anEarlierThread_needsItsDaysAndBothTexts() throws Exception {
+        Scenario loaded = loader.load(file("""
+                - id: X5
+                  titulo: t
+                  nivel: bloqueante
+                  datos: bar-ejemplo
+                  previo:
+                    - hilo_anterior: {hace_dias: 2, cliente: "¿Abrís los lunes?", agente: "Hoy es {+0}: los lunes cerramos."}
+                  turnos:
+                    - cliente: "Mesa para dos mañana"
+                """)).get(0);
+
+        assertThat(loaded.setup().get(0).earlierThread()).satisfies(t -> {
+            assertThat(t.daysAgo()).isEqualTo(2);
+            assertThat(t.hasClockLookup()).isTrue();
+        });
+        assertThatThrownBy(() -> loader.load(file("""
+                - id: X6
+                  titulo: t
+                  nivel: aviso
+                  datos: bar-ejemplo
+                  previo:
+                    - hilo_anterior: {hace_dias: 0, cliente: "hola", agente: "buenas"}
+                  turnos:
+                    - cliente: "hola"
+                """))).isInstanceOf(InvalidScenarioException.class).hasMessageContaining("hace_dias");
+    }
+
+    @Test
     void anUnknownKey_isALoadError_notAScenarioThatPasses() throws Exception {
         assertThatThrownBy(() -> loader.load(file("""
                 - id: X1

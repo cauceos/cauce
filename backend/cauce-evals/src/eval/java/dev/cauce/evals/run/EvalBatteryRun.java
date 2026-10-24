@@ -36,6 +36,7 @@ import dev.cauce.orchestration.InboundMessageService;
 import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.ConversationService;
+import dev.cauce.tenancy.MessageService;
 import dev.cauce.tenancy.TenantService;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -138,6 +139,7 @@ class EvalBatteryRun {
     @Autowired private BookingService bookings;
     @Autowired private LlmProviderRegistry providers;
     @Autowired private InboundMessageService inbound;
+    @Autowired private MessageService messageService;
     @Autowired private Environment environment;
     @Autowired private Clock clock;
     @Autowired @Qualifier("adminDataSource") private DataSource adminDataSource;
@@ -214,7 +216,7 @@ class EvalBatteryRun {
         UUID operatorId = tenants.bootstrapOperator("Operator").id();
         UUID partnerId = EvalWorld.asTenant(operatorId, () -> tenants.createPartner("Evals", operatorId).id());
         EvalWorld.Services services = new EvalWorld.Services(mockMvc, json, tenants, apiKeys, conversations, owners,
-                dispatcher, worker, bookings, adminDataSource, clock, SETTINGS.packDir(), inbound);
+                dispatcher, worker, bookings, adminDataSource, clock, SETTINGS.packDir(), inbound, messageService);
         Menu menu = Menu.load(SETTINGS.packDir().resolve("bar-ejemplo").resolve("carta.json"));
         List<ScenarioRun> runs = new ArrayList<>();
         boolean complete = true;

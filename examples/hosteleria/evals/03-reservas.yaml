@@ -265,3 +265,22 @@
         argumentos: {check_availability: {date: "{+6}"}}
         herramientas_no: [propose_booking, confirm_booking]
   nota: "Seis días después de hoy: el primero con ese nombre, sin que sea hoy ni el de dentro de dos semanas. Dicho un domingo, «el sábado que viene»."
+
+- id: H3.19
+  titulo: En un hilo abierto hace dos días, «mañana» sale del mensaje nuevo, no de la fecha de entonces
+  nivel: bloqueante
+  datos: bar-ejemplo
+  origen: prueba real del 2026-10-24 (un hilo abierto el jueves guardaba la hora de aquel día; el sábado, el agente tomó «mañana» por el viernes 23)
+  previo:
+    - hilo_anterior:
+        hace_dias: 2
+        cliente: "¿Abrís los lunes?"
+        agente: "Hoy es {+0}. Los lunes cerramos; abrimos de martes a domingo. ¿Quieres reservar algún día?"
+  turnos:
+    - cliente: "Quería reservar para dos, mañana a las dos y media, a nombre de Ana."
+      nota_de_voz: true
+      espera:
+        argumentos: {check_availability: {date: "{+1}"}}
+        herramientas_no: [confirm_booking]
+        estado: {reservas: {CONFIRMED: 0}}
+  nota: "El hilo se siembra con fecha de hace dos días a las 10:00 del bar, con la consulta de get_current_time de aquel día y la respuesta del agente que dice qué día era: lo mismo que había en la conversación real. «Mañana» es hoy + 1."

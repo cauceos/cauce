@@ -101,8 +101,24 @@ public final class ScenarioLoader {
         Set<String> aliases = new HashSet<>();
         for (Setup setup : s.setup()) {
             int set = (setup.booking() != null ? 1 : 0) + (setup.handoff() != null ? 1 : 0)
-                    + (setup.question() != null ? 1 : 0) + (setup.ownerLinked() != null ? 1 : 0);
-            require(set == 1, where + "each previo entry holds exactly one of reserva, caso, pregunta, dueno_vinculado");
+                    + (setup.question() != null ? 1 : 0) + (setup.ownerLinked() != null ? 1 : 0)
+                    + (setup.earlierThread() != null ? 1 : 0);
+            require(set == 1, where + "each previo entry holds exactly one of reserva, caso, pregunta, dueno_vinculado, "
+                    + "hilo_anterior");
+            if (setup.earlierThread() != null) {
+                Scenario.SetupThread t = setup.earlierThread();
+                require(t.daysAgo() != null && t.daysAgo() >= 1, where + "hilo_anterior needs hace_dias >= 1");
+                require(t.customer() != null && !t.customer().isBlank() && t.agent() != null && !t.agent().isBlank(),
+                        where + "hilo_anterior needs cliente and agente");
+                require(s.setup().stream().filter(other -> other.earlierThread() != null).count() == 1,
+                        where + "at most one hilo_anterior");
+                try {
+                    RelativeDates.validatePlaceholders(t.customer());
+                    RelativeDates.validatePlaceholders(t.agent());
+                } catch (InvalidScenarioException e) {
+                    throw new InvalidScenarioException(where + e.getMessage());
+                }
+            }
             if (setup.booking() != null) {
                 Scenario.SetupBooking b = setup.booking();
                 require(b.date() != null && RelativeDates.SPEC.matcher(b.date()).matches(),

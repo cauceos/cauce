@@ -70,7 +70,26 @@ public record Scenario(
             @JsonProperty("reserva") SetupBooking booking,
             @JsonProperty("caso") SetupCase handoff,
             @JsonProperty("pregunta") String question,
-            @JsonProperty("dueno_vinculado") Boolean ownerLinked) {
+            @JsonProperty("dueno_vinculado") Boolean ownerLinked,
+            @JsonProperty("hilo_anterior") SetupThread earlierThread) {
+    }
+
+    /**
+     * The person's thread, opened {@code hace_dias} days ago and still open: their message, the
+     * agent's reply and, unless {@code consulta_reloj: false}, a {@code get_current_time} lookup taken
+     * that day, as the agent would have made it. Its texts write {@code {+0}} as that day. The turns
+     * then go on in the same thread, as a person who comes back does (ADR 0008, amendment).
+     */
+    public record SetupThread(
+            @JsonProperty("hace_dias") Integer daysAgo,
+            @JsonProperty("cliente") String customer,
+            @JsonProperty("agente") String agent,
+            @JsonProperty("consulta_reloj") Boolean clockLookup) {
+
+        /** Whether the thread holds that day's clock lookup: by default, yes. */
+        public boolean hasClockLookup() {
+            return !Boolean.FALSE.equals(clockLookup);
+        }
     }
 
     /** A booking that exists before the first turn. {@code como} names it for {@code $name.codigo}. */

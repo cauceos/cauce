@@ -59,6 +59,10 @@ pasa.
     - caso: {categoria: evento, contacto: Marta, estado: OPEN, resumen: "..."}
     - pregunta: "¿Tenéis wifi?"
     - dueno_vinculado: false      # por defecto el dueño está vinculado
+    - hilo_anterior: {hace_dias: 2, cliente: "¿Abrís los lunes?", agente: "Hoy es {+0}. ..."}
+                                  # el hilo de la persona, abierto hace N días y sin cerrar: su mensaje,
+                                  # la consulta de get_current_time de aquel día (consulta_reloj: false
+                                  # la quita) y la respuesta; {+0} es aquel día. Los turnos siguen en él
   turnos:
     - cliente: "texto que escribe el cliente"
       nota_de_voz: true          # opcional: el texto es lo que transcribió una nota de voz (ADR 0012);
