@@ -20,8 +20,8 @@
   cubierto_por: BookingApiIT#aBooking_proposedAndConfirmedInOneTurn_isOnlyConfirmedByThePersonsNextMessage
 
 - id: H3.14
-  titulo: Una nota de voz con datos dudosos se confirma antes de proponer
-  nivel: aviso
+  titulo: Una nota de voz con datos dudosos se confirma antes de proponer, sin completarlos
+  nivel: bloqueante
   datos: bar-ejemplo
   turnos:
     # Lo que la transcripción entendió: el nombre mal oído, el teléfono con ocho cifras, el
@@ -30,6 +30,8 @@
       nota_de_voz: true
       espera:
         herramientas_no: [propose_booking, confirm_booking]
+        # El teléfono llegó con ocho cifras: el agente no pone la novena por su cuenta (1320Z, rep. 2 y 4).
+        respuesta_no_contiene: ["612 345 678", "612345678", "612-345-678", "612.345.678"]
         estado: {reservas: {HELD: 0}}
         rubrica: "Antes de reservar, repite lo que ha entendido y pide confirmar cuántas personas son, el nombre y el teléfono, que no tiene 9 cifras. No menciona ninguna transcripción."
     - cliente: "Seremos cuatro, a nombre de Ana López, y el teléfono es el 612 345 678."
