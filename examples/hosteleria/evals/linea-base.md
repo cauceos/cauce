@@ -1,23 +1,21 @@
 # Línea base del agente de clientes del bar
 
-**Vigente: ninguna con el prompt actual** (huella `1600d77bc9ac`, desde `1d822ee`: la regla de no
-completar por su cuenta un teléfono, un nombre o un alérgeno mal oídos, y H3.14 bloqueante). La
-saldrá de la próxima batería completa. Hasta entonces, la última medida es
-[`2026-10-24T1320Z`](historial/2026-10-24T1320Z-claude-sonnet-5-5.json), N = 5: **97 %** global en
-sus 41 escenarios y **todos los bloqueantes al 100 %**, con el prompt anterior (huella
-`43c8a0cc2043`, commit `64ca30e`: la regla de las notas de voz, ADR 0012, V7) y con la versión de
-H3.14 de ese commit. Sustituyó a `1138Z` porque cambió el prompt. El
+**Vigente:** la batería completa [`2026-10-24T1550Z`](historial/2026-10-24T1550Z-claude-sonnet-5-5.json)
+sobre `df32239`, con el prompt vigente, N = 5: **100 %** global en sus 41 escenarios y **todos los
+bloqueantes al 100 %**, H3.14 incluido. Sustituye a `1138Z`, la última válida, porque cambió el
+prompt: la regla de las notas de voz (ADR 0012, V7) y la de no completar por su cuenta un teléfono,
+un nombre o un alérgeno mal oídos, con H3.14 bloqueante. El
 [coste por conversación del bar](#coste-por-conversación-del-bar) sigue siendo el medido en `1138Z`.
 
-> **Corrección.** Esta página dio `1320Z` como medida «con el prompt vigente». No lo es: se ejecutó
-> desde un worktree parado en `64ca30e`, y el prompt cambió después, en `1d822ee`. Lo mismo vale
-> para el subconjunto `1422Z` (H3.14, G1, H3.1 y H3.4, N = 5), ejecutado desde ese mismo commit con
-> cambios sin commitear, que no entra en el historial: midió el H3.14 antiguo, todavía aviso y con
-> la comprobación de orden, y por eso dio H3.14 al 0 %. Desde ahora el arnés imprime al empezar el
-> commit del que se ejecuta y avisa si está por detrás de `origin/main`.
+**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `1600d77bc9ac` · **Juez:** ninguno
 
-**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt de `1320Z`:** huella `43c8a0cc2043` (el
-actual es `1600d77bc9ac`) · **Juez:** ninguno
+> **No cuentan `1320Z`, `1422Z` ni `1516Z`.** Se ejecutaron desde un worktree parado en `64ca30e`,
+> con el prompt anterior (huella `43c8a0cc2043`) y la versión de H3.14 de ese commit, todavía aviso
+> y con la comprobación de orden. Esta página dio `1320Z` por vigente: fue un error. `1320Z` sigue
+> en el historial, como todas las ejecuciones publicadas, y se conserva más abajo por su
+> diagnóstico de H3.14; los subconjuntos `1422Z` y `1516Z` no entran en el historial. Desde
+> `6880eda` el arnés imprime al empezar el commit del que se ejecuta y avisa si está por detrás de
+> `origin/main`.
 
 > **Es una línea base determinista.** Solo cuentan las comprobaciones de traza, estado y texto.
 > Las comprobaciones de rúbrica (120 por batería) quedaron «pendiente de juez»: no entran en
@@ -38,11 +36,54 @@ prompt corregido (`0732Z`) → arreglos del arnés y del orden de los mensajes, 
 H3.13 → **100 %** (`0914Z`). El experimento R1 (`0941Z`) no cambia la línea base: se rechazó. →
 **99 %** (`1138Z`), mismo prompt, con tokens por escenario: H3.13 al 80 %, variabilidad. Haiku 5.5
 (`1315Z`): **86 %** y seis bloqueantes por debajo del 100 %, **no aprobado**. → Prompt con la regla
-de las notas de voz y escenario H3.14 → **97 %** (`1320Z`), bloqueantes al 100 %: H3.14 al 0 % por
-su comprobación de orden, no por el agente; corregida después. → Prompt con la regla de no
-completar datos mal oídos y H3.14 bloqueante (`1d822ee`): **sin medir todavía**.
+de las notas de voz y escenario H3.14; `1320Z` lo midió desde un worktree desfasado y no cuenta. →
+H3.14 propone sin volver a consultar, regla de no completar datos mal oídos y H3.14 bloqueante →
+**100 %** (`1550Z`), bloqueantes al 100 %.
 
-## Última línea base medida · 2026-10-24T1320Z · prompt anterior
+## Línea base vigente · 2026-10-24T1550Z
+
+| Commit | Huella del prompt | Turnos de modelo | Coste |
+|---|---|---|---|
+| `df32239` | `1600d77bc9ac` | 280 | 1,5326 US$ |
+
+| Entrada | Leída de caché | Escrita en caché | Salida |
+|---|---|---|---|
+| 4.010.426 | 3.898.598 (97,2 %) | 110.004 | 69.906 |
+
+- El resumen marca «con cambios sin commitear» solo porque el resumen sin commitear del subconjunto
+  `1522Z` estaba en `historial/` del worktree: ni el prompt ni los escenarios tenían cambios (la
+  huella es la de `df32239`).
+- La entrada por turno de modelo sube de 13.285 (`1138Z`) a 14.323 tokens (+8 %): el prompt es
+  más largo (las dos reglas nuevas) y H3.14 añade turnos. El coste de la batería queda igual que
+  en `1320Z` (1,5326 frente a 1,5339 US$).
+- La estimación de tokens de entrada del presupuesto de contexto queda en 1,037 de lo facturado de
+  media (mínimo 0,896, máximo 1,081) en sus 632 llamadas: la calibración a 2,5 caracteres por
+  token (ADR 0005) se sostiene.
+- Antes, el subconjunto `1522Z` (H3.14, G1, H3.1 y H3.4, N = 5, sobre `df32239`) dio 100 %; no
+  entra en el historial: lo cubre esta batería.
+
+### Tasas
+
+**Global: 100 %** (165 de 165 repeticiones con todas sus comprobaciones en verde).
+
+| Tarea | Tasa |
+|---|---|
+| 00 · anclaje | 100 % |
+| 01 · información | 100 % |
+| 02 · carta | 100 % |
+| 03 · reservas | 100 % |
+| 04 · escalado | 100 % |
+| 05 · resumen | 100 % |
+
+Reglas generales (G1 y carta sin inventar), al 100 %. **Bloqueantes por debajo del 100 %:** ninguno.
+**Avisos bajo el umbral del 90 %:** ninguno. 120 comprobaciones de rúbrica, pendientes de juez.
+
+**H3.14 · lo observado en `1320Z`, resuelto.** A la nota de voz con el teléfono de ocho cifras, el
+agente ya no pone la cifra que falta: dice que le han llegado ocho («612 345 67») y pide el número
+completo, y con los datos corregidos propone la reserva para 4 a nombre de Ana López en las cinco
+repeticiones.
+
+## 2026-10-24T1320Z · worktree desfasado, no cuenta
 
 | Commit | Huella del prompt | Turnos de modelo | Coste |
 |---|---|---|---|
