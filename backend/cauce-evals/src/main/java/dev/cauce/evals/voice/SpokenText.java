@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Spoken Spanish reduced to the words a transcription is compared by: lowercase, without accents
@@ -13,8 +15,13 @@ import java.util.Map;
  * a transcriber writing figures is not a mistake, and a phone number is compared the way it matters.
  *
  * <p>Spelt numbers are read up to the thousands ("trescientos cuarenta y cinco" is 345); a figure
- * spoken digit by digit ("seis uno dos") stays three numbers. Times and fractions are not
- * interpreted: "nueve y media" against "9:30" counts as different words.
+ * spoken digit by digit ("seis uno dos") stays three numbers.
+ *
+ * <p>A clock time is one token, on the twelve-hour dial it is said on: "dos y media", "2:30",
+ * "2.30", "14:30" and "14h30" are all {@code 2h30}; "nueve menos cuarto" is {@code 8h45}, "una en
+ * punto" {@code 1h00}. Spoken, a time is an hour with "y media", "y cuarto", "menos cuarto" or "en
+ * punto"; with "y" or "menos" and five, ten, twenty or twenty-five minutes only after "la" or "las"
+ * ("las nueve y diez"), so "dos y cinco niños" stays numbers. Other fractions are not interpreted.
  */
 public final class SpokenText {
 
@@ -44,13 +51,35 @@ public final class SpokenText {
             Map.entry("setecientos", 700), Map.entry("setecientas", 700), Map.entry("ochocientos", 800),
             Map.entry("ochocientas", 800), Map.entry("novecientos", 900), Map.entry("novecientas", 900));
 
+    /** The hours a time is said with, on the twelve-hour dial. */
+    private static final Map<String, Integer> HOURS = Map.ofEntries(
+            Map.entry("una", 1), Map.entry("uno", 1), Map.entry("dos", 2), Map.entry("tres", 3),
+            Map.entry("cuatro", 4), Map.entry("cinco", 5), Map.entry("seis", 6), Map.entry("siete", 7),
+            Map.entry("ocho", 8), Map.entry("nueve", 9), Map.entry("diez", 10), Map.entry("once", 11),
+            Map.entry("doce", 12));
+
+    private static final Map<String, Integer> MINUTES = Map.of("cinco", 5, "diez", 10, "veinte", 20,
+            "veinticinco", 25);
+
+    private static final String HOUR = "(una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|\\d{1,2})";
+
+    /** "2:30", "14.30", "14h30": a figure that is a time, not part of a longer number. */
+    private static final Pattern FIGURE_TIME = Pattern.compile("(?<![\\d.,:])(\\d{1,2})[:.h](\\d{2})(?![\\d.,:]?\\d)");
+
+    private static final Pattern SPOKEN_TIME = Pattern.compile("\\b" + HOUR
+            + " (y media|y cuarto|menos cuarto|en punto)\\b");
+
+    private static final Pattern SPOKEN_MINUTES = Pattern.compile("(?<=\\blas? )" + HOUR
+            + " (y|menos) (cinco|diez|veinte|veinticinco)\\b");
+
     private SpokenText() {
     }
 
     /** {@code text} as the tokens it is compared by. */
     public static List<String> tokens(String text) {
-        String plain = Normalizer.normalize(text.toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "")
+        String unaccented = Normalizer.normalize(text.toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+        String plain = times(unaccented)
                 .replaceAll("[^a-z0-9ñ]+", " ")
                 .strip();
         List<String> tokens = new ArrayList<>();
@@ -76,6 +105,59 @@ public final class SpokenText {
         }
         number.flushInto(tokens);
         return tokens;
+    }
+
+    /** Every clock time in {@code text} as its one token, before the punctuation that marks it goes. */
+    static String times(String text) {
+        String result = replace(FIGURE_TIME, text, time -> {
+            int hour = Integer.parseInt(time.group(1));
+            int minutes = Integer.parseInt(time.group(2));
+            return hour > 24 || minutes > 59 ? time.group() : clock(hour, minutes);
+        });
+        result = replace(SPOKEN_TIME, result, time -> {
+            Integer hour = hour(time.group(1));
+            if (hour == null) {
+                return time.group();
+            }
+            return switch (time.group(2)) {
+                case "y media" -> clock(hour, 30);
+                case "y cuarto" -> clock(hour, 15);
+                case "menos cuarto" -> clock(hour - 1, 45);
+                default -> clock(hour, 0);
+            };
+        });
+        return replace(SPOKEN_MINUTES, result, time -> {
+            Integer hour = hour(time.group(1));
+            int minutes = MINUTES.get(time.group(3));
+            if (hour == null) {
+                return time.group();
+            }
+            return "y".equals(time.group(2)) ? clock(hour, minutes) : clock(hour - 1, 60 - minutes);
+        });
+    }
+
+    private static String replace(Pattern pattern, String text, java.util.function.Function<Matcher, String> by) {
+        Matcher matcher = pattern.matcher(text);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            matcher.appendReplacement(result, Matcher.quoteReplacement(by.apply(matcher)));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    private static Integer hour(String said) {
+        if (said.chars().allMatch(Character::isDigit)) {
+            int hour = Integer.parseInt(said);
+            return hour <= 24 ? hour : null;
+        }
+        return HOURS.get(said);
+    }
+
+    /** The time on the twelve-hour dial: 0 and 12 are 12, 14 is 2. */
+    private static String clock(int hour, int minutes) {
+        int dial = Math.floorMod(hour - 1, 12) + 1;
+        return dial + "h" + (minutes < 10 ? "0" : "") + minutes;
     }
 
     private static void digits(String figure, List<String> tokens) {

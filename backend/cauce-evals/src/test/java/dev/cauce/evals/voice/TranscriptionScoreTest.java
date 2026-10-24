@@ -55,6 +55,17 @@ class TranscriptionScoreTest {
     }
 
     @Test
+    void of_aTimeHeardInFigures_isNoWordError_andTheCriticalTimeIsHeard() {
+        TranscriptionScore score = TranscriptionScore.of("Mañana a las dos y media, a nombre de Ana.",
+                "Mañana a las 2:30, a nombre de Ana.", List.of("dos y media"));
+
+        assertThat(score.wordErrorRate()).isZero();
+        assertThat(score.criticalDataRight()).isTrue();
+        assertThat(TranscriptionScore.of("a las dos y media", "a las 3:30", List.of("dos y media"))
+                .criticalDataRight()).isFalse();
+    }
+
+    @Test
     void editDistance_countsSubstitutionsDeletionsAndInsertions() {
         assertThat(TranscriptionScore.editDistance(List.of("a", "b", "c"), List.of("a", "x", "c", "d"))).isEqualTo(2);
         assertThat(TranscriptionScore.editDistance(List.of("a", "b"), List.of())).isEqualTo(2);
