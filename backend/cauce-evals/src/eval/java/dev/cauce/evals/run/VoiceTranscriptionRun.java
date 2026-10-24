@@ -53,10 +53,12 @@ class VoiceTranscriptionRun {
         List<VoiceReport.Result> results = new ArrayList<>();
         for (VoiceManifest.Note note : notes) {
             byte[] audio = Files.readAllBytes(folder.resolve(note.file()));
+            long started = System.nanoTime(); // a local duration: how long the transcriber took
             Transcription heard = transcriber.transcribe(audio, mediaType(note.file()), null);
+            double took = (System.nanoTime() - started) / 1e9;
             TranscriptionScore score = TranscriptionScore.of(note.transcript(), heard.text(), note.criticalData());
-            results.add(new VoiceReport.Result(note, heard.text(), heard.durationSeconds(), score));
-            System.out.printf(Locale.ROOT, "%s · %.1f %% · %s%n", note.id(), score.wordErrorRate() * 100,
+            results.add(new VoiceReport.Result(note, heard.text(), heard.durationSeconds(), took, score));
+            System.out.printf(Locale.ROOT, "%s · %.1f s · %.1f %% · %s%n", note.id(), took, score.wordErrorRate() * 100,
                     score.criticalData());
         }
 
@@ -67,8 +69,9 @@ class VoiceTranscriptionRun {
         Files.writeString(out.resolve("informe.md"), VoiceReport.markdown(title, results), StandardCharsets.UTF_8);
         Files.writeString(out.resolve("resultados.csv"), VoiceReport.csv(results), StandardCharsets.UTF_8);
         int[] critical = VoiceReport.criticalDataRight(results);
-        System.out.printf(Locale.ROOT, "%nError de palabras: %.1f %% · datos críticos: %d de %d · informe: %s%n",
-                VoiceReport.overallWordErrorRate(results) * 100, critical[0], critical[1], out.resolve("informe.md"));
+        System.out.printf(Locale.ROOT, "%nError de palabras: %.1f %% · datos críticos: %d de %d · %.1f s por nota"
+                        + " · informe: %s%n", VoiceReport.overallWordErrorRate(results) * 100, critical[0], critical[1],
+                VoiceReport.meanTranscriptionSeconds(results), out.resolve("informe.md"));
         assertThat(results).hasSameSizeAs(notes);
     }
 

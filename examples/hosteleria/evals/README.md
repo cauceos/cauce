@@ -151,7 +151,9 @@ cd backend
 ```
 
 Se compara sin mayúsculas, acentos ni puntuación, y los números igual en letra que en cifra
-(«seis cero cero» y «600»). Un dato crítico está bien si sus palabras se oyen enteras y en orden. El
+(«seis cero cero» y «600»). Un dato crítico está bien si sus palabras se oyen enteras y en orden;
+una palabra vale también en singular o plural («perro» y «perros»), un número solo entero y exacto
+(«seis» no está en «16»). El informe da también cuánto tardó cada nota en transcribirse. El
 informe va a `build/evals/voz-<fecha>/` y nunca al historial: cita lo que dicen las notas, y las
 notas reales no van al repositorio público.
 

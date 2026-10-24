@@ -8,7 +8,9 @@ import java.util.Map;
  * How a transcription compares with what the note says (ADR 0012): the word error rate — the
  * substitutions, deletions and insertions that turn the expected words into the heard ones, over
  * the expected words — and, for each critical datum, whether its words were heard together and in
- * order. Both on {@link SpokenText} tokens.
+ * order. Both on {@link SpokenText} tokens, so case and accents never count. A critical datum also
+ * tolerates another form of the same word — singular or plural ("perro", "perros"; "mesa", "mesas")
+ * — but never another number: a digit is heard right only as itself.
  *
  * @param wordErrorRate 0 when every word was heard; above 1 when the transcription added more than
  *        the note said
@@ -61,10 +63,37 @@ public record TranscriptionScore(double wordErrorRate, int expectedWords, Map<St
             return true;
         }
         for (int start = 0; start + datum.size() <= heard.size(); start++) {
-            if (heard.subList(start, start + datum.size()).equals(datum)) {
+            boolean all = true;
+            for (int k = 0; k < datum.size() && all; k++) {
+                all = sameWord(datum.get(k), heard.get(start + k));
+            }
+            // A number is heard right only whole: "seis" is not the 6 of "16".
+            if (all && !digitAt(heard, start - 1, datum.get(0)) && !digitAt(heard, start + datum.size(),
+                    datum.get(datum.size() - 1))) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** Whether {@code edge} is a digit and the heard token at {@code index} a digit too: a longer number. */
+    private static boolean digitAt(List<String> heard, int index, String edge) {
+        return Character.isDigit(edge.charAt(0)) && index >= 0 && index < heard.size()
+                && Character.isDigit(heard.get(index).charAt(0));
+    }
+
+    /** The same word, or its singular or plural; a digit only as itself. */
+    static boolean sameWord(String expected, String heard) {
+        if (expected.equals(heard)) {
+            return true;
+        }
+        if (Character.isDigit(expected.charAt(0)) || Character.isDigit(heard.charAt(0))) {
+            return false;
+        }
+        return plural(expected, heard) || plural(heard, expected);
+    }
+
+    private static boolean plural(String singular, String other) {
+        return other.equals(singular + "s") || other.equals(singular + "es");
     }
 }

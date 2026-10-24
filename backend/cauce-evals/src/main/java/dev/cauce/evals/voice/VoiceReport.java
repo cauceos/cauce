@@ -13,8 +13,17 @@ import java.util.stream.Collectors;
  */
 public final class VoiceReport {
 
-    /** One note's result: what the transcriber heard, how long the note was, and its score. */
-    public record Result(VoiceManifest.Note note, String heard, Integer seconds, TranscriptionScore score) {
+    /**
+     * One note's result: what the transcriber heard, how long the note was, how long transcribing it
+     * took, and its score.
+     */
+    public record Result(VoiceManifest.Note note, String heard, Integer seconds, double transcriptionSeconds,
+                         TranscriptionScore score) {
+    }
+
+    /** The mean time it took to transcribe a note. */
+    public static double meanTranscriptionSeconds(List<Result> results) {
+        return results.stream().mapToDouble(Result::transcriptionSeconds).average().orElse(0);
     }
 
     private VoiceReport() {
@@ -45,15 +54,18 @@ public final class VoiceReport {
         StringBuilder md = new StringBuilder("# " + title + "\n\n");
         md.append(String.format(Locale.ROOT, "- Notas: %d · tasa de error de palabras: **%.1f %%**%n", results.size(),
                 overallWordErrorRate(results) * 100));
-        md.append(String.format(Locale.ROOT, "- Datos críticos bien oídos: **%d de %d**%n%n", critical[0], critical[1]));
-        md.append("| Nota | Segundos | Error de palabras | Datos críticos |\n|---|---|---|---|\n");
+        md.append(String.format(Locale.ROOT, "- Datos críticos bien oídos: **%d de %d**%n", critical[0], critical[1]));
+        md.append(String.format(Locale.ROOT, "- Tiempo de transcripción por nota: %.1f s de media%n%n",
+                meanTranscriptionSeconds(results)));
+        md.append("| Nota | Segundos | Transcrita en | Error de palabras | Datos críticos |\n|---|---|---|---|---|\n");
         for (Result result : results) {
             String data = result.score().criticalData().isEmpty() ? "—"
                     : result.score().criticalData().entrySet().stream()
                             .map(d -> "«" + d.getKey() + "»" + (d.getValue() ? " ✓" : " ✗"))
                             .collect(Collectors.joining(", "));
-            md.append(String.format(Locale.ROOT, "| %s | %s | %.1f %% | %s |%n", result.note().id(),
-                    result.seconds() == null ? "?" : result.seconds(), result.score().wordErrorRate() * 100, data));
+            md.append(String.format(Locale.ROOT, "| %s | %s | %.1f s | %.1f %% | %s |%n", result.note().id(),
+                    result.seconds() == null ? "?" : result.seconds(), result.transcriptionSeconds(),
+                    result.score().wordErrorRate() * 100, data));
         }
         md.append("\n## Lo que se dijo y lo que se oyó\n");
         for (Result result : results) {
@@ -70,13 +82,14 @@ public final class VoiceReport {
      * wrong are listed, separated by {@code |}.
      */
     public static String csv(List<Result> results) {
-        StringBuilder csv = new StringBuilder("id,seconds,expected_words,word_error_rate,critical_right,critical_total,"
-                + "critical_missed\n");
+        StringBuilder csv = new StringBuilder("id,seconds,transcription_seconds,expected_words,word_error_rate,"
+                + "critical_right,critical_total,critical_missed\n");
         for (Result result : results) {
             long right = result.score().criticalData().values().stream().filter(Boolean::booleanValue).count();
             String missed = result.score().criticalData().entrySet().stream().filter(d -> !d.getValue())
                     .map(Map.Entry::getKey).collect(Collectors.joining("|"));
             csv.append(result.note().id()).append(',').append(result.seconds() == null ? "" : result.seconds())
+                    .append(',').append(String.format(Locale.ROOT, "%.2f", result.transcriptionSeconds()))
                     .append(',').append(result.score().expectedWords()).append(',')
                     .append(String.format(Locale.ROOT, "%.4f", result.score().wordErrorRate())).append(',')
                     .append(right).append(',').append(result.score().criticalData().size()).append(',')
