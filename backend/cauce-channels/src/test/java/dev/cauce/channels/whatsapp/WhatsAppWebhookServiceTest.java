@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import dev.cauce.channels.UnsupportedMessageRecorder;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.InboundInterception;
 import dev.cauce.channels.config.ChannelConfig;
@@ -57,7 +58,7 @@ class WhatsAppWebhookServiceTest {
     private WhatsAppNumberService numberService;
     private InboundMessageService inbound;
     private WhatsAppChannelAdapter outbound;
-    private WhatsAppEventRecorder recorder;
+    private UnsupportedMessageRecorder recorder;
     private WhatsAppWebhookService service;
     private WhatsAppApp app;
     private ChannelConfig number;
@@ -68,7 +69,7 @@ class WhatsAppWebhookServiceTest {
         numberService = mock(WhatsAppNumberService.class);
         inbound = mock(InboundMessageService.class);
         outbound = mock(WhatsAppChannelAdapter.class);
-        recorder = mock(WhatsAppEventRecorder.class);
+        recorder = mock(UnsupportedMessageRecorder.class);
         service = new WhatsAppWebhookService(appService, numberService, inbound, outbound, recorder,
                 new WhatsAppProperties(), FAKE_HASHER, new SyncTaskExecutor(), mock(InboundInterception.class),
                 Clock.systemUTC());

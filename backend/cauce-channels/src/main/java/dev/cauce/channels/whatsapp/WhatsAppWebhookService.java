@@ -3,6 +3,7 @@ package dev.cauce.channels.whatsapp;
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.cauce.channels.UnsupportedMessageRecorder;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.InboundInterception;
 import dev.cauce.channels.config.ChannelConfig;
@@ -60,7 +61,7 @@ public class WhatsAppWebhookService {
     private final WhatsAppNumberService numberService;
     private final InboundMessageService inboundMessageService;
     private final WhatsAppChannelAdapter outbound;
-    private final WhatsAppEventRecorder eventRecorder;
+    private final UnsupportedMessageRecorder eventRecorder;
     private final WhatsAppProperties properties;
     private final ApiKeyHasher hasher;
     private final TaskExecutor outboundExecutor;
@@ -71,7 +72,7 @@ public class WhatsAppWebhookService {
 
     public WhatsAppWebhookService(WhatsAppAppService appService, WhatsAppNumberService numberService,
                                   InboundMessageService inboundMessageService, WhatsAppChannelAdapter outbound,
-                                  WhatsAppEventRecorder eventRecorder, WhatsAppProperties properties,
+                                  UnsupportedMessageRecorder eventRecorder, WhatsAppProperties properties,
                                   ApiKeyHasher hasher,
                                   @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor,
                                   InboundInterception interception,

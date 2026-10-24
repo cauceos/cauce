@@ -71,16 +71,16 @@ public final class ChannelAuditEvents {
 
     /**
      * An inbound message of a type Cauce does not read yet arrived and was answered with the
-     * fixed text-only reply (ADR 0006, W5). Recorded in the number's tenant chain: the message
+     * fixed text-only reply (ADR 0006, W5). Recorded in the config's tenant chain: the message
      * type and ids only — never its content, its media or the sender's identifier.
      */
-    public static AuditEvent unsupportedMessage(ChannelConfig number, String messageType, String providerMessageId) {
-        Objects.requireNonNull(number, "number must not be null");
+    public static AuditEvent unsupportedMessage(ChannelConfig config, String messageType, String providerMessageId) {
+        Objects.requireNonNull(config, "config must not be null");
         Objects.requireNonNull(messageType, "messageType must not be null");
-        return new AuditEvent(number.tenantId(), UNSUPPORTED_MESSAGE, Map.of(
-                "channel_config_id", number.id().toString(),
-                "agent_id", number.agentId().toString(),
-                "channel_type", number.channelType(),
+        return new AuditEvent(config.tenantId(), UNSUPPORTED_MESSAGE, Map.of(
+                "channel_config_id", config.id().toString(),
+                "agent_id", config.agentId().toString(),
+                "channel_type", config.channelType(),
                 "message_type", messageType,
                 "provider_message_id", providerMessageId == null ? "" : providerMessageId));
     }
