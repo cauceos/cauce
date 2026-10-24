@@ -34,7 +34,10 @@
         rubrica: "Antes de reservar, repite lo que ha entendido y pide confirmar cuántas personas son, el nombre y el teléfono, que no tiene 9 cifras. No menciona ninguna transcripción."
     - cliente: "Seremos cuatro, a nombre de Ana López, y el teléfono es el 612 345 678."
       espera:
-        orden: [check_availability, propose_booking]
+        # La disponibilidad ya se consultó en el turno anterior, para la misma fecha: no hace falta
+        # otra vez (1320Z). Lo que se comprueba es que propone con los datos corregidos.
+        herramientas: [propose_booking]
+        argumentos: {propose_booking: {party_size: 4, contact_name: "Ana López"}}
         herramientas_no: [confirm_booking]
         estado: {reservas: {HELD: 1, CONFIRMED: 0}}
         rubrica: "Propone la reserva con 4 personas a nombre de Ana López y pregunta si la confirma."
