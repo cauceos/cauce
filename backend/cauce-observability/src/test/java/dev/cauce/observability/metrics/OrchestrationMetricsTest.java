@@ -17,6 +17,7 @@ import dev.cauce.orchestration.events.LlmInvoked;
 import dev.cauce.orchestration.events.LlmResponded;
 import dev.cauce.orchestration.events.ToolCallRequested;
 import dev.cauce.orchestration.events.ToolExecuted;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -137,9 +138,22 @@ class OrchestrationMetricsTest {
     }
 
     @Test
+    void on_llmResponded_recordsTheEstimateOverTheBilledInputTokens() {
+        metrics.on(new LlmResponded(INVOCATION_ID, "anthropic", "claude-sonnet-4-7", 0,
+                "STOP", 1000, 9, 1009, 1300, NOW));
+        metrics.on(new LlmResponded(INVOCATION_ID, "anthropic", "claude-sonnet-4-7", 1,
+                "STOP", 0, 9, 9, 50, NOW)); // nothing billed: no ratio
+
+        DistributionSummary ratio = registry.get(OrchestrationMetrics.INPUT_ESTIMATE_RATIO)
+                .tags("provider", "anthropic", "model", "claude-sonnet-4-7").summary();
+        assertThat(ratio.count()).isEqualTo(1);
+        assertThat(ratio.totalAmount()).isEqualTo(1.3);
+    }
+
+    @Test
     void on_llmResponded_countsResponsesByFinishReason() {
         metrics.on(new LlmResponded(INVOCATION_ID, "anthropic", "claude-sonnet-4-7", 0,
-                "STOP", 7, 9, 16, NOW));
+                "STOP", 7, 9, 16, 7, NOW));
 
         assertThat(registry.counter(OrchestrationMetrics.LLM_RESPONSES,
                 "provider", "anthropic", "model", "claude-sonnet-4-7",
@@ -149,7 +163,7 @@ class OrchestrationMetricsTest {
     @Test
     void on_llmResponded_incrementsTokenCountersByUsage() {
         metrics.on(new LlmResponded(INVOCATION_ID, "anthropic", "claude-sonnet-4-7", 0,
-                "STOP", 7, 9, 16, NOW));
+                "STOP", 7, 9, 16, 7, NOW));
 
         assertThat(tokenCount("input")).isEqualTo(7.0);
         assertThat(tokenCount("output")).isEqualTo(9.0);

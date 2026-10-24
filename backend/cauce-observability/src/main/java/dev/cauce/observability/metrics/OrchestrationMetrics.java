@@ -11,6 +11,7 @@ import dev.cauce.orchestration.events.LlmResponded;
 import dev.cauce.orchestration.events.OrchestrationEvent;
 import dev.cauce.orchestration.events.ToolCallRequested;
 import dev.cauce.orchestration.events.ToolExecuted;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
@@ -55,6 +56,7 @@ public class OrchestrationMetrics {
     static final String LLM_RESPONSES = "cauce.orchestration.llm.responses";
     static final String LLM_FAILURES = "cauce.orchestration.llm.failures";
     static final String LLM_TOKENS = "cauce.orchestration.llm.tokens";
+    static final String INPUT_ESTIMATE_RATIO = "cauce.orchestration.llm.input_tokens.estimate_ratio";
     static final String TOOL_CALLS = "cauce.orchestration.tools.calls";
     static final String TOOL_EXECUTION = "cauce.orchestration.tools.execution";
     static final String CUSTOMER_MESSAGES = "cauce.conversation.customer_messages";
@@ -67,6 +69,12 @@ public class OrchestrationMetrics {
     /** The bounds a turn's latency is read against: a person waiting for a reply. */
     static final Duration[] TURN_OBJECTIVES = {
             Duration.ofSeconds(5), Duration.ofSeconds(15), Duration.ofSeconds(30), Duration.ofSeconds(60)};
+
+    /**
+     * The bounds the estimate ratio is read against: within 20 % of the billed input tokens either
+     * way (ADR 0005, amendment of 2026-10-24); the orchestrator logs a WARN beyond them.
+     */
+    static final double[] ESTIMATE_OBJECTIVES = {0.8, 1.2};
 
     /** The lifetimes of the two prompt cache retentions (ADR 0010, S9): the gaps that matter. */
     static final Duration SHORT_CACHE = Duration.ofMinutes(5);
@@ -130,6 +138,7 @@ public class OrchestrationMetrics {
                 tokens(responded, "input", responded.inputTokens());
                 tokens(responded, "output", responded.outputTokens());
                 tokens(responded, "total", responded.totalTokens());
+                estimateRatio(responded);
             }
             case LlmFailed failed ->
                     registry.counter(LLM_FAILURES,
@@ -171,6 +180,23 @@ public class OrchestrationMetrics {
                     .register(registry)
                     .record(gap);
         }
+    }
+
+    /**
+     * The context budget's estimate of the input tokens over what the provider billed: 1.0 is exact,
+     * under 1 an estimate that fell short (windows overrun), over 1 one that overshot (history thrown
+     * away). Nothing is recorded for a call that billed no input.
+     */
+    private void estimateRatio(LlmResponded responded) {
+        if (responded.inputTokens() <= 0) {
+            return;
+        }
+        DistributionSummary.builder(INPUT_ESTIMATE_RATIO)
+                .tag("provider", responded.provider())
+                .tag("model", responded.modelName())
+                .serviceLevelObjectives(ESTIMATE_OBJECTIVES)
+                .register(registry)
+                .record((double) responded.estimatedInputTokens() / responded.inputTokens());
     }
 
     private void tokens(LlmResponded responded, String kind, int amount) {

@@ -40,10 +40,12 @@ class OrchestrationEventTest {
 
     @Test
     void llmResponded_invalidPayload_throws() {
-        assertThatThrownBy(() -> new LlmResponded(ID, "p", "m", 0, null, 1, 1, 2, TS))
+        assertThatThrownBy(() -> new LlmResponded(ID, "p", "m", 0, null, 1, 1, 2, 1, TS))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("finishReason");
-        assertThatThrownBy(() -> new LlmResponded(ID, "p", "m", 0, "STOP", -1, 1, 0, TS))
+        assertThatThrownBy(() -> new LlmResponded(ID, "p", "m", 0, "STOP", -1, 1, 0, 1, TS))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("inputTokens");
+        assertThatThrownBy(() -> new LlmResponded(ID, "p", "m", 0, "STOP", 1, 1, 2, -1, TS))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("estimatedInputTokens");
     }
 
     @Test
@@ -80,7 +82,7 @@ class OrchestrationEventTest {
                 new ContextAssembled(ID, 0, "m", 1, 10, 200_000, TS),
                 new LlmInvoked(ID, "anthropic", "m", 0, TS),
                 new LlmFailed(ID, "anthropic", "m", 0, "LlmProviderUnavailableException", TS),
-                new LlmResponded(ID, "anthropic", "m", 0, "STOP", 5, 7, 12, TS),
+                new LlmResponded(ID, "anthropic", "m", 0, "STOP", 5, 7, 12, 5, TS),
                 new ToolCallRequested(ID, 0, "get_current_time", "call-1", TS),
                 new ToolExecuted(ID, 0, "get_current_time", "call-1", false, 3, TS),
                 new InvocationCompleted(ID, ID, ID, 1, ID, java.time.Duration.ofSeconds(4), TS),

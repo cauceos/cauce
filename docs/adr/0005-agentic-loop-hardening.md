@@ -129,6 +129,27 @@ behind a per-agent switch (`agents.elide_past_lookups`, V45) and measured with t
   at the full input price. The harness cannot show this: its calls follow each other and its cache
   never expires.
 
+## Amendment (2026-10-24): the window counts the prompt and tools, and the estimate is checked
+
+C2 cut the history to fit the window, but the system prompt and the tool schemas travelled
+outside the budget. On a small served window (Ollama's 4096) that overran the window, and the
+server cut the request without saying so.
+
+- **Everything sent counts.** The context budget subtracts an estimate of the system prompt and
+  of each tool (name, description and schema as compact JSON, 3.5 characters per token), plus
+  20 tokens per tool and 400 once when tools are offered, for the tool-use instructions providers
+  write into the prompt. The estimate errs high: an overshoot costs history, an undershoot a cut.
+- **What does not fit fails, never goes out to be cut.** When the prompt and tools leave no room
+  for the current message, the invocation fails before the model is called, as
+  `AGENT_MISCONFIGURED`, with the window and the estimates in its reason. A message that would not
+  fit even without a prompt is still the message's failure, not the agent's.
+- **The estimate is read against the bill.** Each call's `LlmResponded` event carries the
+  estimate next to the input tokens the provider billed (the same count the usage ledger
+  records). The metric `cauce.orchestration.llm.input_tokens.estimate_ratio` (estimate over
+  billed, by provider and model, with objectives at 0.8 and 1.2) shows how far it drifts, and a
+  call off by more than 20 % either way logs a WARN with the counts, never content. The constants
+  above are revised from that metric, not by guess.
+
 ## References
 
 - `backend/cauce-orchestration/src/main/java/dev/cauce/orchestration/service/OrchestratorService.java` — the loop

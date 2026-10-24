@@ -23,6 +23,7 @@ import dev.cauce.llm.spi.SystemDefaultLlmCredential;
 import dev.cauce.orchestration.LogSafe;
 import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.context.ContextBuilder;
+import dev.cauce.orchestration.context.InputTokenEstimate;
 import dev.cauce.orchestration.context.LlmInvocationContext;
 import dev.cauce.orchestration.context.ModelContextWindow;
 import dev.cauce.orchestration.events.ContextAssembled;
@@ -265,10 +266,21 @@ public class OrchestratorService {
             usageRecorder.record(LlmUsageRecord.create(agent.tenantId(), agent.id(),
                     conversationId, invocationId, provider.id(), agent.modelName(), iteration,
                     response.usage(), response.finishReason().name(), clock.instant()));
+            int estimatedInput = context.estimatedTokens() + context.fixedTokens();
             eventPublisher.publishEvent(new LlmResponded(invocationId, provider.id(),
                     agent.modelName(), iteration, response.finishReason().name(),
                     response.usage().inputTokens(), response.usage().outputTokens(),
-                    response.usage().totalTokens(), Instant.now()));
+                    response.usage().totalTokens(), estimatedInput, Instant.now()));
+            if (InputTokenEstimate.exceeds(estimatedInput, response.usage().inputTokens())) {
+                // ADR 0005, amendment of 2026-10-24: the context budget holds only if its estimate
+                // tracks what the provider bills. Counts only, never content.
+                log.warn("Input token estimate off by more than {}%: estimated={} billed={} deviation={}% "
+                                + "provider={} model={} round={}",
+                        Math.round(InputTokenEstimate.MAX_DEVIATION * 100), estimatedInput,
+                        response.usage().inputTokens(),
+                        Math.round(InputTokenEstimate.deviation(estimatedInput, response.usage().inputTokens()) * 100),
+                        provider.id(), agent.modelName(), iteration);
+            }
 
             if (response.toolCalls().isEmpty()) {
                 if (response.content().isBlank()) {

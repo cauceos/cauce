@@ -21,6 +21,8 @@ import java.util.UUID;
  * @param inputTokens prompt-side tokens billed for this call
  * @param outputTokens completion-side tokens billed for this call
  * @param totalTokens total tokens billed for this call
+ * @param estimatedInputTokens the context budget's estimate of {@code inputTokens}, made before the
+ *     call (history, system prompt and tool schemas), to be read against what was billed
  * @param occurredAt when the response arrived
  */
 public record LlmResponded(
@@ -32,6 +34,7 @@ public record LlmResponded(
         int inputTokens,
         int outputTokens,
         int totalTokens,
+        int estimatedInputTokens,
         Instant occurredAt) implements OrchestrationEvent {
 
     public LlmResponded {
@@ -43,6 +46,7 @@ public record LlmResponded(
         EventPreconditions.requireNonNegative(inputTokens, "inputTokens");
         EventPreconditions.requireNonNegative(outputTokens, "outputTokens");
         EventPreconditions.requireNonNegative(totalTokens, "totalTokens");
+        EventPreconditions.requireNonNegative(estimatedInputTokens, "estimatedInputTokens");
         Objects.requireNonNull(occurredAt, "occurredAt");
     }
 }

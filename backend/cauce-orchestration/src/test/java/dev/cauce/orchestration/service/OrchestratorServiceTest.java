@@ -36,6 +36,7 @@ import dev.cauce.llm.spi.LlmProvider;
 import dev.cauce.llm.spi.LlmProviderRegistry;
 import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.context.ContextBuilder;
+import dev.cauce.orchestration.context.TokenEstimator;
 import dev.cauce.orchestration.events.ContextAssembled;
 import dev.cauce.orchestration.events.InvocationCompleted;
 import dev.cauce.orchestration.events.LlmFailed;
@@ -522,6 +523,9 @@ class OrchestratorServiceTest {
         assertThat(responded.inputTokens()).isEqualTo(5);
         assertThat(responded.outputTokens()).isEqualTo(5);
         assertThat(responded.totalTokens()).isEqualTo(10);
+        // What the budget estimated for this call: the history plus the system prompt (no tool registered).
+        assertThat(responded.estimatedInputTokens())
+                .isEqualTo(assembled.estimatedTokens() + TokenEstimator.estimate("You are helpful."));
 
         InvocationCompleted completed = (InvocationCompleted) events.get(3);
         assertThat(completed.roundCount()).isEqualTo(1);
