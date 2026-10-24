@@ -24,6 +24,11 @@ same machine in three runs: the ≈5 GB download is all the difference, so on a 
 budget 30–40 minutes. Afterwards every path starts in under a minute: images, the model and
 the database are kept in Docker volumes.
 
+With a real Anthropic key, path A from a fresh clone, on a machine whose Docker already held the
+base images, took **2 min 03 s** to the agent's answer, and the audit chain came out VALID in
+both checks: 7 of 7 entries, signatures verified by the instance and by the independent
+verifier.
+
 ## Requirements
 
 - **Docker** with **Docker Compose 2.20 or later** (Docker Desktop on Windows/macOS, or
