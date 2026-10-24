@@ -134,6 +134,15 @@ export interface ConversationResponse {
 export type MessagePart =
   | { type: 'text'; text: string }
   | {
+      /** A voice note (ADR 0012); `content` is its transcript once it has one. */
+      type: 'audio'
+      media_type: string
+      size_bytes?: number
+      sha256?: string
+      duration_seconds?: number
+      transcript?: string
+    }
+  | {
       type: 'tool_call'
       tool_call_id: string
       tool_name: string

@@ -6,6 +6,7 @@ import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolResult;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,18 @@ class MessageMapperTest {
                 .containsEntry("tool_call_id", "call-9")
                 .containsEntry("tool_name", "get_current_time")
                 .containsKey("input");
+    }
+
+    @Test
+    void roundTrip_aVoiceNote_preservesItsAudioPart() {
+        Message original = Message.fromParts(UUID.randomUUID(), MessageRole.USER, List.of(
+                dev.cauce.core.message.MessagePart.Audio.received("audio/ogg", "AwACAgQ", 6200L, 4)
+                        .transcribed("Mesa para cuatro", "a".repeat(64), 6200, 4)));
+
+        Message roundTripped = mapper.toDomain(mapper.toEntity(original));
+
+        assertThat(roundTripped.parts()).isEqualTo(original.parts());
+        assertThat(roundTripped.content()).isEqualTo("Mesa para cuatro");
     }
 
     @Test

@@ -27,7 +27,8 @@ import java.util.UUID;
  * <p>Two versions coexist and nothing recorded is recomputed (ADR 0004, decision 2). v1 hashes a
  * text: a business document, an agent's prompt, and the messages audited before message parts. v2
  * hashes a message's parts, {@code "cauce-content:v2:" + tenantId + ":" + canonical_json(parts)},
- * the parts in their one JSON form ({@link MessageParts}) and the canonical JSON with Unicode NFC
+ * the parts in their one JSON form as received ({@link MessageParts#toHashedJson}: an audio part
+ * by its type, media type and provider reference only) and the canonical JSON with Unicode NFC
  * normalisation; a payload hashed so says {@code content_hash_version: 2}. Both are published,
  * informatively, in {@code docs/spec/audit-chain-format.md} §6.3.
  */
@@ -54,7 +55,7 @@ public final class AuditContentHash {
         Objects.requireNonNull(tenantId, "tenantId must not be null");
         Objects.requireNonNull(parts, "parts must not be null");
         return sha256Hex(PARTS_DOMAIN_PREFIX + tenantId + ":"
-                + CanonicalJson.serialize(MessageParts.toJson(parts), true));
+                + CanonicalJson.serialize(MessageParts.toHashedJson(parts), true));
     }
 
     private static String sha256Hex(String preimage) {

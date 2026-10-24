@@ -1,6 +1,7 @@
 # ADR 0012: Voice notes, transcribed behind a neutral port
 
-Status: Accepted. Not implemented yet: units 2b–2d of ADR 0004 (see its amendment of 2026-10-24).
+Status: Accepted. V1's audio part implemented (unit 2b of ADR 0004); transcription (2c) and the
+channels (2d) not yet.
 
 ## Context
 
@@ -47,7 +48,10 @@ person gets the fallback reply, never silence.
 The transcript is written into the message's audio part and audited as
 `conduct.message.transcribed`: the message and invocation ids, the duration, and the **hash** of
 the transcript (`cauce-content:v2`, ADR 0004), never the text. `conduct.message.received` keeps the
-hash of the parts as they were received, without a transcript.
+hash of the parts as they were received: an audio part by its media type and provider reference
+only (the content hash v2, `docs/spec/audit-chain-format.md` §6.3), so that filling in the
+transcript, the bytes' hash, size and duration never moves the hash the message was audited
+under.
 
 ### V3 — A neutral port; the first adapter is a local Whisper
 

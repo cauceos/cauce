@@ -48,13 +48,21 @@ public record MessageResponse(
 
     /**
      * One part, with its {@code type} and only that type's keys (NON_NULL): {@code text} for a
-     * text part; {@code tool_call_id}, {@code tool_name} and {@code input} for a tool call;
+     * text part; {@code media_type} and, once known, {@code size_bytes}, {@code sha256},
+     * {@code duration_seconds} and {@code transcript} for a voice note (ADR 0012) — never the
+     * provider's reference to its bytes, a handle for the channel adapter only;
+     * {@code tool_call_id}, {@code tool_name} and {@code input} for a tool call;
      * {@code tool_call_id}, {@code tool_name}, {@code output} and {@code is_error} for a result.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record PartResponse(
             String type,
             String text,
+            String mediaType,
+            Long sizeBytes,
+            String sha256,
+            Integer durationSeconds,
+            String transcript,
             String toolCallId,
             String toolName,
             Map<String, Object> input,
@@ -63,10 +71,16 @@ public record MessageResponse(
 
         static PartResponse from(MessagePart part) {
             return switch (part) {
-                case MessagePart.Text text -> new PartResponse(text.type(), text.text(), null, null, null, null, null);
+                case MessagePart.Text text -> new PartResponse(text.type(), text.text(),
+                        null, null, null, null, null, null, null, null, null, null);
+                case MessagePart.Audio audio -> new PartResponse(audio.type(), null, audio.mediaType(),
+                        audio.sizeBytes(), audio.sha256(), audio.durationSeconds(), audio.transcript(),
+                        null, null, null, null, null);
                 case MessagePart.ToolCallPart toolCall -> new PartResponse(toolCall.type(), null,
+                        null, null, null, null, null,
                         toolCall.call().toolCallId(), toolCall.call().toolName(), toolCall.call().input(), null, null);
                 case MessagePart.ToolResultPart toolResult -> new PartResponse(toolResult.type(), null,
+                        null, null, null, null, null,
                         toolResult.result().toolCallId(), toolResult.result().toolName(), null,
                         toolResult.result().output(), toolResult.result().isError());
             };

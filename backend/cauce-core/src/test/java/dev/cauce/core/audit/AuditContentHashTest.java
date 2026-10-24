@@ -37,6 +37,17 @@ class AuditContentHashTest {
     }
 
     @Test
+    void ofParts_anAudioPart_matchesThePublishedVector_beforeAndAfterItsTranscription() {
+        MessagePart.Audio received = MessagePart.Audio.received("audio/ogg", "AwACAgQ", null, 4);
+        String published = "1f3651c4ee122cf69ac3fa386ab0c6c40d8befa144e3a362de43f24d94fc149b";
+
+        assertThat(AuditContentHash.ofParts(SPEC_TENANT, List.of(received))).isEqualTo(published);
+        // What is learned later does not move the hash the message was audited under.
+        assertThat(AuditContentHash.ofParts(SPEC_TENANT, List.of(received.transcribed("Mesa para cuatro",
+                "a".repeat(64), 6200, 4)))).isEqualTo(published);
+    }
+
+    @Test
     void ofParts_isNotTheV1HashOfTheSameText() {
         // Two versions side by side: a text hashed as parts never collides with its v1 hash.
         assertThat(AuditContentHash.ofParts(tenantId, List.of(new MessagePart.Text("Hola"))))

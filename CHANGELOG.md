@@ -18,6 +18,9 @@ starting the new version.
   `{"type": "tool_result", "tool_call_id", "tool_name", "output", "is_error"}`.
 - Gone: `tool_content`. Its fields are the tool part's, under the same names.
 - Unchanged: `content`, now derived from the parts (the text, or a tool message's name / output).
+- A USER message may carry an `audio` part (a voice note, ADR 0012): `media_type` and, once known,
+  `size_bytes`, `sha256`, `duration_seconds` and `transcript`; its `content` is the transcript,
+  or `[voice note]` until there is one. No channel produces them yet.
 
 **The input does not change**: `POST /v1/agents/{agentId}/messages` still takes `content`,
 stored as one text part.

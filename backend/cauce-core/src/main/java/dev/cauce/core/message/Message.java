@@ -24,9 +24,13 @@ import java.util.stream.Collectors;
  * (TOOL_CALL, TOOL_RESULT) its one tool part. {@link #content()} and {@link #toolContent()} are
  * derived from the parts, never stored: the text, verbatim (not trimmed) and never blank, and for
  * a tool message a human-readable rendering of its part (the tool name for a call, the output for
- * a result).
+ * a result). A voice note (ADR 0012) reads as its transcript, or {@link #UNTRANSCRIBED_AUDIO}
+ * until it has one; only a USER message carries one.
  */
 public final class Message {
+
+    /** What an audio part reads as before it is transcribed: never blank, never the model's to read. */
+    public static final String UNTRANSCRIBED_AUDIO = "[voice note]";
 
     private static final int TO_STRING_CONTENT_LIMIT = 50;
 
@@ -50,6 +54,18 @@ public final class Message {
     /** Creates a new text message authored by {@code role} (USER, AGENT, or SYSTEM). */
     public static Message from(UUID conversationId, MessageRole role, String content) {
         return create(conversationId, role, content, null);
+    }
+
+    /**
+     * Creates a new message authored by {@code role} from its {@code parts}, in order: how a
+     * channel's message that is not only text (a voice note) is ingested.
+     */
+    public static Message fromParts(UUID conversationId, MessageRole role, List<MessagePart> parts) {
+        Objects.requireNonNull(conversationId, "conversationId");
+        Objects.requireNonNull(role, "role");
+        List<MessagePart> copy = List.copyOf(Objects.requireNonNull(parts, "parts"));
+        validate(role, copy, null);
+        return new Message(UuidGenerator.newV7(), conversationId, role, copy, null, Instant.now());
     }
 
     /** Creates a new TOOL_CALL message wrapping the agent's request to run a tool. */
@@ -162,6 +178,7 @@ public final class Message {
     private static String render(List<MessagePart> parts) {
         return parts.stream().map(part -> switch (part) {
             case MessagePart.Text text -> text.text();
+            case MessagePart.Audio audio -> audio.transcriptText().orElse(UNTRANSCRIBED_AUDIO);
             case MessagePart.ToolCallPart toolCall -> toolCall.call().toolName();
             case MessagePart.ToolResultPart toolResult -> renderContent(toolResult.result());
         }).collect(Collectors.joining("\n"));
@@ -169,8 +186,9 @@ public final class Message {
 
     /**
      * Enforces the message invariants: at least one part and a non-blank text; a tool role is
-     * exactly its one tool part, of the role's kind, and every other role is text parts only; a
-     * failure type is present exactly for FALLBACK.
+     * exactly its one tool part, of the role's kind; USER is text and audio parts, every other role
+     * text parts only (an agent does not speak, ADR 0012, V6); a failure type is present exactly
+     * for FALLBACK.
      */
     private static void validate(MessageRole role, List<MessagePart> parts, String failureType) {
         if (parts.isEmpty() || render(parts).isBlank()) {
@@ -196,8 +214,12 @@ public final class Message {
                 }
             }
             default -> {
-                if (!parts.stream().allMatch(MessagePart.Text.class::isInstance)) {
+                if (parts.stream().anyMatch(part -> part instanceof MessagePart.ToolCallPart
+                        || part instanceof MessagePart.ToolResultPart)) {
                     throw new IllegalArgumentException(role + " must not carry tool content");
+                }
+                if (role != MessageRole.USER && parts.stream().anyMatch(MessagePart.Audio.class::isInstance)) {
+                    throw new IllegalArgumentException(role + " must not carry audio");
                 }
             }
         }
@@ -231,6 +253,7 @@ public final class Message {
             case MessagePart.ToolCallPart toolCall -> Optional.of(toolCall.call());
             case MessagePart.ToolResultPart toolResult -> Optional.of(toolResult.result());
             case MessagePart.Text ignored -> Optional.empty();
+            case MessagePart.Audio ignored -> Optional.empty();
         };
     }
 

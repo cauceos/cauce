@@ -1,5 +1,6 @@
 package dev.cauce.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -8,6 +9,7 @@ import dev.cauce.api.support.AbstractApiIntegrationTest;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.core.tool.ToolCall;
@@ -17,6 +19,7 @@ import dev.cauce.tenancy.AgentService;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.ConversationService;
 import dev.cauce.tenancy.TenantService;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -80,6 +83,26 @@ class MessageToolContentApiIT extends AbstractApiIntegrationTest {
                     ToolResult.success("call-1", "get_current_time", "2026-08-13T10:00:00Z")));
             return convId;
         });
+    }
+
+    @Test
+    void listMessages_aVoiceNote_exposesItsAudioPartAndTranscript_neverTheProviderReference() throws Exception {
+        asTenant(clientId, () -> conversationGateway.append(Message.fromParts(conversationId, MessageRole.USER,
+                List.of(MessagePart.Audio.received("audio/ogg", "AwACAgQ-provider-handle", 6200L, 4)
+                        .transcribed("Mesa para cuatro", "a".repeat(64), 6200, 4)))));
+
+        String body = mockMvc.perform(get("/v1/conversations/" + conversationId + "/messages")
+                        .header(HttpHeaders.AUTHORIZATION, clientAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[3].content").value("Mesa para cuatro"))
+                .andExpect(jsonPath("$.data[3].parts[0].type").value("audio"))
+                .andExpect(jsonPath("$.data[3].parts[0].media_type").value("audio/ogg"))
+                .andExpect(jsonPath("$.data[3].parts[0].duration_seconds").value(4))
+                .andExpect(jsonPath("$.data[3].parts[0].size_bytes").value(6200))
+                .andExpect(jsonPath("$.data[3].parts[0].transcript").value("Mesa para cuatro"))
+                .andExpect(jsonPath("$.data[3].parts[0].text").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("AwACAgQ-provider-handle");
     }
 
     @Test

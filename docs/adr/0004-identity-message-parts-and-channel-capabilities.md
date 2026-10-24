@@ -1,7 +1,7 @@
 # ADR 0004: Interlocutor identity, message parts, and channel capabilities
 
 Status: Accepted. Unit 1 (identity) implemented; unit 2 cut in four by the amendment of 2026-10-24
-(2a, the parts, being implemented; 2b–2d, audio, per ADR 0012); unit 3 not yet.
+(2a, the parts, and 2b, the audio part, implemented; 2c–2d per ADR 0012); unit 3 not yet.
 
 ## Context
 

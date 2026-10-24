@@ -331,8 +331,12 @@ hash of the message. It has two versions, which coexist: nothing recorded is eve
   ```
 
   `parts` is the message as stored, an array of objects, each with its `type`: `text` (with
-  `text`), `tool_call` (with `tool_call_id`, `tool_name`, `input`) or `tool_result` (with
-  `tool_call_id`, `tool_name`, `output`, `is_error`). `canonical_json` follows §4 **with** NFC
+  `text`), `tool_call` (with `tool_call_id`, `tool_name`, `input`), `tool_result` (with
+  `tool_call_id`, `tool_name`, `output`, `is_error`) or `audio`. An `audio` part, a voice note,
+  enters **as received**: with `media_type` and `provider_reference` only. What is learned of it
+  later (the bytes' `sha256` and `size_bytes`, `duration_seconds`, the `transcript`) is stored in
+  the same part but left out of this hash, which must not move once the message is audited; it
+  is committed by its own record when it is learned. `canonical_json` follows §4 **with** NFC
   normalisation (§4.4).
 
 With `tenant_id` = `00000000-0000-0000-0000-000000000001`:
@@ -343,6 +347,7 @@ With `tenant_id` = `00000000-0000-0000-0000-000000000001`:
 | v2 | `[{"text":"Hola","type":"text"}]` | `af8bb27c1a8c17c8ae3084111c4b86480f38b1c44c5055cacc7f77f1719acda7` |
 | v2 | `[{"input":{"tz":"UTC"},"tool_call_id":"call-1","tool_name":"get_current_time","type":"tool_call"}]` | `e0838bc04dd8e78b5d199d37823bc700e9956ee9fb9affe3e6fed5da028ab2bf` |
 | v2 | `[{"is_error":false,"output":"10:15","tool_call_id":"call-1","tool_name":"get_current_time","type":"tool_result"}]` | `e7e2cd7866c10043abc3ed828fc721c121b31102a8a4e0dac9e0592121323d22` |
+| v2 | `[{"media_type":"audio/ogg","provider_reference":"AwACAgQ","type":"audio"}]` | `1f3651c4ee122cf69ac3fa386ab0c6c40d8befa144e3a362de43f24d94fc149b` |
 
 The v2 column holds `canonical_json(parts)`, the string that is hashed.
 

@@ -224,6 +224,42 @@ class MessageTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void fromParts_aUserVoiceNote_readsAsItsTranscript_orAsAVoiceNoteUntilItHasOne() {
+        MessagePart.Audio note = MessagePart.Audio.received("audio/ogg", "AwACAgQ", null, 4);
+
+        Message untranscribed = Message.fromParts(CONVERSATION, MessageRole.USER, List.of(note));
+        Message transcribed = Message.fromParts(CONVERSATION, MessageRole.USER,
+                List.of(note.transcribed("Mesa para cuatro", "a".repeat(64), 6200, 4)));
+
+        assertThat(untranscribed.content()).isEqualTo(Message.UNTRANSCRIBED_AUDIO);
+        assertThat(transcribed.content()).isEqualTo("Mesa para cuatro");
+        assertThat(transcribed.toolContent()).isEmpty();
+        assertThat(transcribed.id().version()).isEqualTo(7);
+    }
+
+    @Test
+    void fromParts_onlyAUserMessageCarriesAudio() {
+        MessagePart.Audio note = MessagePart.Audio.received("audio/ogg", "AwACAgQ", null, null);
+
+        assertThatThrownBy(() -> Message.fromParts(CONVERSATION, MessageRole.AGENT, List.of(note)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("audio");
+        assertThatThrownBy(() -> Message.fromParts(CONVERSATION, MessageRole.TOOL_RESULT, List.of(note)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void audioPart_rejectsWhatCannotBeTrue() {
+        assertThatThrownBy(() -> MessagePart.Audio.received(" ", "r", null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> MessagePart.Audio.received("audio/ogg", "", null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new MessagePart.Audio("audio/ogg", "r", -1L, null, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new MessagePart.Audio("audio/ogg", "r", null, "NOT-HEX", null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private static Message newMessage() {
         return Message.from(CONVERSATION, MessageRole.USER, "Hello");
     }
