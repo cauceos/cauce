@@ -93,10 +93,26 @@ public record Scenario(
             @JsonProperty("resumen") String summary) {
     }
 
-    /** One message of the person and what must hold after the agent answers it. */
+    /**
+     * One message of the person and what must hold after the agent answers it. With
+     * {@code nota_de_voz: true} the message is the transcription of a voice note (ADR 0012): it
+     * reaches the agent as a transcribed voice note, as it would from a channel, so a scenario tests
+     * what the agent does with what was heard, mistakes included.
+     */
     public record Turn(
             @JsonProperty("cliente") String message,
+            @JsonProperty("nota_de_voz") Boolean voiceNote,
             @JsonProperty("espera") Expectation expectation) {
+
+        /** A written message. */
+        public Turn(String message, Expectation expectation) {
+            this(message, null, expectation);
+        }
+
+        /** Whether the message is the transcription of a voice note. */
+        public boolean isVoiceNote() {
+            return Boolean.TRUE.equals(voiceNote);
+        }
     }
 
     /** The checks of a turn, or of a scenario's action. Every field is optional. */

@@ -54,6 +54,8 @@ pasa.
     - dueno_vinculado: false      # por defecto el dueño está vinculado
   turnos:
     - cliente: "texto que escribe el cliente"
+      nota_de_voz: true          # opcional: el texto es lo que transcribió una nota de voz (ADR 0012);
+                                 # llega al agente marcado como nota de voz transcrita, sin transcribir nada
       espera:
         herramientas: [list_my_bookings, propose_booking_change]   # en este turno, en cualquier orden
         orden: [check_availability, propose_booking]               # en este orden (subsecuencia)

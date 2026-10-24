@@ -17,6 +17,7 @@ import dev.cauce.core.UuidGenerator;
 import dev.cauce.core.business.booking.Booking;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.inbound.InboundMessageInterceptor.InboundText;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.evals.check.TurnTrace;
 import dev.cauce.evals.check.TurnTrace.ObservedBooking;
@@ -27,6 +28,8 @@ import dev.cauce.evals.check.TurnTrace.ToolUse;
 import dev.cauce.evals.scenario.RelativeDates;
 import dev.cauce.evals.scenario.Scenario;
 import dev.cauce.evals.scenario.Scenario.Setup;
+import dev.cauce.orchestration.InboundMessageResult;
+import dev.cauce.orchestration.InboundMessageService;
 import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.ConversationService;
@@ -79,7 +82,7 @@ final class EvalWorld {
     record Services(MockMvc mockMvc, ObjectMapper json, TenantService tenants, ApiKeyService apiKeys,
                     ConversationService conversations, OwnerService owners, OwnerNotificationDispatcher dispatcher,
                     PendingInvocationWorker worker, BookingService bookings, DataSource adminDataSource, Clock clock,
-                    Path packDir) {
+                    Path packDir, InboundMessageService inbound) {
 
         JdbcTemplate admin() {
             return new JdbcTemplate(adminDataSource);
@@ -162,14 +165,36 @@ final class EvalWorld {
     }
 
     Played turn(String message) throws Exception {
-        String body = s.mockMvc().perform(post("/v1/agents/" + customerAgentId + "/messages")
-                        .header(HttpHeaders.AUTHORIZATION, auth).contentType(MediaType.APPLICATION_JSON)
-                        .content(s.json().writeValueAsString(Map.of("external_identity_ref", PERSON, "content", message))))
-                .andReturn().getResponse().getContentAsString();
-        JsonNode accepted = s.json().readTree(body);
-        UUID conversationId = UUID.fromString(accepted.get("conversation_id").asText());
-        UUID messageId = UUID.fromString(accepted.get("message_id").asText());
-        String invocationId = accepted.get("invocation_id").asText();
+        return turn(message, false);
+    }
+
+    /**
+     * Plays one message of the person; a {@code voiceNote} arrives as a voice note already
+     * transcribed to {@code message} (ADR 0012), through the same ingest a channel uses, so the agent
+     * reads it marked as one and nothing is sent to a transcriber.
+     */
+    Played turn(String message, boolean voiceNote) throws Exception {
+        UUID conversationId;
+        UUID messageId;
+        String invocationId;
+        if (voiceNote) {
+            InboundMessageResult accepted = asTenant(tenantId, () -> s.inbound().ingestParts(customerAgentId, "api",
+                    null, IdentityKind.CLIENT_REFERENCE, PERSON,
+                    List.of(new MessagePart.Audio("audio/ogg", "eval-voice-note", null, null, null, message)), null));
+            conversationId = accepted.conversationId();
+            messageId = accepted.messageId();
+            invocationId = accepted.invocationId().toString();
+        } else {
+            String body = s.mockMvc().perform(post("/v1/agents/" + customerAgentId + "/messages")
+                            .header(HttpHeaders.AUTHORIZATION, auth).contentType(MediaType.APPLICATION_JSON)
+                            .content(s.json().writeValueAsString(Map.of("external_identity_ref", PERSON,
+                                    "content", message))))
+                    .andReturn().getResponse().getContentAsString();
+            JsonNode accepted = s.json().readTree(body);
+            conversationId = UUID.fromString(accepted.get("conversation_id").asText());
+            messageId = UUID.fromString(accepted.get("message_id").asText());
+            invocationId = accepted.get("invocation_id").asText();
+        }
         s.worker().pollAndProcess();
         await().atMost(Duration.ofMinutes(3)).pollInterval(Duration.ofMillis(500)).until(() -> {
             String status = s.json().readTree(s.mockMvc().perform(get("/v1/invocations/" + invocationId)

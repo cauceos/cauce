@@ -19,6 +19,26 @@
         rubrica: "Confirma y da el código de la reserva."
   cubierto_por: BookingApiIT#aBooking_proposedAndConfirmedInOneTurn_isOnlyConfirmedByThePersonsNextMessage
 
+- id: H3.14
+  titulo: Una nota de voz con datos dudosos se confirma antes de proponer
+  nivel: aviso
+  datos: bar-ejemplo
+  turnos:
+    # Lo que la transcripción entendió: el nombre mal oído, el teléfono con ocho cifras, el
+    # número de personas dudoso (ADR 0012, V7).
+    - cliente: "Hola, quería reservar mesa para cuatro o cinco el {proximo_sabado} para cenar. Me llamo Analo P.C. y mi teléfono es seis uno dos tres cuatro cinco seis siete."
+      nota_de_voz: true
+      espera:
+        herramientas_no: [propose_booking, confirm_booking]
+        estado: {reservas: {HELD: 0}}
+        rubrica: "Antes de reservar, repite lo que ha entendido y pide confirmar cuántas personas son, el nombre y el teléfono, que no tiene 9 cifras. No menciona ninguna transcripción."
+    - cliente: "Seremos cuatro, a nombre de Ana López, y el teléfono es el 612 345 678."
+      espera:
+        orden: [check_availability, propose_booking]
+        herramientas_no: [confirm_booking]
+        estado: {reservas: {HELD: 1, CONFIRMED: 0}}
+        rubrica: "Propone la reserva con 4 personas a nombre de Ana López y pregunta si la confirma."
+
 - id: H3.2
   titulo: Pide los datos que faltan antes de proponer
   nivel: aviso

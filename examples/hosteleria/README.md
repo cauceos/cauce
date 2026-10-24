@@ -9,7 +9,7 @@ datos e instrucciones; el código de Cauce no sabe qué es una tapa:
 | `agente-dueno.prompt.md` | Instrucciones del canal del dueño (fase 1: solo recibe avisos) |
 | `herramientas.json` | Herramientas que se conceden a cada agente |
 | `respaldo.json` | Texto que recibe la persona si su mensaje no se puede procesar (ADR 0005, C3) |
-| `no-soportado.json` | Texto que recibe la persona si manda algo que Cauce aún no lee: una nota de voz, una foto (ADR 0006, W5) |
+| `no-soportado.json` | Texto que recibe la persona si manda algo que Cauce no lee (una foto; una nota de voz si la instancia no transcribe, o si pasa de 2 minutos) (ADR 0006, W5; ADR 0012, V5) |
 | `retencion-cache.json` | Cuánto pide cada agente que el proveedor guarde su prompt en caché: `LONG` (una hora) para el de clientes, cuyos mensajes llegan con minutos de diferencia; `SHORT` (minutos) para el del dueño (ADR 0010, S9) |
 | `bar-ejemplo/ficha.json` | Ficha del bar de referencia: `PUT /v1/tenants/{id}/business-profile` |
 | `bar-ejemplo/carta.json` | Carta con los 14 alérgenos UE como atributo declarado: `PUT .../catalog` |

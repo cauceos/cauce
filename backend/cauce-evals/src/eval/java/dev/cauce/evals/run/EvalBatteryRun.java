@@ -31,6 +31,7 @@ import dev.cauce.evals.scenario.ScenarioLoader;
 import dev.cauce.llm.spi.LlmProvider;
 import dev.cauce.llm.spi.LlmProviderRegistry;
 import dev.cauce.llm.spi.SystemDefaultLlmCredential;
+import dev.cauce.orchestration.InboundMessageService;
 import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.tenancy.ApiKeyService;
 import dev.cauce.tenancy.ConversationService;
@@ -133,6 +134,7 @@ class EvalBatteryRun {
     @Autowired private PendingInvocationWorker worker;
     @Autowired private BookingService bookings;
     @Autowired private LlmProviderRegistry providers;
+    @Autowired private InboundMessageService inbound;
     @Autowired private Environment environment;
     @Autowired private Clock clock;
     @Autowired @Qualifier("adminDataSource") private DataSource adminDataSource;
@@ -196,7 +198,7 @@ class EvalBatteryRun {
         UUID operatorId = tenants.bootstrapOperator("Operator").id();
         UUID partnerId = EvalWorld.asTenant(operatorId, () -> tenants.createPartner("Evals", operatorId).id());
         EvalWorld.Services services = new EvalWorld.Services(mockMvc, json, tenants, apiKeys, conversations, owners,
-                dispatcher, worker, bookings, adminDataSource, clock, SETTINGS.packDir());
+                dispatcher, worker, bookings, adminDataSource, clock, SETTINGS.packDir(), inbound);
         Menu menu = Menu.load(SETTINGS.packDir().resolve("bar-ejemplo").resolve("carta.json"));
         List<ScenarioRun> runs = new ArrayList<>();
         boolean complete = true;
@@ -256,7 +258,7 @@ class EvalBatteryRun {
             String prefix = "turno " + (i + 1);
             // The person's dates are written out from today, so no scenario depends on the day it runs.
             String message = RelativeDates.render(turn.message(), world::resolveDate);
-            EvalWorld.Played played = world.turn(message);
+            EvalWorld.Played played = world.turn(message, turn.isVoiceNote());
             invocations.add(played.invocationId());
             TurnTrace trace = played.trace();
             transcript.append("Cliente: ").append(message).append('\n');

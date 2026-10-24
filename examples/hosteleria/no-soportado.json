@@ -1,4 +1,4 @@
 {
-  "agente_clientes": "Perdona, de momento solo puedo leer mensajes de texto. ¿Me lo escribes?",
-  "agente_dueno": "De momento solo leo mensajes de texto. Escríbemelo, por favor."
+  "agente_clientes": "Perdona, ese mensaje no lo puedo leer. ¿Me lo escribes? Si es una nota de voz, que no pase de dos minutos.",
+  "agente_dueno": "Ese mensaje no lo puedo leer. Escríbemelo, o mándame una nota de voz de menos de dos minutos."
 }

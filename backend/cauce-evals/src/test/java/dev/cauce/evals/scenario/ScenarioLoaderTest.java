@@ -37,6 +37,11 @@ class ScenarioLoaderTest {
                 .satisfies(s -> assertThat(s.kind()).isEqualTo(Kind.COVERED_BY_IT));
         assertThat(all).filteredOn(s -> s.id().equals("G1")).singleElement()
                 .satisfies(s -> assertThat(s.level()).isEqualTo(Level.BLOCKING));
+        // ADR 0012: a turn may be a transcribed voice note; the next one is written.
+        assertThat(all).filteredOn(s -> s.id().equals("H3.14")).singleElement().satisfies(s -> {
+            assertThat(s.turns().get(0).isVoiceNote()).isTrue();
+            assertThat(s.turns().get(1).isVoiceNote()).isFalse();
+        });
     }
 
     @Test
