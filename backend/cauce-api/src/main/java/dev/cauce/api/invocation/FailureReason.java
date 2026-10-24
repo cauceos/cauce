@@ -18,7 +18,10 @@ public enum FailureReason {
      * model has no price under a spend limit. Fix the agent or the instance; not a provider outage.
      */
     AGENT_MISCONFIGURED,
-    /** The LLM provider kept failing transiently until the retry budget ran out. */
+    /**
+     * A provider kept failing transiently until the retry budget ran out: the LLM provider, or the
+     * channel that holds a voice note's bytes.
+     */
     PROVIDER_UNAVAILABLE,
     /** The agentic loop hit its hard tool-iteration cap. */
     AGENT_LOOP_LIMIT,
@@ -45,6 +48,7 @@ public enum FailureReason {
             case REAPER_ABANDONED -> TIMEOUT;
             case SPEND_LIMIT_REACHED -> SPEND_LIMIT_REACHED;
             case VOICE_NOTE_REJECTED -> VOICE_NOTE_UNREADABLE;
+            case MEDIA_RETRIES_EXHAUSTED -> PROVIDER_UNAVAILABLE;
         };
     }
 }

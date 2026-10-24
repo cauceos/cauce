@@ -18,6 +18,7 @@ import dev.cauce.orchestration.exception.TranscriptionNotAvailableException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.exception.VoiceNoteRejectedException;
+import dev.cauce.orchestration.exception.VoiceNoteUnavailableException;
 import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
 import dev.cauce.orchestration.tracing.MessageTracing;
@@ -148,6 +149,9 @@ public class PendingInvocationWorker {
             } catch (LlmProviderException e) {
                 span.error(e);
                 handleLlmFailure(invocation, e);
+            } catch (VoiceNoteUnavailableException e) {
+                span.error(e);
+                handleVoiceNoteUnavailable(invocation, e);
             } catch (RuntimeException e) {
                 span.error(e);
                 span.tag("failure_type", failureTypeOf(e).name());
@@ -222,16 +226,44 @@ public class PendingInvocationWorker {
             }, invocation, "FAILED");
             return;
         }
-        // Retryable. The claim() already incremented attemptCount, so attemptCount ==
-        // attempts consumed so far. If we have used up the budget, abandon; otherwise
-        // release with backoff.
+        releaseOrAbandon(invocation, errorSummary, logged, InvocationFailureType.LLM_RETRIES_EXHAUSTED);
+    }
+
+    /**
+     * The channel did not hand over a voice note (ADR 0012): retried with backoff when transient,
+     * like a transient model error, and each attempt fetches it anew; when permanent, the person is
+     * asked to write it, as for a note that could not be read.
+     */
+    private void handleVoiceNoteUnavailable(PendingInvocation invocation, VoiceNoteUnavailableException error) {
+        String errorSummary = error.toString(); // stored with the invocation, never logged (ADR 0011, L2)
+        String logged = LogSafe.describe(error);
+        if (!error.isTransient()) {
+            log.warn("Worker {} failing invocation {}: the voice note cannot be fetched: {}",
+                    workerIdentity.getId(), invocation.id(), logged);
+            safeMark(() -> {
+                pendingInvocationService.markFailed(invocation.id(), errorSummary,
+                        InvocationFailureType.VOICE_NOTE_REJECTED);
+                publishFailed(invocation, InvocationFailureType.VOICE_NOTE_REJECTED, errorSummary);
+            }, invocation, "FAILED");
+            return;
+        }
+        releaseOrAbandon(invocation, errorSummary, logged, InvocationFailureType.MEDIA_RETRIES_EXHAUSTED);
+    }
+
+    /**
+     * A transient failure: released for retry with backoff, or abandoned as {@code exhausted} with
+     * the fallback reply once the attempt budget is spent.
+     */
+    private void releaseOrAbandon(PendingInvocation invocation, String errorSummary, String logged,
+                                  InvocationFailureType exhausted) {
+        // The claim() already incremented attemptCount, so attemptCount == attempts consumed so
+        // far. If we have used up the budget, abandon; otherwise release with backoff.
         if (invocation.attemptCount() >= invocation.maxAttempts()) {
             log.warn("Worker {} abandoning invocation {} after exhausting {} attempt(s): {}",
                     workerIdentity.getId(), invocation.id(), invocation.maxAttempts(), logged);
             safeMark(() -> {
-                pendingInvocationService.markAbandoned(invocation.id(), errorSummary,
-                        InvocationFailureType.LLM_RETRIES_EXHAUSTED);
-                publishFailed(invocation, InvocationFailureType.LLM_RETRIES_EXHAUSTED, errorSummary);
+                pendingInvocationService.markAbandoned(invocation.id(), errorSummary, exhausted);
+                publishFailed(invocation, exhausted, errorSummary);
             }, invocation, "ABANDONED");
             return;
         }

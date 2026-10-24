@@ -45,6 +45,12 @@ before the context is built, so retries, backoff and the fallback reply (ADR 000
 as to any step. A transcription that fails ends the invocation with its own failure type and the
 person gets the fallback reply, never silence.
 
+A channel that fails transiently to hand over the bytes (unreachable, 5xx, 429) is retried with
+backoff by the same budget as a transient model error, and each attempt fetches the note anew — on
+WhatsApp, with a new download URL, since one lives for minutes. The budget spent, the invocation is
+abandoned as `MEDIA_RETRIES_EXHAUSTED` (public reason `PROVIDER_UNAVAILABLE`) with the fallback
+reply; a provider that no longer knows the note fails it as `VOICE_NOTE_REJECTED`.
+
 The transcript is written into the message's audio part and audited as
 `conduct.message.transcribed`: the message and invocation ids, the duration, and the **hash** of
 the transcript (`cauce-content:v2`, ADR 0004), never the text. `conduct.message.received` keeps the

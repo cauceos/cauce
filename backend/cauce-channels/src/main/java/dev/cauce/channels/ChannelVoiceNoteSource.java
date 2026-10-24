@@ -1,9 +1,11 @@
 package dev.cauce.channels;
 
 import dev.cauce.channels.config.ChannelConfig;
+import dev.cauce.channels.spi.ChannelMediaException;
 import dev.cauce.channels.spi.MediaChannelAdapter;
 import dev.cauce.core.message.MessagePart;
 import dev.cauce.orchestration.exception.TranscriptionNotAvailableException;
+import dev.cauce.orchestration.exception.VoiceNoteUnavailableException;
 import dev.cauce.orchestration.voice.VoiceNoteSource;
 import java.util.List;
 import java.util.UUID;
@@ -36,6 +38,11 @@ public class ChannelVoiceNoteSource implements VoiceNoteSource {
                 .findFirst()
                 .orElseThrow(() -> new TranscriptionNotAvailableException("Channel '" + config.channelType()
                         + "' does not hand over voice notes"));
-        return adapter.download(note.providerReference(), config, maxBytes);
+        try {
+            return adapter.download(note.providerReference(), config, maxBytes);
+        } catch (ChannelMediaException e) {
+            // The worker retries a transient failure with backoff; each attempt downloads anew.
+            throw new VoiceNoteUnavailableException(e.getMessage(), e.isTransient(), e);
+        }
     }
 }

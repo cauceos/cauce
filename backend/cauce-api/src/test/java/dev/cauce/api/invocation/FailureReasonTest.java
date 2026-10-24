@@ -16,6 +16,12 @@ class FailureReasonTest {
     }
 
     @Test
+    void from_aVoiceNoteTheChannelKeptFailingToHandOver_isAProviderUnavailable() {
+        assertThat(FailureReason.from(InvocationFailureType.MEDIA_RETRIES_EXHAUSTED))
+                .isEqualTo(FailureReason.PROVIDER_UNAVAILABLE);
+    }
+
+    @Test
     void from_aVoiceNoteRejected_saysTheVoiceNoteWasUnreadable() {
         assertThat(FailureReason.from(InvocationFailureType.VOICE_NOTE_REJECTED))
                 .isEqualTo(FailureReason.VOICE_NOTE_UNREADABLE);

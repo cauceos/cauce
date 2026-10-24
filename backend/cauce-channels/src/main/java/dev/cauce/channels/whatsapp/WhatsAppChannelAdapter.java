@@ -134,14 +134,14 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter, MediaChan
                 + "/" + URLEncoder.encode(providerReference, StandardCharsets.UTF_8)), config,
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (located.statusCode() < 200 || located.statusCode() >= 300) {
-            throw new ChannelMediaException("WhatsApp media lookup returned HTTP " + located.statusCode() + ": "
-                    + describeError(located.body()));
+            throw ChannelMediaException.ofStatus(located.statusCode(), "WhatsApp media lookup returned HTTP "
+                    + located.statusCode() + ": " + describeError(located.body()));
         }
         JsonNode media;
         try {
             media = objectMapper.readTree(located.body());
         } catch (IOException e) {
-            throw new ChannelMediaException("WhatsApp media lookup returned a body that is not JSON", e);
+            throw new ChannelMediaException("WhatsApp media lookup returned a body that is not JSON", false, e);
         }
         if (!media.path("url").isTextual()) {
             throw new ChannelMediaException("WhatsApp media lookup returned no URL");
@@ -153,7 +153,9 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter, MediaChan
         HttpResponse<byte[]> bytes = get(URI.create(media.path("url").asText()), config,
                 HttpResponse.BodyHandlers.ofByteArray());
         if (bytes.statusCode() < 200 || bytes.statusCode() >= 300) {
-            throw new ChannelMediaException("WhatsApp media download returned HTTP " + bytes.statusCode());
+            // A download URL lives for minutes: the next attempt looks the media up again for a new one.
+            throw ChannelMediaException.ofStatus(bytes.statusCode(), "WhatsApp media download returned HTTP "
+                    + bytes.statusCode());
         }
         if (bytes.body().length > maxBytes) {
             throw new VoiceNoteRejectedException("The voice note is " + bytes.body().length
@@ -177,7 +179,7 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter, MediaChan
             throw new ChannelMediaException("HTTP call to the WhatsApp Cloud API for a voice note failed", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ChannelMediaException("Interrupted while fetching a voice note from WhatsApp", e);
+            throw new ChannelMediaException("Interrupted while fetching a voice note from WhatsApp", true, e);
         }
     }
 

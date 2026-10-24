@@ -18,7 +18,8 @@ public interface VoiceNoteSource {
      * @throws dev.cauce.orchestration.exception.VoiceNoteRejectedException if the note is larger
      * @throws dev.cauce.orchestration.exception.TranscriptionNotAvailableException if the channel
      *     cannot hand over its media
-     * @throws RuntimeException if the provider fails to serve them; a retry may succeed
+     * @throws dev.cauce.orchestration.exception.VoiceNoteUnavailableException if the channel does
+     *     not hand them over: retried with backoff when transient, each attempt fetching anew
      */
     byte[] fetch(UUID channelConfigId, MessagePart.Audio note, long maxBytes);
 }

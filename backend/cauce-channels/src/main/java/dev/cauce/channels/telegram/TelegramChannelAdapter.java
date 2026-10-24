@@ -197,12 +197,12 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
         try {
             file = objectMapper.readTree(located.body()).path("result");
         } catch (JacksonException e) {
-            throw new ChannelMediaException("Telegram getFile returned a body that is not JSON", e);
+            throw new ChannelMediaException("Telegram getFile returned a body that is not JSON", false, e);
         }
         if (located.statusCode() != 200 || !file.path("file_path").isTextual()) {
             // The body carries Telegram's error description, never our token.
-            throw new ChannelMediaException("Telegram getFile returned HTTP " + located.statusCode() + ": "
-                    + located.body());
+            throw ChannelMediaException.ofStatus(located.statusCode(), "Telegram getFile returned HTTP "
+                    + located.statusCode() + ": " + located.body());
         }
         if (file.path("file_size").isIntegralNumber() && file.path("file_size").asLong() > maxBytes) {
             throw new VoiceNoteRejectedException("The voice note is " + file.path("file_size").asLong()
@@ -211,7 +211,8 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
         HttpResponse<byte[]> bytes = get(URI.create(properties.getBaseUrl() + "/file/bot" + config.credential()
                 + "/" + file.path("file_path").asText()), HttpResponse.BodyHandlers.ofByteArray());
         if (bytes.statusCode() != 200) {
-            throw new ChannelMediaException("Telegram file download returned HTTP " + bytes.statusCode());
+            throw ChannelMediaException.ofStatus(bytes.statusCode(), "Telegram file download returned HTTP "
+                    + bytes.statusCode());
         }
         if (bytes.body().length > maxBytes) {
             throw new VoiceNoteRejectedException("The voice note is " + bytes.body().length
@@ -229,7 +230,7 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
             throw new ChannelMediaException("HTTP call to Telegram for a voice note failed", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new ChannelMediaException("Interrupted while fetching a voice note from Telegram", e);
+            throw new ChannelMediaException("Interrupted while fetching a voice note from Telegram", true, e);
         }
     }
 

@@ -26,6 +26,7 @@ import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.PromptDoesNotFitContextException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
+import dev.cauce.orchestration.exception.VoiceNoteUnavailableException;
 import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
 import java.time.Instant;
@@ -229,6 +230,49 @@ class PendingInvocationWorkerTest {
                 .isEqualTo(InvocationFailureType.LLM_RETRIES_EXHAUSTED);
         verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
                 InvocationFailureType.LLM_RETRIES_EXHAUSTED);
+    }
+
+    @Test
+    void processInvocation_whenTheVoiceNoteIsTransientlyUnavailable_releasesForRetryWithBackoff() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new VoiceNoteUnavailableException("Telegram file download returned HTTP 502", true, null))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).releaseForRetry(eq(claimed.id()), anyString(), eq(30L));
+        verify(pendingInvocationService, never()).markFailed(any(), anyString(), any());
+        verify(failureFallbackService, never()).sendFallback(any(), any(), any());
+    }
+
+    @Test
+    void processInvocation_whenTheVoiceNoteStaysUnavailable_abandonsWithTheFallbackReply() {
+        PendingInvocation claimed = claimedAtAttempt(3);
+        Mockito.doThrow(new VoiceNoteUnavailableException("WhatsApp media download returned HTTP 503", true, null))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markAbandoned(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.MEDIA_RETRIES_EXHAUSTED));
+        verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
+        verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
+                InvocationFailureType.MEDIA_RETRIES_EXHAUSTED);
+    }
+
+    @Test
+    void processInvocation_whenTheChannelNoLongerKnowsTheVoiceNote_failsAsUnreadable_withoutRetry() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new VoiceNoteUnavailableException("Telegram getFile returned HTTP 400", false, null))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.VOICE_NOTE_REJECTED));
+        verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
+        verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
+                InvocationFailureType.VOICE_NOTE_REJECTED);
     }
 
     @Test

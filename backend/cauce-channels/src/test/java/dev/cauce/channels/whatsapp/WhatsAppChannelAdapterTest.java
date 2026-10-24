@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelDeliveryException;
@@ -61,6 +62,27 @@ class WhatsAppChannelAdapterTest {
         byte[] bytes = adapterAgainst(wm).download("media-9", number, 20_000_000);
 
         assertThat(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("OggS-wa!!");
+    }
+
+    @Test
+    void download_eachAttemptAsksForANewUrl_soARetryGetsPastAnExpiredOrFailedOne(WireMockRuntimeInfo wm) {
+        WhatsAppChannelAdapter adapter = adapterAgainst(wm);
+        stubFor(get(urlEqualTo("/v24.0/media-9")).inScenario("urls").whenScenarioStateIs(Scenario.STARTED)
+                .willReturn(okJson("{\"url\": \"%s/lookaside/first\", \"id\": \"media-9\"}"
+                        .formatted(wm.getHttpBaseUrl()))).willSetStateTo("second"));
+        stubFor(get(urlEqualTo("/v24.0/media-9")).inScenario("urls").whenScenarioStateIs("second")
+                .willReturn(okJson("{\"url\": \"%s/lookaside/second\", \"id\": \"media-9\"}"
+                        .formatted(wm.getHttpBaseUrl()))));
+        stubFor(get(urlEqualTo("/lookaside/first")).willReturn(aResponse().withStatus(503)));
+        stubFor(get(urlEqualTo("/lookaside/second")).willReturn(aResponse().withStatus(200).withBody("OggS-wa!!")));
+
+        assertThatThrownBy(() -> adapter.download("media-9", number, 20_000_000))
+                .isInstanceOf(dev.cauce.channels.spi.ChannelMediaException.class)
+                .satisfies(e -> assertThat(((dev.cauce.channels.spi.ChannelMediaException) e).isTransient()).isTrue());
+        byte[] retried = adapter.download("media-9", number, 20_000_000);
+
+        assertThat(new String(retried, java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("OggS-wa!!");
+        verify(2, getRequestedFor(urlEqualTo("/v24.0/media-9")));
     }
 
     @Test

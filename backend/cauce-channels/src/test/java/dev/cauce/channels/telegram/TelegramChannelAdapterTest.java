@@ -255,7 +255,17 @@ class TelegramChannelAdapterTest {
         assertThatThrownBy(() -> adapterAgainst(wm).download("gone", config, 20_000_000))
                 .isInstanceOf(ChannelMediaException.class)
                 .hasMessageContaining("invalid file_id")
-                .hasMessageNotContaining("bot-token");
+                .hasMessageNotContaining("bot-token")
+                .satisfies(e -> assertThat(((ChannelMediaException) e).isTransient()).isFalse());
+    }
+
+    @Test
+    void download_aTelegramOutage_isATransientFailure_thatALaterAttemptMayGetPast(WireMockRuntimeInfo wm) {
+        stubFor(get(urlEqualTo("/bot12345:bot-token/getFile?file_id=AwACAgQ")).willReturn(aResponse().withStatus(502)));
+
+        assertThatThrownBy(() -> adapterAgainst(wm).download("AwACAgQ", config, 20_000_000))
+                .isInstanceOf(ChannelMediaException.class)
+                .satisfies(e -> assertThat(((ChannelMediaException) e).isTransient()).isTrue());
     }
 
     @Test

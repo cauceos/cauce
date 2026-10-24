@@ -48,6 +48,12 @@ public enum InvocationFailureType {
     VOICE_NOTE_REJECTED,
 
     /**
+     * The channel kept failing transiently to hand over the person's voice note until the retry
+     * budget ran out (ADR 0012): the person gets the fallback reply — row ABANDONED.
+     */
+    MEDIA_RETRIES_EXHAUSTED,
+
+    /**
      * The reaper abandoned an orphaned claim (worker died mid-processing) whose attempt
      * budget was exhausted — row ABANDONED.
      */
