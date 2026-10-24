@@ -13,9 +13,10 @@ import java.util.List;
  * {@code LlmInvocation} by adding the credential, max tokens, and other call parameters.
  *
  * @param messages           the selected messages, oldest first
- * @param systemPrompt       the agent's system prompt, passed through verbatim (NOT counted
- *                           against the window in v1.0)
+ * @param systemPrompt       the agent's system prompt, passed through verbatim
  * @param estimatedTokens    estimated tokens of {@code messages} (excludes the system prompt)
+ * @param fixedTokens        estimated tokens of the system prompt and the tool schemas, counted
+ *                           against the window before the messages
  * @param contextWindowLimit the model's total context window, for info/debugging
  * @param reservedForResponse tokens held back for the response plus buffer: 8K + 2K, or half
  *                           of a window too small for that
@@ -24,6 +25,7 @@ public record LlmInvocationContext(
         List<LlmMessage> messages,
         String systemPrompt,
         int estimatedTokens,
+        int fixedTokens,
         int contextWindowLimit,
         int reservedForResponse) {
 

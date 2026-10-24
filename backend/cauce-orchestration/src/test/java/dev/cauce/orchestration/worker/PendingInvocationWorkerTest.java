@@ -24,6 +24,7 @@ import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
+import dev.cauce.orchestration.exception.PromptDoesNotFitContextException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
@@ -287,6 +288,21 @@ class PendingInvocationWorkerTest {
 
         verify(pendingInvocationService).markFailed(
                 eq(claimed.id()), anyString(), eq(InvocationFailureType.AGENT_CONFIGURATION));
+        verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
+                InvocationFailureType.AGENT_CONFIGURATION);
+    }
+
+    @Test
+    void processInvocation_whenThePromptDoesNotFitTheWindow_marksFailedAsAgentConfiguration() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new PromptDoesNotFitContextException("The system prompt and tools do not fit"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.AGENT_CONFIGURATION));
+        verify(pendingInvocationService, never()).releaseForRetry(any(), anyString(), anyLong());
         verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
                 InvocationFailureType.AGENT_CONFIGURATION);
     }

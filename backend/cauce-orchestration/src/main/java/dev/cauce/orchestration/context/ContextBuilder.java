@@ -3,10 +3,12 @@ package dev.cauce.orchestration.context;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolDefinition;
 import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmRole;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
+import dev.cauce.orchestration.exception.PromptDoesNotFitContextException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -19,9 +21,14 @@ import java.util.Set;
  * an injected collaborator.
  *
  * <p>Strategy: reserve {@link #RESERVED_FOR_RESPONSE} tokens of the model's window for the
- * response, then walk the conversation newest-first, including each message while the
- * running estimate fits the remaining (effective) window, and stop at the first message that
- * would overflow. The surviving slice is returned in chronological order.
+ * response and the estimate of what every request carries besides the history — the system prompt
+ * and the tool schemas ({@link #fixedTokens}) — then walk the conversation newest-first, including
+ * each message while the running estimate fits the remaining (effective) window, and stop at the
+ * first message that would overflow. The surviving slice is returned in chronological order.
+ *
+ * <p>When the prompt and tools leave no room for the current message, the agent does not fit the
+ * window it is served: that is the agent's configuration to fix, and it fails
+ * ({@link PromptDoesNotFitContextException}), never sent for the provider to cut silently.
  *
  * <p>The window always starts at a user turn (ADR 0005, C2). A size cut can land anywhere: on a
  * tool result whose call fell outside, in the middle of a batch of tool calls, or on an
@@ -46,6 +53,16 @@ public final class ContextBuilder {
     /** History a window must keep after the standard reservation for that reservation to apply. */
     static final int MIN_HISTORY = 4_096;
 
+    /**
+     * What a provider adds once when tools are offered: the tool-use instructions it writes into the
+     * prompt (Anthropic documents a few hundred tokens; an Ollama chat template writes its own).
+     * Conservative, like {@link TokenEstimator}: an overshoot costs history, an undershoot a cut.
+     */
+    static final int TOOL_USE_OVERHEAD = 400;
+
+    /** What each tool's wire wrapping adds to its name, description and schema. */
+    static final int PER_TOOL_OVERHEAD = 20;
+
     /** What stands in for a past lookup's result when the agent elides them (deferred R1). */
     public static final String ELIDED_RESULT = "resultado omitido; vuelve a consultar si lo necesitas";
 
@@ -55,6 +72,8 @@ public final class ContextBuilder {
      *
      * @throws MessageTooLargeForContextException if the most recent message alone exceeds the
      *     effective context window, or if no user turn fits in it
+     * @throws PromptDoesNotFitContextException if the system prompt leaves no room for the most
+     *     recent message
      */
     public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
                                       String systemPrompt) {
@@ -71,25 +90,28 @@ public final class ContextBuilder {
     public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
                                       String systemPrompt, Set<String> elidedLookups) {
         return build(conversationMessages, modelName, ModelContextWindow.contextWindowFor(modelName),
-                systemPrompt, elidedLookups);
+                systemPrompt, List.of(), elidedLookups);
     }
 
     /**
      * {@link #build(List, String, String, Set)} for a window {@code contextWindow} tokens wide,
-     * given rather than looked up by model: the window the provider actually serves, when it is
-     * the provider's setting (a local server's context length) and not the model's.
+     * given rather than looked up by model — the window the provider actually serves, when it is
+     * the provider's setting (a local server's context length) and not the model's — and with the
+     * {@code tools} offered to the model, whose schemas count against it as the prompt does.
+     *
+     * @throws PromptDoesNotFitContextException if the system prompt and the tools leave no room
+     *     for the most recent message
      */
     public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
-                                      int contextWindow, String systemPrompt, Set<String> elidedLookups) {
+                                      int contextWindow, String systemPrompt, List<ToolDefinition> tools,
+                                      Set<String> elidedLookups) {
         if (!elidedLookups.isEmpty()) {
             conversationMessages = elidePastLookups(conversationMessages, elidedLookups);
         }
         int reservedForResponse = reservedForResponse(contextWindow);
-        int effectiveWindow = contextWindow - reservedForResponse;
-
-        // v1.0: the systemPrompt is NOT counted against the window — it belongs to the Agent,
-        // not the conversation history. TODO(v2): if system prompts grow large enough to
-        // matter, subtract TokenEstimator.estimate(systemPrompt) from effectiveWindow here.
+        int historyWindow = contextWindow - reservedForResponse;
+        int fixedTokens = fixedTokens(systemPrompt, tools);
+        int effectiveWindow = historyWindow - fixedTokens;
 
         List<Message> selected = new ArrayList<>();
         int runningTokens = 0;
@@ -103,10 +125,19 @@ public final class ContextBuilder {
             int messageTokens = estimateTokens(message);
 
             if (i == lastIndex && messageTokens > effectiveWindow) {
-                throw new MessageTooLargeForContextException(
-                        "Most recent message estimated at " + messageTokens
-                                + " tokens exceeds the effective context window of "
-                                + effectiveWindow + " tokens for model '" + modelName + "'");
+                if (fixedTokens < historyWindow && messageTokens > historyWindow) {
+                    // Too large for the window with no prompt at all: the message, not the agent.
+                    throw new MessageTooLargeForContextException(
+                            "Most recent message estimated at " + messageTokens
+                                    + " tokens exceeds the effective context window of "
+                                    + historyWindow + " tokens for model '" + modelName + "'");
+                }
+                throw new PromptDoesNotFitContextException("The system prompt and tools do not fit the"
+                        + " context window of " + contextWindow + " tokens: they are estimated at "
+                        + fixedTokens + " tokens (" + tools.size() + " tools), the current message at "
+                        + messageTokens + ", and " + reservedForResponse + " are reserved for the"
+                        + " response, for model '" + modelName + "'. Shorten the prompt, grant fewer"
+                        + " tools, or serve a larger window");
             }
             if (runningTokens + messageTokens > effectiveWindow) {
                 break; // older messages cannot fit either; stop
@@ -131,7 +162,23 @@ public final class ContextBuilder {
                 .map(ContextBuilder::toLlmMessage)
                 .toList();
         return new LlmInvocationContext(
-                window, systemPrompt, runningTokens, contextWindow, reservedForResponse);
+                window, systemPrompt, runningTokens, fixedTokens, contextWindow, reservedForResponse);
+    }
+
+    /**
+     * The estimate of what every request carries besides the history: the system prompt, and each
+     * tool's name, description and input schema plus the provider's tool-use overhead.
+     */
+    static int fixedTokens(String systemPrompt, List<ToolDefinition> tools) {
+        int tokens = TokenEstimator.estimate(systemPrompt);
+        if (!tools.isEmpty()) {
+            tokens += TOOL_USE_OVERHEAD;
+        }
+        for (ToolDefinition tool : tools) {
+            tokens += PER_TOOL_OVERHEAD + TokenEstimator.estimate(tool.name())
+                    + TokenEstimator.estimate(tool.description()) + TokenEstimator.estimateJson(tool.inputSchema());
+        }
+        return tokens;
     }
 
     /** {@link #RESERVED_FOR_RESPONSE}, or half the window when that would leave under {@link #MIN_HISTORY}. */

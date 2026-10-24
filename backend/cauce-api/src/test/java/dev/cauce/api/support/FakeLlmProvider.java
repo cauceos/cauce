@@ -9,6 +9,7 @@ import dev.cauce.llm.model.LlmResponse;
 import dev.cauce.llm.model.LlmUsage;
 import dev.cauce.llm.spi.LlmProvider;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.Queue;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +44,7 @@ public class FakeLlmProvider implements LlmProvider {
 
     private volatile RuntimeException nextFailure;
     private volatile boolean useTool;
+    private volatile OptionalInt servedContextWindow = OptionalInt.empty();
     private final AtomicInteger calls = new AtomicInteger();
     private final Queue<Function<LlmInvocation, LlmResponse>> scripted = new ConcurrentLinkedQueue<>();
     private final List<LlmInvocation> invocations = new CopyOnWriteArrayList<>();
@@ -55,6 +57,16 @@ public class FakeLlmProvider implements LlmProvider {
     @Override
     public boolean supports(String modelName) {
         return modelName != null && modelName.startsWith("claude-");
+    }
+
+    @Override
+    public OptionalInt servedContextWindow(String modelName) {
+        return servedContextWindow;
+    }
+
+    /** Plays a server whose context length is its own setting (Ollama's), until {@link #reset()}. */
+    public void serveContextWindow(int tokens) {
+        this.servedContextWindow = OptionalInt.of(tokens);
     }
 
     @Override
@@ -141,6 +153,7 @@ public class FakeLlmProvider implements LlmProvider {
         this.invocations.clear();
         this.nextFailure = null;
         this.useTool = false;
+        this.servedContextWindow = OptionalInt.empty();
         this.calls.set(0);
     }
 }

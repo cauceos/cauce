@@ -6,10 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolDefinition;
 import dev.cauce.core.tool.ToolResult;
 import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmRole;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
+import dev.cauce.orchestration.exception.PromptDoesNotFitContextException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,8 @@ class ContextBuilderTest {
     /** Unknown to ModelContextWindow: the 16_384 fallback, so 6_384 tokens of effective window. */
     private static final String SMALL_MODEL = "some-unknown-model";
     private static final String SYSTEM_PROMPT = "You are a helpful assistant.";
+    /** No prompt, for the tests whose arithmetic is the history's alone. */
+    private static final String NO_PROMPT = "";
     private static final UUID CONVERSATION = UUID.randomUUID();
 
     private final ContextBuilder builder = new ContextBuilder();
@@ -43,18 +47,72 @@ class ContextBuilderTest {
             messages.add(userMessageOfLength("m" + i, 700));
         }
 
-        LlmInvocationContext context = builder.build(messages, "qwen2.5:3b", 4096, SYSTEM_PROMPT, Set.of());
+        LlmInvocationContext context = builder.build(messages, "qwen2.5:3b", 4096, SYSTEM_PROMPT, List.of(), Set.of());
 
         assertThat(context.contextWindowLimit()).isEqualTo(4096);
         assertThat(context.reservedForResponse()).isEqualTo(2048);
         assertThat(context.messages()).hasSize(10);
-        assertThat(context.estimatedTokens() + context.reservedForResponse()).isLessThanOrEqualTo(4096);
+        assertThat(context.estimatedTokens() + context.fixedTokens() + context.reservedForResponse())
+                .isLessThanOrEqualTo(4096);
+    }
+
+    @Test
+    void build_countsThePromptAndTheToolSchemasAgainstTheWindow() {
+        ToolDefinition tool = new ToolDefinition("search_catalog", "Busca en la carta.",
+                Map.of("type", "object", "properties", Map.of("query", Map.of("type", "string"))));
+        // 2048 tokens of history window; 12 messages of 200 tokens each.
+        List<Message> messages = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            messages.add(userMessageOfLength("m" + i, 700));
+        }
+        String prompt = "p".repeat(1400); // 400 tokens
+
+        LlmInvocationContext context = builder.build(messages, "qwen2.5:3b", 4096, prompt, List.of(tool), Set.of());
+
+        int fixed = 400 + ContextBuilder.TOOL_USE_OVERHEAD + ContextBuilder.PER_TOOL_OVERHEAD
+                + TokenEstimator.estimate("search_catalog") + TokenEstimator.estimate("Busca en la carta.")
+                + TokenEstimator.estimateJson(tool.inputSchema());
+        assertThat(context.fixedTokens()).isEqualTo(fixed);
+        assertThat(context.messages()).hasSize((2048 - fixed) / 200);
+        assertThat(context.estimatedTokens() + context.fixedTokens() + context.reservedForResponse())
+                .isLessThanOrEqualTo(4096);
+    }
+
+    @Test
+    void build_whenThePromptAloneFillsTheWindow_failsAsThePromptNotFitting() {
+        String prompt = "p".repeat(7168); // 2048 tokens: the whole history window of 4096
+
+        assertThatThrownBy(() -> builder.build(List.of(userMessageOfLength("hi", 10)), "qwen2.5:3b", 4096,
+                prompt, List.of(), Set.of()))
+                .isInstanceOf(PromptDoesNotFitContextException.class)
+                .hasMessageStartingWith("The system prompt and tools do not fit the context window of 4096 tokens")
+                .hasMessageContaining("2048");
+    }
+
+    @Test
+    void build_whenThePromptAndTheCurrentMessageTogetherOverflow_failsAsThePromptNotFitting() {
+        String prompt = "p".repeat(5250); // 1500 tokens
+        Message current = userMessageOfLength("ASK", 2800); // 800 tokens: fits 2048 alone, not with the prompt
+
+        assertThatThrownBy(() -> builder.build(List.of(current), "qwen2.5:3b", 4096, prompt, List.of(), Set.of()))
+                .isInstanceOf(PromptDoesNotFitContextException.class)
+                .hasMessageContaining("1500 tokens (0 tools)")
+                .hasMessageContaining("current message at 800");
+    }
+
+    @Test
+    void build_whenTheCurrentMessageIsTooLargeEvenWithoutAPrompt_isTheMessageNotTheAgent() {
+        Message current = userMessageOfLength("HUGE", 7700); // 2200 tokens > 2048
+
+        assertThatThrownBy(() -> builder.build(List.of(current), "qwen2.5:3b", 4096, SYSTEM_PROMPT, List.of(),
+                Set.of()))
+                .isInstanceOf(MessageTooLargeForContextException.class);
     }
 
     @Test
     void responseTokens_inASmallWindow_isCappedToWhatWasHeldBack() {
         LlmInvocationContext context = builder.build(
-                List.of(userMessageOfLength("hi", 10)), "qwen2.5:3b", 4096, SYSTEM_PROMPT, Set.of());
+                List.of(userMessageOfLength("hi", 10)), "qwen2.5:3b", 4096, SYSTEM_PROMPT, List.of(), Set.of());
 
         assertThat(context.responseTokens(4096)).isEqualTo(2048);
         assertThat(context.responseTokens(1000)).isEqualTo(1000);
@@ -102,7 +160,7 @@ class ContextBuilderTest {
             messages.add(userMessageOfLength("MSG" + i, 7000));
         }
 
-        LlmInvocationContext context = builder.build(messages, MODEL, SYSTEM_PROMPT);
+        LlmInvocationContext context = builder.build(messages, MODEL, NO_PROMPT);
 
         assertThat(context.messages()).hasSize(95);
         assertThat(context.estimatedTokens()).isEqualTo(EFFECTIVE_WINDOW); // 190_000
@@ -117,7 +175,7 @@ class ContextBuilderTest {
         // 700_000 chars => ceil(700000/3.5) = 200_000 tokens > 190_000 effective window.
         Message huge = userMessageOfLength("HUGE", 700_000);
 
-        assertThatThrownBy(() -> builder.build(List.of(huge), MODEL, SYSTEM_PROMPT))
+        assertThatThrownBy(() -> builder.build(List.of(huge), MODEL, NO_PROMPT))
                 .isInstanceOf(MessageTooLargeForContextException.class)
                 .hasMessageContaining("200000")
                 .hasMessageContaining(String.valueOf(EFFECTIVE_WINDOW));
@@ -128,7 +186,7 @@ class ContextBuilderTest {
         // 665_000 chars => ceil(665000/3.5) = 190_000 tokens == effective window (boundary).
         Message exact = userMessageOfLength("EXACT", 665_000);
 
-        LlmInvocationContext context = builder.build(List.of(exact), MODEL, SYSTEM_PROMPT);
+        LlmInvocationContext context = builder.build(List.of(exact), MODEL, NO_PROMPT);
 
         assertThat(context.messages()).hasSize(1);
         assertThat(context.estimatedTokens()).isEqualTo(EFFECTIVE_WINDOW);
@@ -262,10 +320,9 @@ class ContextBuilderTest {
     }
 
     @Test
-    void build_whenSystemPromptIsLarge_doesNotCountItAgainstWindow() {
-        // Messages alone = 150_000 tokens (under 190_000). System prompt = 50_000 tokens.
-        // Jointly they would exceed the window, but the prompt must not be counted, so every
-        // message is retained.
+    void build_whenSystemPromptIsLarge_countsItAgainstTheWindow() {
+        // Messages alone = 150_000 tokens (under 190_000). System prompt = 50_000 tokens: what
+        // is left for the history is 140_000, so the newest 70 messages are retained.
         List<Message> messages = new ArrayList<>();
         for (int i = 0; i < 75; i++) {
             messages.add(userMessageOfLength("M" + i, 7000)); // 2000 tokens each => 150_000
@@ -274,9 +331,10 @@ class ContextBuilderTest {
 
         LlmInvocationContext context = builder.build(messages, MODEL, largeSystemPrompt);
 
-        assertThat(context.messages()).hasSize(75);
-        assertThat(context.estimatedTokens()).isEqualTo(150_000);
-        assertThat(context.estimatedTokens()).isLessThanOrEqualTo(EFFECTIVE_WINDOW);
+        assertThat(context.messages()).hasSize(70);
+        assertThat(context.messages().get(0).content()).startsWith("M5:");
+        assertThat(context.estimatedTokens()).isEqualTo(140_000);
+        assertThat(context.fixedTokens()).isEqualTo(50_000);
         assertThat(context.systemPrompt()).isEqualTo(largeSystemPrompt);
     }
 

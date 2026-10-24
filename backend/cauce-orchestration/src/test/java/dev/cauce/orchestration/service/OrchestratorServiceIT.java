@@ -200,7 +200,8 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
 
     @Test
     void respondToMessage_whenConversationExceedsWindow_invokesLlmWithTruncatedContext() {
-        // Insert 100 USER messages of 7000 chars (2000 tokens each); 95 fit the 190_000 window.
+        // Insert 100 USER messages of 7000 chars (2000 tokens each): the 190_000 window less the
+        // agent's system prompt, which counts against it, holds 94.
         seedLargeHistory(100, 7000);
         UUID trigger = lastUserMessageId();
 
@@ -214,9 +215,9 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
         }
 
         List<dev.cauce.llm.model.LlmMessage> sent = mockLlmProvider.lastInvocation().messages();
-        assertThat(sent).hasSize(95);
-        assertThat(sent.get(0).content()).startsWith("MSG5:");
-        assertThat(sent.get(94).content()).startsWith("MSG99:");
+        assertThat(sent).hasSize(94);
+        assertThat(sent.get(0).content()).startsWith("MSG6:");
+        assertThat(sent.get(93).content()).startsWith("MSG99:");
     }
 
     @Test

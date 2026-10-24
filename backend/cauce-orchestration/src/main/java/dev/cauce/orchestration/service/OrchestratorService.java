@@ -220,7 +220,7 @@ public class OrchestratorService {
         for (int iteration = alreadyUsed; iteration < maxIterations; iteration++) {
             LlmInvocationContext context =
                     contextBuilder.build(messages, agent.modelName(), contextWindow, agent.systemPrompt(),
-                            elidedLookups);
+                            toolDefinitions, elidedLookups);
             eventPublisher.publishEvent(new ContextAssembled(invocationId, iteration,
                     agent.modelName(), context.messages().size(), context.estimatedTokens(),
                     context.contextWindowLimit(), Instant.now()));

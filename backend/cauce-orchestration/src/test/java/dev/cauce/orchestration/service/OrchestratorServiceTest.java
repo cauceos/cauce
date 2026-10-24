@@ -48,6 +48,7 @@ import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
+import dev.cauce.orchestration.exception.PromptDoesNotFitContextException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.service.ConversationGateway.LoadedConversation;
 import dev.cauce.orchestration.usage.LlmUsageRecord;
@@ -474,6 +475,22 @@ class OrchestratorServiceTest {
         // History gets half of the window and the response the other half: together they fit.
         assertThat(captor.getValue().maxTokens()).isEqualTo(2048);
         assertThat(assembled.estimatedTokens() + captor.getValue().maxTokens()).isLessThanOrEqualTo(4096);
+    }
+
+    @Test
+    void respondToMessage_promptThatDoesNotFitTheServedWindow_failsBeforeTheModelIsCalled() {
+        stubLoadAndEchoAppend();
+        agent = Agent.create(tenantId, "DentalBot", "p".repeat(7168), PROVIDER, MODEL); // 2048 tokens
+        when(gateway.load(conversationId, triggerId)).thenReturn(new LoadedConversation(conversation, agent,
+                List.of(Message.from(conversationId, MessageRole.USER, "Hola"))));
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.servedContextWindow(MODEL)).thenReturn(OptionalInt.of(4096));
+
+        assertThatThrownBy(() -> serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId))
+                .isInstanceOf(PromptDoesNotFitContextException.class)
+                .hasMessageContaining("context window of 4096 tokens");
+        // Never sent for the provider to cut silently.
+        verify(provider, never()).invoke(any());
     }
 
     @Test

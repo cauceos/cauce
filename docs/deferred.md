@@ -9,7 +9,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 ## Agentic loop and tools
 
 - **A heartbeat instead of the flat reaper timeout.** The orphan timeout is a fixed duration sized for the multi-step loop; a long-running loop would need a liveness signal rather than a bigger constant.
-- **Counting the tool-definition schema against the context window.** Only tool-message content is counted; the schema the provider receives is not.
 - **Per-model limits beyond the context window.** Only the context window has a registry plus a conservative fallback (`ModelContextWindow`); max response tokens is a flat default, never per-model.
 - **`RESERVED_FOR_RESPONSE`** is a hardcoded token constant in `ContextBuilder`; revisit when tuning context assembly.
 - **Streaming** is not part of the LLM SPI — explicitly deferred past v1.0, to be added as a separate method. The orchestrator does one blocking `invoke`.

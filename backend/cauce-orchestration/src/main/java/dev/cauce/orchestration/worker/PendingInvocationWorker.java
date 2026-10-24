@@ -13,6 +13,7 @@ import dev.cauce.orchestration.events.InvocationFailureType;
 import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
+import dev.cauce.orchestration.exception.PromptDoesNotFitContextException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
 import dev.cauce.orchestration.service.FailureFallbackService;
@@ -182,6 +183,10 @@ public class PendingInvocationWorker {
         }
         if (e instanceof LlmProviderNotAvailableException) {
             // The agent names a provider this instance has not configured: setup, not an outage.
+            return InvocationFailureType.AGENT_CONFIGURATION;
+        }
+        if (e instanceof PromptDoesNotFitContextException) {
+            // The agent's prompt and tools exceed the window it is served: its setup, never a cut.
             return InvocationFailureType.AGENT_CONFIGURATION;
         }
         if (e instanceof UnpricedModelException) {

@@ -1,5 +1,7 @@
 package dev.cauce.orchestration.context;
 
+import java.util.Map;
+
 /**
  * Conservative, provider-independent token estimator. Pure, stateless utility.
  *
@@ -24,5 +26,42 @@ public final class TokenEstimator {
             return 0;
         }
         return (int) Math.ceil(text.length() / CHARS_PER_TOKEN);
+    }
+
+    /**
+     * Estimates the token count of {@code value} rendered as compact JSON, the shape a tool's input
+     * schema takes on the wire: maps, iterables, strings (quoted), and anything else by its
+     * {@code toString()}. The same ratio as {@link #estimate(String)}.
+     */
+    public static int estimateJson(Object value) {
+        StringBuilder json = new StringBuilder();
+        appendJson(json, value);
+        return estimate(json.toString());
+    }
+
+    private static void appendJson(StringBuilder json, Object value) {
+        if (value instanceof Map<?, ?> map) {
+            json.append('{');
+            String separator = "";
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                json.append(separator).append('"').append(entry.getKey()).append("\":");
+                appendJson(json, entry.getValue());
+                separator = ",";
+            }
+            json.append('}');
+        } else if (value instanceof Iterable<?> items) {
+            json.append('[');
+            String separator = "";
+            for (Object item : items) {
+                json.append(separator);
+                appendJson(json, item);
+                separator = ",";
+            }
+            json.append(']');
+        } else if (value instanceof CharSequence text) {
+            json.append('"').append(text).append('"');
+        } else {
+            json.append(value);
+        }
     }
 }

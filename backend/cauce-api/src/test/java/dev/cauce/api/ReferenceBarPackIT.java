@@ -1,6 +1,7 @@
 package dev.cauce.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -9,12 +10,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * The hospitality sector pack under {@code examples/hosteleria} stays loadable: the reference
@@ -57,6 +61,63 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
         assertThat(retention.get("agente_clientes").asText()).isEqualTo("LONG");
         assertThat(dev.cauce.core.agent.PromptCacheRetention.valueOf(retention.get("agente_dueno").asText()))
                 .isNotNull();
+    }
+
+    @Test
+    void theBarsCustomerAgent_onAServedWindowOf4096_failsAsMisconfigured_neverSentToBeCut() throws Exception {
+        llm.serveContextWindow(4096); // Ollama's default context length
+        UUID agentId = createCustomerAgent();
+
+        String invocationId = postHola(agentId);
+        worker.pollAndProcess();
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                getAs(clientAuth, "/v1/invocations/" + invocationId)
+                        .andExpect(jsonPath("$.status").value("FAILED"))
+                        .andExpect(jsonPath("$.failure_reason").value("AGENT_MISCONFIGURED")));
+        assertThat(new JdbcTemplate(adminDataSource).queryForObject(
+                "SELECT last_error FROM pending_invocations WHERE id = ?::uuid", String.class, invocationId))
+                .contains("The system prompt and tools do not fit the context window of 4096 tokens")
+                .contains("(11 tools)");
+        assertThat(llm.invocations()).as("the prompt is never sent for the server to cut").isEmpty();
+    }
+
+    @Test
+    void theBarsCustomerAgent_onAServedWindowOf16384_answers() throws Exception {
+        llm.serveContextWindow(16_384); // what QUICKSTART advises for the bar on Ollama
+        UUID agentId = createCustomerAgent();
+
+        String invocationId = postHola(agentId);
+        worker.pollAndProcess();
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                getAs(clientAuth, "/v1/invocations/" + invocationId)
+                        .andExpect(jsonPath("$.status").value("COMPLETED")));
+        assertThat(llm.invocations()).hasSize(1);
+        assertThat(llm.invocations().get(0).tools()).hasSize(11);
+    }
+
+    private UUID createCustomerAgent() throws Exception {
+        List<String> tools = new ArrayList<>();
+        objectMapper.readTree(read("herramientas.json")).get("agente_clientes").forEach(tool -> tools.add(tool.asText()));
+        String body = mockMvc.perform(post("/v1/tenants/" + clientId + "/agents").header(HttpHeaders.AUTHORIZATION, clientAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("name", "agente_clientes",
+                                "system_prompt", read("agente-clientes.prompt.md"), "model_provider", "anthropic",
+                                "model_name", "claude-sonnet-4-7", "tools", tools))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(objectMapper.readTree(body).get("id").asText());
+    }
+
+    private String postHola(UUID agentId) throws Exception {
+        String body = mockMvc.perform(post("/v1/agents/" + agentId + "/messages").header(HttpHeaders.AUTHORIZATION, clientAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("external_identity_ref", "cliente-1",
+                                "content", "Hola, ¿tenéis mesa para cuatro esta noche?"))))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).get("invocation_id").asText();
     }
 
     private static String read(String file) throws Exception {
