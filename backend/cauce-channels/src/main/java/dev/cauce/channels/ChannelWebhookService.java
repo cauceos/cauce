@@ -3,8 +3,12 @@ package dev.cauce.channels;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelAdapterRegistry;
+import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelInboundMessage;
+import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.InboundChannelAdapter;
+import dev.cauce.channels.spi.OutboundChannelAdapter;
+import dev.cauce.channels.spi.UnsupportedInboundMessage;
 import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.tenant.TenantContext;
@@ -13,6 +17,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
 /**
@@ -42,6 +48,11 @@ public class ChannelWebhookService {
         /** Authentic but not an ingestable user message; acknowledged without effects. */
         IGNORED,
         /**
+         * A person's message of a type Cauce does not read yet (a Telegram voice note): not
+         * ingested, but audited once and answered with the adapter's fixed text (ADR 0006, W5).
+         */
+        UNSUPPORTED,
+        /**
          * Authentic and well formed, but from an interlocutor no identity kind can name (a
          * Telegram group). Refused loudly — logged at WARN with the reason — and still
          * acknowledged, because the provider would otherwise redeliver it forever.
@@ -53,15 +64,21 @@ public class ChannelWebhookService {
     private final ChannelAdapterRegistry adapterRegistry;
     private final InboundMessageService inboundMessageService;
     private final InboundInterception interception;
+    private final UnsupportedMessageRecorder unsupportedRecorder;
+    private final TaskExecutor outboundExecutor;
 
     public ChannelWebhookService(ChannelConfigService channelConfigService,
                                  ChannelAdapterRegistry adapterRegistry,
                                  InboundMessageService inboundMessageService,
-                                 InboundInterception interception) {
+                                 InboundInterception interception,
+                                 UnsupportedMessageRecorder unsupportedRecorder,
+                                 @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor) {
         this.channelConfigService = channelConfigService;
         this.adapterRegistry = adapterRegistry;
         this.inboundMessageService = inboundMessageService;
         this.interception = interception;
+        this.unsupportedRecorder = unsupportedRecorder;
+        this.outboundExecutor = outboundExecutor;
     }
 
     /**
@@ -89,6 +106,11 @@ public class ChannelWebhookService {
             return WebhookResult.REJECTED;
         }
         if (message.isEmpty()) {
+            Optional<UnsupportedInboundMessage> unsupported = adapter.unsupported(request.body(), config);
+            if (unsupported.isPresent()) {
+                answerUnsupported(config, unsupported.get());
+                return WebhookResult.UNSUPPORTED;
+            }
             log.debug("Ignoring non-ingestable {} webhook payload for config {}",
                     config.channelType(), configId);
             return WebhookResult.IGNORED;
@@ -107,5 +129,43 @@ public class ChannelWebhookService {
             TenantContext.clear();
         }
         return WebhookResult.ACCEPTED;
+    }
+
+    /**
+     * W5: never silence. The message is not ingested, so it opens no thread; its receipt makes a
+     * redelivery a no-op — one audit record, one reply.
+     */
+    private void answerUnsupported(ChannelConfig config, UnsupportedInboundMessage unsupported) {
+        TenantContext.setCurrentTenantId(config.tenantId());
+        try {
+            if (!unsupportedRecorder.recordUnsupportedMessage(config, unsupported.messageType(),
+                    unsupported.providerMessageId())) {
+                return;
+            }
+        } finally {
+            TenantContext.clear();
+        }
+        Optional<OutboundChannelAdapter> outbound = adapterRegistry.outboundAdapter(config.channelType());
+        if (outbound.isEmpty()) {
+            log.warn("Channel '{}' has no outbound adapter; the {} message through config {} is audited, not answered",
+                    config.channelType(), unsupported.messageType(), config.id());
+            return;
+        }
+        // The interlocutor has just written: a channel with a reply window has it open.
+        ChannelOutboundMessage reply = new ChannelOutboundMessage(unsupported.identityKind(),
+                unsupported.identityValue(), unsupported.reply());
+        try {
+            // Best-effort, off the webhook thread: the provider expects its 2xx quickly.
+            outboundExecutor.execute(() -> {
+                try {
+                    outbound.get().deliver(reply, config);
+                } catch (ChannelDeliveryException e) {
+                    log.warn("Could not send the text-only reply through config {}: {}", config.id(),
+                            e.getMessage());
+                }
+            });
+        } catch (RuntimeException e) {
+            log.warn("Could not queue the text-only reply through config {}: {}", config.id(), e.toString());
+        }
     }
 }

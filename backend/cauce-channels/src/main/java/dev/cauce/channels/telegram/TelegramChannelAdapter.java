@@ -12,6 +12,7 @@ import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.spi.InboundChannelAdapter;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.channels.spi.ReplyMarkdown;
+import dev.cauce.channels.spi.UnsupportedInboundMessage;
 import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
@@ -22,6 +23,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -33,7 +35,9 @@ import java.util.Optional;
  * <p>Only plain text messages are ingested ({@code update.message.text}); every other
  * update shape (edited messages, callbacks, media without text, channel posts) is
  * authentic-but-unsupported and reported as empty, so the webhook acknowledges it and
- * Telegram does not redeliver.
+ * Telegram does not redeliver. A private message without text — a voice note, a photo — is a
+ * person waiting for an answer: {@link #unsupported} names it, so that it is answered with a fixed
+ * text instead of silence (ADR 0006, W5).
  *
  * <p>Only private chats are accepted. A group's {@code chat.id} is not a person and there is
  * no identity kind for it (ADR 0004, conscious limitation), so a text message from any chat
@@ -67,6 +71,10 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
 
     /** What Telegram answers (HTTP 400) to a {@code parse_mode} text it cannot parse. */
     static final String ENTITIES_REJECTED = "can't parse entities";
+
+    /** The Bot API's fields for what a message carries instead of text, as its audited type. */
+    static final List<String> MEDIA_FIELDS = List.of("voice", "audio", "video_note", "video", "photo",
+            "document", "sticker", "animation", "location", "venue", "contact", "poll", "dice");
 
     // Own mapper on purpose: the Telegram wire format is fixed by the Bot API and must not
     // inherit the application's Jackson configuration (e.g. the global snake_case strategy).
@@ -126,6 +134,33 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
                 String.valueOf(chatId.asLong()),
                 text.asText(),
                 config.id() + ":" + updateId.asLong()));
+    }
+
+    @Override
+    public Optional<UnsupportedInboundMessage> unsupported(String body, ChannelConfig config) {
+        JsonNode update;
+        try {
+            update = objectMapper.readTree(body);
+        } catch (JacksonException e) {
+            return Optional.empty();
+        }
+        JsonNode updateId = update.path("update_id");
+        JsonNode message = update.path("message");
+        JsonNode chatId = message.path("chat").path("id");
+        JsonNode text = message.path("text");
+        if (!updateId.isIntegralNumber() || !chatId.isIntegralNumber()
+                || !"private".equals(message.path("chat").path("type").asText(""))
+                || (text.isTextual() && !text.asText().isBlank())) {
+            return Optional.empty(); // not a person's message, or text that parse() ingests
+        }
+        return Optional.of(new UnsupportedInboundMessage(IdentityKind.PROVIDER_USER_ID,
+                String.valueOf(chatId.asLong()), messageType(message), String.valueOf(updateId.asLong()),
+                properties.getUnsupportedMessageReply()));
+    }
+
+    /** What a message without text carries, by the Bot API's field for it; {@code other} if none is known. */
+    private static String messageType(JsonNode message) {
+        return MEDIA_FIELDS.stream().filter(message::has).findFirst().orElse("other");
     }
 
     @Override

@@ -38,4 +38,14 @@ public interface InboundChannelAdapter {
      *     be named with any identity kind (e.g. a Telegram group)
      */
     Optional<ChannelInboundMessage> parse(String body, ChannelConfig config);
+
+    /**
+     * For a payload {@link #parse} left out: whether it is a person's message of a type Cauce does
+     * not read yet (a voice note, a photo), to be audited and answered with a fixed text rather
+     * than met with silence (ADR 0006, W5). Empty for everything else — an edit, a callback, a
+     * group — and by default, for a channel that delivers only what it ingests.
+     */
+    default Optional<UnsupportedInboundMessage> unsupported(String body, ChannelConfig config) {
+        return Optional.empty();
+    }
 }

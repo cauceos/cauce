@@ -16,7 +16,10 @@ import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelAdapterRegistry;
 import dev.cauce.channels.spi.ChannelInboundMessage;
 import dev.cauce.core.identity.IdentityKind;
+import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.InboundChannelAdapter;
+import dev.cauce.channels.spi.OutboundChannelAdapter;
+import dev.cauce.channels.spi.UnsupportedInboundMessage;
 import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.tenant.TenantContext;
@@ -30,6 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.task.SyncTaskExecutor;
 
 class ChannelWebhookServiceTest {
 
@@ -39,6 +43,8 @@ class ChannelWebhookServiceTest {
     private InboundChannelAdapter adapter;
     private InboundMessageService inboundMessageService;
     private InboundInterception interception;
+    private UnsupportedMessageRecorder unsupportedRecorder;
+    private OutboundChannelAdapter outbound;
     private ChannelWebhookService service;
 
     private ChannelConfig config;
@@ -49,9 +55,13 @@ class ChannelWebhookServiceTest {
         adapter = mock(InboundChannelAdapter.class);
         inboundMessageService = mock(InboundMessageService.class);
         interception = mock(InboundInterception.class);
+        unsupportedRecorder = mock(UnsupportedMessageRecorder.class);
+        outbound = mock(OutboundChannelAdapter.class);
         when(adapter.channelType()).thenReturn("telegram");
+        when(outbound.channelType()).thenReturn("telegram");
         service = new ChannelWebhookService(channelConfigService,
-                new ChannelAdapterRegistry(List.of(adapter), List.of()), inboundMessageService, interception);
+                new ChannelAdapterRegistry(List.of(adapter), List.of(outbound)), inboundMessageService, interception,
+                unsupportedRecorder, new SyncTaskExecutor());
         config = ChannelConfig.create(UUID.randomUUID(), UUID.randomUUID(), "telegram",
                 "token", "hash");
         TenantContext.clear();
@@ -94,6 +104,43 @@ class ChannelWebhookServiceTest {
 
         assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.IGNORED);
         verifyNoInteractions(inboundMessageService);
+    }
+
+    @Test
+    void handle_aPersonsMessageOfAnUnreadType_isAuditedUnderTheConfigTenant_andAnsweredOnce() {
+        UnsupportedInboundMessage voice = new UnsupportedInboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                "voice", "7007", "Only text, please.");
+        when(channelConfigService.resolveActiveChannelConfig(config.id())).thenReturn(Optional.of(config));
+        when(adapter.verify(REQUEST, config)).thenReturn(true);
+        when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.empty());
+        when(adapter.unsupported(REQUEST.body(), config)).thenReturn(Optional.of(voice));
+        AtomicReference<UUID> contextWhileRecording = new AtomicReference<>();
+        when(unsupportedRecorder.recordUnsupportedMessage(config, "voice", "7007")).thenAnswer(call -> {
+            contextWhileRecording.set(TenantContext.getCurrentTenantId().orElse(null));
+            return true;
+        });
+
+        assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.UNSUPPORTED);
+
+        assertThat(contextWhileRecording.get()).isEqualTo(config.tenantId());
+        verify(outbound).deliver(new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                "Only text, please."), config);
+        verifyNoInteractions(inboundMessageService);
+        assertThat(TenantContext.getCurrentTenantId()).isEmpty();
+    }
+
+    @Test
+    void handle_aRedeliveredMessageOfAnUnreadType_isNotAnsweredAgain() {
+        when(channelConfigService.resolveActiveChannelConfig(config.id())).thenReturn(Optional.of(config));
+        when(adapter.verify(REQUEST, config)).thenReturn(true);
+        when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.empty());
+        when(adapter.unsupported(REQUEST.body(), config)).thenReturn(Optional.of(new UnsupportedInboundMessage(
+                IdentityKind.PROVIDER_USER_ID, "987654321", "voice", "7007", "Only text, please.")));
+        when(unsupportedRecorder.recordUnsupportedMessage(config, "voice", "7007")).thenReturn(false);
+
+        assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.UNSUPPORTED);
+
+        verify(outbound, never()).deliver(any(), any());
     }
 
     @Test

@@ -102,6 +102,10 @@ The text is sent directly through the outbound adapter (the message was not inge
 no thread) and the event is audited as `conduct.message.unsupported`: the message type and
 ids, no content.
 
+Since 2026-10-24 Telegram follows the same rule: a private message without text (a voice note, a
+photo) is answered with `cauce.channels.telegram.unsupported-message-reply` and audited the same
+way, once per `update_id`. Until then it was acknowledged in silence.
+
 ### Sending to a BSUID
 
 A reply is sent with `recipient_type: "individual"` and `recipient: "<BSUID>"`, without `to`.

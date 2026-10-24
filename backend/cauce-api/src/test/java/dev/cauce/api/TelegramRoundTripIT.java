@@ -23,6 +23,7 @@ import dev.cauce.api.support.AbstractApiIntegrationTest;
 import dev.cauce.api.support.FakeLlmProvider;
 import dev.cauce.api.tenant.CreateClientRequest;
 import dev.cauce.api.tenant.CreatePartnerRequest;
+import dev.cauce.channels.telegram.TelegramProperties;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.worker.PendingInvocationWorker;
 import dev.cauce.tenancy.ApiKeyService;
@@ -195,6 +196,30 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[1].role").value("AGENT"))
                 .andExpect(jsonPath("$.data[1].content").value(FakeLlmProvider.REPLY));
+    }
+
+    @Test
+    void telegramVoiceNote_isAnsweredOnceWithTheFixedText_auditedButNeverIngested() throws Exception {
+        TELEGRAM.stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson("{\"ok\": true}")));
+        String voice = """
+                {"update_id": 7007,
+                 "message": {"message_id": 43, "chat": {"id": 987654321, "type": "private"},
+                             "date": 1751623000,
+                             "voice": {"file_id": "AwACAgQ", "duration": 4, "mime_type": "audio/ogg"}}}
+                """;
+
+        postUpdate(voice).andExpect(status().isOk());
+        postUpdate(voice).andExpect(status().isOk()); // Telegram redelivers it
+
+        // Before W5's rule reached Telegram this was silence: the person got nothing.
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                TELEGRAM.verify(1, postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage"))
+                        .withRequestBody(equalToJson("{\"chat_id\": \"987654321\", \"text\": \""
+                                + new TelegramProperties().getUnsupportedMessageReply() + "\", \"parse_mode\": \"HTML\"}"))));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_outbox WHERE event_type = "
+                + "'conduct.message.unsupported'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM conversations", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM messages", Integer.class)).isZero();
     }
 
     // --- helpers ---

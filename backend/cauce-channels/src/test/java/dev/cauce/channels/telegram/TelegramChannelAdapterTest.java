@@ -22,6 +22,7 @@ import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelInboundMessage;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
+import dev.cauce.channels.spi.UnsupportedInboundMessage;
 import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
@@ -153,6 +154,43 @@ class TelegramChannelAdapterTest {
                 """;
 
         assertThat(adapter.parse(update, config)).isEmpty();
+    }
+
+    @Test
+    void unsupported_aPrivateVoiceNote_isNamedWithItsSenderTypeAndUpdate_toBeAnswered() {
+        String update = """
+                {"update_id": 7007, "message": {"chat": {"id": 987654321, "type": "private"},
+                 "voice": {"file_id": "AwAC", "duration": 4, "mime_type": "audio/ogg"}}}
+                """;
+
+        Optional<UnsupportedInboundMessage> unsupported = adapter.unsupported(update, config);
+
+        assertThat(unsupported).contains(new UnsupportedInboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                "voice", "7007", new TelegramProperties().getUnsupportedMessageReply()));
+    }
+
+    @Test
+    void unsupported_aPrivatePhoto_isNamedPhoto_andAnUnknownKind_other() {
+        assertThat(adapter.unsupported("""
+                {"update_id": 8, "message": {"chat": {"id": 1, "type": "private"}, "photo": []}}
+                """, config)).map(UnsupportedInboundMessage::messageType).contains("photo");
+        assertThat(adapter.unsupported("""
+                {"update_id": 9, "message": {"chat": {"id": 1, "type": "private"}, "paid_media": {}}}
+                """, config)).map(UnsupportedInboundMessage::messageType).contains("other");
+    }
+
+    @Test
+    void unsupported_isEmpty_forText_aGroup_anEdit_orMalformedJson() {
+        assertThat(adapter.unsupported("""
+                {"update_id": 1, "message": {"chat": {"id": 1, "type": "private"}, "text": "Hola"}}
+                """, config)).isEmpty();
+        assertThat(adapter.unsupported("""
+                {"update_id": 2, "message": {"chat": {"id": -100, "type": "group"}, "voice": {}}}
+                """, config)).isEmpty();
+        assertThat(adapter.unsupported("""
+                {"update_id": 3, "edited_message": {"chat": {"id": 1, "type": "private"}, "voice": {}}}
+                """, config)).isEmpty();
+        assertThat(adapter.unsupported("{not json", config)).isEmpty();
     }
 
     @Test

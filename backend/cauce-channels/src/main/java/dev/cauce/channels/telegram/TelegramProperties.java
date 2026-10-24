@@ -17,6 +17,13 @@ public class TelegramProperties {
     /** Per-request HTTP timeout for outbound deliveries. */
     private Duration timeout = Duration.ofSeconds(10);
 
+    /**
+     * The fixed reply to a private message that is not text (a voice note, a photo): never
+     * silence, the rule WhatsApp follows (ADR 0006, W5). A platform setting, like WhatsApp's.
+     */
+    private String unsupportedMessageReply =
+            "Sorry, for now I can only read text messages. Please write your message as text.";
+
     public String getBaseUrl() {
         return baseUrl;
     }
@@ -31,5 +38,16 @@ public class TelegramProperties {
 
     public void setTimeout(Duration timeout) {
         this.timeout = timeout;
+    }
+
+    public String getUnsupportedMessageReply() {
+        return unsupportedMessageReply;
+    }
+
+    public void setUnsupportedMessageReply(String unsupportedMessageReply) {
+        if (unsupportedMessageReply == null || unsupportedMessageReply.isBlank()) {
+            throw new IllegalArgumentException("cauce.channels.telegram.unsupported-message-reply must not be blank");
+        }
+        this.unsupportedMessageReply = unsupportedMessageReply.strip();
     }
 }
