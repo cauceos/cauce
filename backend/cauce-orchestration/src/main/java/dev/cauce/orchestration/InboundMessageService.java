@@ -6,6 +6,7 @@ import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.events.InvocationRequested;
@@ -17,6 +18,7 @@ import dev.cauce.tenancy.ConversationService;
 import dev.cauce.tenancy.MessageService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.MDC;
@@ -125,10 +127,23 @@ public class InboundMessageService {
     public InboundMessageResult ingest(UUID agentId, String channelType, UUID channelConfigId,
                                        IdentityKind identityKind, String identityValue,
                                        String content, String idempotencyKey) {
+        return ingestParts(agentId, channelType, channelConfigId, identityKind, identityValue,
+                List.of(new MessagePart.Text(content)), idempotencyKey);
+    }
+
+    /**
+     * {@link #ingest(UUID, String, UUID, IdentityKind, String, String, String)} for a message given
+     * as its parts, in order: a channel's message that is not only text (a voice note, received
+     * untranscribed; the worker transcribes it, ADR 0012).
+     */
+    @Transactional
+    public InboundMessageResult ingestParts(UUID agentId, String channelType, UUID channelConfigId,
+                                            IdentityKind identityKind, String identityValue,
+                                            List<MessagePart> parts, String idempotencyKey) {
         // ADR 0011, L1: the ingest's log lines carry the agent and, once resolved, the conversation.
         MDC.put(LogKeys.AGENT_ID, agentId.toString());
         try {
-            return ingestLogged(agentId, channelType, channelConfigId, identityKind, identityValue, content,
+            return ingestLogged(agentId, channelType, channelConfigId, identityKind, identityValue, parts,
                     idempotencyKey);
         } finally {
             MDC.remove(LogKeys.AGENT_ID);
@@ -138,7 +153,7 @@ public class InboundMessageService {
 
     private InboundMessageResult ingestLogged(UUID agentId, String channelType, UUID channelConfigId,
                                               IdentityKind identityKind, String identityValue,
-                                              String content, String idempotencyKey) {
+                                              List<MessagePart> parts, String idempotencyKey) {
         if (idempotencyKey != null) {
             requireValidKey(idempotencyKey);
             // Fast-path replay of a committed ingest. Deliberately BEFORE resolving the
@@ -177,7 +192,7 @@ public class InboundMessageService {
         MDC.put(LogKeys.CONVERSATION_ID, conversation.id().toString());
         // ADR 0010, S10: how long the person took since their previous message, for the cache retention.
         Optional<Instant> previousMessageAt = messageService.lastMessageAt(conversation.id(), MessageRole.USER);
-        Message userMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, content);
+        Message userMessage = messageService.appendMessage(conversation.id(), MessageRole.USER, parts);
         PendingInvocation invocation =
                 pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(),
                         tracing.currentTraceParent().orElse(null)); // ADR 0011, T2: the reply continues this trace

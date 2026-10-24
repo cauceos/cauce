@@ -3,6 +3,8 @@ package dev.cauce.channels.whatsapp;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
@@ -45,6 +47,42 @@ class WhatsAppChannelAdapterTest {
 
     private static ChannelOutboundMessage reply(String text, Duration sinceInterlocutor) {
         return new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, BSUID, text, NOW.minus(sinceInterlocutor));
+    }
+
+    @Test
+    void download_asksGraphForTheMediaUrl_andReadsItWithTheNumbersToken(WireMockRuntimeInfo wm) {
+        stubFor(get(urlEqualTo("/v24.0/media-9")).withHeader("Authorization", equalTo("Bearer EAAG-access-token"))
+                .willReturn(okJson("""
+                        {"url": "%s/lookaside/media-9", "mime_type": "audio/ogg", "file_size": 9, "id": "media-9"}
+                        """.formatted(wm.getHttpBaseUrl()))));
+        stubFor(get(urlEqualTo("/lookaside/media-9")).withHeader("Authorization", equalTo("Bearer EAAG-access-token"))
+                .willReturn(aResponse().withStatus(200).withBody("OggS-wa!!")));
+
+        byte[] bytes = adapterAgainst(wm).download("media-9", number, 20_000_000);
+
+        assertThat(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("OggS-wa!!");
+    }
+
+    @Test
+    void download_aMediaOverTheLimit_isRejected_beforeItIsRead(WireMockRuntimeInfo wm) {
+        stubFor(get(urlEqualTo("/v24.0/media-big")).willReturn(okJson("""
+                {"url": "%s/lookaside/big", "file_size": 30000000, "id": "media-big"}
+                """.formatted(wm.getHttpBaseUrl()))));
+
+        assertThatThrownBy(() -> adapterAgainst(wm).download("media-big", number, 20_000_000))
+                .isInstanceOf(dev.cauce.orchestration.exception.VoiceNoteRejectedException.class);
+        verify(0, getRequestedFor(urlEqualTo("/lookaside/big")));
+    }
+
+    @Test
+    void download_aMediaMetaDoesNotServe_isAMediaFailure(WireMockRuntimeInfo wm) {
+        stubFor(get(urlEqualTo("/v24.0/media-gone")).willReturn(aResponse().withStatus(404)
+                .withBody("{\"error\": {\"code\": 100, \"message\": \"Unsupported get request\"}}")));
+
+        assertThatThrownBy(() -> adapterAgainst(wm).download("media-gone", number, 20_000_000))
+                .isInstanceOf(dev.cauce.channels.spi.ChannelMediaException.class)
+                .hasMessageContaining("404")
+                .hasMessageNotContaining("EAAG-access-token");
     }
 
     @Test

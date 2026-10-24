@@ -23,10 +23,13 @@ import dev.cauce.channels.whatsapp.app.WhatsAppAppNotFoundException;
 import dev.cauce.channels.whatsapp.app.WhatsAppAppService;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.identity.IdentityKind;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.InboundMessageService;
+import dev.cauce.orchestration.voice.VoiceNoteTranscription;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -61,6 +64,7 @@ class WhatsAppWebhookServiceTest {
     private InboundMessageService inbound;
     private WhatsAppChannelAdapter outbound;
     private UnsupportedMessageRecorder recorder;
+    private VoiceNoteTranscription voiceNotes;
     private WhatsAppWebhookService service;
     private WhatsAppApp app;
     private ChannelConfig number;
@@ -72,9 +76,10 @@ class WhatsAppWebhookServiceTest {
         inbound = mock(InboundMessageService.class);
         outbound = mock(WhatsAppChannelAdapter.class);
         recorder = mock(UnsupportedMessageRecorder.class);
+        voiceNotes = mock(VoiceNoteTranscription.class);
         service = new WhatsAppWebhookService(appService, numberService, inbound, outbound, recorder,
                 new WhatsAppProperties(), FAKE_HASHER, new SyncTaskExecutor(), mock(InboundInterception.class),
-                Clock.systemUTC());
+                Clock.systemUTC(), voiceNotes);
         app = WhatsAppApp.create(UUID.randomUUID(), "1234567890", SECRET, FAKE_HASHER.hash("verify-me"));
         number = ChannelConfig.createWhatsAppNumber(UUID.randomUUID(), UUID.randomUUID(), app.id(), "1111111111",
                 "EAAG-token");
@@ -168,6 +173,20 @@ class WhatsAppWebhookServiceTest {
         assertThat(reply.getValue().content()).isEqualTo("Solo texto, por favor.");
         assertThat(reply.getValue().lastMessageAt()).isPresent();
         verify(inbound, never()).ingest(any(), anyString(), any(), any(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void handle_aVoiceNote_whereTheInstanceTranscribes_isIngestedByItsMediaId() {
+        when(voiceNotes.available()).thenReturn(true);
+
+        service.handle(app.id(), signed(change("""
+                {"from_user_id":"%s","id":"wamid.V1","type":"audio",
+                 "audio":{"id":"media-9","mime_type":"audio/ogg; codecs=opus","voice":true}}""".formatted(BSUID))));
+
+        verify(inbound).ingestParts(number.agentId(), "whatsapp", number.id(), IdentityKind.PROVIDER_USER_ID, BSUID,
+                List.of(MessagePart.Audio.received("audio/ogg; codecs=opus", "media-9", null, null)),
+                number.id() + ":wamid.V1");
+        verifyNoInteractions(recorder);
     }
 
     @Test

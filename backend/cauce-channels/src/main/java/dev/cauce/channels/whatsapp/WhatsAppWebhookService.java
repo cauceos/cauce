@@ -16,9 +16,12 @@ import dev.cauce.channels.whatsapp.app.WhatsAppAppNotFoundException;
 import dev.cauce.channels.whatsapp.app.WhatsAppAppService;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.identity.IdentityKind;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.InboundMessageService;
+import dev.cauce.orchestration.voice.VoiceNoteTranscription;
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -67,6 +70,7 @@ public class WhatsAppWebhookService {
     private final TaskExecutor outboundExecutor;
     private final InboundInterception interception;
     private final Clock clock;
+    private final VoiceNoteTranscription voiceNotes;
     // Own mapper: Meta's wire format must not inherit the application's Jackson settings.
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -76,7 +80,8 @@ public class WhatsAppWebhookService {
                                   ApiKeyHasher hasher,
                                   @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor,
                                   InboundInterception interception,
-                                  Clock clock) {
+                                  Clock clock,
+                                  VoiceNoteTranscription voiceNotes) {
         this.appService = appService;
         this.numberService = numberService;
         this.inboundMessageService = inboundMessageService;
@@ -87,6 +92,7 @@ public class WhatsAppWebhookService {
         this.outboundExecutor = outboundExecutor;
         this.interception = interception;
         this.clock = clock;
+        this.voiceNotes = voiceNotes;
     }
 
     /**
@@ -189,6 +195,18 @@ public class WhatsAppWebhookService {
                 }
                 inboundMessageService.ingest(number.agentId(), number.channelType(), number.id(),
                         IdentityKind.PROVIDER_USER_ID, bsuid, message.path("text").path("body").asText(),
+                        number.id() + ":" + providerMessageId);
+                return;
+            }
+            // ADR 0012: a voice note is read when the instance transcribes; the worker fetches it
+            // by its media id. WhatsApp announces neither its size nor its length.
+            if ("audio".equals(type) && voiceNotes.available()
+                    && !message.path("audio").path("id").asText("").isBlank()) {
+                JsonNode audio = message.path("audio");
+                inboundMessageService.ingestParts(number.agentId(), number.channelType(), number.id(),
+                        IdentityKind.PROVIDER_USER_ID, bsuid,
+                        List.of(MessagePart.Audio.received(audio.path("mime_type").asText("audio/ogg"),
+                                audio.path("id").asText(), null, null)),
                         number.id() + ":" + providerMessageId);
                 return;
             }

@@ -61,6 +61,12 @@ class MessagingApiIT extends AbstractApiIntegrationTest {
         FakeLlmProvider fakeLlmProvider() {
             return new FakeLlmProvider();
         }
+
+        /** The instance reads voice notes (ADR 0012), without a network. */
+        @Bean
+        dev.cauce.api.support.FakeTranscriber fakeTranscriber() {
+            return new dev.cauce.api.support.FakeTranscriber();
+        }
     }
 
     @Autowired

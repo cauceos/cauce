@@ -4,6 +4,7 @@ import java.util.Optional;
 import java.time.Instant;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.Message;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.memory.conversation.ConversationRepository;
 import dev.cauce.memory.message.MessageEntity;
@@ -48,11 +49,24 @@ public class MessageService {
      */
     @Transactional
     public Message appendMessage(UUID conversationId, MessageRole role, String content) {
+        return append(conversationId, Message.from(conversationId, role, content));
+    }
+
+    /**
+     * {@link #appendMessage(UUID, MessageRole, String)} for a message given as its parts, in order:
+     * a channel's message that is not only text (a voice note, ADR 0012).
+     */
+    @Transactional
+    public Message appendMessage(UUID conversationId, MessageRole role, List<MessagePart> parts) {
+        return append(conversationId, Message.fromParts(conversationId, role, parts));
+    }
+
+    private Message append(UUID conversationId, Message unstamped) {
         conversationRepository.findById(conversationId).orElseThrow(() ->
                 new ConversationNotFoundException("No conversation found for id " + conversationId));
 
         // Stamped from the database clock (ADR 0008): reply windows are measured against it.
-        Message message = Message.from(conversationId, role, content).stampedAt(clock.instant());
+        Message message = unstamped.stampedAt(clock.instant());
         Message saved = messageMapper.toDomain(messageRepository.save(messageMapper.toEntity(message)));
         conversationRepository.touchLastMessageAt(conversationId, saved.createdAt());
         return saved;

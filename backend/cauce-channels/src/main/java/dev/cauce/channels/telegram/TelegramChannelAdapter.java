@@ -7,9 +7,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelInboundMessage;
+import dev.cauce.channels.spi.ChannelMediaException;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.spi.InboundChannelAdapter;
+import dev.cauce.channels.spi.MediaChannelAdapter;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.channels.spi.ReplyMarkdown;
 import dev.cauce.channels.spi.UnsupportedInboundMessage;
@@ -17,8 +19,11 @@ import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.identity.IdentityKind;
+import dev.cauce.core.message.MessagePart;
+import dev.cauce.orchestration.exception.VoiceNoteRejectedException;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -62,7 +67,7 @@ import java.util.Optional;
  * Registered as a bean by {@code ChannelsConfig} (it carries the HTTP client and
  * properties, mirroring the LLM adapter configurations).
  */
-public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundChannelAdapter {
+public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundChannelAdapter, MediaChannelAdapter {
 
     /** Header Telegram sends on every webhook request when a secret_token is set. */
     static final String SECRET_TOKEN_HEADER = "X-Telegram-Bot-Api-Secret-Token";
@@ -117,9 +122,12 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
         JsonNode message = update.path("message");
         JsonNode chatId = message.path("chat").path("id");
         JsonNode text = message.path("text");
-        if (!chatId.isIntegralNumber() || !text.isTextual() || text.asText().isBlank()) {
-            // Authentic but not an ingestable text message (edited_message, callback_query,
-            // media without text, ...): acknowledge without ingesting.
+        boolean isText = text.isTextual() && !text.asText().isBlank();
+        boolean isVoice = message.path("voice").path("file_id").isTextual()
+                && !message.path("voice").path("file_id").asText().isBlank();
+        if (!chatId.isIntegralNumber() || (!isText && !isVoice)) {
+            // Authentic but not an ingestable text message or voice note (edited_message,
+            // callback_query, other media, ...): acknowledge without ingesting.
             return Optional.empty();
         }
         String chatType = message.path("chat").path("type").asText("");
@@ -132,7 +140,7 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
         return Optional.of(new ChannelInboundMessage(
                 IdentityKind.PROVIDER_USER_ID,
                 String.valueOf(chatId.asLong()),
-                text.asText(),
+                isText ? List.of(new MessagePart.Text(text.asText())) : voiceNote(message),
                 config.id() + ":" + updateId.asLong()));
     }
 
@@ -156,6 +164,73 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
         return Optional.of(new UnsupportedInboundMessage(IdentityKind.PROVIDER_USER_ID,
                 String.valueOf(chatId.asLong()), messageType(message), String.valueOf(updateId.asLong()),
                 properties.getUnsupportedMessageReply()));
+    }
+
+    /**
+     * A voice note as Telegram announces it (ADR 0012): Ogg Opus by default, its {@code file_id} the
+     * reference {@link #download} fetches it by, with its size and length when given; a caption is
+     * a text part after it.
+     */
+    private static List<MessagePart> voiceNote(JsonNode message) {
+        JsonNode voice = message.path("voice");
+        MessagePart.Audio note = MessagePart.Audio.received(voice.path("mime_type").asText("audio/ogg"),
+                voice.path("file_id").asText(),
+                voice.path("file_size").isIntegralNumber() ? voice.path("file_size").asLong() : null,
+                voice.path("duration").isIntegralNumber() ? voice.path("duration").asInt() : null);
+        JsonNode caption = message.path("caption");
+        return caption.isTextual() && !caption.asText().isBlank()
+                ? List.of(note, new MessagePart.Text(caption.asText()))
+                : List.of(note);
+    }
+
+    /**
+     * The bytes of a voice note (ADR 0012, V1): {@code getFile} names its path on Telegram's file
+     * server and its size, then the file is read from there, both with the bot token. Never more
+     * than {@code maxBytes}: a bot cannot download more than 20 MB anyway.
+     */
+    @Override
+    public byte[] download(String providerReference, ChannelConfig config, long maxBytes) {
+        HttpResponse<String> located = get(URI.create(properties.getBaseUrl() + "/bot" + config.credential()
+                + "/getFile?file_id=" + URLEncoder.encode(providerReference, StandardCharsets.UTF_8)),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        JsonNode file;
+        try {
+            file = objectMapper.readTree(located.body()).path("result");
+        } catch (JacksonException e) {
+            throw new ChannelMediaException("Telegram getFile returned a body that is not JSON", e);
+        }
+        if (located.statusCode() != 200 || !file.path("file_path").isTextual()) {
+            // The body carries Telegram's error description, never our token.
+            throw new ChannelMediaException("Telegram getFile returned HTTP " + located.statusCode() + ": "
+                    + located.body());
+        }
+        if (file.path("file_size").isIntegralNumber() && file.path("file_size").asLong() > maxBytes) {
+            throw new VoiceNoteRejectedException("The voice note is " + file.path("file_size").asLong()
+                    + " bytes, over the limit of " + maxBytes);
+        }
+        HttpResponse<byte[]> bytes = get(URI.create(properties.getBaseUrl() + "/file/bot" + config.credential()
+                + "/" + file.path("file_path").asText()), HttpResponse.BodyHandlers.ofByteArray());
+        if (bytes.statusCode() != 200) {
+            throw new ChannelMediaException("Telegram file download returned HTTP " + bytes.statusCode());
+        }
+        if (bytes.body().length > maxBytes) {
+            throw new VoiceNoteRejectedException("The voice note is " + bytes.body().length
+                    + " bytes, over the limit of " + maxBytes);
+        }
+        return bytes.body();
+    }
+
+    private <T> HttpResponse<T> get(URI uri, HttpResponse.BodyHandler<T> handler) {
+        HttpRequest request = HttpRequest.newBuilder(uri).timeout(properties.getTimeout()).GET().build();
+        try {
+            return httpClient.send(request, handler);
+        } catch (IOException e) {
+            // The URI holds the token: never in the message.
+            throw new ChannelMediaException("HTTP call to Telegram for a voice note failed", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ChannelMediaException("Interrupted while fetching a voice note from Telegram", e);
+        }
     }
 
     /** What a message without text carries, by the Bot API's field for it; {@code other} if none is known. */

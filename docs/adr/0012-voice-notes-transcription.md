@@ -1,7 +1,7 @@
 # ADR 0012: Voice notes, transcribed behind a neutral port
 
-Status: Accepted. V1's audio part (unit 2b of ADR 0004) and transcription (2c) implemented; the
-channels (2d) not yet. V5 amended on 2026-10-24 (below).
+Status: Accepted and implemented (units 2b–2d of ADR 0004): the audio part, transcription in the
+worker, and Telegram and WhatsApp voice notes. V5 amended on 2026-10-24 (below).
 
 ## Context
 

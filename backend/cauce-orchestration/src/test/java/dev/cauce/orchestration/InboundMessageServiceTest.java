@@ -74,7 +74,7 @@ class InboundMessageServiceTest {
 
         when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
-        when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, text("Hola")))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(invocation);
@@ -87,7 +87,7 @@ class InboundMessageServiceTest {
 
         InOrder inOrder = inOrder(conversationService, messageService, pendingInvocationService);
         inOrder.verify(conversationService).resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null);
-        inOrder.verify(messageService).appendMessage(conversation.id(), MessageRole.USER, "Hola");
+        inOrder.verify(messageService).appendMessage(conversation.id(), MessageRole.USER, text("Hola"));
         inOrder.verify(pendingInvocationService).enqueueInvocation(conversation.id(), userMessage.id(), null);
     }
 
@@ -102,7 +102,7 @@ class InboundMessageServiceTest {
 
         when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
-        when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, text("Hola")))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(invocation);
@@ -133,7 +133,7 @@ class InboundMessageServiceTest {
         when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
         when(messageService.lastMessageAt(conversation.id(), MessageRole.USER)).thenReturn(java.util.Optional.of(previous));
-        when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola")).thenReturn(userMessage);
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, text("Hola"))).thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null)).thenReturn(invocation);
 
         service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
@@ -154,7 +154,7 @@ class InboundMessageServiceTest {
         when(conversationService.resolveOrStartConversation(agentId, "telegram", IdentityKind.PROVIDER_USER_ID,
                 "42", configId))
                 .thenReturn(conversation);
-        when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hi"))
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, text("Hi")))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id()));
@@ -178,7 +178,7 @@ class InboundMessageServiceTest {
 
         when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
-        when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, text("Hola")))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(invocation);
@@ -214,7 +214,7 @@ class InboundMessageServiceTest {
 
         when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
                 .thenReturn(conversation);
-        when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, text("Hola")))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id()));
@@ -279,7 +279,7 @@ class InboundMessageServiceTest {
                 .thenReturn(conversation);
         when(idempotencyRecordRepository.insertLockIfAbsent(any(), eq(agentId), eq("wamid-1")))
                 .thenReturn(1);
-        when(messageService.appendMessage(conversation.id(), MessageRole.USER, "Hola"))
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, text("Hola")))
                 .thenReturn(userMessage);
         when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
                 .thenReturn(invocation);
@@ -323,5 +323,10 @@ class InboundMessageServiceTest {
     private static String textHash(java.util.UUID tenantId, String text) {
         return AuditContentHash.ofParts(tenantId,
                 java.util.List.of(new dev.cauce.core.message.MessagePart.Text(text)));
+    }
+
+    /** A text message's parts, as the ingest appends them. */
+    private static java.util.List<dev.cauce.core.message.MessagePart> text(String text) {
+        return java.util.List.of(new dev.cauce.core.message.MessagePart.Text(text));
     }
 }

@@ -13,6 +13,7 @@ import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.InboundMessageService;
+import dev.cauce.orchestration.voice.VoiceNoteTranscription;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -66,19 +67,22 @@ public class ChannelWebhookService {
     private final InboundInterception interception;
     private final UnsupportedMessageRecorder unsupportedRecorder;
     private final TaskExecutor outboundExecutor;
+    private final VoiceNoteTranscription voiceNotes;
 
     public ChannelWebhookService(ChannelConfigService channelConfigService,
                                  ChannelAdapterRegistry adapterRegistry,
                                  InboundMessageService inboundMessageService,
                                  InboundInterception interception,
                                  UnsupportedMessageRecorder unsupportedRecorder,
-                                 @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor) {
+                                 @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor,
+                                 VoiceNoteTranscription voiceNotes) {
         this.channelConfigService = channelConfigService;
         this.adapterRegistry = adapterRegistry;
         this.inboundMessageService = inboundMessageService;
         this.interception = interception;
         this.unsupportedRecorder = unsupportedRecorder;
         this.outboundExecutor = outboundExecutor;
+        this.voiceNotes = voiceNotes;
     }
 
     /**
@@ -105,7 +109,9 @@ public class ChannelWebhookService {
                     e.getMessage());
             return WebhookResult.REJECTED;
         }
-        if (message.isEmpty()) {
+        // A voice note is read only by an instance that transcribes (ADR 0012, V3); elsewhere it is
+        // a message Cauce does not read, answered as such (ADR 0006, W5).
+        if (message.isEmpty() || (message.get().hasAudio() && !voiceNotes.available())) {
             Optional<UnsupportedInboundMessage> unsupported = adapter.unsupported(request.body(), config);
             if (unsupported.isPresent()) {
                 answerUnsupported(config, unsupported.get());
@@ -118,13 +124,13 @@ public class ChannelWebhookService {
         TenantContext.setCurrentTenantId(config.tenantId());
         try {
             // ADR 0007, B8: a text an interceptor handles (an owner's link code) reaches no agent.
-            if (interception.intercepted(config, message.get().identityKind(), message.get().identityValue(),
-                    message.get().content())) {
+            if (!message.get().hasAudio() && interception.intercepted(config, message.get().identityKind(),
+                    message.get().identityValue(), message.get().content())) {
                 return WebhookResult.ACCEPTED;
             }
-            inboundMessageService.ingest(config.agentId(), config.channelType(), config.id(),
+            inboundMessageService.ingestParts(config.agentId(), config.channelType(), config.id(),
                     message.get().identityKind(), message.get().identityValue(),
-                    message.get().content(), message.get().idempotencyKey());
+                    message.get().parts(), message.get().idempotencyKey());
         } finally {
             TenantContext.clear();
         }

@@ -1,5 +1,6 @@
 package dev.cauce.api;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
@@ -21,6 +22,7 @@ import dev.cauce.api.channel.CreateChannelConfigRequest;
 import dev.cauce.api.message.PostMessageRequest;
 import dev.cauce.api.support.AbstractApiIntegrationTest;
 import dev.cauce.api.support.FakeLlmProvider;
+import dev.cauce.api.support.FakeTranscriber;
 import dev.cauce.api.tenant.CreateClientRequest;
 import dev.cauce.api.tenant.CreatePartnerRequest;
 import dev.cauce.channels.telegram.TelegramProperties;
@@ -98,6 +100,9 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
 
     @Autowired
     private PendingInvocationWorker worker;
+
+    @Autowired
+    private FakeLlmProvider llm;
 
     private JdbcTemplate jdbc;
 
@@ -199,17 +204,17 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
     }
 
     @Test
-    void telegramVoiceNote_isAnsweredOnceWithTheFixedText_auditedButNeverIngested() throws Exception {
+    void telegramPhoto_isAnsweredOnceWithTheFixedText_auditedButNeverIngested() throws Exception {
         TELEGRAM.stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson("{\"ok\": true}")));
-        String voice = """
+        String photo = """
                 {"update_id": 7007,
                  "message": {"message_id": 43, "chat": {"id": 987654321, "type": "private"},
                              "date": 1751623000,
-                             "voice": {"file_id": "AwACAgQ", "duration": 4, "mime_type": "audio/ogg"}}}
+                             "photo": [{"file_id": "AgACAgQ", "width": 90, "height": 90}]}}
                 """;
 
-        postUpdate(voice).andExpect(status().isOk());
-        postUpdate(voice).andExpect(status().isOk()); // Telegram redelivers it
+        postUpdate(photo).andExpect(status().isOk());
+        postUpdate(photo).andExpect(status().isOk()); // Telegram redelivers it
 
         // Before W5's rule reached Telegram this was silence: the person got nothing.
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
@@ -223,7 +228,7 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
     }
 
     @Test
-    void telegramVoiceNote_toAnAgentWithItsOwnText_isAnsweredWithIt() throws Exception {
+    void telegramPhoto_toAnAgentWithItsOwnText_isAnsweredWithIt() throws Exception {
         TELEGRAM.stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson("{\"ok\": true}")));
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .patch("/v1/agents/" + agentId)
@@ -235,13 +240,50 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
         postUpdate("""
                 {"update_id": 7008,
                  "message": {"message_id": 44, "chat": {"id": 987654321, "type": "private"},
-                             "date": 1751623000, "voice": {"file_id": "AwACAgQ", "duration": 2}}}
+                             "date": 1751623000, "photo": [{"file_id": "AgACAgQ", "width": 9, "height": 9}]}}
                 """).andExpect(status().isOk());
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
                 TELEGRAM.verify(1, postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage"))
                         .withRequestBody(equalToJson("{\"chat_id\": \"987654321\", \"text\": "
                                 + "\"Ahora solo leo texto: escríbemelo, porfa.\", \"parse_mode\": \"HTML\"}"))));
+    }
+
+    @Test
+    void telegramVoiceNote_isFetchedTranscribedAndAnswered_andTheModelReadsItAsATranscribedVoiceNote()
+            throws Exception {
+        TELEGRAM.stubFor(com.github.tomakehurst.wiremock.client.WireMock.get(urlEqualTo("/bot12345:bot-token/getFile?file_id=AwACAgQ")).willReturn(okJson("""
+                {"ok": true, "result": {"file_id": "AwACAgQ", "file_size": 11, "file_path": "voice/file_1.oga"}}
+                """)));
+        TELEGRAM.stubFor(com.github.tomakehurst.wiremock.client.WireMock.get(urlEqualTo("/file/bot12345:bot-token/voice/file_1.oga"))
+                .willReturn(aResponse().withStatus(200).withBody("OggS-opus!!")));
+        TELEGRAM.stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson("{\"ok\": true}")));
+
+        postUpdate("""
+                {"update_id": 7101,
+                 "message": {"message_id": 45, "chat": {"id": 987654321, "type": "private"},
+                             "date": 1751623000,
+                             "voice": {"file_id": "AwACAgQ", "duration": 4, "mime_type": "audio/ogg", "file_size": 11}}}
+                """).andExpect(status().isOk());
+        worker.pollAndProcess();
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                TELEGRAM.verify(1, postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage"))
+                        .withRequestBody(equalToJson("{\"chat_id\": \"987654321\", \"text\": \""
+                                + FakeLlmProvider.REPLY + "\", \"parse_mode\": \"HTML\"}"))));
+        UUID conversationId = telegramConversationId();
+        assertThat(jdbc.queryForObject("SELECT parts -> 0 ->> 'transcript' FROM messages WHERE conversation_id = ? "
+                + "AND role = 'USER'", String.class, conversationId)).isEqualTo(FakeTranscriber.HEARD);
+        assertThat(llm.invocations()).last().satisfies(invocation -> assertThat(invocation.messages().get(0).content())
+                .isEqualTo("[Transcribed voice note] " + FakeTranscriber.HEARD));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_outbox WHERE event_type = "
+                + "'conduct.message.transcribed'", Integer.class)).isEqualTo(1);
+        // The person and the API read the transcript, unmarked.
+        mockMvc.perform(get("/v1/conversations/" + conversationId + "/messages")
+                        .header(HttpHeaders.AUTHORIZATION, clientAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].content").value(FakeTranscriber.HEARD))
+                .andExpect(jsonPath("$.data[0].parts[0].type").value("audio"));
     }
 
     // --- helpers ---

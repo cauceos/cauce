@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,7 @@ import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelAdapterRegistry;
 import dev.cauce.channels.spi.ChannelInboundMessage;
 import dev.cauce.core.identity.IdentityKind;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.InboundChannelAdapter;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
@@ -25,6 +27,7 @@ import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.InboundMessageResult;
 import dev.cauce.orchestration.InboundMessageService;
+import dev.cauce.orchestration.voice.VoiceNoteTranscription;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,6 +48,7 @@ class ChannelWebhookServiceTest {
     private InboundInterception interception;
     private UnsupportedMessageRecorder unsupportedRecorder;
     private OutboundChannelAdapter outbound;
+    private VoiceNoteTranscription voiceNotes;
     private ChannelWebhookService service;
 
     private ChannelConfig config;
@@ -57,11 +61,12 @@ class ChannelWebhookServiceTest {
         interception = mock(InboundInterception.class);
         unsupportedRecorder = mock(UnsupportedMessageRecorder.class);
         outbound = mock(OutboundChannelAdapter.class);
+        voiceNotes = mock(VoiceNoteTranscription.class);
         when(adapter.channelType()).thenReturn("telegram");
         when(outbound.channelType()).thenReturn("telegram");
         service = new ChannelWebhookService(channelConfigService,
                 new ChannelAdapterRegistry(List.of(adapter), List.of(outbound)), inboundMessageService, interception,
-                unsupportedRecorder, new SyncTaskExecutor());
+                unsupportedRecorder, new SyncTaskExecutor(), voiceNotes);
         config = ChannelConfig.create(UUID.randomUUID(), UUID.randomUUID(), "telegram",
                 "token", "hash");
         TenantContext.clear();
@@ -147,6 +152,41 @@ class ChannelWebhookServiceTest {
     }
 
     @Test
+    void handle_aVoiceNote_whereTheInstanceTranscribes_isIngestedAsItsAudioPart() {
+        MessagePart.Audio note = MessagePart.Audio.received("audio/ogg", "AwACAgQ", 6200L, 4);
+        ChannelInboundMessage voice = new ChannelInboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                List.of(note), config.id() + ":7");
+        when(channelConfigService.resolveActiveChannelConfig(config.id())).thenReturn(Optional.of(config));
+        when(adapter.verify(REQUEST, config)).thenReturn(true);
+        when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.of(voice));
+        when(voiceNotes.available()).thenReturn(true);
+
+        assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.ACCEPTED);
+
+        verify(inboundMessageService).ingestParts(config.agentId(), "telegram", config.id(),
+                IdentityKind.PROVIDER_USER_ID, "987654321", List.of(note), config.id() + ":7");
+        verifyNoInteractions(interception);
+    }
+
+    @Test
+    void handle_aVoiceNote_whereTheInstanceDoesNotTranscribe_isAnsweredAsAMessageItCannotRead() {
+        ChannelInboundMessage voice = new ChannelInboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                List.of(MessagePart.Audio.received("audio/ogg", "AwACAgQ", null, 4)), config.id() + ":7");
+        when(channelConfigService.resolveActiveChannelConfig(config.id())).thenReturn(Optional.of(config));
+        when(adapter.verify(REQUEST, config)).thenReturn(true);
+        when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.of(voice));
+        when(adapter.unsupported(REQUEST.body(), config)).thenReturn(Optional.of(new UnsupportedInboundMessage(
+                IdentityKind.PROVIDER_USER_ID, "987654321", "voice", "7", "Only text, please.")));
+        when(unsupportedRecorder.recordUnsupportedMessage(config, "voice", "7", "Only text, please."))
+                .thenReturn(Optional.of("Only text, please."));
+
+        assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.UNSUPPORTED);
+
+        verifyNoInteractions(inboundMessageService);
+        verify(outbound).deliver(any(), eq(config));
+    }
+
+    @Test
     void handle_unsupportedInterlocutor_returnsRejectedWithoutIngesting() {
         when(channelConfigService.resolveActiveChannelConfig(config.id()))
                 .thenReturn(Optional.of(config));
@@ -167,8 +207,8 @@ class ChannelWebhookServiceTest {
         when(adapter.verify(REQUEST, config)).thenReturn(true);
         when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.of(message));
         AtomicReference<UUID> contextDuringIngest = new AtomicReference<>();
-        when(inboundMessageService.ingest(config.agentId(), "telegram", config.id(),
-                IdentityKind.PROVIDER_USER_ID, "987654321", "Hola", config.id() + ":1"))
+        when(inboundMessageService.ingestParts(config.agentId(), "telegram", config.id(),
+                IdentityKind.PROVIDER_USER_ID, "987654321", List.of(new MessagePart.Text("Hola")), config.id() + ":1"))
                 .thenAnswer(invocation -> {
                     contextDuringIngest.set(TenantContext.getCurrentTenantId().orElse(null));
                     return new InboundMessageResult(UUID.randomUUID(), UUID.randomUUID(),

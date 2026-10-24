@@ -6,13 +6,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelDeliveryException;
+import dev.cauce.channels.spi.ChannelMediaException;
+import dev.cauce.channels.spi.MediaChannelAdapter;
 import dev.cauce.channels.spi.OutsideReplyWindowException;
 import dev.cauce.channels.spi.ReplyMarkdown;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
 import dev.cauce.core.identity.IdentityKind;
+import dev.cauce.orchestration.exception.VoiceNoteRejectedException;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -37,7 +41,7 @@ import java.time.Instant;
  * Every refusal and every provider error is a {@link ChannelDeliveryException}, which the
  * best-effort delivery logs with its reason. The access token never appears in a message.
  */
-public class WhatsAppChannelAdapter implements OutboundChannelAdapter {
+public class WhatsAppChannelAdapter implements OutboundChannelAdapter, MediaChannelAdapter {
 
     static final String CHANNEL_TYPE = "whatsapp";
     static final int MAX_TEXT_LENGTH = 4096;
@@ -116,6 +120,64 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter {
             throw described.startsWith("error " + REENGAGEMENT_ERROR + " ")
                     ? new OutsideReplyWindowException(failure)
                     : new ChannelDeliveryException(failure);
+        }
+    }
+
+    /**
+     * The bytes of a voice note (ADR 0012, V1): the Graph API names the media id's short-lived URL and
+     * its size, then the file is read from that URL, both with the number's access token. Never more
+     * than {@code maxBytes}.
+     */
+    @Override
+    public byte[] download(String providerReference, ChannelConfig config, long maxBytes) {
+        HttpResponse<String> located = get(URI.create(properties.getBaseUrl() + "/" + properties.getApiVersion()
+                + "/" + URLEncoder.encode(providerReference, StandardCharsets.UTF_8)), config,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (located.statusCode() < 200 || located.statusCode() >= 300) {
+            throw new ChannelMediaException("WhatsApp media lookup returned HTTP " + located.statusCode() + ": "
+                    + describeError(located.body()));
+        }
+        JsonNode media;
+        try {
+            media = objectMapper.readTree(located.body());
+        } catch (IOException e) {
+            throw new ChannelMediaException("WhatsApp media lookup returned a body that is not JSON", e);
+        }
+        if (!media.path("url").isTextual()) {
+            throw new ChannelMediaException("WhatsApp media lookup returned no URL");
+        }
+        if (media.path("file_size").canConvertToLong() && media.path("file_size").asLong() > maxBytes) {
+            throw new VoiceNoteRejectedException("The voice note is " + media.path("file_size").asLong()
+                    + " bytes, over the limit of " + maxBytes);
+        }
+        HttpResponse<byte[]> bytes = get(URI.create(media.path("url").asText()), config,
+                HttpResponse.BodyHandlers.ofByteArray());
+        if (bytes.statusCode() < 200 || bytes.statusCode() >= 300) {
+            throw new ChannelMediaException("WhatsApp media download returned HTTP " + bytes.statusCode());
+        }
+        if (bytes.body().length > maxBytes) {
+            throw new VoiceNoteRejectedException("The voice note is " + bytes.body().length
+                    + " bytes, over the limit of " + maxBytes);
+        }
+        return bytes.body();
+    }
+
+    private <T> HttpResponse<T> get(URI uri, ChannelConfig config, HttpResponse.BodyHandler<T> handler) {
+        if (!config.isAppRouted()) {
+            throw new ChannelMediaException("Channel config " + config.id() + " is not a WhatsApp number");
+        }
+        HttpRequest request = HttpRequest.newBuilder(uri)
+                .timeout(properties.getTimeout())
+                .header("Authorization", "Bearer " + config.credential())
+                .GET()
+                .build();
+        try {
+            return httpClient.send(request, handler);
+        } catch (IOException e) {
+            throw new ChannelMediaException("HTTP call to the WhatsApp Cloud API for a voice note failed", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ChannelMediaException("Interrupted while fetching a voice note from WhatsApp", e);
         }
     }
 

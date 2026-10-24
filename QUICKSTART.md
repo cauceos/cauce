@@ -325,3 +325,26 @@ curl -s "https://api.telegram.org/bot<bot token>/setWebhook" \
 Message your bot: the update arrives at `/webhooks/channels/{config id}`, is verified
 against the secret, ingested, answered by the agent, and the reply is delivered back to
 the Telegram chat.
+
+## Optional: voice notes
+
+With a transcriber, a voice note sent to your bot is read like a written message (ADR 0012): the
+worker fetches it from Telegram, transcribes it, and the agent reads the transcript, marked as a
+voice note. Without one, it is answered with a fixed text asking for it in writing. The local one
+is a Whisper in a container: no key, no cost, the audio never leaves your machine.
+
+```bash
+echo "TRANSCRIPTION_ENABLED=true" >> .env
+echo "TRANSCRIPTION_LANGUAGE=es" >> .env        # optional: the language of the notes
+docker compose --profile api --profile transcription up -d --build   # or with --profile quickstart
+```
+
+The first start downloads the image (≈850 MB) and the model `Systran/faster-whisper-small` (≈500
+MB, kept in a volume). On a laptop CPU a 10-second note takes about 5 seconds to transcribe.
+Notes over 2 minutes or 20 MB are not transcribed: the person is asked for a shorter one or a
+written message. The bytes are never stored; the transcript is, in the message, like a text.
+
+If a client has a spend limit, transcription needs a price, even at zero (ADR 0010, S7):
+`curl -s -X POST $BASE/v1/llm-prices -H "Authorization: Bearer $KEY" -H "Content-Type:
+application/json" -d '{"provider":"whisper","model":"Systran/faster-whisper-small",
+"input_usd_per_mtok":0,"output_usd_per_mtok":0,"audio_usd_per_minute":0}'`.

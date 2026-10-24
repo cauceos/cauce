@@ -297,7 +297,7 @@ class WhatsAppApiIT extends AbstractApiIntegrationTest {
         String appId = registerApp(partnerAuth, partnerId);
         bindNumber(appId, createAgent());
         String body = envelope("""
-                {"from_user_id":"%s","id":"wamid.AUDIO","type":"audio","audio":{"id":"media-9"}}""".formatted(BSUID));
+                {"from_user_id":"%s","id":"wamid.IMAGE","type":"image","image":{"id":"media-9"}}""".formatted(BSUID));
 
         postSigned(appId, body).andExpect(status().isOk());
         List<Integer> statuses = race(6, () -> postSigned(appId, body).andReturn().getResponse().getStatus());

@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.notContaining;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
@@ -20,6 +22,7 @@ import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import dev.cauce.channels.config.ChannelConfig;
 import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelInboundMessage;
+import dev.cauce.channels.spi.ChannelMediaException;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.spi.UnsupportedInboundMessage;
@@ -27,6 +30,8 @@ import dev.cauce.channels.spi.UnsupportedInterlocutorException;
 import dev.cauce.channels.spi.WebhookRequest;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.identity.IdentityKind;
+import dev.cauce.core.message.MessagePart;
+import dev.cauce.orchestration.exception.VoiceNoteRejectedException;
 import java.net.http.HttpClient;
 import java.util.Map;
 import java.util.Optional;
@@ -191,6 +196,66 @@ class TelegramChannelAdapterTest {
                 {"update_id": 3, "edited_message": {"chat": {"id": 1, "type": "private"}, "voice": {}}}
                 """, config)).isEmpty();
         assertThat(adapter.unsupported("{not json", config)).isEmpty();
+    }
+
+    @Test
+    void parse_aPrivateVoiceNote_isItsAudioPart_byFileIdSizeAndLength_withItsCaptionAfter() {
+        Optional<ChannelInboundMessage> parsed = adapter.parse("""
+                {"update_id": 7007, "message": {"chat": {"id": 987654321, "type": "private"},
+                 "voice": {"file_id": "AwACAgQ", "file_unique_id": "u", "duration": 4, "mime_type": "audio/ogg",
+                           "file_size": 6200},
+                 "caption": "para el sábado"}}
+                """, config);
+
+        assertThat(parsed).hasValueSatisfying(message -> {
+            assertThat(message.identityValue()).isEqualTo("987654321");
+            assertThat(message.idempotencyKey()).isEqualTo(config.id() + ":7007");
+            assertThat(message.parts()).containsExactly(
+                    MessagePart.Audio.received("audio/ogg", "AwACAgQ", 6200L, 4), new MessagePart.Text("para el sábado"));
+            assertThat(message.hasAudio()).isTrue();
+        });
+    }
+
+    @Test
+    void parse_aVoiceNoteFromAGroup_failsLoudly_asAnyMessageFromAGroup() {
+        assertThatThrownBy(() -> adapter.parse("""
+                {"update_id": 7008, "message": {"chat": {"id": -100, "type": "group"}, "voice": {"file_id": "x"}}}
+                """, config)).isInstanceOf(UnsupportedInterlocutorException.class);
+    }
+
+    @Test
+    void download_findsTheFileWithGetFile_andReadsItWithTheBotToken(WireMockRuntimeInfo wm) {
+        stubFor(get(urlEqualTo("/bot12345:bot-token/getFile?file_id=AwACAgQ")).willReturn(okJson("""
+                {"ok": true, "result": {"file_id": "AwACAgQ", "file_size": 11, "file_path": "voice/file_7.oga"}}
+                """)));
+        stubFor(get(urlEqualTo("/file/bot12345:bot-token/voice/file_7.oga"))
+                .willReturn(aResponse().withStatus(200).withBody("OggS-opus!!")));
+
+        byte[] bytes = adapterAgainst(wm).download("AwACAgQ", config, 20_000_000);
+
+        assertThat(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("OggS-opus!!");
+    }
+
+    @Test
+    void download_aFileOverTheLimit_isRejected_beforeItIsRead(WireMockRuntimeInfo wm) {
+        stubFor(get(urlEqualTo("/bot12345:bot-token/getFile?file_id=big")).willReturn(okJson("""
+                {"ok": true, "result": {"file_id": "big", "file_size": 30000000, "file_path": "voice/big.oga"}}
+                """)));
+
+        assertThatThrownBy(() -> adapterAgainst(wm).download("big", config, 20_000_000))
+                .isInstanceOf(VoiceNoteRejectedException.class);
+        verify(0, getRequestedFor(urlEqualTo("/file/bot12345:bot-token/voice/big.oga")));
+    }
+
+    @Test
+    void download_aReferenceTelegramDoesNotKnow_isAMediaFailure_neverShowingTheToken(WireMockRuntimeInfo wm) {
+        stubFor(get(urlEqualTo("/bot12345:bot-token/getFile?file_id=gone")).willReturn(aResponse().withStatus(400)
+                .withBody("{\"ok\": false, \"description\": \"Bad Request: invalid file_id\"}")));
+
+        assertThatThrownBy(() -> adapterAgainst(wm).download("gone", config, 20_000_000))
+                .isInstanceOf(ChannelMediaException.class)
+                .hasMessageContaining("invalid file_id")
+                .hasMessageNotContaining("bot-token");
     }
 
     @Test
