@@ -67,6 +67,10 @@ public class LlmUsageRecordEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** The seconds of audio a transcription call transcribed (V56); 0 for a model call. */
+    @Column(name = "audio_seconds", nullable = false, updatable = false)
+    private int audioSeconds;
+
     protected LlmUsageRecordEntity() {
         // for JPA
     }
@@ -76,6 +80,17 @@ public class LlmUsageRecordEntity {
                                 int inputTokens, int outputTokens, int totalTokens,
                                 int cacheReadTokens, int cacheWriteTokens, int cacheWriteLongTokens, String finishReason,
                                 Instant createdAt) {
+        this(id, tenantId, agentId, conversationId, invocationId, provider, model, roundIndex, inputTokens,
+                outputTokens, totalTokens, cacheReadTokens, cacheWriteTokens, cacheWriteLongTokens, finishReason,
+                createdAt, 0);
+    }
+
+    public LlmUsageRecordEntity(UUID id, UUID tenantId, UUID agentId, UUID conversationId,
+                                UUID invocationId, String provider, String model, int roundIndex,
+                                int inputTokens, int outputTokens, int totalTokens,
+                                int cacheReadTokens, int cacheWriteTokens, int cacheWriteLongTokens, String finishReason,
+                                Instant createdAt, int audioSeconds) {
+        this.audioSeconds = audioSeconds;
         this.id = id;
         this.tenantId = tenantId;
         this.agentId = agentId;
@@ -96,6 +111,10 @@ public class LlmUsageRecordEntity {
 
     public UUID getId() {
         return id;
+    }
+
+    public int getAudioSeconds() {
+        return audioSeconds;
     }
 
     public UUID getTenantId() {

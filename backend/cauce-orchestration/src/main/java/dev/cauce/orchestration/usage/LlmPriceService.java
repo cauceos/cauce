@@ -28,7 +28,8 @@ public class LlmPriceService {
 
     // TODO(cauce-llm): validate against the registered providers once the SPI exposes them, like
     // the agent's model_provider (AgentService).
-    private static final Set<String> SUPPORTED_PROVIDERS = Set.of("openai", "anthropic", "mistral", "ollama");
+    // The LLM providers, and the transcription providers a price may name (ADR 0012, V4).
+    private static final Set<String> SUPPORTED_PROVIDERS = Set.of("openai", "anthropic", "mistral", "ollama", "whisper");
 
     private final LlmPriceRepository repository;
     private final LlmPriceMapper mapper;
@@ -56,6 +57,15 @@ public class LlmPriceService {
     public LlmPrice addPrice(String provider, String model, BigDecimal inputUsdPerMtok, BigDecimal outputUsdPerMtok,
                              BigDecimal cacheReadUsdPerMtok, BigDecimal cacheWriteUsdPerMtok,
                              BigDecimal cacheWriteLongUsdPerMtok) {
+        return addPrice(provider, model, inputUsdPerMtok, outputUsdPerMtok, cacheReadUsdPerMtok, cacheWriteUsdPerMtok,
+                cacheWriteLongUsdPerMtok, null);
+    }
+
+    /** As the other, with the price of a minute of transcribed audio ({@code null}: not priced). */
+    @Transactional
+    public LlmPrice addPrice(String provider, String model, BigDecimal inputUsdPerMtok, BigDecimal outputUsdPerMtok,
+                             BigDecimal cacheReadUsdPerMtok, BigDecimal cacheWriteUsdPerMtok,
+                             BigDecimal cacheWriteLongUsdPerMtok, BigDecimal audioUsdPerMinute) {
         UUID actorId = TenantContext.getCurrentTenantId().orElseThrow();
         Tenant actor = tenantService.getTenant(actorId);
         if (actor.tier() != Tier.OPERATOR) {
@@ -65,7 +75,7 @@ public class LlmPriceService {
             throw new IllegalArgumentException("Unsupported model provider: " + provider);
         }
         LlmPrice price = LlmPrice.create(actorId, provider, model, inputUsdPerMtok, outputUsdPerMtok,
-                cacheReadUsdPerMtok, cacheWriteUsdPerMtok, cacheWriteLongUsdPerMtok, clock.instant());
+                cacheReadUsdPerMtok, cacheWriteUsdPerMtok, cacheWriteLongUsdPerMtok, audioUsdPerMinute, clock.instant());
         LlmPrice saved = mapper.toDomain(repository.save(mapper.toEntity(price)));
         auditRecorder.record(UsageAuditEvents.llmPriceAdded(saved, actorId));
         return saved;

@@ -12,8 +12,9 @@ import java.util.UUID;
  * {@code validFrom} until a later price of the same provider and model (ADR 0010, S1). Never
  * changed once added: a new price is a new row, so a tariff change never reprices past calls. The
  * cache prices are optional; absent, cached tokens are priced as input. {@code cacheWriteLongUsdPerMtok}
- * prices the writes made for a long retention (an hour on Anthropic, V49). Owned by the operator
- * tenant.
+ * prices the writes made for a long retention (an hour on Anthropic, V49). {@code audioUsdPerMinute}
+ * prices a minute of transcribed audio (ADR 0012, V4; V56); a transcriber's price row has it, and
+ * zero token prices. Owned by the operator tenant.
  *
  * <p>{@code provider} is a {@code String}: its vocabulary is the cauce-llm SPI's.
  */
@@ -26,7 +27,16 @@ public record LlmPrice(UUID id,
                        BigDecimal cacheReadUsdPerMtok,
                        BigDecimal cacheWriteUsdPerMtok,
                        BigDecimal cacheWriteLongUsdPerMtok,
-                       Instant validFrom) {
+                       Instant validFrom,
+                       BigDecimal audioUsdPerMinute) {
+
+    /** A price that does not price audio. */
+    public LlmPrice(UUID id, UUID tenantId, String provider, String model, BigDecimal inputUsdPerMtok,
+                    BigDecimal outputUsdPerMtok, BigDecimal cacheReadUsdPerMtok, BigDecimal cacheWriteUsdPerMtok,
+                    BigDecimal cacheWriteLongUsdPerMtok, Instant validFrom) {
+        this(id, tenantId, provider, model, inputUsdPerMtok, outputUsdPerMtok, cacheReadUsdPerMtok,
+                cacheWriteUsdPerMtok, cacheWriteLongUsdPerMtok, validFrom, null);
+    }
 
     public LlmPrice {
         Objects.requireNonNull(id, "id must not be null");
@@ -47,6 +57,7 @@ public record LlmPrice(UUID id,
         requireNotNegative(cacheReadUsdPerMtok, "cacheReadUsdPerMtok");
         requireNotNegative(cacheWriteUsdPerMtok, "cacheWriteUsdPerMtok");
         requireNotNegative(cacheWriteLongUsdPerMtok, "cacheWriteLongUsdPerMtok");
+        requireNotNegative(audioUsdPerMinute, "audioUsdPerMinute");
     }
 
     /**
@@ -65,8 +76,17 @@ public record LlmPrice(UUID id,
                                   BigDecimal outputUsdPerMtok, BigDecimal cacheReadUsdPerMtok,
                                   BigDecimal cacheWriteUsdPerMtok, BigDecimal cacheWriteLongUsdPerMtok,
                                   Instant now) {
+        return create(tenantId, provider, model, inputUsdPerMtok, outputUsdPerMtok, cacheReadUsdPerMtok,
+                cacheWriteUsdPerMtok, cacheWriteLongUsdPerMtok, null, now);
+    }
+
+    /** As the others, with the price of a minute of transcribed audio. */
+    public static LlmPrice create(UUID tenantId, String provider, String model, BigDecimal inputUsdPerMtok,
+                                  BigDecimal outputUsdPerMtok, BigDecimal cacheReadUsdPerMtok,
+                                  BigDecimal cacheWriteUsdPerMtok, BigDecimal cacheWriteLongUsdPerMtok,
+                                  BigDecimal audioUsdPerMinute, Instant now) {
         return new LlmPrice(UuidGenerator.newV7(), tenantId, provider, model, inputUsdPerMtok, outputUsdPerMtok,
-                cacheReadUsdPerMtok, cacheWriteUsdPerMtok, cacheWriteLongUsdPerMtok, now);
+                cacheReadUsdPerMtok, cacheWriteUsdPerMtok, cacheWriteLongUsdPerMtok, now, audioUsdPerMinute);
     }
 
     public Optional<BigDecimal> cacheRead() {
@@ -79,6 +99,10 @@ public record LlmPrice(UUID id,
 
     public Optional<BigDecimal> cacheWriteLong() {
         return Optional.ofNullable(cacheWriteLongUsdPerMtok);
+    }
+
+    public Optional<BigDecimal> audioPerMinute() {
+        return Optional.ofNullable(audioUsdPerMinute);
     }
 
     private static void requireNotNegative(BigDecimal value, String name) {

@@ -96,6 +96,20 @@ class LlmUsageRecordTest {
     }
 
     @Test
+    void transcription_isARecordOfAudioSeconds_withNoTokens() {
+        LlmUsageRecord record = LlmUsageRecord.transcription(tenantId, agentId, conversationId, invocationId,
+                "whisper", "Systran/faster-whisper-small", 42, NOW);
+
+        assertThat(record.audioSeconds()).isEqualTo(42);
+        assertThat(record.inputTokens() + record.outputTokens() + record.totalTokens()).isZero();
+        assertThat(record.finishReason()).isEqualTo(LlmUsageRecord.TRANSCRIBED);
+        assertThat(LlmUsageRecord.create(tenantId, agentId, conversationId, invocationId, "anthropic",
+                "claude-sonnet-5-5", 0, LlmUsage.of(10, 5), "STOP", NOW).audioSeconds()).isZero();
+        assertThatThrownBy(() -> LlmUsageRecord.transcription(tenantId, agentId, conversationId, invocationId,
+                "whisper", "m", -1, NOW)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void create_copiesTheLongRetentionWrites_andTheyCannotExceedTheWrites() {
         LlmUsageRecord record = LlmUsageRecord.create(tenantId, agentId, conversationId, invocationId, "anthropic",
                 "claude-sonnet-5-5", 0, LlmUsage.of(6000, 50, 0, 5000, 5000), "STOP", NOW);

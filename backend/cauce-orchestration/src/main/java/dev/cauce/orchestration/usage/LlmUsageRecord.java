@@ -18,8 +18,9 @@ import java.util.UUID;
  * {@code cacheReadTokens} and {@code cacheWriteTokens} are the parts of it the provider served from
  * or wrote to its prompt cache, priced differently, so they are facts too, and
  * {@code cacheWriteLongTokens} the part of the writes made for a long retention, dearer still (V49).
- * {@code provider}, {@code model}, and {@code finishReason}
- * are {@code String}s because their vocabularies are owned by the cauce-llm SPI.
+ * {@code audioSeconds} is the audio a transcription call transcribed (ADR 0012, V4; V56), 0 for a
+ * model call: a transcription is a record with no tokens. {@code provider}, {@code model}, and
+ * {@code finishReason} are {@code String}s because their vocabularies are owned by the cauce-llm SPI.
  *
  * <p>Pure domain type: no persistence or framework dependencies.
  */
@@ -38,7 +39,21 @@ public record LlmUsageRecord(UUID id,
                              int cacheWriteTokens,
                              int cacheWriteLongTokens,
                              String finishReason,
-                             Instant createdAt) {
+                             Instant createdAt,
+                             int audioSeconds) {
+
+    /** What a transcription record says as its finish reason. */
+    public static final String TRANSCRIBED = "TRANSCRIBED";
+
+    /** A model call's record: no audio. */
+    public LlmUsageRecord(UUID id, UUID tenantId, UUID agentId, UUID conversationId, UUID invocationId,
+                          String provider, String model, int roundIndex, int inputTokens, int outputTokens,
+                          int totalTokens, int cacheReadTokens, int cacheWriteTokens, int cacheWriteLongTokens,
+                          String finishReason, Instant createdAt) {
+        this(id, tenantId, agentId, conversationId, invocationId, provider, model, roundIndex, inputTokens,
+                outputTokens, totalTokens, cacheReadTokens, cacheWriteTokens, cacheWriteLongTokens, finishReason,
+                createdAt, 0);
+    }
 
     public LlmUsageRecord {
         Objects.requireNonNull(id, "id must not be null");
@@ -66,6 +81,20 @@ public record LlmUsageRecord(UUID id,
                 || cacheWriteLongTokens < 0 || cacheWriteLongTokens > cacheWriteTokens) {
             throw new IllegalArgumentException("token counts must not be negative");
         }
+        if (audioSeconds < 0) {
+            throw new IllegalArgumentException("audioSeconds must not be negative");
+        }
+    }
+
+    /**
+     * Mints the record of one transcription of {@code audioSeconds} of a voice note, by
+     * {@code provider}'s {@code model}: no tokens, round 0, {@link #TRANSCRIBED}. {@code now} comes
+     * from the application clock, the database's (ADR 0008).
+     */
+    public static LlmUsageRecord transcription(UUID tenantId, UUID agentId, UUID conversationId, UUID invocationId,
+                                               String provider, String model, int audioSeconds, Instant now) {
+        return new LlmUsageRecord(UuidGenerator.newV7(), tenantId, agentId, conversationId, invocationId, provider,
+                model, 0, 0, 0, 0, 0, 0, 0, TRANSCRIBED, now, audioSeconds);
     }
 
     /**

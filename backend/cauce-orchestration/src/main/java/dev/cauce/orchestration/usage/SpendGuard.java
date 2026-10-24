@@ -88,6 +88,19 @@ public class SpendGuard {
         return Verdict.ALLOWED;
     }
 
+    /**
+     * Whether a voice note of {@code tenantId} may be transcribed by {@code provider}'s {@code model}
+     * (ADR 0012, V4): without a limit, always; with one, only if that model has an audio price in
+     * force, the rule of S7 for a model. Whether the limit is reached is {@link #check}'s, run before.
+     */
+    @Transactional(readOnly = true)
+    public Verdict checkTranscription(UUID tenantId, String provider, String model) {
+        if (repository.findByTenantId(tenantId).isEmpty()) {
+            return Verdict.ALLOWED;
+        }
+        return repository.hasAudioPriceInForce(provider, model) ? Verdict.ALLOWED : Verdict.UNPRICED_MODEL;
+    }
+
     private void alertOnce(SpendLimit limit, BigDecimal spent, int thresholdPercent) {
         YearMonth period = SpendLimitService.currentMonth(clock);
         UUID alertId = UuidGenerator.newV7();

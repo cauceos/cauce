@@ -54,6 +54,17 @@ class UsageApiIT extends AbstractBusinessApiIT {
     }
 
     @Test
+    void theOperatorPricesATranscriber_byTheMinuteOfAudio() throws Exception {
+        postJson(bearerFor(operatorId), "/v1/llm-prices", """
+                {"provider": "whisper", "model": "Systran/faster-whisper-small", "input_usd_per_mtok": 0,
+                 "output_usd_per_mtok": 0, "audio_usd_per_minute": 0}
+                """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.provider").value("whisper"))
+                .andExpect(jsonPath("$.audio_usd_per_minute").value(0));
+    }
+
+    @Test
     void aPartner_cannotAddAPrice() throws Exception {
         postJson(partnerAuth, "/v1/llm-prices", SONNET_PRICE)
                 .andExpect(status().isUnprocessableEntity())

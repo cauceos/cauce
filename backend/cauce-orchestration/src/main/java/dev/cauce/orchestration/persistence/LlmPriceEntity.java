@@ -48,6 +48,10 @@ public class LlmPriceEntity {
     @Column(name = "valid_from", nullable = false, updatable = false)
     private Instant validFrom;
 
+    /** The price of a minute of transcribed audio (V56); null when the row does not price it. */
+    @Column(name = "audio_usd_per_minute", updatable = false, precision = 12, scale = 6)
+    private BigDecimal audioUsdPerMinute;
+
     protected LlmPriceEntity() {
         // for JPA
     }
@@ -55,6 +59,15 @@ public class LlmPriceEntity {
     public LlmPriceEntity(UUID id, UUID tenantId, String provider, String model, BigDecimal inputUsdPerMtok,
                           BigDecimal outputUsdPerMtok, BigDecimal cacheReadUsdPerMtok,
                           BigDecimal cacheWriteUsdPerMtok, BigDecimal cacheWriteLongUsdPerMtok, Instant validFrom) {
+        this(id, tenantId, provider, model, inputUsdPerMtok, outputUsdPerMtok, cacheReadUsdPerMtok,
+                cacheWriteUsdPerMtok, cacheWriteLongUsdPerMtok, validFrom, null);
+    }
+
+    public LlmPriceEntity(UUID id, UUID tenantId, String provider, String model, BigDecimal inputUsdPerMtok,
+                          BigDecimal outputUsdPerMtok, BigDecimal cacheReadUsdPerMtok,
+                          BigDecimal cacheWriteUsdPerMtok, BigDecimal cacheWriteLongUsdPerMtok, Instant validFrom,
+                          BigDecimal audioUsdPerMinute) {
+        this.audioUsdPerMinute = audioUsdPerMinute;
         this.id = id;
         this.tenantId = tenantId;
         this.provider = provider;
@@ -69,6 +82,10 @@ public class LlmPriceEntity {
 
     public UUID getId() {
         return id;
+    }
+
+    public BigDecimal getAudioUsdPerMinute() {
+        return audioUsdPerMinute;
     }
 
     public UUID getTenantId() {

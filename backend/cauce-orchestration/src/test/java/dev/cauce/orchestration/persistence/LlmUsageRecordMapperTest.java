@@ -26,6 +26,15 @@ class LlmUsageRecordMapperTest {
     }
 
     @Test
+    void roundTrip_preservesATranscriptionsAudioSeconds() {
+        LlmUsageRecord original = LlmUsageRecord.transcription(UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), UUID.randomUUID(), "whisper", "Systran/faster-whisper-small", 42, NOW);
+
+        assertThat(mapper.toEntity(original).getAudioSeconds()).isEqualTo(42);
+        assertThat(mapper.toDomain(mapper.toEntity(original))).isEqualTo(original);
+    }
+
+    @Test
     void toEntity_mapsEveryColumn() {
         LlmUsageRecord record = LlmUsageRecord.create(UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID(), "anthropic", "claude-sonnet-4-7", 0,

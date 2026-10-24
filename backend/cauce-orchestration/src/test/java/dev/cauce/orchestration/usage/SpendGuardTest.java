@@ -145,6 +145,18 @@ class SpendGuardTest {
         assertThat(guard.check(agent)).isEqualTo(Verdict.ALLOWED); // a short-cache agent does not need it
     }
 
+    @Test
+    void transcription_withoutALimit_runs_andWithOne_needsAnAudioPrice() {
+        assertThat(guard.checkTranscription(clientId, "whisper", "small")).isEqualTo(Verdict.ALLOWED);
+        verify(repository, never()).hasAudioPriceInForce(any(), any());
+
+        limit("50.00");
+        when(repository.hasAudioPriceInForce("whisper", "small")).thenReturn(false, true);
+
+        assertThat(guard.checkTranscription(clientId, "whisper", "small")).isEqualTo(Verdict.UNPRICED_MODEL);
+        assertThat(guard.checkTranscription(clientId, "whisper", "small")).isEqualTo(Verdict.ALLOWED);
+    }
+
     private void limit(String usd) {
         when(repository.findByTenantId(clientId)).thenReturn(Optional.of(mapper.toEntity(
                 SpendLimit.create(clientId, new BigDecimal(usd), UUID.randomUUID(), NOW))));

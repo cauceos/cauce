@@ -164,6 +164,35 @@ class LlmPriceServiceIT extends AbstractOrchestrationIntegrationTest {
     }
 
     @Test
+    void costView_pricesTranscribedAudioByTheMinute_andUnpricedWithoutAnAudioPrice() {
+        UUID priced = transcription("whisper-small", 90);
+        UUID unpriced = transcription("whisper-large", 30);
+        jdbc.update("INSERT INTO llm_prices (id, tenant_id, provider, model, input_usd_per_mtok, output_usd_per_mtok, "
+                        + "audio_usd_per_minute, valid_from) VALUES (?, ?, 'whisper', 'whisper-small', 0, 0, 0.006, ?)",
+                UuidGenerator.newV7(), operator.id(), Timestamp.from(Instant.parse("2026-10-05T00:00:00Z")));
+        // A row for the other model that prices tokens, not audio.
+        jdbc.update("INSERT INTO llm_prices (id, tenant_id, provider, model, input_usd_per_mtok, output_usd_per_mtok, "
+                        + "valid_from) VALUES (?, ?, 'whisper', 'whisper-large', 0, 0, ?)",
+                UuidGenerator.newV7(), operator.id(), Timestamp.from(Instant.parse("2026-10-05T00:00:00Z")));
+
+        Map<UUID, BigDecimal> costs = costsAs(client.id());
+
+        // 90 s × 0.006 per minute.
+        assertThat(costs.get(priced)).isEqualByComparingTo("0.009");
+        assertThat(costs).containsKey(unpriced);
+        assertThat(costs.get(unpriced)).isNull();
+    }
+
+    @Test
+    void addPrice_ofATranscriber_storesItsPricePerMinute() {
+        TenantContext.setCurrentTenantId(operator.id());
+        LlmPrice price = priceService.addPrice("whisper", "Systran/faster-whisper-small", BigDecimal.ZERO,
+                BigDecimal.ZERO, null, null, null, BigDecimal.ZERO);
+
+        assertThat(price.audioPerMinute()).contains(BigDecimal.ZERO);
+    }
+
+    @Test
     void costView_withTwoPricesFromTheSameInstant_usesTheOneAddedLast() {
         insertPrice("2026-10-05T00:00:00Z", "2.00", "10.00", null, null);
         insertPrice("2026-10-05T00:00:00Z", "4.00", "10.00", null, null);
@@ -206,6 +235,17 @@ class LlmPriceServiceIT extends AbstractOrchestrationIntegrationTest {
                         + "VALUES (?, ?, ?, ?, ?, 'anthropic', ?, 0, ?, ?, ?, ?, ?, 'STOP', ?)",
                 id, tenantId, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), model, input, output,
                 input + output, cacheRead, cacheWrite, Timestamp.from(Instant.parse(createdAt)));
+        return id;
+    }
+
+    /** A transcription's record (V56): no tokens, {@code seconds} of audio, at a fixed instant. */
+    private UUID transcription(String model, int seconds) {
+        UUID id = UuidGenerator.newV7();
+        jdbc.update("INSERT INTO llm_usage_records (id, tenant_id, agent_id, conversation_id, invocation_id, provider, "
+                        + "model, round_index, input_tokens, output_tokens, total_tokens, finish_reason, created_at, "
+                        + "audio_seconds) VALUES (?, ?, ?, ?, ?, 'whisper', ?, 0, 0, 0, 0, 'TRANSCRIBED', ?, ?)",
+                id, client.id(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), model,
+                Timestamp.from(Instant.parse("2026-10-10T12:00:00Z")), seconds);
         return id;
     }
 

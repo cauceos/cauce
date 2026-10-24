@@ -22,6 +22,15 @@ class LlmPriceMapperTest {
     }
 
     @Test
+    void roundTrip_preservesATranscribersPricePerMinute() {
+        LlmPrice price = LlmPrice.create(UUID.randomUUID(), "whisper", "Systran/faster-whisper-small",
+                BigDecimal.ZERO, BigDecimal.ZERO, null, null, null, new BigDecimal("0.006"), NOW);
+
+        assertThat(mapper.toEntity(price).getAudioUsdPerMinute()).isEqualByComparingTo("0.006");
+        assertThat(mapper.toDomain(mapper.toEntity(price))).isEqualTo(price);
+    }
+
+    @Test
     void roundTrip_preservesAbsentCachePrices() {
         LlmPrice price = LlmPrice.create(UUID.randomUUID(), "ollama", "qwen2.5:3b", BigDecimal.ZERO,
                 BigDecimal.ZERO, null, null, NOW);

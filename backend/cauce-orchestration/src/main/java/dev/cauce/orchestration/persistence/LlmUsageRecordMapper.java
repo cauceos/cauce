@@ -27,7 +27,8 @@ public final class LlmUsageRecordMapper {
                 record.cacheWriteTokens(),
                 record.cacheWriteLongTokens(),
                 record.finishReason(),
-                record.createdAt());
+                record.createdAt(),
+                record.audioSeconds());
     }
 
     public LlmUsageRecord toDomain(LlmUsageRecordEntity entity) {
@@ -47,6 +48,7 @@ public final class LlmUsageRecordMapper {
                 entity.getCacheWriteTokens(),
                 entity.getCacheWriteLongTokens(),
                 entity.getFinishReason(),
-                entity.getCreatedAt());
+                entity.getCreatedAt(),
+                entity.getAudioSeconds());
     }
 }

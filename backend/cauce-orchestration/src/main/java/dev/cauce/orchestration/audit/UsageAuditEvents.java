@@ -47,6 +47,7 @@ public final class UsageAuditEvents {
         price.cacheRead().ifPresent(p -> payload.put("cache_read_usd_per_mtok", p.toPlainString()));
         price.cacheWrite().ifPresent(p -> payload.put("cache_write_usd_per_mtok", p.toPlainString()));
         price.cacheWriteLong().ifPresent(p -> payload.put("cache_write_long_usd_per_mtok", p.toPlainString()));
+        price.audioPerMinute().ifPresent(p -> payload.put("audio_usd_per_minute", p.toPlainString()));
         payload.put("valid_from", price.validFrom().toString());
         payload.put("actor_tenant_id", actorTenantId.toString());
         return new AuditEvent(price.tenantId(), LLM_PRICE_ADDED, payload);

@@ -34,7 +34,7 @@ public class LlmPriceController {
     public ResponseEntity<LlmPriceResponse> add(@Valid @RequestBody AddLlmPriceRequest request) {
         LlmPrice price = priceService.addPrice(request.provider(), request.model(), request.inputUsdPerMtok(),
                 request.outputUsdPerMtok(), request.cacheReadUsdPerMtok(), request.cacheWriteUsdPerMtok(),
-                request.cacheWriteLongUsdPerMtok());
+                request.cacheWriteLongUsdPerMtok(), request.audioUsdPerMinute());
         return ResponseEntity.status(HttpStatus.CREATED).body(LlmPriceResponse.from(price));
     }
 

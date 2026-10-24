@@ -44,6 +44,16 @@ public interface SpendLimitRepository extends JpaRepository<SpendLimitEntity, UU
                             @Param("longWrites") boolean longWrites);
 
     /**
+     * Whether {@code provider}'s {@code model} has a price in force now, by the database clock, that
+     * prices a minute of audio (V56): a transcriber's price.
+     */
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM (SELECT audio_usd_per_minute FROM llm_prices "
+            + "WHERE provider = :provider AND model = :model AND valid_from <= now() "
+            + "ORDER BY valid_from DESC, id DESC LIMIT 1) latest "
+            + "WHERE latest.audio_usd_per_minute IS NOT NULL)", nativeQuery = true)
+    boolean hasAudioPriceInForce(@Param("provider") String provider, @Param("model") String model);
+
+    /**
      * Records that {@code tenantId} reached {@code thresholdPercent} of its limit in the month that
      * starts on {@code period}, unless it already had: 1 when this call recorded it, 0 otherwise.
      */
