@@ -58,7 +58,7 @@ el playground, pantalla **Business**, que los edita como JSON y muestra cómo lo
   y `docker compose --profile api --profile transcription up -d --build` (el primer arranque baja
   el modelo, ≈1,6 GB). Medido con diez notas de voz reales del bar (2026-10-24, en CPU): `small`
   oye mal casi la mitad de las palabras (46,7 %) y 13 de 21 datos críticos; `large-v3-turbo`,
-  29,9 % y 19 de 21, a cambio de unos 21 s por nota en lugar de 5. Lo que falla aun así (un
+  30,5 % y 19 de 21, a cambio de unos 21 s por nota en lugar de 5. Lo que falla aun así (un
   nombre, un número) lo pide el camarero antes de actuar (ver el prompt).
 - La clave de operador (`CAUCE_API_KEY`; el quickstart la guarda en `.quickstart.env`).
 - **Dos bots** creados con [@BotFather](https://t.me/BotFather): uno para los clientes y otro para

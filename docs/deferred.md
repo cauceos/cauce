@@ -62,12 +62,13 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 - **A paid European transcriber, measured on the same ten voice notes (November).** The local Whisper
   is the only transcriber (ADR 0012, V3). The reference a paid adapter must beat, measured on
-  2026-10-24 with ten real voice notes of the hospitality pack (`-Pevals.voz`, Spanish, laptop CPU):
+  2026-10-24 with ten real voice notes of the hospitality pack (`-Pevals.voz`, Spanish, laptop CPU, clock times compared as said; seconds per note once the
+  model is loaded):
 
   | Model | Word error | Critical data heard right | Transcription per note |
   |---|---|---|---|
   | `Systran/faster-whisper-small` (quickstart) | 46.7 % | 13 of 21 | 4.8 s |
-  | `deepdml/faster-whisper-large-v3-turbo-ct2` (hospitality pack) | 29.9 % | 19 of 21 | 21.1 s |
+  | `deepdml/faster-whisper-large-v3-turbo-ct2` (hospitality pack) | 30.5 % | 19 of 21 | 21.0 s |
 
   Lands as a second OpenAI-compatible (or own) transcriber with its audio price, measured with the
   same notes and harness before it is offered.
