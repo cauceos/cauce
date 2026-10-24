@@ -41,10 +41,10 @@ class ContextBuilderTest {
 
     @Test
     void build_inAServedWindowOf4096_reservesHalfAndKeepsHistoryInTheOtherHalf() {
-        // 12 messages of 700 chars => 200 tokens each; 2048 tokens of history fit 10 of them.
+        // 12 messages of 500 chars => 200 tokens each; 2048 tokens of history fit 10 of them.
         List<Message> messages = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
-            messages.add(userMessageOfLength("m" + i, 700));
+            messages.add(userMessageOfLength("m" + i, 500));
         }
 
         LlmInvocationContext context = builder.build(messages, "qwen2.5:3b", 4096, SYSTEM_PROMPT, List.of(), Set.of());
@@ -63,9 +63,9 @@ class ContextBuilderTest {
         // 2048 tokens of history window; 12 messages of 200 tokens each.
         List<Message> messages = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
-            messages.add(userMessageOfLength("m" + i, 700));
+            messages.add(userMessageOfLength("m" + i, 500));
         }
-        String prompt = "p".repeat(1400); // 400 tokens
+        String prompt = "p".repeat(1000); // 400 tokens
 
         LlmInvocationContext context = builder.build(messages, "qwen2.5:3b", 4096, prompt, List.of(tool), Set.of());
 
@@ -80,7 +80,7 @@ class ContextBuilderTest {
 
     @Test
     void build_whenThePromptAloneFillsTheWindow_failsAsThePromptNotFitting() {
-        String prompt = "p".repeat(7168); // 2048 tokens: the whole history window of 4096
+        String prompt = "p".repeat(5120); // 2048 tokens: the whole history window of 4096
 
         assertThatThrownBy(() -> builder.build(List.of(userMessageOfLength("hi", 10)), "qwen2.5:3b", 4096,
                 prompt, List.of(), Set.of()))
@@ -91,8 +91,8 @@ class ContextBuilderTest {
 
     @Test
     void build_whenThePromptAndTheCurrentMessageTogetherOverflow_failsAsThePromptNotFitting() {
-        String prompt = "p".repeat(5250); // 1500 tokens
-        Message current = userMessageOfLength("ASK", 2800); // 800 tokens: fits 2048 alone, not with the prompt
+        String prompt = "p".repeat(3750); // 1500 tokens
+        Message current = userMessageOfLength("ASK", 2000); // 800 tokens: fits 2048 alone, not with the prompt
 
         assertThatThrownBy(() -> builder.build(List.of(current), "qwen2.5:3b", 4096, prompt, List.of(), Set.of()))
                 .isInstanceOf(PromptDoesNotFitContextException.class)
@@ -102,7 +102,7 @@ class ContextBuilderTest {
 
     @Test
     void build_whenTheCurrentMessageIsTooLargeEvenWithoutAPrompt_isTheMessageNotTheAgent() {
-        Message current = userMessageOfLength("HUGE", 7700); // 2200 tokens > 2048
+        Message current = userMessageOfLength("HUGE", 5500); // 2200 tokens > 2048
 
         assertThatThrownBy(() -> builder.build(List.of(current), "qwen2.5:3b", 4096, SYSTEM_PROMPT, List.of(),
                 Set.of()))
@@ -154,10 +154,10 @@ class ContextBuilderTest {
 
     @Test
     void build_whenConversationExceedsWindow_keepsMostRecentSliceChronological() {
-        // 100 messages of 7000 chars each => 2000 tokens each. 190_000 / 2000 = 95 fit exactly.
+        // 100 messages of 5000 chars each => 2000 tokens each. 190_000 / 2000 = 95 fit exactly.
         List<Message> messages = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            messages.add(userMessageOfLength("MSG" + i, 7000));
+            messages.add(userMessageOfLength("MSG" + i, 5000));
         }
 
         LlmInvocationContext context = builder.build(messages, MODEL, NO_PROMPT);
@@ -172,8 +172,8 @@ class ContextBuilderTest {
 
     @Test
     void build_whenMostRecentMessageAloneExceedsWindow_throwsMessageTooLarge() {
-        // 700_000 chars => ceil(700000/3.5) = 200_000 tokens > 190_000 effective window.
-        Message huge = userMessageOfLength("HUGE", 700_000);
+        // 500_000 chars => ceil(500000/2.5) = 200_000 tokens > 190_000 effective window.
+        Message huge = userMessageOfLength("HUGE", 500_000);
 
         assertThatThrownBy(() -> builder.build(List.of(huge), MODEL, NO_PROMPT))
                 .isInstanceOf(MessageTooLargeForContextException.class)
@@ -183,8 +183,8 @@ class ContextBuilderTest {
 
     @Test
     void build_whenMostRecentMessageExactlyFillsWindow_isIncluded() {
-        // 665_000 chars => ceil(665000/3.5) = 190_000 tokens == effective window (boundary).
-        Message exact = userMessageOfLength("EXACT", 665_000);
+        // 475_000 chars => ceil(475000/2.5) = 190_000 tokens == effective window (boundary).
+        Message exact = userMessageOfLength("EXACT", 475_000);
 
         LlmInvocationContext context = builder.build(List.of(exact), MODEL, NO_PROMPT);
 
@@ -246,13 +246,13 @@ class ContextBuilderTest {
     void build_whenTheCutOrphansAToolResult_startsTheWindowAtTheNextUserTurn() {
         // 6000 tokens of window. The old turn's call does not fit, its result would; the window
         // must not open on that orphaned result.
-        ToolCall call = new ToolCall("call-1", "search", Map.of("query", "x".repeat(70_000)));
+        ToolCall call = new ToolCall("call-1", "search", Map.of("query", "x".repeat(50_000)));
         List<Message> messages = List.of(
-                userMessageOfLength("OLD", 7000),
+                userMessageOfLength("OLD", 5000),
                 Message.toolCall(CONVERSATION, call),
                 Message.toolResult(CONVERSATION, ToolResult.success("call-1", "search", "found")),
                 Message.from(CONVERSATION, MessageRole.AGENT, "Found it."),
-                userMessageOfLength("NEW", 7000));
+                userMessageOfLength("NEW", 5000));
 
         LlmInvocationContext context = builder.build(messages, SMALL_MODEL, SYSTEM_PROMPT);
 
@@ -267,9 +267,9 @@ class ContextBuilderTest {
         ToolCall call = new ToolCall("call-2", "get_current_time", Map.of());
         ToolResult result = ToolResult.success("call-2", "get_current_time", "10:15");
         List<Message> messages = List.of(
-                userMessageOfLength("OLD", 7000),
-                Message.from(CONVERSATION, MessageRole.AGENT, "a".repeat(10_500)), // 3000 tokens: fits, OLD then does not
-                userMessageOfLength("NEW", 7000),
+                userMessageOfLength("OLD", 5000),
+                Message.from(CONVERSATION, MessageRole.AGENT, "a".repeat(7_500)), // 3000 tokens: fits, OLD then does not
+                userMessageOfLength("NEW", 5000),
                 Message.toolCall(CONVERSATION, call),
                 Message.toolResult(CONVERSATION, result));
 
@@ -287,9 +287,9 @@ class ContextBuilderTest {
         // tool messages would fit, and a history that opens on them is malformed.
         ToolCall call = new ToolCall("call-3", "search", Map.of("query", "q"));
         List<Message> messages = List.of(
-                userMessageOfLength("ASK", 7000),
+                userMessageOfLength("ASK", 5000),
                 Message.toolCall(CONVERSATION, call),
-                Message.toolResult(CONVERSATION, ToolResult.success("call-3", "search", "r".repeat(17_000))));
+                Message.toolResult(CONVERSATION, ToolResult.success("call-3", "search", "r".repeat(12_145))));
 
         assertThatThrownBy(() -> builder.build(messages, SMALL_MODEL, SYSTEM_PROMPT))
                 .isInstanceOf(MessageTooLargeForContextException.class)
@@ -325,9 +325,9 @@ class ContextBuilderTest {
         // is left for the history is 140_000, so the newest 70 messages are retained.
         List<Message> messages = new ArrayList<>();
         for (int i = 0; i < 75; i++) {
-            messages.add(userMessageOfLength("M" + i, 7000)); // 2000 tokens each => 150_000
+            messages.add(userMessageOfLength("M" + i, 5000)); // 2000 tokens each => 150_000
         }
-        String largeSystemPrompt = "s".repeat(175_000); // ceil(175000/3.5) = 50_000 tokens
+        String largeSystemPrompt = "s".repeat(125_000); // ceil(125000/2.5) = 50_000 tokens
 
         LlmInvocationContext context = builder.build(messages, MODEL, largeSystemPrompt);
 

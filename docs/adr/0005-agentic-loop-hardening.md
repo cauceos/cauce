@@ -136,7 +136,7 @@ outside the budget. On a small served window (Ollama's 4096) that overran the wi
 server cut the request without saying so.
 
 - **Everything sent counts.** The context budget subtracts an estimate of the system prompt and
-  of each tool (name, description and schema as compact JSON, 3.5 characters per token), plus
+  of each tool (name, description and schema as compact JSON, 2.5 characters per token), plus
   20 tokens per tool and 400 once when tools are offered, for the tool-use instructions providers
   write into the prompt. The estimate errs high: an overshoot costs history, an undershoot a cut.
 - **What does not fit fails, never goes out to be cut.** When the prompt and tools leave no room
@@ -149,7 +149,15 @@ server cut the request without saying so.
   billed, by provider and model, with objectives at 0.8 and 1.2) shows how far it drifts, and a
   call off by more than 20 % either way logs a WARN with the counts, never content: at most one per
   model an hour, with the number of deviating calls left out since the previous one. An eval run
-  writes the same comparison per call (`estimaciones.csv`) and by model at the end of its report. The constants
+  writes the same comparison per call (`estimaciones.csv`) and by model at the end of its report.
+- **Calibrated once, on a run.** The first estimate counted 3.5 characters per token. The
+  hospitality battery at N = 1 (`2026-10-24T1033Z`, Claude Sonnet 5.5, 124 calls) put it at 0.782
+  of the billed input on average (minimum 0.664, maximum 0.822): 22 % short, beyond the 10 % that
+  calls for an adjustment. The shortfall is larger in the history (tool results are JSON, which
+  tokenizes densely) than in the prompt and tools. One ratio for both, **2.5 characters per
+  token**, gives on the same calls a mean of 1.051 (minimum 0.905, maximum 1.101): high on
+  average, every call within 10 %. The overheads per tool and for tool use stay. It is one model's
+  tokenizer and one pack's language; the metric is what says when another needs its own. The constants
   above are revised from that metric, not by guess.
 
 ## References

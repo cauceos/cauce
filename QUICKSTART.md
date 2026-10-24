@@ -167,7 +167,7 @@ Its agents use Anthropic (`claude-sonnet-5-5`) by default, so it needs path A's 
 checks the instance has the provider before creating anything. With path B or C,
 `MODEL_PROVIDER=ollama MODEL_NAME=qwen2.5:3b ./scripts/demo-bar.sh` works, with a noticeably
 weaker waiter. Give it room with `OLLAMA_CONTEXT_LENGTH=32768` in `.env` (and, with your own
-Ollama, the same on the server): the waiter's prompt and tools alone are about 4,000 tokens, and
+Ollama, the same on the server): the waiter's prompt and tools alone are about 5,000 tokens, and
 each turn adds the menu and the agenda it looks up. On Ollama's default 4096 every message fails
 at once as `AGENT_MISCONFIGURED`, saying so, rather than reaching the model cut. It ends with a ready-made `curl` to talk to the waiter, and
 optionally connects two Telegram bots: see [examples/hosteleria/README.md](examples/hosteleria/README.md).

@@ -43,7 +43,7 @@ el playground, pantalla **Business**, que los edita como JSON y muestra cómo lo
   necesita `ANTHROPIC_API_KEY` en el entorno de la instancia; cámbialo con `MODEL_PROVIDER` y
   `MODEL_NAME`. Un modelo local pequeño (`qwen2.5:3b`) sirve para la tubería, no para juzgar al
   agente. Con Ollama, arráncalo con `OLLAMA_CONTEXT_LENGTH=32768` (en el `.env` del quickstart, y
-  en tu servidor si es tuyo): el prompt y las herramientas del camarero ocupan unos 4.000 tokens y
+  en tu servidor si es tuyo): el prompt y las herramientas del camarero ocupan unos 5.000 tokens y
   cada turno suma la carta y la agenda que consulta. Con los 4096 que Ollama sirve por defecto,
   cada mensaje falla enseguida como `AGENT_MISCONFIGURED`, con el motivo dicho.
 - La clave de operador (`CAUCE_API_KEY`; el quickstart la guarda en `.quickstart.env`).

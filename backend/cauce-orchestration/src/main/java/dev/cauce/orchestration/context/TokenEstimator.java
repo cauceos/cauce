@@ -5,21 +5,23 @@ import java.util.Map;
 /**
  * Conservative, provider-independent token estimator. Pure, stateless utility.
  *
- * <p>Uses a fixed characters-per-token ratio of 3.5 — deliberately low so the estimate
- * tends to overshoot, leaving headroom rather than overflowing a model's context window.
- * This is a heuristic, not a real tokenizer; a future version may delegate to a
- * provider-specific tokenizer when accuracy matters.
+ * <p>Uses a fixed characters-per-token ratio of 2.5, calibrated against billed input tokens (ADR
+ * 0005, amendment of 2026-10-24): on the hospitality pack with Claude Sonnet 5.5, 3.5 fell short
+ * by 22 % on average, and 2.5 overshoots by 5 % on average, every call within 10 %. Erring high
+ * leaves headroom rather than overflowing a model's context window. This is a heuristic, not a
+ * real tokenizer; a future version may delegate to a provider-specific tokenizer when accuracy
+ * matters, and {@code cauce.orchestration.llm.input_tokens.estimate_ratio} says when to revisit it.
  */
 public final class TokenEstimator {
 
-    private static final double CHARS_PER_TOKEN = 3.5;
+    static final double CHARS_PER_TOKEN = 2.5;
 
     private TokenEstimator() {
     }
 
     /**
      * Estimates the token count of {@code text}. Returns 0 for {@code null} or empty input;
-     * otherwise {@code ceil(length / 3.5)}.
+     * otherwise {@code ceil(length / 2.5)}.
      */
     public static int estimate(String text) {
         if (text == null || text.isEmpty()) {

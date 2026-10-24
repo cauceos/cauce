@@ -200,9 +200,9 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
 
     @Test
     void respondToMessage_whenConversationExceedsWindow_invokesLlmWithTruncatedContext() {
-        // Insert 100 USER messages of 7000 chars (2000 tokens each): the 190_000 window less the
+        // Insert 100 USER messages of 5000 chars (2000 tokens each): the 190_000 window less the
         // agent's system prompt, which counts against it, holds 94.
-        seedLargeHistory(100, 7000);
+        seedLargeHistory(100, 5000);
         UUID trigger = lastUserMessageId();
 
         mockLlmProvider.respondWith(invocation ->
