@@ -114,6 +114,30 @@ class WhatsAppChannelAdapterTest {
     }
 
     @Test
+    void showTypingFor_marksTheInboundMessageRead_withTheTypingIndicator(WireMockRuntimeInfo wm) {
+        stubFor(post(SEND_PATH).willReturn(okJson("{\"success\":true}")));
+
+        adapterAgainst(wm).showTypingFor("wamid.V1", number);
+
+        verify(postRequestedFor(urlEqualTo(SEND_PATH))
+                .withHeader("Authorization", equalTo("Bearer EAAG-access-token"))
+                .withRequestBody(equalToJson("""
+                        {"messaging_product":"whatsapp","status":"read","message_id":"wamid.V1",
+                         "typing_indicator":{"type":"text"}}""")));
+    }
+
+    @Test
+    void showTypingFor_refusedByMeta_failsLoudlyForTheCallerToLog(WireMockRuntimeInfo wm) {
+        stubFor(post(SEND_PATH).willReturn(aResponse().withStatus(400)
+                .withBody("{\"error\":{\"code\":100,\"message\":\"Invalid parameter\"}}")));
+
+        assertThatThrownBy(() -> adapterAgainst(wm).showTypingFor("wamid.V1", number))
+                .isInstanceOf(ChannelDeliveryException.class)
+                .hasMessageContaining("typing indicator returned HTTP 400")
+                .hasMessageNotContaining("EAAG-access-token");
+    }
+
+    @Test
     void deliver_postsATextMessageToTheBsuid_withTheNumbersToken_neverATo_inWhatsAppsMarkers(
             WireMockRuntimeInfo wm) {
         stubFor(post(SEND_PATH).willReturn(okJson("{\"messages\":[{\"id\":\"wamid.X\"}]}")));

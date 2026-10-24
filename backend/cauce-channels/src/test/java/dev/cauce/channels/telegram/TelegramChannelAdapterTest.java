@@ -298,6 +298,27 @@ class TelegramChannelAdapterTest {
     }
 
     @Test
+    void showTyping_postsSendChatActionTyping_toTheChat(WireMockRuntimeInfo wm) {
+        stubFor(post("/bot12345:bot-token/sendChatAction").willReturn(okJson("{\"ok\": true, \"result\": true}")));
+
+        adapterAgainst(wm).showTyping(config, IdentityKind.PROVIDER_USER_ID, "987654321");
+
+        verify(postRequestedFor(urlEqualTo("/bot12345:bot-token/sendChatAction"))
+                .withRequestBody(equalToJson("{\"chat_id\": \"987654321\", \"action\": \"typing\"}")));
+    }
+
+    @Test
+    void showTyping_refusedByTelegram_failsLoudlyForTheCallerToLog(WireMockRuntimeInfo wm) {
+        stubFor(post("/bot12345:bot-token/sendChatAction").willReturn(aResponse().withStatus(403)
+                .withBody("{\"ok\": false, \"description\": \"Forbidden: bot was blocked by the user\"}")));
+
+        assertThatThrownBy(() -> adapterAgainst(wm).showTyping(config, IdentityKind.PROVIDER_USER_ID, "987654321"))
+                .isInstanceOf(ChannelDeliveryException.class)
+                .hasMessageContaining("sendChatAction returned HTTP 403")
+                .hasMessageNotContaining("bot-token");
+    }
+
+    @Test
     void deliver_rendersTheAgentsMarkdownAsTelegramHtml_neverLiteralAsterisks(WireMockRuntimeInfo wm) {
         stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson("{\"ok\": true}")));
 

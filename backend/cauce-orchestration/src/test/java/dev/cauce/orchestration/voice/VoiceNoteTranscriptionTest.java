@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -37,6 +38,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.ObjectProvider;
 
 class VoiceNoteTranscriptionTest {
@@ -112,6 +114,39 @@ class VoiceNoteTranscriptionTest {
         verify(usage).record(billed.capture());
         assertThat(billed.getValue().audioSeconds()).isEqualTo(5);
         assertThat(billed.getValue().provider()).isEqualTo("whisper");
+    }
+
+    @Test
+    void transcribePending_showsThePersonTheAgentTyping_whileTheNoteIsFetchedAndHeard() {
+        Message note = voiceNote(4);
+        UUID configId = conversation.channelConfigId().orElseThrow();
+        VoiceNoteSource.Activity typing = mock(VoiceNoteSource.Activity.class);
+        when(source.showTranscribing(configId, conversation.identityId())).thenReturn(typing);
+        when(source.fetch(eq(configId), any(), anyLong())).thenReturn(AUDIO);
+        when(transcriber.transcribe(AUDIO, "audio/ogg", null)).thenReturn(new Transcription("Mesa para cuatro", 5));
+
+        voiceNotes.transcribePending(agent, conversation, invocationId, note.id(), List.of(note));
+
+        InOrder order = inOrder(source, transcriber, typing, usage);
+        order.verify(source).showTranscribing(configId, conversation.identityId());
+        order.verify(source).fetch(eq(configId), any(), anyLong());
+        order.verify(transcriber).transcribe(AUDIO, "audio/ogg", null);
+        order.verify(typing).close();
+        order.verify(usage).record(any());
+    }
+
+    @Test
+    void transcribePending_whenTheTranscriberFails_stopsShowingTheAgentTyping() {
+        Message note = voiceNote(4);
+        UUID configId = conversation.channelConfigId().orElseThrow();
+        VoiceNoteSource.Activity typing = mock(VoiceNoteSource.Activity.class);
+        when(source.showTranscribing(configId, conversation.identityId())).thenReturn(typing);
+        when(source.fetch(eq(configId), any(), anyLong())).thenReturn(AUDIO);
+        when(transcriber.transcribe(AUDIO, "audio/ogg", null)).thenThrow(new IllegalStateException("down"));
+
+        assertThatThrownBy(() -> voiceNotes.transcribePending(agent, conversation, invocationId, note.id(),
+                List.of(note))).isInstanceOf(IllegalStateException.class);
+        verify(typing).close();
     }
 
     @Test

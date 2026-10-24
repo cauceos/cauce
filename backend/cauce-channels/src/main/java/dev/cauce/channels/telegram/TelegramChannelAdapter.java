@@ -63,7 +63,8 @@ import java.util.Optional;
  * Telegram shows formatting only when asked: the agent's Markdown is rendered to Telegram's HTML
  * subset and sent with {@code parse_mode=HTML}, so a code never arrives as {@code **9PNVXQ**}.
  * Should Telegram still reject the entities, the same reply is sent once more as plain text,
- * markers dropped: formatting is never worth losing the reply.
+ * markers dropped: formatting is never worth losing the reply. While a voice note is heard,
+ * {@code sendChatAction} with {@code typing} shows the person "escribiendo…".
  * Registered as a bean by {@code ChannelsConfig} (it carries the HTTP client and
  * properties, mirroring the LLM adapter configurations).
  */
@@ -259,9 +260,26 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
         }
     }
 
+    /** {@code sendChatAction} with {@code typing}: Telegram shows it for five seconds or until a message. */
+    @Override
+    public void showTyping(ChannelConfig config, IdentityKind identityKind, String identityValue) {
+        if (identityKind != IdentityKind.PROVIDER_USER_ID) {
+            throw new ChannelDeliveryException("Telegram can only show typing to a PROVIDER_USER_ID, not "
+                    + identityKind);
+        }
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("chat_id", identityValue);
+        payload.put("action", "typing");
+        send(payload, config, "sendChatAction");
+    }
+
     private void send(ObjectNode payload, ChannelConfig config) {
+        send(payload, config, "sendMessage");
+    }
+
+    private void send(ObjectNode payload, ChannelConfig config, String method) {
         HttpRequest request = HttpRequest.newBuilder(
-                        URI.create(properties.getBaseUrl() + "/bot" + config.credential() + "/sendMessage"))
+                        URI.create(properties.getBaseUrl() + "/bot" + config.credential() + "/" + method))
                 .timeout(properties.getTimeout())
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
@@ -282,17 +300,17 @@ public class TelegramChannelAdapter implements InboundChannelAdapter, OutboundCh
         }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             // The response body carries Telegram's error description, never our token.
-            throw new ChannelDeliveryException("Telegram sendMessage returned HTTP "
+            throw new ChannelDeliveryException("Telegram " + method + " returned HTTP "
                     + response.statusCode() + ": " + response.body());
         }
         JsonNode body;
         try {
             body = objectMapper.readTree(response.body());
         } catch (JacksonException e) {
-            throw new ChannelDeliveryException("Malformed Telegram sendMessage response", e);
+            throw new ChannelDeliveryException("Malformed Telegram " + method + " response", e);
         }
         if (!body.path("ok").asBoolean(false)) {
-            throw new ChannelDeliveryException("Telegram sendMessage rejected: "
+            throw new ChannelDeliveryException("Telegram " + method + " rejected: "
                     + body.path("description").asText("(no description)"));
         }
     }

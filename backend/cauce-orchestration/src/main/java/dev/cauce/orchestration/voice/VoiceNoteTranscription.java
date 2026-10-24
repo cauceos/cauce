@@ -37,7 +37,9 @@ import org.springframework.stereotype.Service;
  * <p>Runs in the worker, under the invocation's tenant context, so a transient failure of the
  * channel or the transcriber is retried like a model call's, and a note already transcribed by an
  * earlier attempt is not transcribed again. A note over the limits, or with nothing intelligible in
- * it, ends the invocation as {@code VOICE_NOTE_REJECTED} without calling the model.
+ * it, ends the invocation as {@code VOICE_NOTE_REJECTED} without calling the model. While a note is
+ * fetched and heard, its channel shows the person the agent typing ({@link VoiceNoteSource#showTranscribing}):
+ * a minute's note takes about twenty seconds on a CPU.
  */
 @Service
 public class VoiceNoteTranscription {
@@ -138,12 +140,16 @@ public class VoiceNoteTranscription {
             throw new VoiceNoteRejectedException("The voice note is " + note.sizeBytes()
                     + " bytes, over the limit of " + maxBytes);
         }
-        byte[] audio = source.fetch(channelConfigId, note, maxBytes);
-        if (audio.length > maxBytes) {
-            throw new VoiceNoteRejectedException("The voice note is " + audio.length
-                    + " bytes, over the limit of " + maxBytes);
+        byte[] audio;
+        Transcription transcription;
+        try (VoiceNoteSource.Activity typing = source.showTranscribing(channelConfigId, conversation.identityId())) {
+            audio = source.fetch(channelConfigId, note, maxBytes);
+            if (audio.length > maxBytes) {
+                throw new VoiceNoteRejectedException("The voice note is " + audio.length
+                        + " bytes, over the limit of " + maxBytes);
+            }
+            transcription = transcriber.transcribe(audio, note.mediaType(), null);
         }
-        Transcription transcription = transcriber.transcribe(audio, note.mediaType(), null);
         int seconds = transcription.duration().orElse(note.durationSeconds() == null ? 0 : note.durationSeconds());
         if (seconds == 0) {
             log.warn("The transcriber reported no duration for a voice note of conversation {}: usage recorded as 0 s",

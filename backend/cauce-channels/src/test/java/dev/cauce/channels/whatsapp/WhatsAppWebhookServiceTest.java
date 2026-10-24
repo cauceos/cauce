@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import dev.cauce.channels.UnsupportedMessageRecorder;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.InboundInterception;
 import dev.cauce.channels.config.ChannelConfig;
+import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.spi.WebhookRequest;
@@ -186,7 +188,21 @@ class WhatsAppWebhookServiceTest {
         verify(inbound).ingestParts(number.agentId(), "whatsapp", number.id(), IdentityKind.PROVIDER_USER_ID, BSUID,
                 List.of(MessagePart.Audio.received("audio/ogg; codecs=opus", "media-9", null, null)),
                 number.id() + ":wamid.V1");
+        verify(outbound).showTypingFor("wamid.V1", number);
         verifyNoInteractions(recorder);
+    }
+
+    @Test
+    void handle_aVoiceNote_whoseTypingIndicatorIsRefused_isIngestedAllTheSame() {
+        when(voiceNotes.available()).thenReturn(true);
+        doThrow(new ChannelDeliveryException("WhatsApp typing indicator returned HTTP 400")).when(outbound)
+                .showTypingFor(anyString(), any());
+
+        service.handle(app.id(), signed(change("""
+                {"from_user_id":"%s","id":"wamid.V2","type":"audio","audio":{"id":"media-3"}}""".formatted(BSUID))));
+
+        verify(inbound).ingestParts(number.agentId(), "whatsapp", number.id(), IdentityKind.PROVIDER_USER_ID, BSUID,
+                List.of(MessagePart.Audio.received("audio/ogg", "media-3", null, null)), number.id() + ":wamid.V2");
     }
 
     @Test

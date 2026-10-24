@@ -40,6 +40,10 @@ import java.time.Instant;
  * </ul>
  * Every refusal and every provider error is a {@link ChannelDeliveryException}, which the
  * best-effort delivery logs with its reason. The access token never appears in a message.
+ *
+ * <p>The typing indicator ({@link #showTypingFor}) is tied to the message it answers, not to the
+ * interlocutor: it marks that message read and shows "escribiendo…" for up to 25 seconds or until
+ * the reply.
  */
 public class WhatsAppChannelAdapter implements OutboundChannelAdapter, MediaChannelAdapter {
 
@@ -120,6 +124,44 @@ public class WhatsAppChannelAdapter implements OutboundChannelAdapter, MediaChan
             throw described.startsWith("error " + REENGAGEMENT_ERROR + " ")
                     ? new OutsideReplyWindowException(failure)
                     : new ChannelDeliveryException(failure);
+        }
+    }
+
+    /**
+     * Shows the interlocutor of inbound message {@code providerMessageId} (its {@code wamid}) the
+     * typing indicator, which also marks that message read. Sent when a voice note arrives, before
+     * it is heard: the indicator lasts while it is transcribed.
+     *
+     * @throws ChannelDeliveryException if Meta refuses it; the caller only logs it
+     */
+    public void showTypingFor(String providerMessageId, ChannelConfig config) {
+        if (!config.isAppRouted()) {
+            throw new ChannelDeliveryException("Channel config " + config.id() + " is not a WhatsApp number");
+        }
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("messaging_product", "whatsapp");
+        payload.put("status", "read");
+        payload.put("message_id", providerMessageId);
+        payload.putObject("typing_indicator").put("type", "text");
+        HttpRequest request = HttpRequest.newBuilder(URI.create(properties.getBaseUrl() + "/"
+                        + properties.getApiVersion() + "/" + config.phoneNumberId() + "/messages"))
+                .timeout(properties.getTimeout())
+                .header("Authorization", "Bearer " + config.credential())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<String> response;
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new ChannelDeliveryException("HTTP call to the WhatsApp Cloud API failed", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ChannelDeliveryException("Interrupted while showing the WhatsApp typing indicator", e);
+        }
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new ChannelDeliveryException("WhatsApp typing indicator returned HTTP " + response.statusCode()
+                    + ": " + describeError(response.body()));
         }
     }
 

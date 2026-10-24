@@ -22,4 +22,23 @@ public interface VoiceNoteSource {
      *     not hand them over: retried with backoff when transient, each attempt fetching anew
      */
     byte[] fetch(UUID channelConfigId, MessagePart.Audio note, long maxBytes);
+
+    /**
+     * Shows the interlocutor {@code identityId}, in channel config {@code channelConfigId}, that their
+     * voice note is being heard — the channel's own "typing" indicator, never a message — until the
+     * returned activity is closed. Best-effort: never throws, and a channel without such an indicator
+     * shows nothing.
+     */
+    default Activity showTranscribing(UUID channelConfigId, UUID identityId) {
+        return Activity.NONE;
+    }
+
+    /** An indicator being shown; closing it stops it. */
+    interface Activity extends AutoCloseable {
+
+        Activity NONE = () -> { };
+
+        @Override
+        void close();
+    }
 }

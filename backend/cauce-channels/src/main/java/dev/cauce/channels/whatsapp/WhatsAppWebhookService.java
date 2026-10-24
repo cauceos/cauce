@@ -208,6 +208,7 @@ public class WhatsAppWebhookService {
                         List.of(MessagePart.Audio.received(audio.path("mime_type").asText("audio/ogg"),
                                 audio.path("id").asText(), null, null)),
                         number.id() + ":" + providerMessageId);
+                showTyping(number, providerMessageId);
                 return;
             }
             // W5: never silence. The message is not ingested, so it opens no thread. Its receipt
@@ -222,6 +223,28 @@ public class WhatsAppWebhookService {
                     properties.getUnsupportedMessageReply()).ifPresent(text -> sendTextOnlyReply(number, bsuid, text));
         } finally {
             TenantContext.clear();
+        }
+    }
+
+    /**
+     * The typing indicator while the note is heard, best-effort and off the webhook thread. WhatsApp
+     * ties it to the inbound message, which only the webhook knows; it lasts up to 25 seconds.
+     */
+    private void showTyping(ChannelConfig number, String providerMessageId) {
+        if (providerMessageId.isBlank()) {
+            return;
+        }
+        try {
+            outboundExecutor.execute(() -> {
+                try {
+                    outbound.showTypingFor(providerMessageId, number);
+                } catch (ChannelDeliveryException e) {
+                    log.debug("Could not show the typing indicator through config {}: {}", number.id(),
+                            e.getMessage());
+                }
+            });
+        } catch (RuntimeException e) {
+            log.debug("Could not queue the typing indicator for config {}: {}", number.id(), e.toString());
         }
     }
 
