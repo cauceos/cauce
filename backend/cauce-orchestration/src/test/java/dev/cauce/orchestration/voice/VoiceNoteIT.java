@@ -100,8 +100,10 @@ class VoiceNoteIT extends AbstractOrchestrationIntegrationTest {
         respond(note);
 
         List<LlmMessage> history = sent.get().messages();
+        // Stamped with when it was sent (ADR 0008, amendment), in UTC: this business has no profile.
         assertThat(history.get(history.size() - 1).content())
-                .isEqualTo("[Transcribed voice note] Quería mesa para cuatro el sábado");
+                .matches("\\[Sent \\w+ \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} UTC\\] "
+                        + "\\[Transcribed voice note\\] Quería mesa para cuatro el sábado");
         Map<String, Object> part = jdbc.queryForMap("SELECT parts -> 0 ->> 'transcript' AS transcript, "
                 + "parts -> 0 ->> 'sha256' AS sha256, (parts -> 0 ->> 'duration_seconds')::int AS seconds "
                 + "FROM messages WHERE id = ?", note.id());

@@ -141,6 +141,9 @@ public class OrchestratorService {
     private final Clock clock;
     private final VoiceNoteTranscription voiceNotes;
     private final ObjectProvider<BusinessProfileSource> businessProfiles;
+
+    /** The zone of an agent whose business has none: named, so the stamp says "UTC", never "Z". */
+    static final ZoneId UTC = ZoneId.of("UTC");
     private final InputTokenEstimateWarnings estimateWarnings = new InputTokenEstimateWarnings();
 
     public OrchestratorService(ConversationGateway conversationGateway,
@@ -223,7 +226,8 @@ public class OrchestratorService {
         int contextWindow = provider.servedContextWindow(agent.modelName())
                 .orElseGet(() -> ModelContextWindow.contextWindowFor(agent.modelName()));
         List<ToolDefinition> toolDefinitions = toolDefinitions(agent);
-        // ADR 0008, amendment: each customer message reads with when it was sent, in the business's zone.
+        // ADR 0008, amendment: each customer message reads with when it was sent, in the business's
+        // zone, or in UTC, said so, for an agent whose business has none.
         ZoneId senderTimeZone = businessTimeZone(agent);
         // Deferred R1, behind a per-agent switch: earlier turns' lookups the agent can repeat.
         Set<String> elidedLookups = agent.elidesPastLookups() ? toolRegistry.lookupTools() : Set.of();
@@ -383,11 +387,14 @@ public class OrchestratorService {
     }
 
     /** ADR 0010, S6, S7: the client's spend limit, checked before the model is called at all. */
-    /** The time zone of the agent's business, read under the invocation's tenant context; null if none. */
+    /**
+     * The time zone of the agent's business, read under the invocation's tenant context; {@code UTC}
+     * when it has none, so that every agent knows when each message was sent.
+     */
     private ZoneId businessTimeZone(Agent agent) {
         BusinessProfileSource profiles = businessProfiles.getIfAvailable();
-        return profiles == null ? null
-                : profiles.findProfile(agent.tenantId()).map(BusinessProfile::timeZone).orElse(null);
+        return Optional.ofNullable(profiles).flatMap(source -> source.findProfile(agent.tenantId()))
+                .map(BusinessProfile::timeZone).orElse(UTC);
     }
 
     private void checkSpend(Agent agent, UUID conversationId) {

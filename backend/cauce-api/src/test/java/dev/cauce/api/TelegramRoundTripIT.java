@@ -275,7 +275,7 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT parts -> 0 ->> 'transcript' FROM messages WHERE conversation_id = ? "
                 + "AND role = 'USER'", String.class, conversationId)).isEqualTo(FakeTranscriber.HEARD);
         assertThat(llm.invocations()).last().satisfies(invocation -> assertThat(invocation.messages().get(0).content())
-                .isEqualTo("[Transcribed voice note] " + FakeTranscriber.HEARD));
+                .startsWith("[Sent ").endsWith(" UTC] [Transcribed voice note] " + FakeTranscriber.HEARD));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_outbox WHERE event_type = "
                 + "'conduct.message.transcribed'", Integer.class)).isEqualTo(1);
         // The person and the API read the transcript, unmarked.

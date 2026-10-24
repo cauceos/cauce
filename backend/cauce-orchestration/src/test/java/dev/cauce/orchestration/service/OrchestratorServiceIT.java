@@ -216,8 +216,8 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
 
         List<dev.cauce.llm.model.LlmMessage> sent = mockLlmProvider.lastInvocation().messages();
         assertThat(sent).hasSize(94);
-        assertThat(sent.get(0).content()).startsWith("MSG6:");
-        assertThat(sent.get(93).content()).startsWith("MSG99:");
+        assertThat(unstamped(sent.get(0).content())).startsWith("MSG6:");
+        assertThat(unstamped(sent.get(93).content())).startsWith("MSG99:");
     }
 
     @Test
@@ -236,7 +236,7 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
                 yes, conversation.id(), "Sí", Timestamp.from(now.minusSeconds(60)));
         List<List<String>> sent = new ArrayList<>();
         mockLlmProvider.respondWith(invocation -> {
-            sent.add(invocation.messages().stream().map(m -> m.role() + ":" + m.content()).toList());
+            sent.add(invocation.messages().stream().map(m -> m.role() + ":" + unstamped(m.content())).toList());
             return new LlmResponse("Hecho.", List.of(), FinishReason.STOP, LlmUsage.of(1, 1));
         });
 
@@ -297,5 +297,10 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
                 conn.rollback();
             }
         }
+    }
+
+    /** A message as written, without the stamp of when it was sent (ADR 0008, amendment). */
+    private static String unstamped(String content) {
+        return content.replaceFirst("^\\[Sent [^\\]]+\\] ", "");
     }
 }

@@ -163,7 +163,10 @@ class OrchestratorServiceTest {
         verify(provider).invoke(captor.capture());
         // Empty registry => no tools offered: the request is byte-identical to the single-shot path.
         assertThat(captor.getValue().tools()).isEmpty();
-        assertThat(captor.getValue().messages()).extracting(LlmMessage::content).containsExactly("Hola");
+        // No business here: the message reads stamped in UTC, said so (ADR 0008, amendment).
+        assertThat(captor.getValue().messages()).extracting(LlmMessage::content)
+                .singleElement(org.assertj.core.api.InstanceOfAssertFactories.STRING)
+                .matches("\\[Sent \\w+ \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} UTC\\] Hola");
         assertThat(captor.getValue().cacheRetention()).isEqualTo(dev.cauce.core.agent.PromptCacheRetention.SHORT);
         verifyNoInteractions(errorRecorder);
     }

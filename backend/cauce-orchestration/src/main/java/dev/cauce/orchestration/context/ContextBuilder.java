@@ -47,9 +47,9 @@ import java.util.stream.Collectors;
  * <p>FALLBACK messages are skipped entirely (ADR 0005, C3): they are the platform's reply to a
  * failed invocation, not a turn of the agent, and the model must not read them as its own.
  *
- * <p>When the agent's business has a time zone, each USER message reads with the moment it was sent
- * in front ({@link #sentStamp}; ADR 0008, amendment of 2026-10-24): its database stamp, in that
- * zone. The newest one is "now", so "tomorrow" is worked out from it, never from memory or from a
+ * <p>Each USER message reads with the moment it was sent in front ({@link #sentStamp}; ADR 0008,
+ * amendment of 2026-10-24): its database stamp, in the business's time zone, or in UTC for an agent
+ * whose business has none — the orchestrator passes the zone. The newest one is "now", so "tomorrow" is worked out from it, never from memory or from a
  * clock reading earlier in a conversation that may span days. Each message carries its own stamp,
  * the same on every later turn, so the cached conversation prefix never changes.
  */

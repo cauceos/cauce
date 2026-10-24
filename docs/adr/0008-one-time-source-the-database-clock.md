@@ -138,10 +138,10 @@ conversation. In the real test of 2026-10-24, a Saturday, a thread open since Th
 clock reading of that Thursday; asked for "tomorrow", the agent worked from it instead of calling
 the tool again, said "tomorrow, Friday the 23rd" and looked up availability on a past date.
 
-- **Each customer message reads with when it was sent.** When the agent's business has a time zone
-  (its profile), context assembly writes in front of every USER message
-  `[Sent Saturday 2026-10-24 18:40 Europe/Madrid]`: the message's `created_at`, stamped by the
-  database clock, in that zone. The newest one is "now". The prompt of a sector pack says to work
+- **Each customer message reads with when it was sent.** Context assembly writes in front of every
+  USER message `[Sent Saturday 2026-10-24 18:40 Europe/Madrid]`: the message's `created_at`,
+  stamped by the database clock, in the time zone of the agent's business (its profile) or, for an
+  agent whose business has none, in UTC, said so (`[Sent Saturday 2026-10-24 16:40 UTC]`). The newest one is "now". The prompt of a sector pack says to work
   relative dates out from it, never from memory or an earlier result. The person and the API read
   the message unstamped.
 - **A stamp per message, not "now" on the last one.** A message's stamp never changes, so the
@@ -152,7 +152,9 @@ the tool again, said "tomorrow, Friday the 23rd" and looked up availability on a
   refusal whose message says what today is, as a booking of one already was: the tool corrects the
   model rather than answering a past day as one with nothing left.
 
-An agent whose business has no time zone reads its messages as before; `get_current_time` stays.
+`get_current_time` stays, for the exact time and for a business's zone when the model needs it.
+The real failure is a blocking eval scenario of the hospitality pack (H3.19): a thread seeded two
+days back, with that day's clock lookup, and "tomorrow" in the new message.
 
 ## References
 
