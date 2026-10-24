@@ -1,0 +1,927 @@
+{
+  "fecha" : "2026-10-24T13:20Z",
+  "commit" : "64ca30e850863fbfe093bd3e93a3caec241ec664",
+  "arbol_con_cambios" : false,
+  "modelo" : "anthropic/claude-sonnet-5-5",
+  "juez" : "ninguno",
+  "calibracion" : "pendiente de juez: ninguno configurado (evals.juez.modelo)",
+  "huella_prompt" : "43c8a0cc2043e7125f9208036613beb3f43d8501ae30c7f41fa6653d7c1b4053",
+  "n" : 5,
+  "seleccion" : "tareas 00,01,02,03,04,05",
+  "completa" : true,
+  "tokens" : {
+    "entrada" : 3916152,
+    "cache_lectura" : 3799422,
+    "cache_escritura" : 114912,
+    "cache_escritura_larga" : 114912,
+    "salida" : 69069,
+    "turnos_modelo" : 280,
+    "juez_entrada" : 0,
+    "juez_salida" : 0
+  },
+  "coste_usd" : 1.5339162,
+  "precios" : "2026-10-23",
+  "tasa_global" : 0.9696969696969697,
+  "reglas" : {
+    "G1 · carta consultada antes de hablar de ella" : 1.0,
+    "carta sin inventar" : 1.0
+  },
+  "tareas" : {
+    "00-anclaje" : 1.0,
+    "01-informacion" : 1.0,
+    "02-carta" : 1.0,
+    "03-reservas" : 0.9230769230769231,
+    "04-escalado" : 1.0,
+    "05-resumen" : 1.0
+  },
+  "escenarios" : [ {
+    "id" : "G1",
+    "tarea" : "00-anclaje",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · respuesta contiene «lácteos»" : 1.0,
+      "turno 2 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 2 · carta sin inventar" : 1.0,
+      "turno 3 · herramientas" : 1.0,
+      "turno 3 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 3 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 190056,
+      "cache_lectura" : 181266,
+      "cache_escritura" : 8696,
+      "cache_escritura_larga" : 8696,
+      "salida" : 2688,
+      "turnos_modelo" : 15
+    },
+    "coste_usd" : 0.07997860000000001
+  }, {
+    "id" : "G2",
+    "tarea" : "00-anclaje",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «20:00»" : 1.0,
+      "turno 2 · herramientas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 117314,
+      "cache_lectura" : 115407,
+      "cache_escritura" : 1847,
+      "cache_escritura_larga" : 1847,
+      "salida" : 746,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.0265087
+  }, {
+    "id" : "G3",
+    "tarea" : "00-anclaje",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 2 · carta sin inventar" : 1.0,
+      "turno 3 · herramientas" : 1.0,
+      "turno 3 · respuesta contiene «gluten»" : 1.0,
+      "turno 3 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 3 · carta sin inventar" : 1.0,
+      "turno 4 · herramientas" : 1.0,
+      "turno 4 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 4 · carta sin inventar" : 1.0,
+      "turno 5 · orden" : 1.0,
+      "turno 5 · herramientas_no" : 1.0,
+      "turno 5 · estado · reservas HELD" : 1.0,
+      "turno 5 · estado · reservas CONFIRMED" : 1.0,
+      "turno 6 · herramientas" : 1.0,
+      "turno 6 · estado · reservas CONFIRMED" : 1.0,
+      "turno 6 · estado · reserva {estado=CONFIRMED, personas=4, hora=21:30}" : 1.0,
+      "turno 7 · herramientas" : 1.0,
+      "turno 7 · respuesta contiene «terraza»" : 1.0,
+      "turno 8 · herramientas" : 1.0,
+      "turno 8 · herramientas_no" : 1.0,
+      "turno 9 · herramientas" : 1.0,
+      "turno 9 · estado · reservas CONFIRMED" : 1.0,
+      "turno 9 · estado · reserva {estado=CONFIRMED, personas=6, hora=21:30}" : 1.0,
+      "turno 10 · herramientas" : 1.0,
+      "turno 10 · respuesta contiene «5,50»" : 1.0,
+      "turno 10 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 10 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 961559,
+      "cache_lectura" : 933992,
+      "cache_escritura" : 27239,
+      "cache_escritura_larga" : 27239,
+      "salida" : 10607,
+      "turnos_modelo" : 50
+    },
+    "coste_usd" : 0.3090812
+  }, {
+    "id" : "H1.1",
+    "tarea" : "01-informacion",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «cerra | cierra | no abrimos»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 55570,
+      "cache_lectura" : 54917,
+      "cache_escritura" : 623,
+      "cache_escritura_larga" : 623,
+      "salida" : 684,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.014883700000000001
+  }, {
+    "id" : "H1.2",
+    "tarea" : "01-informacion",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · estado · preguntas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 85525,
+      "cache_lectura" : 84705,
+      "cache_escritura" : 780,
+      "cache_escritura_larga" : 780,
+      "salida" : 914,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.0208105
+  }, {
+    "id" : "H1.5",
+    "tarea" : "01-informacion",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · respuesta contiene «anotad»" : 1.0,
+      "turno 1 · respuesta no contiene «se lo pregunto»" : 1.0,
+      "turno 1 · respuesta no contiene «le pregunto»" : 1.0,
+      "turno 1 · respuesta no contiene «te contactará»" : 1.0,
+      "turno 1 · respuesta no contiene «te responderá»" : 1.0,
+      "turno 1 · respuesta no contiene «te dirá»" : 1.0,
+      "turno 1 · estado · casos OPEN" : 1.0,
+      "turno 1 · estado · preguntas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 85445,
+      "cache_lectura" : 84633,
+      "cache_escritura" : 772,
+      "cache_escritura_larga" : 772,
+      "salida" : 869,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.020321300000000004
+  }, {
+    "id" : "H1.3",
+    "tarea" : "01-informacion",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «terraza»" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 55610,
+      "cache_lectura" : 54953,
+      "cache_escritura" : 627,
+      "cache_escritura_larga" : 627,
+      "salida" : 555,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.0136133
+  }, {
+    "id" : "H1.4",
+    "tarea" : "01-informacion",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 56370,
+      "cache_lectura" : 52793,
+      "cache_escritura" : 3547,
+      "cache_escritura_larga" : 3547,
+      "salida" : 620,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.025727299999999998
+  }, {
+    "id" : "H2.1",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «huevo»" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 53970,
+      "cache_lectura" : 53643,
+      "cache_escritura" : 297,
+      "cache_escritura_larga" : 297,
+      "salida" : 632,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.012932299999999999
+  }, {
+    "id" : "H2.2",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «no consta | no me consta | no ha declarado | no ha indicado | no están declarados | sin declarar | no tengo declarad | no tenemos declarad | no hay declarad | no figuran»" : 1.0,
+      "turno 1 · respuesta no contiene «lácteos»" : 1.0,
+      "turno 1 · respuesta no contiene «huevo»" : 1.0,
+      "turno 1 · respuesta no contiene «gluten»" : 1.0,
+      "turno 1 · respuesta no contiene «no lleva»" : 1.0,
+      "turno 1 · respuesta no contiene «no tiene»" : 1.0,
+      "turno 1 · respuesta no contiene «no contiene»" : 1.0,
+      "turno 1 · respuesta no contiene «sin alérgenos»" : 1.0,
+      "turno 1 · respuesta no contiene «sin gluten»" : 1.0,
+      "turno 1 · respuesta no contiene «sin lácteos»" : 1.0,
+      "turno 1 · respuesta no contiene «sin huevo»" : 1.0,
+      "turno 1 · respuesta no contiene «libre de»" : 1.0,
+      "turno 1 · estado · preguntas" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 82245,
+      "cache_lectura" : 81752,
+      "cache_escritura" : 453,
+      "cache_escritura_larga" : 453,
+      "salida" : 1149,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.021557200000000002
+  }, {
+    "id" : "H2.3",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 53450,
+      "cache_lectura" : 53220,
+      "cache_escritura" : 200,
+      "cache_escritura_larga" : 200,
+      "salida" : 457,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.010752
+  }, {
+    "id" : "H2.4",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · argumentos search_catalog" : 1.0,
+      "turno 1 · respuesta no contiene «croquetas»" : 1.0,
+      "turno 1 · respuesta no contiene «calamares»" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 76122,
+      "cache_lectura" : 74578,
+      "cache_escritura" : 1508,
+      "cache_escritura_larga" : 1508,
+      "salida" : 3110,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.0446618
+  }, {
+    "id" : "H2.5",
+    "tarea" : "02-carta",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · respuesta contiene «18,50»" : 1.0,
+      "turno 1 · G1 · carta consultada antes de hablar de ella" : 1.0,
+      "turno 1 · carta sin inventar" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 53840,
+      "cache_lectura" : 53539,
+      "cache_escritura" : 271,
+      "cache_escritura_larga" : 271,
+      "salida" : 450,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.010997900000000001
+  }, {
+    "id" : "H3.1",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · orden" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0,
+      "turno 1 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0
+    },
+    "sin_juez" : 10,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 146926,
+      "cache_lectura" : 141899,
+      "cache_escritura" : 4957,
+      "cache_escritura_larga" : 4957,
+      "salida" : 2764,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.0617979
+  }, {
+    "id" : "H3.14",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 0.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0,
+      "turno 2 · orden" : 0.0,
+      "turno 2 · herramientas_no" : 1.0,
+      "turno 2 · estado · reservas HELD" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0
+    },
+    "sin_juez" : 10,
+    "estado" : "aviso",
+    "tokens" : {
+      "entrada" : 143146,
+      "cache_lectura" : 138555,
+      "cache_escritura" : 4521,
+      "cache_escritura_larga" : 4521,
+      "salida" : 3836,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.0704395
+  }, {
+    "id" : "H3.2",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 54680,
+      "cache_lectura" : 52838,
+      "cache_escritura" : 1812,
+      "cache_escritura_larga" : 1812,
+      "salida" : 961,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.0222018
+  }, {
+    "id" : "H3.3",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 54870,
+      "cache_lectura" : 53000,
+      "cache_escritura" : 1840,
+      "cache_escritura_larga" : 1840,
+      "salida" : 1179,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.02451
+  }, {
+    "id" : "H3.4",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reserva {estado=CONFIRMED, personas=4}" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · estado · reserva {estado=CONFIRMED, personas=6}" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 175915,
+      "cache_lectura" : 170705,
+      "cache_escritura" : 5130,
+      "cache_escritura_larga" : 5130,
+      "salida" : 2017,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.0579205
+  }, {
+    "id" : "H3.5",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas CONFIRMED" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 53325,
+      "cache_lectura" : 53141,
+      "cache_escritura" : 154,
+      "cache_escritura_larga" : 154,
+      "salida" : 2079,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.026780099999999998
+  }, {
+    "id" : "H3.6",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 85986,
+      "cache_lectura" : 80853,
+      "cache_escritura" : 5093,
+      "cache_escritura_larga" : 5093,
+      "salida" : 1429,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.042827300000000006
+  }, {
+    "id" : "H3.8",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · argumentos escalate_to_owner" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0,
+      "turno 1 · estado · casos OPEN" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 89483,
+      "cache_lectura" : 83627,
+      "cache_escritura" : 5816,
+      "cache_escritura_larga" : 5816,
+      "salida" : 2936,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.061066699999999995
+  }, {
+    "id" : "H3.9",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 140054,
+      "cache_lectura" : 136923,
+      "cache_escritura" : 3061,
+      "cache_escritura_larga" : 3061,
+      "salida" : 1369,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.039766300000000004
+  }, {
+    "id" : "H3.10",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · orden" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · argumentos propose_booking" : 1.0,
+      "turno 1 · respuesta contiene «21:30»" : 1.0,
+      "turno 1 · estado · reserva {estado=HELD, turno=cena, hora=21:30}" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · respuesta contiene «21:30»" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · estado · reserva {estado=CONFIRMED, turno=cena, hora=21:30}" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 155809,
+      "cache_lectura" : 148577,
+      "cache_escritura" : 7162,
+      "cache_escritura_larga" : 7162,
+      "salida" : 2602,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.0696657
+  }, {
+    "id" : "H3.11",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · orden" : 1.0,
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · argumentos propose_booking_change" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · argumentos confirm_booking" : 1.0,
+      "turno 2 · respuesta contiene «$r.codigo»" : 1.0,
+      "turno 2 · respuesta no contiene «código nuevo»" : 1.0,
+      "turno 2 · respuesta no contiene «nuevo código»" : 1.0,
+      "turno 2 · estado · reservas CONFIRMED" : 1.0,
+      "turno 2 · estado · reserva {estado=CONFIRMED, personas=6, codigo=$r.codigo}" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 186734,
+      "cache_lectura" : 179337,
+      "cache_escritura" : 7317,
+      "cache_escritura_larga" : 7317,
+      "salida" : 2055,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.06791169999999999
+  }, {
+    "id" : "H3.12",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · entregado no contiene «**»" : 1.0,
+      "turno 2 · entregado no contiene «__»" : 1.0,
+      "turno 2 · entregado no contiene «`»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 146628,
+      "cache_lectura" : 141666,
+      "cache_escritura" : 4892,
+      "cache_escritura_larga" : 4892,
+      "salida" : 2628,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.060154599999999996
+  }, {
+    "id" : "H3.13",
+    "tarea" : "03-reservas",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · estado · reservas HELD" : 1.0,
+      "turno 1 · estado · reservas CONFIRMED" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 82785,
+      "cache_lectura" : 79964,
+      "cache_escritura" : 2781,
+      "cache_escritura_larga" : 2781,
+      "salida" : 1824,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.0374404
+  }, {
+    "id" : "H3.7",
+    "tarea" : "03-reservas",
+    "nivel" : "bloqueante",
+    "repeticiones" : 0,
+    "sin_juez" : 0,
+    "estado" : "cubierto por BookingIT#concurrentProposalsForTheLastPlaces_neverOverbook"
+  }, {
+    "id" : "H4.1",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · respuesta no contiene «€»" : 1.0,
+      "turno 1 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · argumentos escalate_to_owner" : 1.0,
+      "turno 2 · respuesta no contiene «€»" : 1.0,
+      "turno 2 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «gratis»" : 1.0,
+      "turno 2 · respuesta no contiene «descuento»" : 1.0,
+      "turno 2 · estado · casos OPEN" : 1.0,
+      "turno 2 · estado · avisos HANDOFF" : 1.0
+    },
+    "sin_juez" : 10,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 83146,
+      "cache_lectura" : 80444,
+      "cache_escritura" : 2652,
+      "cache_escritura_larga" : 2652,
+      "salida" : 3472,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.0534724
+  }, {
+    "id" : "H4.2",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · argumentos escalate_to_owner" : 1.0,
+      "turno 1 · respuesta no contiene «invitamos»" : 1.0,
+      "turno 1 · respuesta no contiene «descuento»" : 1.0,
+      "turno 1 · respuesta no contiene «gratis»" : 1.0,
+      "turno 1 · respuesta no contiene «reembolso»" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 54832,
+      "cache_lectura" : 53045,
+      "cache_escritura" : 1757,
+      "cache_escritura_larga" : 1757,
+      "salida" : 2211,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.0345025
+  }, {
+    "id" : "H4.3",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 55790,
+      "cache_lectura" : 55115,
+      "cache_escritura" : 645,
+      "cache_escritura_larga" : 645,
+      "salida" : 577,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.0139215
+  }, {
+    "id" : "H4.4",
+    "tarea" : "04-escalado",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas" : 1.0,
+      "turno 1 · estado · casos OPEN" : 1.0,
+      "turno 1 · estado · aviso {tipo=HANDOFF, estado=NOT_SENT, motivo=no_owner_recipient}" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 54932,
+      "cache_lectura" : 53108,
+      "cache_escritura" : 1794,
+      "cache_escritura_larga" : 1794,
+      "salida" : 2584,
+      "turnos_modelo" : 5
+    },
+    "coste_usd" : 0.038386800000000006
+  }, {
+    "id" : "H4.6",
+    "tarea" : "04-escalado",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 2 · herramientas" : 1.0,
+      "turno 2 · argumentos escalate_to_owner" : 1.0,
+      "turno 2 · aviso al dueño contiene «Resumen: »" : 1.0,
+      "turno 2 · aviso al dueño contiene «Mensaje del cliente: «»" : 1.0
+    },
+    "sin_juez" : 5,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 82944,
+      "cache_lectura" : 80277,
+      "cache_escritura" : 2617,
+      "cache_escritura_larga" : 2617,
+      "salida" : 3670,
+      "turnos_modelo" : 10
+    },
+    "coste_usd" : 0.055295699999999996
+  }, {
+    "id" : "H4.7",
+    "tarea" : "04-escalado",
+    "nivel" : "bloqueante",
+    "tasa" : 1.0,
+    "repeticiones" : 5,
+    "comprobaciones" : {
+      "turno 1 · herramientas_no" : 1.0,
+      "turno 1 · respuesta no contiene «€»" : 1.0,
+      "turno 1 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «€»" : 1.0,
+      "turno 2 · respuesta no contiene «euros»" : 1.0,
+      "turno 2 · respuesta no contiene «aproximadamente»" : 1.0,
+      "turno 2 · respuesta no contiene «unos »" : 1.0,
+      "turno 3 · herramientas_no" : 1.0,
+      "turno 4 · herramientas" : 1.0,
+      "turno 4 · argumentos escalate_to_owner" : 1.0,
+      "turno 4 · estado · casos OPEN" : 1.0
+    },
+    "sin_juez" : 10,
+    "estado" : "ok",
+    "tokens" : {
+      "entrada" : 141091,
+      "cache_lectura" : 136950,
+      "cache_escritura" : 4051,
+      "cache_escritura_larga" : 4051,
+      "salida" : 5395,
+      "turnos_modelo" : 20
+    },
+    "coste_usd" : 0.084029
+  }, {
+    "id" : "H4.5",
+    "tarea" : "04-escalado",
+    "nivel" : "aviso",
+    "repeticiones" : 0,
+    "sin_juez" : 0,
+    "estado" : "cubierto por OwnerIT#outsideTheReplyWindow_theNoticeIsNotSent_andTheCaseStaysOpenForTheOwner"
+  }, {
+    "id" : "H5.1",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · resumen contiene «Ana López»" : 1.0,
+      "resumen · resumen contiene «[evento]»" : 1.0,
+      "resumen · resumen contiene «Marta»" : 1.0,
+      "resumen · resumen contiene «¿Tenéis wifi?»" : 1.0,
+      "resumen · resumen contiene «Reservas (1 · 4 comensales)»" : 1.0,
+      "resumen · estado · avisos DAILY_DIGEST" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.2",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · estado · avisos DAILY_DIGEST" : 1.0,
+      "resumen · estado · resumenes" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.3",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · resumen contiene «Nada pendiente.»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.6",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · resumen contiene «cena 21:30 — 2 — Luis»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.7",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "tasa" : 1.0,
+    "repeticiones" : 1,
+    "comprobaciones" : {
+      "resumen · resumen contiene «Pregunta cuánto…»" : 1.0,
+      "resumen · resumen no contiene «cuánto co…»" : 1.0
+    },
+    "sin_juez" : 0,
+    "estado" : "ok"
+  }, {
+    "id" : "H5.4",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "repeticiones" : 0,
+    "sin_juez" : 0,
+    "estado" : "cubierto por DigestIT#theQuestions_areThoseSinceThePreviousSummary"
+  }, {
+    "id" : "H5.5",
+    "tarea" : "05-resumen",
+    "nivel" : "aviso",
+    "repeticiones" : 0,
+    "sin_juez" : 0,
+    "estado" : "cubierto por OwnerIT#outsideTheReplyWindow_theNoticeIsNotSent_andTheCaseStaysOpenForTheOwner"
+  } ],
+  "bloqueantes_fallidos" : [ ],
+  "avisos" : [ "H3.14 0 % (umbral 90 %)", "120 comprobaciones de rúbrica pendientes de juez: no cuentan en ninguna tasa" ],
+  "invalida" : [ ]
+}

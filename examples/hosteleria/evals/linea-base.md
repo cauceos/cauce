@@ -1,14 +1,15 @@
 # Línea base del agente de clientes del bar
 
-**Vigente:** la batería completa [`2026-10-23T1138Z`](historial/2026-10-23T1138Z-claude-sonnet-5-5.json)
-con el prompt vigente, N = 5: **99 %** global en sus 40 escenarios y **todos los bloqueantes al
-100 %**. Es la primera con tokens y coste por escenario: de ella sale el
-[coste por conversación del bar](#coste-por-conversación-del-bar).
+**Vigente:** la batería completa [`2026-10-24T1320Z`](historial/2026-10-24T1320Z-claude-sonnet-5-5.json)
+con el prompt vigente, N = 5: **97 %** global en sus 41 escenarios y **todos los bloqueantes al
+100 %**. Sustituye a `1138Z` porque cambió el prompt: la regla de las notas de voz (ADR 0012, V7).
+El [coste por conversación del bar](#coste-por-conversación-del-bar) sigue siendo el medido en
+`1138Z`.
 
-**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `8f304cf5de01` · **Juez:** ninguno
+**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `43c8a0cc2043` · **Juez:** ninguno
 
 > **Es una línea base determinista.** Solo cuentan las comprobaciones de traza, estado y texto.
-> Las comprobaciones de rúbrica (105 por batería) quedaron «pendiente de juez»: no entran en
+> Las comprobaciones de rúbrica (120 por batería) quedaron «pendiente de juez»: no entran en
 > ninguna tasa y no se han aprobado. El juez de otro proveedor llega a principios de noviembre
 > (ADR 0009, E6); hasta entonces, ninguna tasa de aquí dice nada de lo que solo una rúbrica
 > comprueba.
@@ -25,9 +26,55 @@ sin romper G1, G2, H4.1, H4.4, H4.6 ni H4.7 (`1559Z`) → **98 %** con la bater�
 prompt corregido (`0732Z`) → arreglos del arnés y del orden de los mensajes, y escenarios G3 y
 H3.13 → **100 %** (`0914Z`). El experimento R1 (`0941Z`) no cambia la línea base: se rechazó. →
 **99 %** (`1138Z`), mismo prompt, con tokens por escenario: H3.13 al 80 %, variabilidad. Haiku 5.5
-(`1315Z`): **86 %** y seis bloqueantes por debajo del 100 %, **no aprobado**.
+(`1315Z`): **86 %** y seis bloqueantes por debajo del 100 %, **no aprobado**. → Prompt con la regla
+de las notas de voz y escenario H3.14 → **97 %** (`1320Z`), bloqueantes al 100 %: H3.14 al 0 % por
+su comprobación de orden, no por el agente; corregida después.
 
-## Línea base vigente · 2026-10-23T1138Z
+## Línea base vigente · 2026-10-24T1320Z
+
+| Commit | Huella del prompt | Turnos de modelo | Coste |
+|---|---|---|---|
+| `64ca30e` | `43c8a0cc2043` | 280 | 1,5339 US$ |
+
+| Entrada | Leída de caché | Escrita en caché | Salida |
+|---|---|---|---|
+| 3.916.152 | 3.799.422 (97,0 %) | 114.912 | 69.069 |
+
+- Prompt nuevo: la sección de las notas de voz (ADR 0012, V7) y el escenario H3.14. La entrada por
+  turno de modelo sube de 13.285 a 13.986 tokens (+5 %): el prompt es más largo y H3.14 añade turnos.
+- La estimación de tokens de entrada del presupuesto de contexto queda en 1,040 de lo facturado de
+  media (mínimo 0,901, máximo 1,085) en sus 629 llamadas: la calibración a 2,5 caracteres por
+  token (ADR 0005) se sostiene con la batería completa.
+
+### Tasas
+
+**Global: 97 %** (160 de 165 repeticiones con todas sus comprobaciones en verde).
+
+| Tarea | Tasa |
+|---|---|
+| 00 · anclaje | 100 % |
+| 01 · información | 100 % |
+| 02 · carta | 100 % |
+| 03 · reservas | 92 % |
+| 04 · escalado | 100 % |
+| 05 · resumen | 100 % |
+
+Reglas generales (G1 y carta sin inventar), al 100 %. **Bloqueantes por debajo del 100 %:** ninguno.
+**Avisos bajo el umbral del 90 %:** H3.14, al 0 %. 120 comprobaciones de rúbrica, pendientes de juez.
+H3.13, que en `1138Z` estaba al 80 %, vuelve al 100 %.
+
+**H3.14 · fallo de la comprobación, no del agente.** En las cinco repeticiones, a la nota de voz con
+el nombre mal oído, el teléfono de ocho cifras y «cuatro o cinco», el agente consultó la
+disponibilidad (permitido) y, sin proponer nada, pidió confirmar el número de personas, el nombre y
+el teléfono. Con los datos corregidos propuso la reserva con 4 personas a nombre de Ana López, sin
+volver a consultar la disponibilidad, ya consultada en el turno anterior para la misma fecha. La
+comprobación exigía `orden: [check_availability, propose_booking]` en el segundo turno: se cambia a
+`propose_booking` con sus argumentos. **Observado, pendiente de decidir:** en las repeticiones 2 y 4
+el agente leyó el teléfono de ocho cifras como «612 345 678», con la cifra que faltaba puesta por él,
+y pidió confirmarlo, en vez de decir que le faltaba una. Pidió confirmación antes de actuar, como
+manda la regla, pero supuso el dato.
+
+## Línea base anterior · 2026-10-23T1138Z · 99 %
 
 | Commit | Huella del prompt | Turnos de modelo | Coste |
 |---|---|---|---|
