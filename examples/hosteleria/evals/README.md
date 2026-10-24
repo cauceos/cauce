@@ -24,7 +24,9 @@ Necesita la clave del modelo del agente (`ANTHROPIC_API_KEY`). El modelo del age
 llevan el modelo, cuyo precio sale de `precios.yaml`. Cada ejecución se compara con la última del
 mismo modelo; la primera de un modelo, con la última de cualquiera, y el informe dice con cuál. El juez (E6) es opcional: sin él, o
 sin calibrar, la ejecución es solo de las comprobaciones deterministas y cada rúbrica se informa
-«pendiente de juez», nunca como aprobada ni en ninguna tasa. Antes de empezar
+«pendiente de juez», nunca como aprobada ni en ninguna tasa. Lo primero que imprime es el commit
+del que se ejecuta y si está al día con `origin/main` (lo descarga antes); un árbol por detrás mide
+otro prompt y otros escenarios, y lo avisa: actualízalo antes de una línea base. Antes de empezar
 estima el coste y, si supera `-Pevals.limite` (10 US$ por defecto), se para hasta que se confirme.
 El informe queda en `backend/cauce-evals/build/evals/` (con las trazas completas, fuera de git), y el
 resumen de cada ejecución en `historial/`, para commitearlo. No forma parte de `./gradlew build` ni

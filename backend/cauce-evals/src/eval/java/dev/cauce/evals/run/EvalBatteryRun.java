@@ -20,6 +20,7 @@ import dev.cauce.evals.judge.Judge;
 import dev.cauce.evals.judge.LlmJudge;
 import dev.cauce.evals.report.Aggregation;
 import dev.cauce.evals.report.EstimateRatios;
+import dev.cauce.evals.report.Provenance;
 import dev.cauce.evals.report.Report;
 import dev.cauce.evals.report.RunValidity;
 import dev.cauce.evals.report.RunSummary;
@@ -144,6 +145,7 @@ class EvalBatteryRun {
 
     @Test
     void run() throws Exception {
+        Provenance provenance = GitState.announce(SETTINGS.repoRoot());
         List<Scenario> selected = select(new ScenarioLoader().loadAll(SETTINGS.evalsDir()));
         assertThat(selected).as("no scenario matches " + SETTINGS.selection()).isNotEmpty();
         List<Scenario> conversationsToRun = selected.stream().filter(s -> s.kind() == Kind.CONVERSATION).toList();
@@ -231,10 +233,9 @@ class EvalBatteryRun {
                         tokens.output())
                 + judgePrice.map(j -> j.cost(tokens.judgeInput(), 0, 0, tokens.judgeOutput())).orElse(0.0)).orElse(null);
         String now = clock.instant().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm'Z'"));
-        String[] git = git();
         RunSummary summary = Aggregation.summarize(runs, covered, SETTINGS.warningThreshold(),
                 SETTINGS.maxExecutionFailures(), new Aggregation.Meta(
-                now, git[0], Boolean.parseBoolean(git[1]), SETTINGS.agentProvider() + "/" + SETTINGS.agentModel(),
+                now, provenance.commit(), provenance.dirty(), SETTINGS.agentProvider() + "/" + SETTINGS.agentModel(),
                 judge.map(LlmJudge::describe).orElse("ninguno"), calibrationText, footprint(), n, SETTINGS.selection(),
                 complete, tokens, cost, prices.version(), agentPrice.orElse(null)));
         writeOutputs(summary, previous, runs, now);
@@ -425,25 +426,6 @@ class EvalBatteryRun {
             sha.update(Files.readAllBytes(file));
         }
         return HexFormat.of().formatHex(sha.digest());
-    }
-
-    /** The commit and whether the tree has uncommitted changes; "desconocido" without git. */
-    private static String[] git() {
-        try {
-            String head = command("git", "rev-parse", "HEAD").strip();
-            String status = command("git", "status", "--porcelain");
-            return new String[] {head, String.valueOf(!status.isBlank())};
-        } catch (Exception e) {
-            return new String[] {"desconocido", "false"};
-        }
-    }
-
-    private static String command(String... args) throws Exception {
-        Process process = new ProcessBuilder(args).directory(SETTINGS.repoRoot().toFile()).redirectErrorStream(true)
-                .start();
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        process.waitFor();
-        return output;
     }
 
     private static boolean sameTools(List<String> a, List<String> b) {
