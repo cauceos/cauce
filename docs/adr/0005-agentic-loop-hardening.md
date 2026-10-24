@@ -147,7 +147,9 @@ server cut the request without saying so.
   estimate next to the input tokens the provider billed (the same count the usage ledger
   records). The metric `cauce.orchestration.llm.input_tokens.estimate_ratio` (estimate over
   billed, by provider and model, with objectives at 0.8 and 1.2) shows how far it drifts, and a
-  call off by more than 20 % either way logs a WARN with the counts, never content. The constants
+  call off by more than 20 % either way logs a WARN with the counts, never content: at most one per
+  model an hour, with the number of deviating calls left out since the previous one. An eval run
+  writes the same comparison per call (`estimaciones.csv`) and by model at the end of its report. The constants
   above are revised from that metric, not by guess.
 
 ## References

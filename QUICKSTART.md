@@ -24,10 +24,9 @@ same machine in three runs: the ≈5 GB download is all the difference, so on a 
 budget 30–40 minutes. Afterwards every path starts in under a minute: images, the model and
 the database are kept in Docker volumes.
 
-With a real Anthropic key, path A from a fresh clone, on a machine whose Docker already held the
-base images, took **2 min 03 s** to the agent's answer, and the audit chain came out VALID in
-both checks: 7 of 7 entries, signatures verified by the instance and by the independent
-verifier.
+With a real Anthropic key, path A from a fresh clone takes **~2 min with the images cached; ~3 min
+cold**, and the audit chain came out VALID in both checks: 7 of 7 entries, signatures verified by
+the instance and by the independent verifier.
 
 ## Requirements
 
@@ -264,7 +263,8 @@ Copy `.env.example` to `.env` to override defaults:
 - `OLLAMA_CONTEXT_LENGTH` (default `4096`, Ollama's own) — the context length Ollama serves. Compose
   gives it to the containerized Ollama and to the app, which sizes its requests to it; with your
   own Ollama, it must equal what that server is started with. 16384 takes ≈0.5 GB more RAM
-  (measured with `qwen2.5:3b`); 32768, the hospitality pack's setting, about twice that.
+  (measured with `qwen2.5:3b`); 32768, the hospitality pack's setting, about twice that (an
+  estimate, not measured).
 - `API_PORT` (default `8080`), `OLLAMA_PORT` (default `11434`) — host ports, next to the
   existing `POSTGRES_PORT=5433`, `REDIS_PORT=6379`, `ADMINER_PORT=8081`.
 - `COMPOSE_PROJECT_NAME` — only to tell apart two clones in directories of the same name.

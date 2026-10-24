@@ -65,7 +65,7 @@ What arrives:
 | Turn latency | `cauce_orchestration_turn_latency` | `tenant_id`, `agent_id` |
 | Model calls / answers / failures | `cauce_orchestration_llm_calls` / `_llm_responses` / `_llm_failures` | `provider`, `model` (`finish_reason`; `error_type`, the exception's type) |
 | Tokens | `cauce_orchestration_llm_tokens` | `provider`, `model`, `kind` |
-| Input estimate over billed input | `cauce_orchestration_llm_input_tokens_estimate_ratio` | `provider`, `model`; objectives 0.8 and 1.2, a WARN beyond them (ADR 0005, amendment of 2026-10-24) |
+| Input estimate over billed input | `cauce_orchestration_llm_input_tokens_estimate_ratio` | `provider`, `model`; objectives 0.8 and 1.2, a WARN beyond them, at most one per model an hour (ADR 0005, amendment of 2026-10-24) |
 | Gaps between a person's messages | `cauce_conversation_customer_messages` | `since_previous`, `tenant_id`, `agent_id` |
 | Queue | `cauce_queue_pending`, `cauce_queue_oldest_due_age` (s) | — |
 | Audit outbox | `cauce_audit_outbox_pending`, `cauce_audit_outbox_oldest_age` (s) | — |

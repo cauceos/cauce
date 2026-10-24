@@ -24,6 +24,7 @@ import dev.cauce.orchestration.LogSafe;
 import dev.cauce.orchestration.audit.ConductAuditEvents;
 import dev.cauce.orchestration.context.ContextBuilder;
 import dev.cauce.orchestration.context.InputTokenEstimate;
+import dev.cauce.orchestration.context.InputTokenEstimateWarnings;
 import dev.cauce.orchestration.context.LlmInvocationContext;
 import dev.cauce.orchestration.context.ModelContextWindow;
 import dev.cauce.orchestration.events.ContextAssembled;
@@ -53,6 +54,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -133,6 +135,7 @@ public class OrchestratorService {
     private final SpendGuard spendGuard;
     private final MessageTracing tracing;
     private final Clock clock;
+    private final InputTokenEstimateWarnings estimateWarnings = new InputTokenEstimateWarnings();
 
     public OrchestratorService(ConversationGateway conversationGateway,
                                LlmProviderRegistry llmProviderRegistry,
@@ -273,13 +276,16 @@ public class OrchestratorService {
                     response.usage().totalTokens(), estimatedInput, Instant.now()));
             if (InputTokenEstimate.exceeds(estimatedInput, response.usage().inputTokens())) {
                 // ADR 0005, amendment of 2026-10-24: the context budget holds only if its estimate
-                // tracks what the provider bills. Counts only, never content.
-                log.warn("Input token estimate off by more than {}%: estimated={} billed={} deviation={}% "
-                                + "provider={} model={} round={}",
-                        Math.round(InputTokenEstimate.MAX_DEVIATION * 100), estimatedInput,
-                        response.usage().inputTokens(),
-                        Math.round(InputTokenEstimate.deviation(estimatedInput, response.usage().inputTokens()) * 100),
-                        provider.id(), agent.modelName(), iteration);
+                // tracks what the provider bills. Counts only, never content; once per model an hour.
+                OptionalInt admitted = estimateWarnings.admit(provider.id(), agent.modelName());
+                if (admitted.isPresent()) {
+                    log.warn("Input token estimate off by more than {}%: estimated={} billed={} deviation={}% "
+                                    + "provider={} model={} round={} (deviating calls not logged in the last hour: {})",
+                            Math.round(InputTokenEstimate.MAX_DEVIATION * 100), estimatedInput,
+                            response.usage().inputTokens(),
+                            Math.round(InputTokenEstimate.deviation(estimatedInput, response.usage().inputTokens()) * 100),
+                            provider.id(), agent.modelName(), iteration, admitted.getAsInt());
+                }
             }
 
             if (response.toolCalls().isEmpty()) {
