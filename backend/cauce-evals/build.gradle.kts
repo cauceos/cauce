@@ -39,6 +39,8 @@ dependencies {
     evalImplementation(project(":cauce-business"))
     evalImplementation(project(":cauce-tenancy"))
     evalImplementation(project(":cauce-orchestration"))
+    // Each model call's input estimate against its bill (ADR 0005, amendment of 2026-10-24).
+    evalImplementation(project(":cauce-orchestration-events"))
     // What a channel delivers is the agent's text rendered for it (ReplyMarkdown).
     evalImplementation(project(":cauce-channels"))
     evalImplementation("com.fasterxml.jackson.core:jackson-databind")

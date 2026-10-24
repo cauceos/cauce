@@ -19,6 +19,7 @@ import dev.cauce.evals.judge.Calibration;
 import dev.cauce.evals.judge.Judge;
 import dev.cauce.evals.judge.LlmJudge;
 import dev.cauce.evals.report.Aggregation;
+import dev.cauce.evals.report.EstimateRatios;
 import dev.cauce.evals.report.Report;
 import dev.cauce.evals.report.RunValidity;
 import dev.cauce.evals.report.RunSummary;
@@ -135,6 +136,7 @@ class EvalBatteryRun {
     @Autowired private Environment environment;
     @Autowired private Clock clock;
     @Autowired @Qualifier("adminDataSource") private DataSource adminDataSource;
+    @Autowired private EvalInfrastructure.EstimateRecorder estimates;
 
     @Test
     void run() throws Exception {
@@ -371,8 +373,11 @@ class EvalBatteryRun {
         String stamp = now.replace(":", "");
         Path out = SETTINGS.repoRoot().resolve("backend/cauce-evals/build/evals").resolve(stamp);
         Files.createDirectories(out);
-        String markdown = Report.markdown(summary, previous, runs);
+        // The input estimate against the bill, by model, at the end of the report; every call in a file.
+        String markdown = Report.markdown(summary, previous, runs) + "\n"
+                + EstimateRatios.markdown(EstimateRatios.summarize(estimates.calls));
         Files.writeString(out.resolve("informe.md"), markdown, StandardCharsets.UTF_8);
+        Files.writeString(out.resolve("estimaciones.csv"), EstimateRatios.csv(estimates.calls), StandardCharsets.UTF_8);
         Files.writeString(out.resolve("resumen.json"), Report.json(summary), StandardCharsets.UTF_8);
         Files.writeString(out.resolve("trazas.txt"), runs.stream()
                 .map(r -> "== " + r.scenario().id() + " #" + r.repetition() + "\n" + r.transcript())
