@@ -67,7 +67,8 @@ pasa.
         herramientas: [list_my_bookings, propose_booking_change]   # en este turno, en cualquier orden
         orden: [check_availability, propose_booking]               # en este orden (subsecuencia)
         herramientas_no: [confirm_booking]                         # no llamadas en este turno
-        argumentos: {propose_booking_change: {code: $r.codigo}}    # subconjunto de la entrada
+        argumentos: {propose_booking_change: {code: $r.codigo}}    # subconjunto de la entrada; una fecha
+                                                                   # entre llaves, {+1}, como YYYY-MM-DD
         respuesta_contiene: ["21:30"]                              # sin distinguir mayúsculas
         respuesta_contiene: ["no consta | no me consta"]           # basta una de las alternativas
         respuesta_no_contiene: ["código nuevo"]

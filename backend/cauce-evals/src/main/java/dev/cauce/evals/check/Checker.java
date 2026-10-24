@@ -5,6 +5,7 @@ import dev.cauce.evals.check.TurnTrace.ObservedCase;
 import dev.cauce.evals.check.TurnTrace.ObservedNotice;
 import dev.cauce.evals.check.TurnTrace.ObservedState;
 import dev.cauce.evals.check.TurnTrace.ToolUse;
+import dev.cauce.evals.scenario.RelativeDates;
 import dev.cauce.evals.scenario.Scenario.Expectation;
 import dev.cauce.evals.scenario.Scenario.ExpectedState;
 import java.time.LocalDate;
@@ -25,6 +26,9 @@ import java.util.regex.Pattern;
 public final class Checker {
 
     private static final Pattern VARIABLE = Pattern.compile("\\$([a-z][a-z0-9_]*)\\.codigo");
+
+    /** An argument that is a relative date in braces, {@code "{+1}"}: the tools take it as YYYY-MM-DD. */
+    private static final Pattern DATE_ARGUMENT = Pattern.compile("\\{(" + RelativeDates.SPEC.pattern() + ")\\}");
 
     private final Map<String, String> codes;
     private final Function<String, LocalDate> dates;
@@ -76,7 +80,7 @@ public final class Checker {
             return CheckResult.fail(name, tool + " no se llamó");
         }
         for (ToolUse call : calls) {
-            if (expected.entrySet().stream().allMatch(entry -> sameValue(resolve(entry.getValue()),
+            if (expected.entrySet().stream().allMatch(entry -> sameValue(argument(entry.getValue()),
                     call.input().get(entry.getKey())))) {
                 return CheckResult.pass(name, "entrada " + call.input());
             }
@@ -195,6 +199,21 @@ public final class Checker {
         }
         m.appendTail(out);
         return out.toString();
+    }
+
+    /**
+     * An expected argument: its variables resolved and, if it is a relative date in braces
+     * ({@code "{+1}"}, {@code "{proximo_sabado}"}), that date in the business's calendar as YYYY-MM-DD.
+     */
+    private Object argument(Object value) {
+        Object resolved = resolve(value);
+        if (resolved instanceof String text) {
+            Matcher date = DATE_ARGUMENT.matcher(text.strip());
+            if (date.matches()) {
+                return dates.apply(date.group(1)).toString();
+            }
+        }
+        return resolved;
     }
 
     private String resolve(String value) {

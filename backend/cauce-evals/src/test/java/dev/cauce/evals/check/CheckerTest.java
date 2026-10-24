@@ -55,6 +55,20 @@ class CheckerTest {
     }
 
     @Test
+    void aDateArgument_inBraces_isTheRelativeDate_asTheToolTakesIt() {
+        TurnTrace asked = new TurnTrace("Mesa para dos mañana",
+                List.of(new ToolUse("check_availability", Map.of("date", "2026-10-23"), "{}")), "", null, null,
+                change.state());
+
+        assertThat(checker.check("turno 1", expectation(null, null, null,
+                Map.of("check_availability", Map.of("date", "{+1}")), null, null, null), asked))
+                .extracting(CheckResult::outcome).containsExactly(Outcome.PASS);
+        assertThat(checker.check("turno 1", expectation(null, null, null,
+                Map.of("check_availability", Map.of("date", "{proximo_sabado}")), null, null, null), asked))
+                .extracting(CheckResult::outcome).containsExactly(Outcome.FAIL);
+    }
+
+    @Test
     void theState_isMatchedInItsVocabulary_countsByStatus_andRelativeDates() {
         ExpectedState state = new ExpectedState(Map.of("CONFIRMED", 1, "HELD", 1),
                 Map.of("estado", "HELD", "personas", 6, "codigo", "$r.codigo", "fecha", "proximo_sabado", "hora", "21:30"),

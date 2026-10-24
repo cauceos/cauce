@@ -216,3 +216,52 @@
         estado: {reservas: {HELD: 0, CONFIRMED: 0}}
         rubrica: "Antes de reservar pregunta si es hoy o el de la semana que viene, con la fecha concreta de cada uno, y no propone ninguna reserva. Si ese día no hay turno de cena, lo dice."
   nota: "El cliente nombra el día de la semana en que se ejecuta la batería, así que la ambigüedad es la misma cualquier día. Domingo y lunes no hay cena: la respuesta correcta es decirlo, y tampoco propone nada."
+
+- id: H3.15
+  titulo: «Mañana» en una nota de voz es el día siguiente al de hoy, nunca uno calculado de memoria
+  nivel: bloqueante
+  datos: bar-ejemplo
+  origen: prueba real del 2026-10-24 (un sábado, el agente entendió «mañana viernes 23» y consultó una fecha pasada)
+  turnos:
+    - cliente: "Quería reservar para dos, mañana a las dos y media, a nombre de Ana."
+      nota_de_voz: true
+      espera:
+        argumentos: {check_availability: {date: "{+1}"}}
+        herramientas_no: [confirm_booking]
+        estado: {reservas: {CONFIRMED: 0}}
+  nota: "Se ejecuta con el reloj real del día: «mañana» es hoy + 1 en la zona del bar. Si mañana es lunes, el bar cierra, pero la consulta de disponibilidad es la misma."
+
+- id: H3.16
+  titulo: «Pasado mañana» es hoy + 2
+  nivel: bloqueante
+  datos: bar-ejemplo
+  origen: prueba real del 2026-10-24 (fechas relativas)
+  turnos:
+    - cliente: "¿Tenéis mesa para cuatro pasado mañana?"
+      espera:
+        argumentos: {check_availability: {date: "{+2}"}}
+        herramientas_no: [propose_booking, confirm_booking]
+
+- id: H3.17
+  titulo: «Este <día de la semana>» es el próximo a partir de hoy
+  nivel: bloqueante
+  datos: bar-ejemplo
+  origen: prueba real del 2026-10-24 (fechas relativas)
+  turnos:
+    - cliente: "Queremos mesa para tres este {+3:dia_semana}, ¿hay sitio?"
+      espera:
+        argumentos: {check_availability: {date: "{+3}"}}
+        herramientas_no: [propose_booking, confirm_booking]
+  nota: "El día se nombra tres días después del de hoy, así que nunca es hoy (eso es H3.13) y solo hay una lectura: el de esta semana. Cualquier día que se ejecute, «este viernes», «este martes»…"
+
+- id: H3.18
+  titulo: «El <día de la semana> que viene» es el próximo después de hoy
+  nivel: bloqueante
+  datos: bar-ejemplo
+  origen: prueba real del 2026-10-24 (fechas relativas)
+  turnos:
+    - cliente: "¿Tenéis mesa para dos el {+6:dia_semana} que viene?"
+      espera:
+        argumentos: {check_availability: {date: "{+6}"}}
+        herramientas_no: [propose_booking, confirm_booking]
+  nota: "Seis días después de hoy: el primero con ese nombre, sin que sea hoy ni el de dentro de dos semanas. Dicho un domingo, «el sábado que viene»."
