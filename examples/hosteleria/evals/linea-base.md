@@ -1,12 +1,23 @@
 # Línea base del agente de clientes del bar
 
-**Vigente:** la batería completa [`2026-10-24T1320Z`](historial/2026-10-24T1320Z-claude-sonnet-5-5.json)
-con el prompt vigente, N = 5: **97 %** global en sus 41 escenarios y **todos los bloqueantes al
-100 %**. Sustituye a `1138Z` porque cambió el prompt: la regla de las notas de voz (ADR 0012, V7).
-El [coste por conversación del bar](#coste-por-conversación-del-bar) sigue siendo el medido en
-`1138Z`.
+**Vigente: ninguna con el prompt actual** (huella `1600d77bc9ac`, desde `1d822ee`: la regla de no
+completar por su cuenta un teléfono, un nombre o un alérgeno mal oídos, y H3.14 bloqueante). La
+saldrá de la próxima batería completa. Hasta entonces, la última medida es
+[`2026-10-24T1320Z`](historial/2026-10-24T1320Z-claude-sonnet-5-5.json), N = 5: **97 %** global en
+sus 41 escenarios y **todos los bloqueantes al 100 %**, con el prompt anterior (huella
+`43c8a0cc2043`, commit `64ca30e`: la regla de las notas de voz, ADR 0012, V7) y con la versión de
+H3.14 de ese commit. Sustituyó a `1138Z` porque cambió el prompt. El
+[coste por conversación del bar](#coste-por-conversación-del-bar) sigue siendo el medido en `1138Z`.
 
-**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `43c8a0cc2043` · **Juez:** ninguno
+> **Corrección.** Esta página dio `1320Z` como medida «con el prompt vigente». No lo es: se ejecutó
+> desde un worktree parado en `64ca30e`, y el prompt cambió después, en `1d822ee`. Lo mismo vale
+> para el subconjunto `1422Z` (H3.14, G1, H3.1 y H3.4, N = 5), ejecutado desde ese mismo commit con
+> cambios sin commitear, que no entra en el historial: midió el H3.14 antiguo, todavía aviso y con
+> la comprobación de orden, y por eso dio H3.14 al 0 %. Desde ahora el arnés imprime al empezar el
+> commit del que se ejecuta y avisa si está por detrás de `origin/main`.
+
+**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt de `1320Z`:** huella `43c8a0cc2043` (el
+actual es `1600d77bc9ac`) · **Juez:** ninguno
 
 > **Es una línea base determinista.** Solo cuentan las comprobaciones de traza, estado y texto.
 > Las comprobaciones de rúbrica (120 por batería) quedaron «pendiente de juez»: no entran en
@@ -28,9 +39,10 @@ H3.13 → **100 %** (`0914Z`). El experimento R1 (`0941Z`) no cambia la línea b
 **99 %** (`1138Z`), mismo prompt, con tokens por escenario: H3.13 al 80 %, variabilidad. Haiku 5.5
 (`1315Z`): **86 %** y seis bloqueantes por debajo del 100 %, **no aprobado**. → Prompt con la regla
 de las notas de voz y escenario H3.14 → **97 %** (`1320Z`), bloqueantes al 100 %: H3.14 al 0 % por
-su comprobación de orden, no por el agente; corregida después.
+su comprobación de orden, no por el agente; corregida después. → Prompt con la regla de no
+completar datos mal oídos y H3.14 bloqueante (`1d822ee`): **sin medir todavía**.
 
-## Línea base vigente · 2026-10-24T1320Z
+## Última línea base medida · 2026-10-24T1320Z · prompt anterior
 
 | Commit | Huella del prompt | Turnos de modelo | Coste |
 |---|---|---|---|
