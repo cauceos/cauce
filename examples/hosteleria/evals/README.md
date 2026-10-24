@@ -127,6 +127,34 @@ cliente, dar precios, tocar reservas ajenas, prometer en nombre del dueño, y G1
 las repeticiones. El resto es `aviso`: un umbral configurable (90 % por defecto) que avisa sin
 bloquear.
 
+## La transcripción de las notas de voz
+
+Aparte de la batería, el arnés mide cuánto se oye bien de notas de voz reales (ADR 0012): lee una
+carpeta con los audios y su `manifiesto.yaml`, los transcribe con el transcriptor de la instancia (un
+Whisper local, el del perfil `transcription`) y da, por nota, la tasa de error de palabras y si cada
+dato crítico se oyó bien. No arranca la aplicación ni llama al modelo: no cuesta nada.
+
+```bash
+docker compose --profile transcription up -d whisper whisper-init    # el Whisper local, en el puerto 8000
+cd backend
+./gradlew :cauce-evals:eval -Pevals.voz=<carpeta>   # [-Pevals.voz.url=http://localhost:8000/v1]
+                                                    # [-Pevals.voz.modelo=Systran/faster-whisper-small]
+                                                    # [-Pevals.voz.idioma=es]
+```
+
+```yaml
+- id: "01"
+  fichero: nota-01.ogg
+  transcripcion: "Buenas, ¿tenéis mesa para cuatro el sábado por la noche?"   # lo que se dice, palabra por palabra
+  datos_criticos: ["cuatro", "sábado", "noche"]                              # escritos como se dicen
+  notas: "con ruido de fondo"                                                # opcional
+```
+
+Se compara sin mayúsculas, acentos ni puntuación, y los números igual en letra que en cifra
+(«seis cero cero» y «600»). Un dato crítico está bien si sus palabras se oyen enteras y en orden. El
+informe va a `build/evals/voz-<fecha>/` y nunca al historial: cita lo que dicen las notas, y las
+notas reales no van al repositorio público.
+
 ## Ficheros
 
 | Fichero | Tarea |

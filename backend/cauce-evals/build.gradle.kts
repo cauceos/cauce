@@ -53,7 +53,8 @@ dependencies {
     evalRuntimeOnly("org.junit.platform:junit-platform-launcher")
     evalRuntimeOnly("org.postgresql:postgresql")
     evalRuntimeOnly(project(":cauce-llm-anthropic"))
-    evalRuntimeOnly(project(":cauce-llm-openai"))
+    // The transcriber, measured on real voice notes by -Pevals.voz (ADR 0012).
+    evalImplementation(project(":cauce-llm-openai"))
     evalRuntimeOnly(project(":cauce-tools"))
 }
 
@@ -61,6 +62,8 @@ dependencies {
 //     [-Pevals.limite=10] [-Pevals.confirmar=true] [-Pevals.juez.proveedor=openai -Pevals.juez.modelo=...]
 //     [-Pevals.r1=true] [-Pevals.umbral_fallos=0.10] [-Pevals.proveedor=anthropic -Pevals.modelo=claude-haiku-5-5]
 //     [-Pevals.retencion=SHORT|LONG]
+// ./gradlew :cauce-evals:eval -Pevals.voz=<folder with manifiesto.yaml, from backend/> [-Pevals.voz.url=...]
+//     [-Pevals.voz.modelo=...] [-Pevals.voz.idioma=es]   -- the transcription alone, instead of the battery
 val evalTask = tasks.register<Test>("eval") {
     description = "Runs the sector agents' scenarios against the real model (ADR 0009). Spends tokens."
     group = "verification"

@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -77,6 +78,7 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>Started only by {@code ./gradlew :cauce-evals:eval}: it is not a test of the build.
  */
+@DisabledIfSystemProperty(named = "evals.voz", matches = ".+") // -Pevals.voz measures the transcription instead
 @SpringBootTest(classes = CauceApplication.class)
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @ActiveProfiles("test")
