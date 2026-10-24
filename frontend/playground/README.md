@@ -47,7 +47,8 @@ runs through `npm run dev` — there is no standalone production hosting target.
 ## Verify
 
 ```bash
-npm run build      # tsc -b && vite build — the type-check + build gate
+npm run build      # guards, tsc -b, vitest run, vite build — the gate
+npm test           # the component tests alone (Vitest, jsdom)
 ```
 
 ## Troubleshooting

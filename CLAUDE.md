@@ -222,7 +222,7 @@ When introducing a new domain entity that participates in the tenant hierarchy, 
 - Every new public method requires at least one test. Every bug fix requires a regression test.
 - Aim for behavior coverage, not line coverage.
 - These rules cover the backend. The playground's gate is `npm run build` (its guard scripts,
-  strict type-check and build) plus manual browser verification.
+  strict type-check, its Vitest component tests and build) plus manual browser verification.
 
 ## Working with this codebase
 

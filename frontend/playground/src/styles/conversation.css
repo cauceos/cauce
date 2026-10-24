@@ -138,6 +138,10 @@
   font-size: 14px; color: var(--color-text);
   white-space: pre-wrap; overflow-wrap: break-word;
 }
+/* A voice note: the transcript is the bubble's text; this says where it came from. */
+.msg.user .voice-note {
+  font-size: 10px; color: var(--color-muted); letter-spacing: 0.3px; margin-bottom: 6px;
+}
 .msg.agent .body {
   max-width: 64ch; font-size: 14.5px; color: var(--color-text); line-height: 1.7;
   white-space: pre-wrap; overflow-wrap: break-word;

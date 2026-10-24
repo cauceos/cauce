@@ -1,3 +1,4 @@
+import type { MessageResponse } from '../../api/types'
 import { utcTime } from '../../lib/format'
 import type { ThreadItem } from './thread-model'
 import { InvocationMeta } from './InvocationMeta'
@@ -25,13 +26,22 @@ export function MessageBubble({
   const when = utcTime(item.message.created_at)
 
   if (item.kind === 'user') {
+    const voice = voiceNote(item.message)
     return (
       <div className="msg user">
         <div className="who">
           <span className="when">{when}</span>
           <span>You · {identityRef}</span>
         </div>
-        <div className="bubble">{item.message.content}</div>
+        <div className="bubble">
+          {voice !== null && (
+            <div className="voice-note mono">
+              voice note{voice.seconds !== undefined && ` · ${voice.seconds} s`}
+              {voice.transcribed ? ' · transcribed' : ' · not transcribed yet'}
+            </div>
+          )}
+          {item.message.content}
+        </div>
       </div>
     )
   }
@@ -63,4 +73,14 @@ export function MessageBubble({
       {item.meta !== null && <InvocationMeta meta={item.meta} />}
     </div>
   )
+}
+
+/**
+ * A voice note's facts (ADR 0012): the message's `content` is already its
+ * transcript, or "[voice note]" until it has one, so only the label is added.
+ */
+function voiceNote(message: MessageResponse): { seconds?: number; transcribed: boolean } | null {
+  const part = message.parts?.find((p) => p.type === 'audio')
+  if (part === undefined || part.type !== 'audio') return null
+  return { seconds: part.duration_seconds, transcribed: part.transcript !== undefined }
 }
