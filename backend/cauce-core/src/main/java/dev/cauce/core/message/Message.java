@@ -153,6 +153,33 @@ public final class Message {
                 Objects.requireNonNull(createdAt, "createdAt"));
     }
 
+    /**
+     * This message with its voice notes having learned what their bytes held (ADR 0012, V2): the
+     * one change a stored message admits. The parts keep their kinds and order, and an audio part
+     * keeps its media type and provider reference — what the message was audited under; only what
+     * the download and the transcription learn (size, the bytes' hash, duration, transcript) is new.
+     *
+     * @throws IllegalArgumentException if anything else would change
+     */
+    public Message withParts(List<MessagePart> learned) {
+        List<MessagePart> copy = List.copyOf(Objects.requireNonNull(learned, "learned"));
+        if (copy.size() != parts.size()) {
+            throw new IllegalArgumentException("a message keeps its parts: " + parts.size() + ", not " + copy.size());
+        }
+        for (int i = 0; i < copy.size(); i++) {
+            MessagePart before = parts.get(i);
+            MessagePart after = copy.get(i);
+            boolean same = before instanceof MessagePart.Audio was && after instanceof MessagePart.Audio now
+                    ? was.mediaType().equals(now.mediaType()) && was.providerReference().equals(now.providerReference())
+                    : before.equals(after);
+            if (!same) {
+                throw new IllegalArgumentException("part " + i + " of a stored message may only learn its transcript");
+            }
+        }
+        validate(role, copy, failureType);
+        return new Message(id, conversationId, role, copy, failureType, createdAt);
+    }
+
     private static String renderContent(ToolResult result) {
         return result.output().isBlank() ? "[empty result]" : result.output();
     }

@@ -22,4 +22,10 @@ public class MockLlmProviderTestConfig {
     MockLlmProvider mockLlmProvider() {
         return new MockLlmProvider();
     }
+
+    /** Both ends of a voice note, for the ITs that read one (ADR 0012); idle for every other. */
+    @Bean
+    FakeVoiceNotes fakeVoiceNotes() {
+        return new FakeVoiceNotes();
+    }
 }

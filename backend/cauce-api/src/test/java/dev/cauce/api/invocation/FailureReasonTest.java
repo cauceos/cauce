@@ -16,6 +16,12 @@ class FailureReasonTest {
     }
 
     @Test
+    void from_aVoiceNoteRejected_saysTheVoiceNoteWasUnreadable() {
+        assertThat(FailureReason.from(InvocationFailureType.VOICE_NOTE_REJECTED))
+                .isEqualTo(FailureReason.VOICE_NOTE_UNREADABLE);
+    }
+
+    @Test
     void from_spendLimitReached_isItsOwnPublicReason() {
         assertThat(FailureReason.from(InvocationFailureType.SPEND_LIMIT_REACHED))
                 .isEqualTo(FailureReason.SPEND_LIMIT_REACHED);

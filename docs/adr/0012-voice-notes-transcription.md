@@ -1,7 +1,7 @@
 # ADR 0012: Voice notes, transcribed behind a neutral port
 
-Status: Accepted. V1's audio part implemented (unit 2b of ADR 0004); transcription (2c) and the
-channels (2d) not yet.
+Status: Accepted. V1's audio part (unit 2b of ADR 0004) and transcription (2c) implemented; the
+channels (2d) not yet. V5 amended on 2026-10-24 (below).
 
 ## Context
 
@@ -74,8 +74,25 @@ the guard.
 ### V5 — Limits: 2 minutes and 20 MB
 
 A voice note over **2 minutes** or **20 MB** (Telegram's limit on what a bot may download) is not
-downloaded. It is answered with a fixed text asking for a shorter note or a written message, and
-audited as `conduct.message.unsupported` with the reason. Both bounds are platform settings.
+transcribed, and neither is one that transcribes to nothing. It is answered with a fixed text
+asking for a written message or a shorter note. Both bounds are platform settings
+(`cauce.orchestration.voice-notes.*`).
+
+**Amended in implementation:** the bounds are checked in one place, the worker's transcription
+step, not at the webhook: Telegram announces a note's length and size, WhatsApp neither, so only
+the worker sees every note the same way. What the channel announces is checked before the download,
+the size again on download, and the length the transcriber reports after it (that call is billed).
+The invocation fails as `VOICE_NOTE_REJECTED` (public reason `VOICE_NOTE_UNREADABLE`, audited as a
+failed invocation), and the fixed text is the agent's reply to a message it cannot read
+(`unsupported_message_reply`), else the platform's `cauce.orchestration.fallback.voice-note-reply`:
+"try again later", the fallback's sense, would not help.
+
+### V7 — The model reads a voice note as one (decided for 2c)
+
+Before the model, a voice note's transcript is marked `[Transcribed voice note]`, so that the agent
+knows it was heard, not written. The sector pack's prompt says what follows: data a mishearing would
+change (a phone number, a name, allergens, the number of people) is confirmed before acting on it.
+The person and the API read the transcript unmarked.
 
 ### V6 — Out of scope
 

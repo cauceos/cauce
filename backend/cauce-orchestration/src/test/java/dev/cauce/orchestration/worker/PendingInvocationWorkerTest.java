@@ -308,6 +308,32 @@ class PendingInvocationWorkerTest {
     }
 
     @Test
+    void processInvocation_whenTheVoiceNoteCannotBeRead_failsAsVoiceNoteRejected_withItsFallback() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new dev.cauce.orchestration.exception.VoiceNoteRejectedException("too long"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.VOICE_NOTE_REJECTED));
+        verify(failureFallbackService).sendFallback(claimed.id(), claimed.conversationId(),
+                InvocationFailureType.VOICE_NOTE_REJECTED);
+    }
+
+    @Test
+    void processInvocation_whenTheInstanceCannotTranscribe_marksFailedAsAgentConfiguration() {
+        PendingInvocation claimed = claimedFirstAttempt();
+        Mockito.doThrow(new dev.cauce.orchestration.exception.TranscriptionNotAvailableException("no transcriber"))
+                .when(orchestratorService).respondToMessage(any(), any(), any());
+
+        worker.processInvocation(claimed);
+
+        verify(pendingInvocationService).markFailed(
+                eq(claimed.id()), anyString(), eq(InvocationFailureType.AGENT_CONFIGURATION));
+    }
+
+    @Test
     void processInvocation_whenTheProviderIsNotConfigured_marksFailedAsAgentConfiguration() {
         PendingInvocation claimed = claimedFirstAttempt();
         Mockito.doThrow(new LlmProviderNotAvailableException("LLM provider 'anthropic' is not configured"))

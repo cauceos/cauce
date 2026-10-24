@@ -14,8 +14,10 @@ import dev.cauce.orchestration.exception.EmptyReplyException;
 import dev.cauce.orchestration.exception.LlmProviderNotAvailableException;
 import dev.cauce.orchestration.exception.MaxToolIterationsExceededException;
 import dev.cauce.orchestration.exception.PromptDoesNotFitContextException;
+import dev.cauce.orchestration.exception.TranscriptionNotAvailableException;
 import dev.cauce.orchestration.exception.SpendLimitReachedException;
 import dev.cauce.orchestration.exception.UnpricedModelException;
+import dev.cauce.orchestration.exception.VoiceNoteRejectedException;
 import dev.cauce.orchestration.service.FailureFallbackService;
 import dev.cauce.orchestration.service.OrchestratorService;
 import dev.cauce.orchestration.tracing.MessageTracing;
@@ -183,6 +185,14 @@ public class PendingInvocationWorker {
         }
         if (e instanceof LlmProviderNotAvailableException) {
             // The agent names a provider this instance has not configured: setup, not an outage.
+            return InvocationFailureType.AGENT_CONFIGURATION;
+        }
+        if (e instanceof VoiceNoteRejectedException) {
+            // ADR 0012, V5: the person is asked to write it, or to send a shorter one.
+            return InvocationFailureType.VOICE_NOTE_REJECTED;
+        }
+        if (e instanceof TranscriptionNotAvailableException) {
+            // The instance cannot transcribe: its setup, not a provider outage.
             return InvocationFailureType.AGENT_CONFIGURATION;
         }
         if (e instanceof PromptDoesNotFitContextException) {

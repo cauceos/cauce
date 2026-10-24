@@ -8,12 +8,14 @@ import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageNotFoundException;
+import dev.cauce.core.message.MessageParts;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.memory.agent.AgentMapper;
 import dev.cauce.memory.agent.AgentRepository;
 import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationMapper;
 import dev.cauce.memory.conversation.ConversationRepository;
+import dev.cauce.memory.message.MessageEntity;
 import dev.cauce.memory.message.MessageMapper;
 import dev.cauce.memory.message.MessageRepository;
 import dev.cauce.orchestration.exception.InvalidTriggerMessageException;
@@ -160,6 +162,23 @@ public class ConversationGateway {
     @Transactional
     public Message appendAudited(Message message, AuditEvent audit) {
         Message saved = append(message);
+        auditRecorder.record(audit);
+        return saved;
+    }
+
+    /**
+     * Stores what {@code learned}'s voice notes learned on transcription (ADR 0012, V2) — the one
+     * rewrite of a stored message, which {@link Message#withParts} bounds — and records
+     * {@code audit} in the same transaction. The message keeps its position and time.
+     *
+     * @throws MessageNotFoundException if the message is not visible
+     */
+    @Transactional
+    public Message rewritePartsAudited(Message learned, AuditEvent audit) {
+        MessageEntity entity = messageRepository.findById(learned.id()).orElseThrow(() ->
+                new MessageNotFoundException("No message found for id " + learned.id()));
+        entity.replaceParts(MessageParts.toJson(learned.parts()));
+        Message saved = messageMapper.toDomain(messageRepository.save(entity));
         auditRecorder.record(audit);
         return saved;
     }

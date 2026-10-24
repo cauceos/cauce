@@ -1,5 +1,6 @@
 package dev.cauce.orchestration.service;
 
+import dev.cauce.core.agent.Agent;
 import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.message.Message;
 import dev.cauce.orchestration.LogSafe;
@@ -54,7 +55,7 @@ public class FailureFallbackService {
         ConversationAgent target;
         try {
             target = conversationGateway.loadConversationAndAgent(conversationId);
-            String text = target.agent().fallbackReply().orElse(properties.getDefaultReply());
+            String text = textFor(target.agent(), failureType);
             fallback = conversationGateway.append(Message.fallback(conversationId, text, failureType.name()));
         } catch (RuntimeException e) {
             log.warn("Could not record the fallback reply for conversation {} ({}): {}",
@@ -74,5 +75,17 @@ public class FailureFallbackService {
             log.warn("Fallback dispatch failed for conversation {}: {}", conversationId, LogSafe.describe(e));
             log.debug("Fallback dispatch failure detail", e);
         }
+    }
+
+    /**
+     * The agent's fallback reply, else the platform's (ADR 0005, C3); for a voice note that could not
+     * be read, the agent's reply to a message it cannot read, else the platform's voice-note text,
+     * since "try again later" would not help (ADR 0012, V5).
+     */
+    private String textFor(Agent agent, InvocationFailureType failureType) {
+        if (failureType == InvocationFailureType.VOICE_NOTE_REJECTED) {
+            return agent.unsupportedMessageReply().orElse(properties.getVoiceNoteReply());
+        }
+        return agent.fallbackReply().orElse(properties.getDefaultReply());
     }
 }

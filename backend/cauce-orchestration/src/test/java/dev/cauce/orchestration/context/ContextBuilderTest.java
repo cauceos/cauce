@@ -297,6 +297,21 @@ class ContextBuilderTest {
     }
 
     @Test
+    void build_aVoiceNote_readsAsItsTranscriptMarkedTranscribed_andCountsItsTokens() {
+        Message note = Message.fromParts(CONVERSATION, MessageRole.USER, List.of(
+                dev.cauce.core.message.MessagePart.Audio.received("audio/ogg", "r", null, 4)
+                        .transcribed("Mesa para cuatro", "a".repeat(64), 10, 4)));
+
+        LlmInvocationContext context = builder.build(List.of(note), MODEL, SYSTEM_PROMPT);
+
+        assertThat(context.messages()).extracting(LlmMessage::content)
+                .containsExactly("[Transcribed voice note] Mesa para cuatro");
+        assertThat(context.estimatedTokens())
+                .isEqualTo(TokenEstimator.estimate("[Transcribed voice note] Mesa para cuatro"));
+        assertThat(note.content()).as("only the model reads the mark").isEqualTo("Mesa para cuatro");
+    }
+
+    @Test
     void build_whenUnknownModel_usesConservativeFallbackWindow() {
         // An unregistered model no longer fails: ModelContextWindow returns a conservative
         // fallback window so the invocation degrades (history trimmed) rather than breaking.

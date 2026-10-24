@@ -47,6 +47,27 @@ class ConductAuditEventsTest {
     }
 
     @Test
+    void messageTranscribed_carriesWhoHowLongAndHashes_neverTheTranscript() {
+        dev.cauce.core.message.MessagePart.Audio heard = dev.cauce.core.message.MessagePart.Audio
+                .received("audio/ogg", "AwACAgQ-handle", null, 4)
+                .transcribed("Mi teléfono es el 612 345 678", "b".repeat(64), 6200, 4);
+        Message note = Message.fromParts(conversationId, MessageRole.USER, java.util.List.of(heard));
+
+        AuditEvent event = ConductAuditEvents.messageTranscribed(tenantId, invocationId, agentId, note, heard,
+                "whisper", "Systran/faster-whisper-small");
+
+        assertThat(event.eventType()).isEqualTo("conduct.message.transcribed");
+        assertThat(event.payload())
+                .containsEntry("message_id", note.id().toString())
+                .containsEntry("provider", "whisper")
+                .containsEntry("duration_seconds", 4)
+                .containsEntry("audio_sha256", "b".repeat(64))
+                .containsEntry("content_hash", textHash(tenantId, "Mi teléfono es el 612 345 678"))
+                .containsEntry("content_hash_version", 2);
+        assertThat(event.payload().values()).doesNotContain("Mi teléfono es el 612 345 678", "AwACAgQ-handle");
+    }
+
+    @Test
     void agentResponded_buildsTerminalSuccessPayloadWithFinishReasonAndRounds() {
         Message reply = Message.from(conversationId, MessageRole.AGENT, "Claro, dime.");
 

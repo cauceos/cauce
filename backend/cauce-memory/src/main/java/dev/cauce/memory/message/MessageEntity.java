@@ -97,6 +97,11 @@ public class MessageEntity {
         return parts;
     }
 
+    /** The parts a voice note learned on transcription (ADR 0012, V2): the row's one rewrite. */
+    public void replaceParts(List<Map<String, Object>> learned) {
+        this.parts = learned;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }

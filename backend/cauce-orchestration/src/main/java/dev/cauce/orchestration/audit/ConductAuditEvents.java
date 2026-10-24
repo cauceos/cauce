@@ -4,8 +4,11 @@ import dev.cauce.core.audit.AuditContentHash;
 import dev.cauce.core.audit.AuditEvent;
 import dev.cauce.core.audit.AuditToolHash;
 import dev.cauce.core.message.Message;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolResult;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -44,6 +47,7 @@ public final class ConductAuditEvents {
     // Emitted types.
     public static final String MESSAGE_RECEIVED = "conduct.message.received";
     public static final String AGENT_RESPONDED = "conduct.agent.responded";
+    public static final String MESSAGE_TRANSCRIBED = "conduct.message.transcribed";
     public static final String INVOCATION_FAILED = "conduct.invocation.failed";
     public static final String TOOL_CALLED = "conduct.tool.called";
     public static final String TOOL_RETURNED = "conduct.tool.returned";
@@ -72,6 +76,37 @@ public final class ConductAuditEvents {
                 "content_hash", AuditContentHash.ofParts(tenantId, userMessage.parts()),
                 "content_hash_version", AuditContentHash.PARTS_VERSION,
                 "content_length", userMessage.content().length()));
+    }
+
+    /**
+     * A USER voice note was transcribed and its transcript stored in its audio part (ADR 0012, V2):
+     * who transcribed it, how long it was, the hash of its bytes, and the hash of the transcript
+     * ({@code cauce-content:v2} over a text part) — never the text, which is erasable message text.
+     */
+    public static AuditEvent messageTranscribed(UUID tenantId, UUID invocationId, UUID agentId, Message message,
+                                                MessagePart.Audio transcribed, String provider, String model) {
+        Objects.requireNonNull(message, "message must not be null");
+        Objects.requireNonNull(transcribed, "transcribed must not be null");
+        String transcript = transcribed.transcriptText().orElseThrow(() ->
+                new IllegalArgumentException("the audio part must carry its transcript"));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("invocation_id", invocationId.toString());
+        payload.put("conversation_id", message.conversationId().toString());
+        payload.put("message_id", message.id().toString());
+        payload.put("agent_id", agentId.toString());
+        payload.put("provider", Objects.requireNonNull(provider, "provider must not be null"));
+        payload.put("model", Objects.requireNonNull(model, "model must not be null"));
+        payload.put("media_type", transcribed.mediaType());
+        if (transcribed.durationSeconds() != null) {
+            payload.put("duration_seconds", transcribed.durationSeconds());
+        }
+        if (transcribed.sha256() != null) {
+            payload.put("audio_sha256", transcribed.sha256());
+        }
+        payload.put("content_hash", AuditContentHash.ofParts(tenantId, List.of(new MessagePart.Text(transcript))));
+        payload.put("content_hash_version", AuditContentHash.PARTS_VERSION);
+        payload.put("content_length", transcript.length());
+        return new AuditEvent(tenantId, MESSAGE_TRANSCRIBED, payload);
     }
 
     /**

@@ -29,7 +29,9 @@ public enum FailureReason {
     /** Processing stalled and the claim timed out. */
     TIMEOUT,
     /** The client spent its monthly spend limit (ADR 0010, S6): the model was not called. */
-    SPEND_LIMIT_REACHED;
+    SPEND_LIMIT_REACHED,
+    /** The voice note could not be read: too long, too large, or nothing intelligible (ADR 0012, V5). */
+    VOICE_NOTE_UNREADABLE;
 
     /** Maps the internal failure taxonomy to the public vocabulary. */
     public static FailureReason from(InvocationFailureType type) {
@@ -42,6 +44,7 @@ public enum FailureReason {
             case SETUP_ERROR -> INTERNAL_ERROR;
             case REAPER_ABANDONED -> TIMEOUT;
             case SPEND_LIMIT_REACHED -> SPEND_LIMIT_REACHED;
+            case VOICE_NOTE_REJECTED -> VOICE_NOTE_UNREADABLE;
         };
     }
 }

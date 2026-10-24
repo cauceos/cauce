@@ -249,6 +249,24 @@ class MessageTest {
     }
 
     @Test
+    void withParts_letsAVoiceNoteLearnItsTranscript_andNothingElseChange() {
+        MessagePart.Audio note = MessagePart.Audio.received("audio/ogg", "AwACAgQ", null, 4);
+        Message received = Message.fromParts(CONVERSATION, MessageRole.USER, List.of(note, new MessagePart.Text("Hola")));
+
+        Message learned = received.withParts(List.of(note.transcribed("Mesa", "a".repeat(64), 10, 4),
+                new MessagePart.Text("Hola")));
+
+        assertThat(learned.id()).isEqualTo(received.id());
+        assertThat(learned.content()).isEqualTo("Mesa\nHola");
+        assertThatThrownBy(() -> received.withParts(List.of(note, new MessagePart.Text("Adiós"))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> received.withParts(List.of(
+                MessagePart.Audio.received("audio/ogg", "other-reference", null, 4), new MessagePart.Text("Hola"))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> received.withParts(List.of(note))).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void audioPart_rejectsWhatCannotBeTrue() {
         assertThatThrownBy(() -> MessagePart.Audio.received(" ", "r", null, null))
                 .isInstanceOf(IllegalArgumentException.class);

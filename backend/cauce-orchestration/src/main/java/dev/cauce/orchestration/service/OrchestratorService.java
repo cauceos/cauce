@@ -45,6 +45,7 @@ import dev.cauce.orchestration.tracing.MessageTracing;
 import dev.cauce.orchestration.usage.LlmUsageRecord;
 import dev.cauce.orchestration.usage.LlmUsageRecorder;
 import dev.cauce.orchestration.usage.SpendGuard;
+import dev.cauce.orchestration.voice.VoiceNoteTranscription;
 import dev.cauce.tools.spi.Tool;
 import dev.cauce.tools.spi.ToolArguments.InvalidToolArgumentException;
 import dev.cauce.tools.spi.ToolRegistry;
@@ -135,6 +136,7 @@ public class OrchestratorService {
     private final SpendGuard spendGuard;
     private final MessageTracing tracing;
     private final Clock clock;
+    private final VoiceNoteTranscription voiceNotes;
     private final InputTokenEstimateWarnings estimateWarnings = new InputTokenEstimateWarnings();
 
     public OrchestratorService(ConversationGateway conversationGateway,
@@ -149,7 +151,8 @@ public class OrchestratorService {
                                AgenticLoopProperties loopProperties,
                                SpendGuard spendGuard,
                                MessageTracing tracing,
-                               Clock clock) {
+                               Clock clock,
+                               VoiceNoteTranscription voiceNotes) {
         this.conversationGateway = conversationGateway;
         this.llmProviderRegistry = llmProviderRegistry;
         this.contextBuilder = contextBuilder;
@@ -163,6 +166,7 @@ public class OrchestratorService {
         this.spendGuard = spendGuard;
         this.tracing = tracing;
         this.clock = clock;
+        this.voiceNotes = voiceNotes;
     }
 
     /**
@@ -200,8 +204,10 @@ public class OrchestratorService {
         LoadedConversation loaded = conversationGateway.load(conversationId, triggerMessageId);
         Agent agent = loaded.agent();
         MDC.put(LogKeys.AGENT_ID, agent.id().toString()); // ADR 0011, L1; the worker clears it
-        List<Message> messages = new ArrayList<>(loaded.messages());
         checkSpend(agent, conversationId);
+        // ADR 0012, V2: a voice note is transcribed first, in the worker, before the model reads it.
+        List<Message> messages = new ArrayList<>(voiceNotes.transcribePending(agent, loaded.conversation(),
+                invocationId, triggerMessageId, loaded.messages()));
 
         LlmCredential credential = new SystemDefaultLlmCredential(agent.modelProvider(), environment);
         LlmProvider provider = llmProviderRegistry.getProvider(agent.modelProvider())

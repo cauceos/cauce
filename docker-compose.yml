@@ -17,6 +17,10 @@
 # Devs running bootRun who only want a local Ollama:
 #   docker compose --profile ollama up -d
 #
+# Voice notes (ADR 0012): a local Whisper, on top of any of the above, with
+# TRANSCRIPTION_ENABLED=true in .env so the app uses it:
+#   docker compose --profile api --profile transcription up -d --build
+#
 # Observability backend (OpenObserve: traces, metrics, logs, alerts; ADR 0011),
 # see docs/operations/observability.md:
 #   docker compose --profile observability up -d
@@ -109,6 +113,37 @@ services:
     command: ["pull", "${OLLAMA_MODEL:-qwen2.5:3b}"]
     restart: "no"
 
+  # --- Transcription profile (ADR 0012) -----------------------------------------
+  # A local Whisper (speaches, OpenAI-compatible /v1/audio/transcriptions): no key, no cost, the
+  # audio never leaves the machine. Optional: without it voice notes are answered as messages Cauce
+  # does not read. Pinned like Ollama: ≈850 MB image, plus the model (≈500 MB) on first start.
+  whisper:
+    image: ghcr.io/speaches-ai/speaches:0.8.3-cpu
+    profiles: [transcription]
+    ports:
+      - "${WHISPER_PORT:-8000}:8000"
+    volumes:
+      - whisper-data:/home/ubuntu/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # One-shot: downloads the transcription model into the whisper volume, then exits (speaches
+  # downloads a model only when asked). Re-runs are cheap: the model is already there.
+  whisper-init:
+    image: ghcr.io/speaches-ai/speaches:0.8.3-cpu
+    profiles: [transcription]
+    depends_on:
+      whisper:
+        condition: service_healthy
+    entrypoint: ["python", "-c"]
+    command:
+      - "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://whisper:8000/v1/models/${TRANSCRIPTION_MODEL:-Systran/faster-whisper-small}', method='POST'), timeout=1800); print('model ready')"
+    restart: "no"
+
   cauce-api:
     build: ./backend
     profiles: [quickstart, api]
@@ -145,6 +180,12 @@ services:
       # CPU inference loads the model on first request; the 60s default is too
       # tight for that cold load on modest hardware.
       CAUCE_LLM_OPENAICOMPATIBLE_PROVIDERS_OLLAMA_TIMEOUT: 180s
+      # Voice notes (ADR 0012): off unless TRANSCRIPTION_ENABLED=true in .env, then the
+      # containerized Whisper (--profile transcription) or the one TRANSCRIPTION_BASE_URL names.
+      CAUCE_SPEECH_OPENAICOMPATIBLE_ENABLED: ${TRANSCRIPTION_ENABLED:-false}
+      CAUCE_SPEECH_OPENAICOMPATIBLE_BASEURL: ${TRANSCRIPTION_BASE_URL:-http://whisper:8000/v1}
+      CAUCE_SPEECH_OPENAICOMPATIBLE_MODEL: ${TRANSCRIPTION_MODEL:-Systran/faster-whisper-small}
+      CAUCE_SPEECH_OPENAICOMPATIBLE_LANGUAGE: ${TRANSCRIPTION_LANGUAGE:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,6 +193,9 @@ services:
         condition: service_healthy
       # Only when the profile starts it: under `--profile api` there is none to wait for.
       ollama:
+        condition: service_started
+        required: false
+      whisper:
         condition: service_started
         required: false
     healthcheck:
@@ -184,5 +228,6 @@ volumes:
   postgres-data:
   redis-data:
   ollama-data:
+  whisper-data:
   observe-data:
   audit-keys:

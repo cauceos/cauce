@@ -41,6 +41,13 @@ public enum InvocationFailureType {
     SPEND_LIMIT_REACHED,
 
     /**
+     * The person's voice note could not be read (ADR 0012, V5): over the limits of length or size,
+     * or nothing intelligible in it. The model is not called, and the person is asked to write it
+     * or to send a shorter one — row FAILED.
+     */
+    VOICE_NOTE_REJECTED,
+
+    /**
      * The reaper abandoned an orphaned claim (worker died mid-processing) whose attempt
      * budget was exhausted — row ABANDONED.
      */

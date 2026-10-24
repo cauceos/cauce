@@ -819,7 +819,16 @@ class OrchestratorServiceTest {
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
                 environment, errorRecorder, usageRecorder, eventPublisher,
                 replyDispatcherProvider, loop, spendGuard,
-                dev.cauce.orchestration.tracing.MessageTracing.noop(), CLOCK);
+                dev.cauce.orchestration.tracing.MessageTracing.noop(), CLOCK, passThroughVoiceNotes());
+    }
+
+    /** No voice note to transcribe: the conversation goes on as loaded. */
+    private static dev.cauce.orchestration.voice.VoiceNoteTranscription passThroughVoiceNotes() {
+        dev.cauce.orchestration.voice.VoiceNoteTranscription voiceNotes =
+                Mockito.mock(dev.cauce.orchestration.voice.VoiceNoteTranscription.class);
+        when(voiceNotes.transcribePending(any(), any(), any(), any(), any()))
+                .thenAnswer(call -> call.getArgument(4));
+        return voiceNotes;
     }
 
     /** All lifecycle events published so far, in publication order. */

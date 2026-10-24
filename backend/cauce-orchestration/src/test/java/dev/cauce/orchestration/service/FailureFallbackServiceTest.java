@@ -74,6 +74,26 @@ class FailureFallbackServiceTest {
     }
 
     @Test
+    void sendFallback_forAVoiceNoteItCouldNotRead_asksForItInWritingOrShorter() {
+        stubAgent(Agent.create(tenantId, "Bot", "p", "anthropic", "m").withFallbackReply("Vuelve en un rato."));
+
+        service.sendFallback(INVOCATION_ID, conversation.id(), InvocationFailureType.VOICE_NOTE_REJECTED);
+
+        // "Try again later" would not help: the platform's voice-note text, not the fallback.
+        assertThat(dispatched().content()).isEqualTo(FallbackReplyProperties.DEFAULT_VOICE_NOTE_REPLY);
+    }
+
+    @Test
+    void sendFallback_forAVoiceNoteItCouldNotRead_usesTheAgentsReplyToWhatItCannotRead() {
+        stubAgent(Agent.create(tenantId, "Bot", "p", "anthropic", "m")
+                .withUnsupportedMessageReply("Escríbemelo, o mándame una nota más corta."));
+
+        service.sendFallback(INVOCATION_ID, conversation.id(), InvocationFailureType.VOICE_NOTE_REJECTED);
+
+        assertThat(dispatched().content()).isEqualTo("Escríbemelo, o mándame una nota más corta.");
+    }
+
+    @Test
     void sendFallback_whenTheConversationCannotBeLoaded_isSwallowedAndSendsNothing() {
         when(gateway.loadConversationAndAgent(conversation.id()))
                 .thenThrow(new ConversationNotFoundException("gone"));

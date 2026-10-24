@@ -4,6 +4,7 @@ import dev.cauce.orchestration.context.ContextBuilder;
 import dev.cauce.orchestration.service.AgenticLoopProperties;
 import dev.cauce.orchestration.service.FallbackReplyProperties;
 import dev.cauce.orchestration.worker.PendingInvocationWorkerProperties;
+import dev.cauce.orchestration.voice.VoiceNoteProperties;
 import java.util.concurrent.ThreadPoolExecutor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -27,7 +28,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Configuration
 @EnableScheduling
 @EnableConfigurationProperties({PendingInvocationWorkerProperties.class, AgenticLoopProperties.class,
-        FallbackReplyProperties.class})
+        FallbackReplyProperties.class, VoiceNoteProperties.class})
 public class OrchestrationConfig {
 
     /** Bean name of the executor that runs individual pending-invocation processings. */

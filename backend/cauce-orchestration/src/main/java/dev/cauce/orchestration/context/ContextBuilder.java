@@ -1,6 +1,7 @@
 package dev.cauce.orchestration.context;
 
 import dev.cauce.core.message.Message;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolDefinition;
@@ -13,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Builds the message list sent to an LLM for one invocation, honouring the target model's
@@ -62,6 +64,12 @@ public final class ContextBuilder {
 
     /** What each tool's wire wrapping adds to its name, description and schema. */
     static final int PER_TOOL_OVERHEAD = 20;
+
+    /**
+     * How the model reads a voice note (ADR 0012): its transcript, marked as one, so that the agent
+     * knows the text was heard, not written, and confirms what a mishearing would change.
+     */
+    public static final String TRANSCRIBED_VOICE_NOTE = "[Transcribed voice note] ";
 
     /** What stands in for a past lookup's result when the agent elides them (deferred R1). */
     public static final String ELIDED_RESULT = "resultado omitido; vuelve a consultar si lo necesitas";
@@ -216,11 +224,27 @@ public final class ContextBuilder {
      * already the message content, so no extra is added.
      */
     private static int estimateTokens(Message message) {
-        int tokens = TokenEstimator.estimate(message.content());
+        int tokens = TokenEstimator.estimate(modelText(message));
         if (message.toolContent().orElse(null) instanceof ToolCall call) {
             tokens += TokenEstimator.estimate(String.valueOf(call.input()));
         }
         return tokens;
+    }
+
+    /**
+     * The text the model reads for {@code message}: its content, except that a voice note reads as
+     * its transcript marked {@link #TRANSCRIBED_VOICE_NOTE}.
+     */
+    static String modelText(Message message) {
+        if (message.parts().stream().noneMatch(MessagePart.Audio.class::isInstance)) {
+            return message.content();
+        }
+        return message.parts().stream().map(part -> switch (part) {
+            case MessagePart.Audio audio -> TRANSCRIBED_VOICE_NOTE + audio.transcriptText().orElse(Message.UNTRANSCRIBED_AUDIO);
+            case MessagePart.Text text -> text.text();
+            case MessagePart.ToolCallPart call -> call.call().toolName();
+            case MessagePart.ToolResultPart result -> result.result().output();
+        }).collect(Collectors.joining("\n"));
     }
 
     /**
@@ -230,7 +254,7 @@ public final class ContextBuilder {
      */
     private static LlmMessage toLlmMessage(Message message) {
         return switch (message.role()) {
-            case USER -> new LlmMessage(LlmRole.USER, message.content());
+            case USER -> new LlmMessage(LlmRole.USER, modelText(message));
             case AGENT -> new LlmMessage(LlmRole.ASSISTANT, message.content());
             case SYSTEM -> new LlmMessage(LlmRole.SYSTEM, message.content());
             case TOOL_CALL -> LlmMessage.toolCall((ToolCall) message.toolContent().orElseThrow());
