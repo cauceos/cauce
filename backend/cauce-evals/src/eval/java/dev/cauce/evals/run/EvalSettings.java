@@ -31,13 +31,15 @@ import java.util.Optional;
  *        ({@code evals.r1=true}; deferred R1, off by default): the run is marked R1 in the report
  * @param cacheRetention the customer agent's prompt cache retention when it is not the pack's
  *        ({@code evals.retencion=SHORT|LONG}); empty: the pack's {@code retencion-cache.json}
+ * @param forced a full battery runs from a tree behind {@code origin/main} or with uncommitted
+ *        changes to the pack ({@code evals.forzar=true}); refused otherwise
  */
 public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<String> scenarioIds,
                            int repetitions, double limitUsd, boolean confirmed, double warningThreshold,
                            double maxExecutionFailures,
                            String agentProvider, String agentModel, Optional<String> judgeProvider,
                            Optional<String> judgeModel, boolean rehearsal, boolean elidePastLookups,
-                           Optional<String> cacheRetention) {
+                           Optional<String> cacheRetention, boolean forced) {
 
     public static EvalSettings fromSystemProperties() {
         String root = System.getProperty("evals.raiz");
@@ -59,7 +61,13 @@ public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<
                 property("evals.juez.modelo"),
                 property("evals.simulacro").map(Boolean::parseBoolean).orElse(false),
                 property("evals.r1").map(Boolean::parseBoolean).orElse(false),
-                property("evals.retencion").map(value -> value.toUpperCase(java.util.Locale.ROOT)));
+                property("evals.retencion").map(value -> value.toUpperCase(java.util.Locale.ROOT)),
+                property("evals.forzar").map(Boolean::parseBoolean).orElse(false));
+    }
+
+    /** Whether the run is the whole battery: neither tasks nor scenarios selected. */
+    public boolean fullBattery() {
+        return tasks.isEmpty() && scenarioIds.isEmpty();
     }
 
     public Path packDir() {

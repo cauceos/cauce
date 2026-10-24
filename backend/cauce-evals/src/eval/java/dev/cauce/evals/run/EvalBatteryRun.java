@@ -146,6 +146,18 @@ class EvalBatteryRun {
     @Test
     void run() throws Exception {
         Provenance provenance = GitState.announce(SETTINGS.repoRoot());
+        Optional<String> stale = provenance.problem("examples/" + SETTINGS.pack() + "/");
+        // A full battery is what a baseline comes from: from a stale tree it is refused, unless
+        // forced; a subset or a rehearsal only warns.
+        boolean refused = stale.isPresent() && SETTINGS.fullBattery() && !SETTINGS.rehearsal() && !SETTINGS.forced();
+        stale.ifPresent(problem -> System.out.printf("%n%s: %s No mide el agente vigente: actualiza el árbol "
+                        + "(git checkout --detach %s) o commitea los cambios.%s%n%n",
+                refused ? "BLOQUEADO" : "AVISO", problem, GitState.UPSTREAM,
+                SETTINGS.fullBattery() && SETTINGS.forced() ? " Forzado con -Pevals.forzar=true: no sirve de línea base." : ""));
+        assertThat(refused)
+                .as("Batería completa desde un árbol desfasado: %s Para ejecutarla igualmente, -Pevals.forzar=true",
+                        stale.orElse(""))
+                .isFalse();
         List<Scenario> selected = select(new ScenarioLoader().loadAll(SETTINGS.evalsDir()));
         assertThat(selected).as("no scenario matches " + SETTINGS.selection()).isNotEmpty();
         List<Scenario> conversationsToRun = selected.stream().filter(s -> s.kind() == Kind.CONVERSATION).toList();

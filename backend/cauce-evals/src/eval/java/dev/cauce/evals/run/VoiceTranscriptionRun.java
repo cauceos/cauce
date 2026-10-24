@@ -42,7 +42,8 @@ class VoiceTranscriptionRun {
     @Test
     void run() throws Exception {
         Path root = Path.of(System.getProperty("evals.raiz"));
-        GitState.announce(root); // the scoring, not the prompt, is what the commit decides here
+        // The scoring, not the prompt, is what the commit decides here: a warning is enough.
+        GitState.announce(root).warning().ifPresent(warning -> System.out.printf("%n%s%n%n", warning));
         Path folder = root.resolve("backend").resolve(System.getProperty("evals.voz")).normalize();
         String url = System.getProperty("evals.voz.url", "http://localhost:8000/v1");
         String model = System.getProperty("evals.voz.modelo", "Systran/faster-whisper-small");

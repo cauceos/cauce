@@ -61,7 +61,7 @@ dependencies {
 // ./gradlew :cauce-evals:eval [-Pevals.tarea=03 | -Pevals.tarea=01,02] [-Pevals.escenarios=H3.10,H3.11] [-Pevals.n=5]
 //     [-Pevals.limite=10] [-Pevals.confirmar=true] [-Pevals.juez.proveedor=openai -Pevals.juez.modelo=...]
 //     [-Pevals.r1=true] [-Pevals.umbral_fallos=0.10] [-Pevals.proveedor=anthropic -Pevals.modelo=claude-haiku-5-5]
-//     [-Pevals.retencion=SHORT|LONG]
+//     [-Pevals.retencion=SHORT|LONG] [-Pevals.forzar=true]
 // ./gradlew :cauce-evals:eval -Pevals.voz=<folder with manifiesto.yaml, from backend/> [-Pevals.voz.url=...]
 //     [-Pevals.voz.modelo=...] [-Pevals.voz.idioma=es]   -- the transcription alone, instead of the battery
 val evalTask = tasks.register<Test>("eval") {

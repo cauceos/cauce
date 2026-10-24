@@ -3,6 +3,7 @@ package dev.cauce.evals.run;
 import dev.cauce.evals.report.Provenance;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -19,24 +20,35 @@ final class GitState {
     private GitState() {
     }
 
-    /** Reads it, and prints where the run comes from and, if it is behind, the warning. */
+    /** Reads it and prints where the run comes from; what to do about it is the runner's. */
     static Provenance announce(Path repoRoot) {
         Provenance provenance = of(repoRoot);
         System.out.println(provenance.line());
-        provenance.warning().ifPresent(warning -> System.out.printf("%n%s%n%n", warning));
         return provenance;
     }
 
     static Provenance of(Path repoRoot) {
         String commit;
-        boolean dirty;
+        List<String> changed;
         try {
             commit = command(repoRoot, "git", "rev-parse", "HEAD").strip();
-            dirty = !command(repoRoot, "git", "status", "--porcelain").isBlank();
+            // -uall: an untracked file by its path, never only its directory.
+            changed = command(repoRoot, "git", "status", "--porcelain", "-uall").lines()
+                    .filter(line -> line.length() > 3)
+                    .map(GitState::path)
+                    .toList();
         } catch (Exception e) {
-            return new Provenance("desconocido", false, UPSTREAM, null);
+            return new Provenance("desconocido", List.of(), UPSTREAM, null);
         }
-        return new Provenance(commit, dirty, UPSTREAM, behind(repoRoot));
+        return new Provenance(commit, changed, UPSTREAM, behind(repoRoot));
+    }
+
+    /** The path of a {@code --porcelain} line ("XY path", or "XY old -> new" for a rename). */
+    private static String path(String line) {
+        String path = line.substring(3);
+        int renamed = path.indexOf(" -> ");
+        path = renamed >= 0 ? path.substring(renamed + 4) : path;
+        return path.startsWith("\"") && path.endsWith("\"") ? path.substring(1, path.length() - 1) : path;
     }
 
     private static Integer behind(Path repoRoot) {
