@@ -40,8 +40,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * End-to-end persistence tests for tool messages (V14): the structured tool payload round-trips
- * through the jsonb {@code tool_content} column via Hibernate with the {@code tool_call_id}
+ * End-to-end persistence tests for tool messages (V14, V54): the structured tool payload
+ * round-trips as the tool part of the jsonb {@code parts} column via Hibernate with the {@code tool_call_id}
  * correlation intact, and Row-Level Security still filters tool messages by the conversation's
  * tenant hierarchy. RLS is exercised through the least-privilege {@code cauce_app} role (the
  * test superuser bypasses RLS, so it is used only to seed).

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolResult;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -180,6 +181,46 @@ class MessageTest {
 
         assertThatThrownBy(() -> Message.rehydrate(UUID.randomUUID(), CONVERSATION,
                 MessageRole.USER, "hi", call, java.time.Instant.now()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // --- parts (ADR 0004, decision 2) ---
+
+    @Test
+    void parts_aTextMessageIsOneTextPart_andAToolMessageItsOneToolPart() {
+        ToolCall call = new ToolCall("call-1", "get_current_time", Map.of());
+
+        assertThat(newMessage().parts()).containsExactly(new MessagePart.Text("Hello"));
+        assertThat(Message.toolCall(CONVERSATION, call).parts()).containsExactly(new MessagePart.ToolCallPart(call));
+    }
+
+    @Test
+    void rehydrateParts_derivesContentAndToolContentFromTheParts() {
+        ToolResult result = ToolResult.success("call-1", "get_current_time", "10:15");
+
+        Message text = Message.rehydrateParts(UUID.randomUUID(), CONVERSATION, MessageRole.AGENT,
+                List.of(new MessagePart.Text("Hola"), new MessagePart.Text("¿Algo más?")), null, java.time.Instant.now());
+        Message tool = Message.rehydrateParts(UUID.randomUUID(), CONVERSATION, MessageRole.TOOL_RESULT,
+                List.of(new MessagePart.ToolResultPart(result)), null, java.time.Instant.now());
+
+        assertThat(text.content()).isEqualTo("Hola\n¿Algo más?");
+        assertThat(text.toolContent()).isEmpty();
+        assertThat(tool.content()).isEqualTo("10:15");
+        assertThat(tool.toolContent()).contains(result);
+    }
+
+    @Test
+    void rehydrateParts_rejectsNoParts_aToolPartInATextRole_andTwoPartsInAToolRole() {
+        ToolCall call = new ToolCall("call-1", "get_current_time", Map.of());
+        java.time.Instant now = java.time.Instant.now();
+
+        assertThatThrownBy(() -> Message.rehydrateParts(UUID.randomUUID(), CONVERSATION, MessageRole.USER,
+                List.of(), null, now)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Message.rehydrateParts(UUID.randomUUID(), CONVERSATION, MessageRole.USER,
+                List.of(new MessagePart.Text("hi"), new MessagePart.ToolCallPart(call)), null, now))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Message.rehydrateParts(UUID.randomUUID(), CONVERSATION, MessageRole.TOOL_CALL,
+                List.of(new MessagePart.ToolCallPart(call), new MessagePart.Text("hi")), null, now))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

@@ -141,7 +141,7 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
                 .isInstanceOf(LlmRateLimitException.class);
 
         String errorContent = jdbc.queryForObject(
-                "SELECT content FROM messages WHERE conversation_id = ? AND role = 'SYSTEM'",
+                "SELECT parts -> 0 ->> 'text' FROM messages WHERE conversation_id = ? AND role = 'SYSTEM'",
                 String.class, conversation.id());
         assertThat(errorContent).startsWith("[orchestration_error] LlmRateLimitException: ");
         Integer agentMessages = jdbc.queryForObject(
@@ -193,7 +193,7 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
         // The tool messages carry their structured payload (jsonb), persisted and API-visible.
         Integer toolMessagesWithContent = jdbc.queryForObject(
                 "SELECT count(*) FROM messages WHERE conversation_id = ? "
-                        + "AND role IN ('TOOL_CALL', 'TOOL_RESULT') AND tool_content IS NOT NULL",
+                        + "AND role IN ('TOOL_CALL', 'TOOL_RESULT') AND parts -> 0 ->> 'type' IN ('tool_call', 'tool_result')",
                 Integer.class, conversation.id());
         assertThat(toolMessagesWithContent).isEqualTo(2);
     }
@@ -227,10 +227,12 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
         // the agent's turn and the provider refused it (no prefill). The order is now the database's
         // sequence, which no clock moves.
         Instant now = clock.instant();
-        jdbc.update("INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'AGENT', ?, ?)",
+        jdbc.update("INSERT INTO messages (id, conversation_id, role, parts, created_at) VALUES (?, ?, 'AGENT', "
+                        + "jsonb_build_array(jsonb_build_object('type', 'text', 'text', ?::text)), ?)",
                 UUID.randomUUID(), conversation.id(), "¿La confirmo?", Timestamp.from(now.plusSeconds(60)));
         UUID yes = UUID.randomUUID();
-        jdbc.update("INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, 'USER', ?, ?)",
+        jdbc.update("INSERT INTO messages (id, conversation_id, role, parts, created_at) VALUES (?, ?, 'USER', "
+                        + "jsonb_build_array(jsonb_build_object('type', 'text', 'text', ?::text)), ?)",
                 yes, conversation.id(), "Sí", Timestamp.from(now.minusSeconds(60)));
         List<List<String>> sent = new ArrayList<>();
         mockLlmProvider.respondWith(invocation -> {
@@ -242,7 +244,7 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
 
         assertThat(sent).singleElement().satisfies(messages ->
                 assertThat(messages).containsExactly("USER:Hola", "ASSISTANT:¿La confirmo?", "USER:Sí"));
-        assertThat(jdbc.queryForList("SELECT content FROM messages WHERE conversation_id = ? ORDER BY seq",
+        assertThat(jdbc.queryForList("SELECT parts -> 0 ->> 'text' FROM messages WHERE conversation_id = ? ORDER BY seq",
                 String.class, conversation.id())).containsExactly("Hola", "¿La confirmo?", "Sí", "Hecho.");
     }
 
@@ -269,8 +271,8 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
             rows.add(new Object[]{UUID.randomUUID(), conversation.id(), "USER", content,
                     Timestamp.from(base.plusMillis(i))});
         }
-        jdbc.batchUpdate("INSERT INTO messages (id, conversation_id, role, content, created_at) "
-                + "VALUES (?, ?, ?, ?, ?)", rows);
+        jdbc.batchUpdate("INSERT INTO messages (id, conversation_id, role, parts, created_at) "
+                + "VALUES (?, ?, ?, jsonb_build_array(jsonb_build_object('type', 'text', 'text', ?::text)), ?)", rows);
     }
 
     private UUID lastUserMessageId() {

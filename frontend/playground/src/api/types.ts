@@ -127,10 +127,30 @@ export interface ConversationResponse {
 }
 
 /**
- * Structured tool payload of a TOOL_CALL / TOOL_RESULT message (backend
- * `ToolContentResponse`, NON_NULL serialization): a call carries `input`,
- * a result carries `output` + `is_error` — the other variant's keys are
- * omitted, so the message `role` is the discriminator.
+ * One part of a message (backend `PartResponse`, ADR 0004): a text message
+ * is text parts, a tool message its one tool part. `type` discriminates;
+ * each variant carries only its own keys.
+ */
+export type MessagePart =
+  | { type: 'text'; text: string }
+  | {
+      type: 'tool_call'
+      tool_call_id: string
+      tool_name: string
+      input: Record<string, unknown>
+    }
+  | {
+      type: 'tool_result'
+      tool_call_id: string
+      tool_name: string
+      output: string
+      is_error: boolean
+    }
+
+/**
+ * The tool payload an instance from before message parts sent as
+ * `tool_content` (a call carries `input`, a result `output` + `is_error`).
+ * Read only as a fallback for such an instance.
  */
 export interface ToolContentResponse {
   tool_call_id: string
@@ -141,15 +161,17 @@ export interface ToolContentResponse {
 }
 
 /**
- * A thread message. `tool_content` travels only on TOOL_CALL / TOOL_RESULT
- * messages (omitted entirely for text roles, and absent on older
- * instances); `content` still flattens them (tool name / output text). The
+ * A thread message. `parts` is the message as stored (absent on an instance
+ * from before message parts, which sent `tool_content` instead); `content`
+ * is derived from them (the text, or a tool message's name / output). The
  * wire carries no invocation link — a known, accepted gap.
  */
 export interface MessageResponse {
   id: string
   role: MessageRole
   content: string
+  parts?: MessagePart[]
+  /** Only from an instance from before message parts. */
   tool_content?: ToolContentResponse
   /**
    * Present only on a FALLBACK message: the public reason of the terminal

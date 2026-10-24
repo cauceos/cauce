@@ -137,7 +137,7 @@ abstract class AbstractBusinessApiIT extends AbstractApiIntegrationTest {
         List<String> outputs = new java.util.ArrayList<>();
         messages.get("data").forEach(message -> {
             if ("TOOL_RESULT".equals(message.get("role").asText())) {
-                outputs.add(message.at("/tool_content/output").asText());
+                outputs.add(message.at("/parts/0/output").asText());
             }
         });
         return outputs;

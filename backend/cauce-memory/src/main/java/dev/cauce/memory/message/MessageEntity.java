@@ -1,5 +1,7 @@
 package dev.cauce.memory.message;
 
+import dev.cauce.core.message.MessagePart;
+import dev.cauce.core.message.MessageParts;
 import dev.cauce.core.message.MessageRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -8,6 +10,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -33,17 +36,13 @@ public class MessageEntity {
     @Column(name = "role", nullable = false, length = 20)
     private MessageRole role;
 
-    @Column(name = "content", nullable = false)
-    private String content;
-
     /**
-     * Structured tool payload for TOOL_CALL / TOOL_RESULT messages, stored as jsonb; null for
-     * text messages. Shape: {tool_call_id, tool_name, input} for a call,
-     * {tool_call_id, tool_name, output, is_error} for a result (built by {@link MessageMapper}).
+     * The message's parts in their one JSON form ({@link MessageParts}), stored as jsonb (V54):
+     * the row's only content, ADR 0004's single source of truth.
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "tool_content")
-    private Map<String, Object> toolContent;
+    @Column(name = "parts", nullable = false)
+    private List<Map<String, Object>> parts;
 
     /** The internal failure type a FALLBACK message answers; null for every other role (V28). */
     @Column(name = "failure_type", length = 50)
@@ -63,24 +62,17 @@ public class MessageEntity {
         // for JPA
     }
 
-    /** Convenience constructor for a text message (USER / AGENT / SYSTEM): no tool content. */
-    public MessageEntity(UUID id, UUID conversationId, MessageRole role, String content,
-                         Instant createdAt) {
-        this(id, conversationId, role, content, null, createdAt);
+    /** Convenience constructor for a text message (USER / AGENT / SYSTEM): one text part. */
+    public MessageEntity(UUID id, UUID conversationId, MessageRole role, String text, Instant createdAt) {
+        this(id, conversationId, role, MessageParts.toJson(List.of(new MessagePart.Text(text))), null, createdAt);
     }
 
-    public MessageEntity(UUID id, UUID conversationId, MessageRole role, String content,
-                         Map<String, Object> toolContent, Instant createdAt) {
-        this(id, conversationId, role, content, toolContent, null, createdAt);
-    }
-
-    public MessageEntity(UUID id, UUID conversationId, MessageRole role, String content,
-                         Map<String, Object> toolContent, String failureType, Instant createdAt) {
+    public MessageEntity(UUID id, UUID conversationId, MessageRole role, List<Map<String, Object>> parts,
+                         String failureType, Instant createdAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.role = role;
-        this.content = content;
-        this.toolContent = toolContent;
+        this.parts = parts;
         this.failureType = failureType;
         this.createdAt = createdAt;
     }
@@ -101,12 +93,8 @@ public class MessageEntity {
         return role;
     }
 
-    public String getContent() {
-        return content;
-    }
-
-    public Map<String, Object> getToolContent() {
-        return toolContent;
+    public List<Map<String, Object>> getParts() {
+        return parts;
     }
 
     public Instant getCreatedAt() {

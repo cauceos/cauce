@@ -69,7 +69,8 @@ public final class ConductAuditEvents {
                 "agent_id", agentId.toString(),
                 "channel_type", channelType,
                 "identity_id", identityId.toString(),
-                "content_hash", AuditContentHash.of(tenantId, userMessage.content()),
+                "content_hash", AuditContentHash.ofParts(tenantId, userMessage.parts()),
+                "content_hash_version", AuditContentHash.PARTS_VERSION,
                 "content_length", userMessage.content().length()));
     }
 
@@ -133,7 +134,8 @@ public final class ConductAuditEvents {
                 "agent_id", agentId.toString(),
                 "finish_reason", finishReason,
                 "rounds", rounds,
-                "content_hash", AuditContentHash.of(tenantId, agentMessage.content()),
+                "content_hash", AuditContentHash.ofParts(tenantId, agentMessage.parts()),
+                "content_hash_version", AuditContentHash.PARTS_VERSION,
                 "content_length", agentMessage.content().length()));
     }
 

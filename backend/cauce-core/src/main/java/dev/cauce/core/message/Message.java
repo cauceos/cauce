@@ -5,9 +5,11 @@ import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolContent;
 import dev.cauce.core.tool.ToolResult;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * A single message within a {@link dev.cauce.core.conversation.Conversation}.
@@ -17,11 +19,12 @@ import java.util.UUID;
  * {@link #from} (text), {@link #toolCall}, or {@link #toolResult}, each minting a
  * time-ordered UUIDv7 id.
  *
- * <p>{@code content} is opaque UTF-8 plain text, preserved verbatim (not trimmed) and
- * never blank. Text messages (USER, AGENT, SYSTEM) carry only content. Tool messages
- * (TOOL_CALL, TOOL_RESULT) additionally carry structured {@link ToolContent}; their
- * content is a human-readable rendering (the tool name for a call, the output for a
- * result), while the machine-readable payload lives in {@link #toolContent()}.
+ * <p>A message is an ordered list of {@link MessagePart parts} (ADR 0004, decision 2), its one
+ * source of truth: a text message (USER, AGENT, SYSTEM, FALLBACK) is text parts, a tool message
+ * (TOOL_CALL, TOOL_RESULT) its one tool part. {@link #content()} and {@link #toolContent()} are
+ * derived from the parts, never stored: the text, verbatim (not trimmed) and never blank, and for
+ * a tool message a human-readable rendering of its part (the tool name for a call, the output for
+ * a result).
  */
 public final class Message {
 
@@ -30,18 +33,16 @@ public final class Message {
     private final UUID id;
     private final UUID conversationId;
     private final MessageRole role;
-    private final String content;
-    private final ToolContent toolContent;
+    private final List<MessagePart> parts;
     private final String failureType; // present exactly for FALLBACK
     private final Instant createdAt;
 
-    private Message(UUID id, UUID conversationId, MessageRole role, String content,
-                    ToolContent toolContent, String failureType, Instant createdAt) {
+    private Message(UUID id, UUID conversationId, MessageRole role, List<MessagePart> parts,
+                    String failureType, Instant createdAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.role = role;
-        this.content = content;
-        this.toolContent = toolContent;
+        this.parts = parts;
         this.failureType = failureType;
         this.createdAt = createdAt;
     }
@@ -54,13 +55,13 @@ public final class Message {
     /** Creates a new TOOL_CALL message wrapping the agent's request to run a tool. */
     public static Message toolCall(UUID conversationId, ToolCall call) {
         Objects.requireNonNull(call, "call");
-        return create(conversationId, MessageRole.TOOL_CALL, call.toolName(), call);
+        return create(conversationId, MessageRole.TOOL_CALL, null, call);
     }
 
     /** Creates a new TOOL_RESULT message wrapping the output of executing a tool call. */
     public static Message toolResult(UUID conversationId, ToolResult result) {
         Objects.requireNonNull(result, "result");
-        return create(conversationId, MessageRole.TOOL_RESULT, renderContent(result), result);
+        return create(conversationId, MessageRole.TOOL_RESULT, null, result);
     }
 
     /**
@@ -82,9 +83,9 @@ public final class Message {
                                   ToolContent toolContent, String failureType) {
         Objects.requireNonNull(conversationId, "conversationId");
         Objects.requireNonNull(role, "role");
-        validate(role, content, toolContent, failureType);
-        return new Message(UuidGenerator.newV7(), conversationId, role, content, toolContent,
-                failureType, Instant.now());
+        List<MessagePart> parts = partsOf(content, toolContent);
+        validate(role, parts, failureType);
+        return new Message(UuidGenerator.newV7(), conversationId, role, parts, failureType, Instant.now());
     }
 
     /** Rebuilds a text message from persisted state. For the persistence layer only. */
@@ -94,7 +95,8 @@ public final class Message {
     }
 
     /**
-     * Rebuilds a message (text or tool) from persisted state. For the persistence layer only.
+     * Rebuilds a message (text or tool) from persisted state: a tool message from its tool
+     * content alone, {@code content} being its rendering. For the persistence layer only.
      */
     public static Message rehydrate(UUID id, UUID conversationId, MessageRole role,
                                     String content, ToolContent toolContent, Instant createdAt) {
@@ -108,12 +110,20 @@ public final class Message {
     public static Message rehydrate(UUID id, UUID conversationId, MessageRole role,
                                     String content, ToolContent toolContent, String failureType,
                                     Instant createdAt) {
+        return rehydrateParts(id, conversationId, role, partsOf(content, toolContent), failureType, createdAt);
+    }
+
+    /** Rebuilds any message from its persisted parts, in order. For the persistence layer only. */
+    public static Message rehydrateParts(UUID id, UUID conversationId, MessageRole role,
+                                         List<MessagePart> parts, String failureType, Instant createdAt) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(conversationId, "conversationId");
         Objects.requireNonNull(role, "role");
+        Objects.requireNonNull(parts, "parts");
         Objects.requireNonNull(createdAt, "createdAt");
-        validate(role, content, toolContent, failureType);
-        return new Message(id, conversationId, role, content, toolContent, failureType, createdAt);
+        List<MessagePart> copy = List.copyOf(parts);
+        validate(role, copy, failureType);
+        return new Message(id, conversationId, role, copy, failureType, createdAt);
     }
 
     /**
@@ -123,7 +133,7 @@ public final class Message {
      * back in this order.
      */
     public Message stampedAt(Instant createdAt) {
-        return new Message(id, conversationId, role, content, toolContent, failureType,
+        return new Message(id, conversationId, role, parts, failureType,
                 Objects.requireNonNull(createdAt, "createdAt"));
     }
 
@@ -132,13 +142,38 @@ public final class Message {
     }
 
     /**
-     * Enforces the message invariants: content is always present (non-blank), tool content is
-     * present exactly for the tool roles, matching the role's kind, and a failure type is
-     * present exactly for FALLBACK.
+     * The parts of a message given as text or, for a tool message, as its tool content: the tool
+     * part alone (its text is a rendering of it), else one text part.
      */
-    private static void validate(MessageRole role, String content, ToolContent toolContent,
-                                 String failureType) {
-        if (content == null || content.isBlank()) {
+    private static List<MessagePart> partsOf(String content, ToolContent toolContent) {
+        if (toolContent instanceof ToolCall call) {
+            return List.of(new MessagePart.ToolCallPart(call));
+        }
+        if (toolContent instanceof ToolResult result) {
+            return List.of(new MessagePart.ToolResultPart(result));
+        }
+        if (content == null) {
+            throw new IllegalArgumentException("content must not be blank");
+        }
+        return List.of(new MessagePart.Text(content));
+    }
+
+    /** The text of {@code parts}: each text verbatim, a tool part's rendering, one per line. */
+    private static String render(List<MessagePart> parts) {
+        return parts.stream().map(part -> switch (part) {
+            case MessagePart.Text text -> text.text();
+            case MessagePart.ToolCallPart toolCall -> toolCall.call().toolName();
+            case MessagePart.ToolResultPart toolResult -> renderContent(toolResult.result());
+        }).collect(Collectors.joining("\n"));
+    }
+
+    /**
+     * Enforces the message invariants: at least one part and a non-blank text; a tool role is
+     * exactly its one tool part, of the role's kind, and every other role is text parts only; a
+     * failure type is present exactly for FALLBACK.
+     */
+    private static void validate(MessageRole role, List<MessagePart> parts, String failureType) {
+        if (parts.isEmpty() || render(parts).isBlank()) {
             throw new IllegalArgumentException("content must not be blank");
         }
         if (role == MessageRole.FALLBACK) {
@@ -150,18 +185,18 @@ public final class Message {
         }
         switch (role) {
             case TOOL_CALL -> {
-                if (!(toolContent instanceof ToolCall)) {
+                if (parts.size() != 1 || !(parts.get(0) instanceof MessagePart.ToolCallPart)) {
                     throw new IllegalArgumentException("TOOL_CALL requires ToolCall tool content");
                 }
             }
             case TOOL_RESULT -> {
-                if (!(toolContent instanceof ToolResult)) {
+                if (parts.size() != 1 || !(parts.get(0) instanceof MessagePart.ToolResultPart)) {
                     throw new IllegalArgumentException(
                             "TOOL_RESULT requires ToolResult tool content");
                 }
             }
             default -> {
-                if (toolContent != null) {
+                if (!parts.stream().allMatch(MessagePart.Text.class::isInstance)) {
                     throw new IllegalArgumentException(role + " must not carry tool content");
                 }
             }
@@ -180,13 +215,23 @@ public final class Message {
         return role;
     }
 
+    /** The message's parts, in order: its one source of truth. */
+    public List<MessagePart> parts() {
+        return parts;
+    }
+
+    /** The message's text, derived from its parts (a tool message's is a rendering of its part). */
     public String content() {
-        return content;
+        return render(parts);
     }
 
     /** The structured tool payload, present only for TOOL_CALL / TOOL_RESULT messages. */
     public Optional<ToolContent> toolContent() {
-        return Optional.ofNullable(toolContent);
+        return switch (parts.get(0)) {
+            case MessagePart.ToolCallPart toolCall -> Optional.of(toolCall.call());
+            case MessagePart.ToolResultPart toolResult -> Optional.of(toolResult.result());
+            case MessagePart.Text ignored -> Optional.empty();
+        };
     }
 
     /** The failure type a FALLBACK message answers; empty for every other role. */
@@ -214,6 +259,7 @@ public final class Message {
     @Override
     public String toString() {
         // content is truncated and never fully exposed (it may be large or sensitive).
+        String content = content();
         String preview = content.length() <= TO_STRING_CONTENT_LIMIT
                 ? content
                 : content.substring(0, TO_STRING_CONTENT_LIMIT) + "...";

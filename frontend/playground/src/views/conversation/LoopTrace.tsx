@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { MessageResponse } from '../../api/types'
+import type { MessageResponse, ToolContentResponse } from '../../api/types'
 import type { ThreadItem } from './thread-model'
 
 type LoopItem = Extract<ThreadItem, { kind: 'loop' }>
@@ -8,10 +8,10 @@ type LoopItem = Extract<ThreadItem, { kind: 'loop' }>
  * The screen's signature: a maximal run of consecutive TOOL_CALL /
  * TOOL_RESULT messages, rendered as one collapsible trace block.
  *
- * `tool_content` supplies the structured view — `input` on the call,
- * `output` + `is_error` on the result. Messages without it (older
- * instances) fall back to the flattened `content`; arguments are never
- * invented to fill the gap.
+ * The message's tool part supplies the structured view — `input` on the
+ * call, `output` + `is_error` on the result (`tool_content` on an instance
+ * from before message parts). Messages with neither fall back to the
+ * flattened `content`; arguments are never invented to fill the gap.
  *
  * There is no "round N" label: two calls in one round and two one-call
  * rounds are identical on the wire, so the summary counts tool calls only.
@@ -63,8 +63,17 @@ export function LoopTrace({ item }: { item: LoopItem }) {
   )
 }
 
+/** A tool message's payload: its tool part, else an older instance's `tool_content`. */
+function toolPayload(message: MessageResponse): ToolContentResponse | undefined {
+  const part = message.parts?.find(
+    (p) => p.type === 'tool_call' || p.type === 'tool_result',
+  )
+  if (part === undefined) return message.tool_content
+  return part
+}
+
 function CallCard({ message }: { message: MessageResponse }) {
-  const tool = message.tool_content
+  const tool = toolPayload(message)
   return (
     <div className="tool">
       <div className="th">
@@ -82,7 +91,7 @@ function CallCard({ message }: { message: MessageResponse }) {
 }
 
 function ResultCard({ message }: { message: MessageResponse }) {
-  const tool = message.tool_content
+  const tool = toolPayload(message)
   const errored = tool?.is_error === true
   return (
     <div className={errored ? 'tool err' : 'tool'}>

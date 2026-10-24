@@ -210,7 +210,13 @@ final class EvalWorld {
     }
 
     private TurnTrace trace(String message, UUID conversationId, UUID messageId) throws Exception {
-        List<Map<String, Object>> rows = s.admin().queryForList("SELECT role, content, tool_content::text AS tool "
+        // A message is its parts (V54): a tool message its one tool part, a text message its text;
+        // a result's content is its output, "[empty result]" when blank, as the API renders it.
+        List<Map<String, Object>> rows = s.admin().queryForList("SELECT role, "
+                + "CASE WHEN role IN ('TOOL_CALL', 'TOOL_RESULT') THEN (parts -> 0)::text END AS tool, "
+                + "CASE WHEN role = 'TOOL_RESULT' THEN CASE WHEN btrim(parts -> 0 ->> 'output') = '' "
+                + "THEN '[empty result]' ELSE parts -> 0 ->> 'output' END "
+                + "ELSE (SELECT string_agg(p ->> 'text', E'\n') FROM jsonb_array_elements(parts) p) END AS content "
                 + "FROM messages WHERE conversation_id = ? AND role <> 'USER' "
                 + "AND seq > (SELECT seq FROM messages WHERE id = ?) ORDER BY seq", conversationId, messageId);
         List<ToolUse> tools = new ArrayList<>();

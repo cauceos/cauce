@@ -27,9 +27,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * End-to-end test of the enriched message DTO: TOOL_CALL / TOOL_RESULT messages carry the
- * structured {@code tool_content} (call → {@code input}; result → {@code output} + {@code
- * is_error}), and text messages carry none. The tool round is seeded directly through the
+ * End-to-end test of the message DTO's parts: a TOOL_CALL / TOOL_RESULT message carries its one
+ * tool part (call → {@code input}; result → {@code output} + {@code is_error}), a text message one
+ * text part, and none carries the retired {@code tool_content}. The tool round is seeded directly through the
  * persistence services (no live LLM), then read back over the real messages endpoint.
  */
 class MessageToolContentApiIT extends AbstractApiIntegrationTest {
@@ -88,24 +88,30 @@ class MessageToolContentApiIT extends AbstractApiIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, clientAuth))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(3))
-                // Text message: no tool_content at all.
+                // Text message: one text part.
                 .andExpect(jsonPath("$.data[0].role").value("USER"))
                 .andExpect(jsonPath("$.data[0].content").value("What time is it?"))
                 .andExpect(jsonPath("$.data[0].tool_content").doesNotExist())
+                .andExpect(jsonPath("$.data[0].parts.length()").value(1))
+                .andExpect(jsonPath("$.data[0].parts[0].type").value("text"))
+                .andExpect(jsonPath("$.data[0].parts[0].tool_name").doesNotExist())
                 // TOOL_CALL: input present; result-only fields absent.
                 .andExpect(jsonPath("$.data[1].role").value("TOOL_CALL"))
                 .andExpect(jsonPath("$.data[1].content").value("get_current_time"))
-                .andExpect(jsonPath("$.data[1].tool_content.tool_call_id").value("call-1"))
-                .andExpect(jsonPath("$.data[1].tool_content.tool_name").value("get_current_time"))
-                .andExpect(jsonPath("$.data[1].tool_content.input.timezone").value("UTC"))
-                .andExpect(jsonPath("$.data[1].tool_content.output").doesNotExist())
-                .andExpect(jsonPath("$.data[1].tool_content.is_error").doesNotExist())
+                .andExpect(jsonPath("$.data[1].tool_content").doesNotExist())
+                .andExpect(jsonPath("$.data[1].parts[0].type").value("tool_call"))
+                .andExpect(jsonPath("$.data[1].parts[0].tool_call_id").value("call-1"))
+                .andExpect(jsonPath("$.data[1].parts[0].tool_name").value("get_current_time"))
+                .andExpect(jsonPath("$.data[1].parts[0].input.timezone").value("UTC"))
+                .andExpect(jsonPath("$.data[1].parts[0].output").doesNotExist())
+                .andExpect(jsonPath("$.data[1].parts[0].is_error").doesNotExist())
                 // TOOL_RESULT: output + is_error present; input absent.
                 .andExpect(jsonPath("$.data[2].role").value("TOOL_RESULT"))
-                .andExpect(jsonPath("$.data[2].tool_content.tool_call_id").value("call-1"))
-                .andExpect(jsonPath("$.data[2].tool_content.output").value("2026-08-13T10:00:00Z"))
-                .andExpect(jsonPath("$.data[2].tool_content.is_error").value(false))
-                .andExpect(jsonPath("$.data[2].tool_content.input").doesNotExist());
+                .andExpect(jsonPath("$.data[2].parts[0].type").value("tool_result"))
+                .andExpect(jsonPath("$.data[2].parts[0].tool_call_id").value("call-1"))
+                .andExpect(jsonPath("$.data[2].parts[0].output").value("2026-08-13T10:00:00Z"))
+                .andExpect(jsonPath("$.data[2].parts[0].is_error").value(false))
+                .andExpect(jsonPath("$.data[2].parts[0].input").doesNotExist());
     }
 
     // --- helpers ---

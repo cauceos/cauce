@@ -164,11 +164,11 @@ class AuditConductIT extends AbstractOrchestrationIntegrationTest {
         assertThat(payloadField(clientA.id(), 1, "message_id"))
                 .isEqualTo(result.messageId().toString());
         assertThat(payloadField(clientA.id(), 1, "content_hash"))
-                .isEqualTo(AuditContentHash.of(clientA.id(), "Necesito una cita"));
+                .isEqualTo(textHash(clientA.id(), "Necesito una cita"));
         assertThat(payloadField(clientA.id(), 2, "finish_reason")).isEqualTo("STOP");
         assertThat(payloadField(clientA.id(), 2, "rounds")).isEqualTo("1");
         assertThat(payloadField(clientA.id(), 2, "content_hash"))
-                .isEqualTo(AuditContentHash.of(clientA.id(), "Claro, te ayudo."));
+                .isEqualTo(textHash(clientA.id(), "Claro, te ayudo."));
         Integer rawTextAnywhere = jdbc.queryForObject(
                 "SELECT count(*) FROM audit_log_entries "
                         + "WHERE payload::text LIKE '%Necesito una cita%' "
@@ -199,16 +199,16 @@ class AuditConductIT extends AbstractOrchestrationIntegrationTest {
         InboundMessageResult result = ingestAndProcess(clientA, agentA, "Texto original");
         drainAs(clientA);
         String auditedHash = payloadField(clientA.id(), 1, "content_hash");
-        assertThat(auditedHash).isEqualTo(AuditContentHash.of(clientA.id(), "Texto original"));
+        assertThat(auditedHash).isEqualTo(textHash(clientA.id(), "Texto original"));
 
         // A privileged edit of the mutable business row is detectable: the stored text no
         // longer hashes to what the chain committed to at ingest time.
-        jdbc.update("UPDATE messages SET content = 'texto manipulado' WHERE id = ?",
-                result.messageId());
+        jdbc.update("UPDATE messages SET parts = jsonb_build_array(jsonb_build_object('type', 'text', "
+                + "'text', 'texto manipulado')) WHERE id = ?", result.messageId());
         String storedContent = jdbc.queryForObject(
-                "SELECT content FROM messages WHERE id = ?", String.class, result.messageId());
+                "SELECT parts -> 0 ->> 'text' FROM messages WHERE id = ?", String.class, result.messageId());
 
-        assertThat(AuditContentHash.of(clientA.id(), storedContent)).isNotEqualTo(auditedHash);
+        assertThat(textHash(clientA.id(), storedContent)).isNotEqualTo(auditedHash);
         // The audit record itself was not touched: the chain still verifies.
         assertThat(verifyAs(clientA).valid()).isTrue();
     }
@@ -223,13 +223,14 @@ class AuditConductIT extends AbstractOrchestrationIntegrationTest {
 
         // Concrete erasure: the text lives in the MUTABLE business table, where deletion
         // operates. The chain committed only to its hash.
-        jdbc.update("UPDATE messages SET content = '[erased]' WHERE id = ?", result.messageId());
+        jdbc.update("UPDATE messages SET parts = jsonb_build_array(jsonb_build_object('type', 'text', "
+                + "'text', '[erased]')) WHERE id = ?", result.messageId());
 
         assertThat(verifyAs(clientA).valid()).isTrue();
         assertThat(payloadField(clientA.id(), 1, "content_hash")).isEqualTo(auditedHash);
         // Proves "a message with this exact hash was processed" without recovering the text.
         assertThat(auditedHash).isEqualTo(
-                AuditContentHash.of(clientA.id(), "Dato personal: 612345678"));
+                textHash(clientA.id(), "Dato personal: 612345678"));
     }
 
     // === ORDER, TENANT ISOLATION, RLS ===
@@ -250,9 +251,9 @@ class AuditConductIT extends AbstractOrchestrationIntegrationTest {
             assertThat(verifyAs(tenant).valid()).isTrue();
         }
         assertThat(payloadField(clientA.id(), 1, "content_hash"))
-                .isEqualTo(AuditContentHash.of(clientA.id(), "Hola de A"));
+                .isEqualTo(textHash(clientA.id(), "Hola de A"));
         assertThat(payloadField(clientB.id(), 1, "content_hash"))
-                .isEqualTo(AuditContentHash.of(clientB.id(), "Hola de B"));
+                .isEqualTo(textHash(clientB.id(), "Hola de B"));
 
         // RLS: a tenant sees only its own conduct records.
         assertThat(countAs("audit_log_entries", clientA.id())).isEqualTo(2);
@@ -338,5 +339,11 @@ class AuditConductIT extends AbstractOrchestrationIntegrationTest {
                 "SELECT payload ->> ? FROM audit_log_entries "
                         + "WHERE tenant_id = ? AND sequence_number = ?",
                 String.class, field, tenantId, sequenceNumber);
+    }
+
+    /** The content hash v2 of a message of one text part, what the conduct payloads carry. */
+    private static String textHash(java.util.UUID tenantId, String text) {
+        return AuditContentHash.ofParts(tenantId,
+                java.util.List.of(new dev.cauce.core.message.MessagePart.Text(text)));
     }
 }

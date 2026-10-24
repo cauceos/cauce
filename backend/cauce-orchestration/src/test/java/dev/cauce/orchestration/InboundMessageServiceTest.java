@@ -197,7 +197,7 @@ class InboundMessageServiceTest {
                 .containsEntry("agent_id", agentId.toString())
                 .containsEntry("channel_type", "api")
                 .containsEntry("identity_id", conversation.identityId().toString())
-                .containsEntry("content_hash", AuditContentHash.of(owningTenantId, "Hola"))
+                .containsEntry("content_hash", textHash(owningTenantId, "Hola"))
                 .containsEntry("content_length", 4);
         // The binding is by hash: the raw text never enters the audit payload, and the
         // interlocutor enters as its opaque id only, never its value (PC-3).
@@ -317,5 +317,11 @@ class InboundMessageServiceTest {
     private static IngestIdempotencyRecordEntity storedRecord(UUID agentId, String key) {
         return new IngestIdempotencyRecordEntity(UUID.randomUUID(), agentId, key,
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), Instant.now());
+    }
+
+    /** The content hash v2 of a message of one text part, what the conduct payloads carry. */
+    private static String textHash(java.util.UUID tenantId, String text) {
+        return AuditContentHash.ofParts(tenantId,
+                java.util.List.of(new dev.cauce.core.message.MessagePart.Text(text)));
     }
 }

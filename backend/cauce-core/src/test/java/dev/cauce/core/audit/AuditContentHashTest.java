@@ -3,12 +3,45 @@ package dev.cauce.core.audit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.cauce.core.message.MessagePart;
+import dev.cauce.core.tool.ToolCall;
+import dev.cauce.core.tool.ToolResult;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class AuditContentHashTest {
 
     private final UUID tenantId = UUID.randomUUID();
+
+    /** The tenant of the vectors published in docs/spec/audit-chain-format.md §6.3. */
+    private static final UUID SPEC_TENANT = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    @Test
+    void of_matchesThePublishedV1Vector() {
+        assertThat(AuditContentHash.of(SPEC_TENANT, "Hola"))
+                .isEqualTo("afe04b403af734d44a3390b5ad13c72eef270f1392a892d12458ad1a89eaf1e8");
+    }
+
+    @Test
+    void ofParts_matchesThePublishedV2Vectors() {
+        assertThat(AuditContentHash.ofParts(SPEC_TENANT, List.of(new MessagePart.Text("Hola"))))
+                .isEqualTo("af8bb27c1a8c17c8ae3084111c4b86480f38b1c44c5055cacc7f77f1719acda7");
+        assertThat(AuditContentHash.ofParts(SPEC_TENANT, List.of(new MessagePart.ToolCallPart(
+                new ToolCall("call-1", "get_current_time", Map.of("tz", "UTC"))))))
+                .isEqualTo("e0838bc04dd8e78b5d199d37823bc700e9956ee9fb9affe3e6fed5da028ab2bf");
+        assertThat(AuditContentHash.ofParts(SPEC_TENANT, List.of(new MessagePart.ToolResultPart(
+                ToolResult.success("call-1", "get_current_time", "10:15")))))
+                .isEqualTo("e7e2cd7866c10043abc3ed828fc721c121b31102a8a4e0dac9e0592121323d22");
+    }
+
+    @Test
+    void ofParts_isNotTheV1HashOfTheSameText() {
+        // Two versions side by side: a text hashed as parts never collides with its v1 hash.
+        assertThat(AuditContentHash.ofParts(tenantId, List.of(new MessagePart.Text("Hola"))))
+                .isNotEqualTo(AuditContentHash.of(tenantId, "Hola"));
+    }
 
     @Test
     void of_sameTenantAndContent_isDeterministicHex64() {

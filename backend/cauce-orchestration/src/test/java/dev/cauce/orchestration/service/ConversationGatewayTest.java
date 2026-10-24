@@ -131,7 +131,8 @@ class ConversationGatewayTest {
         assertThat(saved.role()).isEqualTo(MessageRole.AGENT);
         assertThat(saved.content()).isEqualTo("Reply");
         verify(messageRepository).save(argThat(entity ->
-                entity.getRole() == MessageRole.AGENT && entity.getContent().equals("Reply")));
+                entity.getRole() == MessageRole.AGENT && entity.getParts().equals(
+                        java.util.List.of(java.util.Map.of("type", "text", "text", "Reply")))));
         verify(conversationRepository).touchLastMessageAt(conversationId, STAMP);
         verifyNoInteractions(auditRecorder); // the plain append is deliberately unaudited
     }

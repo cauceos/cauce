@@ -38,16 +38,16 @@ class MessageMapperTest {
         assertThat(entity.getId()).isEqualTo(message.id());
         assertThat(entity.getConversationId()).isEqualTo(message.conversationId());
         assertThat(entity.getRole()).isEqualTo(MessageRole.AGENT);
-        assertThat(entity.getContent()).isEqualTo("Reply");
+        assertThat(entity.getParts()).containsExactly(Map.of("type", "text", "text", "Reply"));
         assertThat(entity.getCreatedAt()).isEqualTo(message.createdAt());
     }
 
     @Test
-    void toEntity_textMessage_leavesToolContentNull() {
+    void toEntity_textMessage_isOneTextPart() {
         MessageEntity entity = mapper.toEntity(
                 Message.from(UUID.randomUUID(), MessageRole.USER, "hi"));
 
-        assertThat(entity.getToolContent()).isNull();
+        assertThat(entity.getParts()).containsExactly(Map.of("type", "text", "text", "hi"));
     }
 
     @Test
@@ -74,12 +74,14 @@ class MessageMapperTest {
     }
 
     @Test
-    void toEntity_toolCall_writesCorrelationIdAndNameIntoJsonbMap() {
+    void toEntity_toolCall_writesItsOneToolPartWithTheV14Keys() {
         ToolCall call = new ToolCall("call-9", "get_current_time", Map.of());
 
         MessageEntity entity = mapper.toEntity(Message.toolCall(UUID.randomUUID(), call));
 
-        assertThat(entity.getToolContent())
+        assertThat(entity.getParts()).hasSize(1);
+        assertThat(entity.getParts().get(0))
+                .containsEntry("type", "tool_call")
                 .containsEntry("tool_call_id", "call-9")
                 .containsEntry("tool_name", "get_current_time")
                 .containsKey("input");
@@ -94,7 +96,7 @@ class MessageMapperTest {
         Message roundTripped = messageMapper.toDomain(entity);
 
         assertThat(entity.getFailureType()).isEqualTo("MAX_TOOL_ITERATIONS");
-        assertThat(entity.getToolContent()).isNull();
+        assertThat(entity.getParts()).containsExactly(Map.of("type", "text", "text", "Sorry."));
         assertThat(roundTripped.role()).isEqualTo(dev.cauce.core.message.MessageRole.FALLBACK);
         assertThat(roundTripped.failureType()).contains("MAX_TOOL_ITERATIONS");
         assertThat(roundTripped.content()).isEqualTo("Sorry.");

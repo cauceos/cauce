@@ -37,7 +37,8 @@ class ConductAuditEventsTest {
                 .containsEntry("agent_id", agentId.toString())
                 .containsEntry("channel_type", "telegram")
                 .containsEntry("identity_id", identityId.toString())
-                .containsEntry("content_hash", AuditContentHash.of(tenantId, "Necesito ayuda"))
+                .containsEntry("content_hash", textHash(tenantId, "Necesito ayuda"))
+                .containsEntry("content_hash_version", 2)
                 .containsEntry("content_length", 14);
         // Forbidden fields: raw text and the (erasable) identity value never enter; the
         // interlocutor is the opaque identity_id only (PC-3).
@@ -60,7 +61,8 @@ class ConductAuditEventsTest {
                 .containsEntry("agent_id", agentId.toString())
                 .containsEntry("finish_reason", "STOP")
                 .containsEntry("rounds", 3)
-                .containsEntry("content_hash", AuditContentHash.of(tenantId, "Claro, dime."))
+                .containsEntry("content_hash", textHash(tenantId, "Claro, dime."))
+                .containsEntry("content_hash_version", 2)
                 .containsEntry("content_length", 12);
         assertThat(event.payload().values()).doesNotContain("Claro, dime.");
     }
@@ -125,5 +127,11 @@ class ConductAuditEventsTest {
                 .containsEntry("output_hash", AuditToolHash.of(tenantId, "order A-1234 not found"));
         assertThat(event.payload().values()).doesNotContain("order A-1234 not found");
         assertThat(event.payload()).doesNotContainKeys("output");
+    }
+
+    /** The content hash v2 of a message of one text part, what the conduct payloads carry. */
+    private static String textHash(java.util.UUID tenantId, String text) {
+        return AuditContentHash.ofParts(tenantId,
+                java.util.List.of(new dev.cauce.core.message.MessagePart.Text(text)));
     }
 }

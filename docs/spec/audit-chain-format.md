@@ -312,6 +312,40 @@ NFC normalisation (§4.4). With `tenant_id` = `00000000-0000-0000-0000-000000000
 | `"10:15"` | `"10:15"` | `47e996141ce415480a5dc139f04a40a07cdbc1f8bc34debfca1768578043d056` |
 | `{}` | `{}` | `793a69aa841b41563205c132eb5540b0829a87f830fc201ce4219167645086dd` |
 
+The `conduct.message.received` and `conduct.agent.responded` payloads carry `content_hash`, the
+hash of the message. It has two versions, which coexist: nothing recorded is ever recomputed.
+
+- **v1**, over the message text, in every entry written before message parts (2026-10-24), and
+  in the hashes of business documents and agent prompts that other payloads carry:
+
+  ```
+  content_hash_v1 = lowercase_hex( SHA-256( UTF-8( "cauce-content:v1:" + tenant_id + ":" + text ) ) )
+  ```
+
+  `text` is hashed as stored, with no canonicalisation or normalisation.
+
+- **v2**, over the message's parts, in a payload that says `"content_hash_version": 2`:
+
+  ```
+  content_hash_v2 = lowercase_hex( SHA-256( UTF-8( "cauce-content:v2:" + tenant_id + ":" + canonical_json( parts ) ) ) )
+  ```
+
+  `parts` is the message as stored, an array of objects, each with its `type`: `text` (with
+  `text`), `tool_call` (with `tool_call_id`, `tool_name`, `input`) or `tool_result` (with
+  `tool_call_id`, `tool_name`, `output`, `is_error`). `canonical_json` follows §4 **with** NFC
+  normalisation (§4.4).
+
+With `tenant_id` = `00000000-0000-0000-0000-000000000001`:
+
+| Version | Content | Hash |
+|---|---|---|
+| v1 | `Hola` | `afe04b403af734d44a3390b5ad13c72eef270f1392a892d12458ad1a89eaf1e8` |
+| v2 | `[{"text":"Hola","type":"text"}]` | `af8bb27c1a8c17c8ae3084111c4b86480f38b1c44c5055cacc7f77f1719acda7` |
+| v2 | `[{"input":{"tz":"UTC"},"tool_call_id":"call-1","tool_name":"get_current_time","type":"tool_call"}]` | `e0838bc04dd8e78b5d199d37823bc700e9956ee9fb9affe3e6fed5da028ab2bf` |
+| v2 | `[{"is_error":false,"output":"10:15","tool_call_id":"call-1","tool_name":"get_current_time","type":"tool_result"}]` | `e7e2cd7866c10043abc3ed828fc721c121b31102a8a4e0dac9e0592121323d22` |
+
+The v2 column holds `canonical_json(parts)`, the string that is hashed.
+
 ---
 
 ## 7. Chaining

@@ -714,7 +714,7 @@ class OrchestratorServiceTest {
                 .containsEntry("finish_reason", "STOP")
                 .containsEntry("rounds", 1)
                 .containsEntry("content_hash",
-                        AuditContentHash.of(tenantId, "Hola, soy un agente"))
+                        textHash(tenantId, "Hola, soy un agente"))
                 .containsEntry("content_length", 19);
         assertThat(event.payload().values()).doesNotContain("Hola, soy un agente");
     }
@@ -920,5 +920,11 @@ class OrchestratorServiceTest {
                 .stampedAt(Instant.parse("2026-10-23T10:00:07Z"));
 
         assertThat(OrchestratorService.turnLatency(List.of(), UUID.randomUUID(), reply)).isNull();
+    }
+
+    /** The content hash v2 of a message of one text part, what the conduct payloads carry. */
+    private static String textHash(java.util.UUID tenantId, String text) {
+        return AuditContentHash.ofParts(tenantId,
+                java.util.List.of(new dev.cauce.core.message.MessagePart.Text(text)));
     }
 }

@@ -15,6 +15,7 @@ import dev.cauce.core.business.handoff.InvalidHandoffCategoryException;
 import dev.cauce.core.business.handoff.UnquotedCustomerMessageException;
 import dev.cauce.core.business.profile.BusinessProfile;
 import dev.cauce.core.message.MessageRole;
+import dev.cauce.memory.message.MessageMapper;
 import dev.cauce.memory.message.MessageRepository;
 import java.util.List;
 import java.util.Locale;
@@ -47,11 +48,12 @@ public class HandoffService implements HandoffSink {
     private final OwnerNotificationService notifications;
     private final AuditEventRecorder auditRecorder;
     private final MessageRepository messageRepository;
+    private final MessageMapper messageMapper;
 
     public HandoffService(HandoffRepository repository, HandoffMapper mapper,
                           BusinessProfileRepository profileRepository, BusinessProfileMapper profileMapper,
                           OwnerNotificationService notifications, AuditEventRecorder auditRecorder,
-                          MessageRepository messageRepository) {
+                          MessageRepository messageRepository, MessageMapper messageMapper) {
         this.repository = repository;
         this.mapper = mapper;
         this.profileRepository = profileRepository;
@@ -59,6 +61,7 @@ public class HandoffService implements HandoffSink {
         this.notifications = notifications;
         this.auditRecorder = auditRecorder;
         this.messageRepository = messageRepository;
+        this.messageMapper = messageMapper;
     }
 
     @Override
@@ -91,7 +94,7 @@ public class HandoffService implements HandoffSink {
         boolean theirs = !words.isEmpty() && messageRepository
                 .findByConversationIdOrderBySeqAsc(conversationId).stream()
                 .filter(message -> message.getRole() == MessageRole.USER)
-                .anyMatch(message -> normalized(message.getContent()).contains(words));
+                .anyMatch(message -> normalized(messageMapper.toDomain(message).content()).contains(words));
         if (!theirs) {
             throw new UnquotedCustomerMessageException("customer_message must be copied word for word from one of "
                     + "the person's messages in this conversation; otherwise leave it out");
