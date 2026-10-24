@@ -56,6 +56,7 @@ public final class Agent {
     private final int maxResponseTokens;
     private final AgentStatus status;
     private final String fallbackReply; // null: the platform default (ADR 0005, C3)
+    private final String unsupportedMessageReply; // null: the channel's default (ADR 0006, W5)
     private final List<String> toolNames; // the granted tools; empty by default (ADR 0005, C4)
     private final boolean elidePastLookups; // off: the full history, as always
     private final PromptCacheRetention promptCacheRetention; // SHORT unless the agent asks for LONG
@@ -64,8 +65,9 @@ public final class Agent {
 
     private Agent(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
                   String modelName, Double temperature, int maxResponseTokens, AgentStatus status,
-                  String fallbackReply, List<String> toolNames, boolean elidePastLookups,
-                  PromptCacheRetention promptCacheRetention, Instant createdAt, Instant updatedAt) {
+                  String fallbackReply, String unsupportedMessageReply, List<String> toolNames,
+                  boolean elidePastLookups, PromptCacheRetention promptCacheRetention, Instant createdAt,
+                  Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
@@ -76,6 +78,7 @@ public final class Agent {
         this.maxResponseTokens = maxResponseTokens;
         this.status = status;
         this.fallbackReply = fallbackReply;
+        this.unsupportedMessageReply = unsupportedMessageReply;
         this.toolNames = toolNames;
         this.elidePastLookups = elidePastLookups;
         this.promptCacheRetention = promptCacheRetention;
@@ -110,6 +113,7 @@ public final class Agent {
                 validatedMaxResponseTokens(resolveMaxResponseTokens(maxResponseTokens)),
                 AgentStatus.DRAFT,
                 null,
+                null,
                 List.of(),
                 false,
                 PromptCacheRetention.SHORT,
@@ -125,8 +129,21 @@ public final class Agent {
      */
     public Agent withFallbackReply(String fallbackReply) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, validatedFallbackReply(fallbackReply), toolNames, elidePastLookups, promptCacheRetention,
+                maxResponseTokens, status, validatedFallbackReply(fallbackReply), unsupportedMessageReply, toolNames,
+                elidePastLookups, promptCacheRetention,
                 createdAt, updatedAt);
+    }
+
+    /**
+     * Returns a copy of this agent whose reply to a message its channel delivered but Cauce does not
+     * read (a voice note, a photo; ADR 0006, W5) is {@code unsupportedMessageReply}. {@code null}
+     * means the channel's platform default; a non-null text follows {@link #withFallbackReply}.
+     */
+    public Agent withUnsupportedMessageReply(String unsupportedMessageReply) {
+        return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, fallbackReply,
+                validatedReply(unsupportedMessageReply, "unsupportedMessageReply"), toolNames, elidePastLookups,
+                promptCacheRetention, createdAt, updatedAt);
     }
 
     /**
@@ -137,14 +154,16 @@ public final class Agent {
      */
     public Agent withTools(Collection<String> tools) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, fallbackReply, validatedToolNames(tools), elidePastLookups, promptCacheRetention, createdAt,
+                maxResponseTokens, status, fallbackReply, unsupportedMessageReply, validatedToolNames(tools), elidePastLookups,
+                promptCacheRetention, createdAt,
                 updatedAt);
     }
 
     /** {@link #withTools} as a modification of an existing agent: {@code updatedAt} moves to now. */
     public Agent retooled(Collection<String> tools) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, fallbackReply, validatedToolNames(tools), elidePastLookups, promptCacheRetention, createdAt,
+                maxResponseTokens, status, fallbackReply, unsupportedMessageReply, validatedToolNames(tools), elidePastLookups,
+                promptCacheRetention, createdAt,
                 Instant.now());
     }
 
@@ -154,7 +173,8 @@ public final class Agent {
      */
     public Agent withPastLookupsElided(boolean elide) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, fallbackReply, toolNames, elide, promptCacheRetention, createdAt,
+                maxResponseTokens, status, fallbackReply, unsupportedMessageReply, toolNames, elide, promptCacheRetention,
+                createdAt,
                 Instant.now());
     }
 
@@ -164,7 +184,7 @@ public final class Agent {
      */
     public Agent withPromptCacheRetention(PromptCacheRetention retention) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
-                maxResponseTokens, status, fallbackReply, toolNames, elidePastLookups,
+                maxResponseTokens, status, fallbackReply, unsupportedMessageReply, toolNames, elidePastLookups,
                 Objects.requireNonNull(retention, "retention"), createdAt, Instant.now());
     }
 
@@ -175,11 +195,18 @@ public final class Agent {
      * {@link #withFallbackReply}.
      */
     public Agent edited(String name, String systemPrompt, String fallbackReply) {
+        return edited(name, systemPrompt, fallbackReply, null);
+    }
+
+    /** {@link #edited(String, String, String)}, and {@code unsupportedMessageReply} the same way. */
+    public Agent edited(String name, String systemPrompt, String fallbackReply, String unsupportedMessageReply) {
         return new Agent(id, tenantId,
                 name == null ? this.name : requireText(name, "name"),
                 systemPrompt == null ? this.systemPrompt : systemPrompt,
                 modelProvider, modelName, temperature, maxResponseTokens, status,
                 fallbackReply == null ? this.fallbackReply : validatedFallbackReply(fallbackReply),
+                unsupportedMessageReply == null ? this.unsupportedMessageReply
+                        : validatedReply(unsupportedMessageReply, "unsupportedMessageReply"),
                 toolNames, elidePastLookups, promptCacheRetention, createdAt, Instant.now());
     }
 
@@ -220,11 +247,23 @@ public final class Agent {
                 createdAt, updatedAt);
     }
 
-    /** Rebuilds an agent with its full configuration, including its prompt cache retention. */
+    /** Rebuilds an agent with its prompt cache retention, and the channels' default unsupported reply. */
     public static Agent rehydrate(UUID id, UUID tenantId, String name, String systemPrompt,
                                   String modelProvider, String modelName, Double temperature,
                                   Integer maxResponseTokens, AgentStatus status, String fallbackReply,
                                   List<String> toolNames, boolean elidePastLookups,
+                                  PromptCacheRetention promptCacheRetention, Instant createdAt,
+                                  Instant updatedAt) {
+        return rehydrate(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, fallbackReply, null, toolNames, elidePastLookups, promptCacheRetention,
+                createdAt, updatedAt);
+    }
+
+    /** Rebuilds an agent with its full configuration, including its reply to an unsupported message. */
+    public static Agent rehydrate(UUID id, UUID tenantId, String name, String systemPrompt,
+                                  String modelProvider, String modelName, Double temperature,
+                                  Integer maxResponseTokens, AgentStatus status, String fallbackReply,
+                                  String unsupportedMessageReply, List<String> toolNames, boolean elidePastLookups,
                                   PromptCacheRetention promptCacheRetention, Instant createdAt,
                                   Instant updatedAt) {
         return new Agent(
@@ -238,6 +277,7 @@ public final class Agent {
                 resolveMaxResponseTokens(maxResponseTokens),
                 Objects.requireNonNull(status, "status"),
                 fallbackReply, // nullable; the V28 CHECK guarantees its shape
+                unsupportedMessageReply, // nullable; the V55 CHECK guarantees its shape
                 List.copyOf(Objects.requireNonNull(toolNames, "toolNames")),
                 elidePastLookups,
                 Objects.requireNonNull(promptCacheRetention, "promptCacheRetention"),
@@ -253,15 +293,20 @@ public final class Agent {
     }
 
     private static String validatedFallbackReply(String fallbackReply) {
-        if (fallbackReply == null) {
+        return validatedReply(fallbackReply, "fallbackReply");
+    }
+
+    /** A configured reply: null, or stripped, non-blank and at most {@value #MAX_FALLBACK_REPLY_LENGTH} characters. */
+    private static String validatedReply(String reply, String field) {
+        if (reply == null) {
             return null;
         }
-        String stripped = fallbackReply.strip();
+        String stripped = reply.strip();
         if (stripped.isEmpty()) {
-            throw new IllegalArgumentException("fallbackReply must not be blank");
+            throw new IllegalArgumentException(field + " must not be blank");
         }
         if (stripped.length() > MAX_FALLBACK_REPLY_LENGTH) {
-            throw new IllegalArgumentException("fallbackReply must be at most "
+            throw new IllegalArgumentException(field + " must be at most "
                     + MAX_FALLBACK_REPLY_LENGTH + " characters");
         }
         return stripped;
@@ -338,6 +383,14 @@ public final class Agent {
     /** The configured fallback reply; empty means the platform default (ADR 0005, C3). */
     public Optional<String> fallbackReply() {
         return Optional.ofNullable(fallbackReply);
+    }
+
+    /**
+     * The reply to a message its channel delivered but Cauce does not read (ADR 0006, W5); empty
+     * means the channel's platform default.
+     */
+    public Optional<String> unsupportedMessageReply() {
+        return Optional.ofNullable(unsupportedMessageReply);
     }
 
     /** The tools this agent may use, in grant order; empty means none (ADR 0005, C4). */

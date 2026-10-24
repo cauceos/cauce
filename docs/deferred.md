@@ -64,7 +64,6 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **`SUPPORTED_CHANNELS` by SPI.** `ConversationService` validates `channel_type` against a hardcoded set; replacing it with the adapter registry needs a port, since a direct dependency would be a cycle.
 - **WhatsApp templates.** Outside the 24-hour customer service window a reply, or a fallback, is not sent: a loud failure (ADR 0006, W4). Sending approved templates there is a later unit.
 - **WhatsApp identity joining.** A changed number or BSUID (`system` webhook) starts a new identity and thread, with a WARN; joining the two is the memory subject ADR 0004 defers. The parent BSUID (`parent_user_id`, across portfolios) is not read.
-- **Per-agent text-only reply.** The answer to a non-text WhatsApp or Telegram message is the platform's `cauce.channels.whatsapp.unsupported-message-reply` or `cauce.channels.telegram.unsupported-message-reply`; a per-agent override like the fallback's (ADR 0005, C3) would be a second per-agent column and write path (ADR 0006, W5).
 - **WhatsApp group messages.** Refused with a WARN when the message carries `group_id`; whether that is the field Meta's Groups API uses for every group event is to be confirmed against a real group.
 - **Outbound delivery metrics.** Log-only; an outbound event would let observability count it.
 - **Message parts and per-channel capabilities** are ADR 0004's second and third units: decided, not yet implemented. Typed identity (the first unit) has landed.

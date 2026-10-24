@@ -115,16 +115,18 @@ class ChannelWebhookServiceTest {
         when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.empty());
         when(adapter.unsupported(REQUEST.body(), config)).thenReturn(Optional.of(voice));
         AtomicReference<UUID> contextWhileRecording = new AtomicReference<>();
-        when(unsupportedRecorder.recordUnsupportedMessage(config, "voice", "7007")).thenAnswer(call -> {
-            contextWhileRecording.set(TenantContext.getCurrentTenantId().orElse(null));
-            return true;
-        });
+        when(unsupportedRecorder.recordUnsupportedMessage(config, "voice", "7007", "Only text, please."))
+                .thenAnswer(call -> {
+                    contextWhileRecording.set(TenantContext.getCurrentTenantId().orElse(null));
+                    return Optional.of("Solo texto, por favor.");
+                });
 
         assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.UNSUPPORTED);
 
         assertThat(contextWhileRecording.get()).isEqualTo(config.tenantId());
+        // The recorder's text: the agent's own when it has one, else the adapter's default.
         verify(outbound).deliver(new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
-                "Only text, please."), config);
+                "Solo texto, por favor."), config);
         verifyNoInteractions(inboundMessageService);
         assertThat(TenantContext.getCurrentTenantId()).isEmpty();
     }
@@ -136,7 +138,8 @@ class ChannelWebhookServiceTest {
         when(adapter.parse(REQUEST.body(), config)).thenReturn(Optional.empty());
         when(adapter.unsupported(REQUEST.body(), config)).thenReturn(Optional.of(new UnsupportedInboundMessage(
                 IdentityKind.PROVIDER_USER_ID, "987654321", "voice", "7007", "Only text, please.")));
-        when(unsupportedRecorder.recordUnsupportedMessage(config, "voice", "7007")).thenReturn(false);
+        when(unsupportedRecorder.recordUnsupportedMessage(config, "voice", "7007", "Only text, please."))
+                .thenReturn(Optional.empty());
 
         assertThat(service.handle(config.id(), REQUEST)).isEqualTo(WebhookResult.UNSUPPORTED);
 

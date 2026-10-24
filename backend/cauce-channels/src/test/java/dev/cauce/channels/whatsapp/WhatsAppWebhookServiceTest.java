@@ -38,6 +38,8 @@ import org.springframework.core.task.SyncTaskExecutor;
 
 class WhatsAppWebhookServiceTest {
 
+    private static final String REPLY_TEXT = new WhatsAppProperties().getUnsupportedMessageReply();
+
     private static final String SECRET = "app-secret";
     private static final String BSUID = "ES.13491208655302741918";
 
@@ -154,27 +156,28 @@ class WhatsAppWebhookServiceTest {
 
     @Test
     void handle_aNonTextMessage_isAudited_andAnsweredWithTheTextOnlyReply_neverSilence() {
-        when(recorder.recordUnsupportedMessage(number, "image", "wamid.B1")).thenReturn(true);
+        when(recorder.recordUnsupportedMessage(number, "image", "wamid.B1", REPLY_TEXT)).thenReturn(Optional.of("Solo texto, por favor."));
         service.handle(app.id(), signed(change("""
                 {"from_user_id":"%s","id":"wamid.B1","type":"image","image":{"id":"media-1"}}""".formatted(BSUID))));
 
-        verify(recorder).recordUnsupportedMessage(number, "image", "wamid.B1");
+        verify(recorder).recordUnsupportedMessage(number, "image", "wamid.B1", REPLY_TEXT);
         ArgumentCaptor<ChannelOutboundMessage> reply = ArgumentCaptor.forClass(ChannelOutboundMessage.class);
         verify(outbound).deliver(reply.capture(), eq(number));
         assertThat(reply.getValue().identityValue()).isEqualTo(BSUID);
-        assertThat(reply.getValue().content()).isEqualTo(new WhatsAppProperties().getUnsupportedMessageReply());
+        // The recorder's text: the agent's own (V55) when it has one, else the platform default.
+        assertThat(reply.getValue().content()).isEqualTo("Solo texto, por favor.");
         assertThat(reply.getValue().lastMessageAt()).isPresent();
         verify(inbound, never()).ingest(any(), anyString(), any(), any(), anyString(), anyString(), anyString());
     }
 
     @Test
     void handle_aRedeliveredNonTextMessage_whoseReceiptIsTaken_isNotAnsweredAgain() {
-        when(recorder.recordUnsupportedMessage(number, "audio", "wamid.B2")).thenReturn(false);
+        when(recorder.recordUnsupportedMessage(number, "audio", "wamid.B2", REPLY_TEXT)).thenReturn(Optional.empty());
 
         service.handle(app.id(), signed(change("""
                 {"from_user_id":"%s","id":"wamid.B2","type":"audio","audio":{"id":"media-2"}}""".formatted(BSUID))));
 
-        verify(recorder).recordUnsupportedMessage(number, "audio", "wamid.B2");
+        verify(recorder).recordUnsupportedMessage(number, "audio", "wamid.B2", REPLY_TEXT);
         verifyNoInteractions(outbound);
     }
 

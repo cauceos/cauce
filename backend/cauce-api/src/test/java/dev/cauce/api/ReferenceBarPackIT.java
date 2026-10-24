@@ -44,6 +44,7 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
 
         JsonNode grants = objectMapper.readTree(read("herramientas.json"));
         JsonNode fallbacks = objectMapper.readTree(read("respaldo.json"));
+        JsonNode unsupported = objectMapper.readTree(read("no-soportado.json"));
         for (String agent : List.of("agente_clientes", "agente_dueno")) {
             List<String> tools = new ArrayList<>();
             grants.get(agent).forEach(tool -> tools.add(tool.asText()));
@@ -52,9 +53,11 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(Map.of("name", agent, "system_prompt", prompt,
                                     "model_provider", "anthropic", "model_name", "claude-sonnet-4-7", "tools", tools,
-                                    "fallback_reply", fallbacks.get(agent).asText()))))
+                                    "fallback_reply", fallbacks.get(agent).asText(),
+                                    "unsupported_message_reply", unsupported.get(agent).asText()))))
                     .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.fallback_reply").value(fallbacks.get(agent).asText()));
+                    .andExpect(jsonPath("$.fallback_reply").value(fallbacks.get(agent).asText()))
+                    .andExpect(jsonPath("$.unsupported_message_reply").value(unsupported.get(agent).asText()));
         }
         assertThat(grants.get("agente_clientes")).hasSize(11);
         JsonNode retention = objectMapper.readTree(read("retencion-cache.json"));

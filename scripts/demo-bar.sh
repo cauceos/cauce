@@ -183,16 +183,19 @@ echo "   Loaded."
 
 # --- 3. agents ---------------------------------------------------------------
 
-# The agents' configuration from the pack: prompt, tool grant and fallback reply (respaldo.json,
-# the text a person gets when an invocation fails for good, ADR 0005 C3).
+# The agents' configuration from the pack: prompt, tool grant, fallback reply (respaldo.json,
+# the text a person gets when an invocation fails for good, ADR 0005 C3) and the reply to a message
+# Cauce does not read (no-soportado.json: a voice note, a photo; ADR 0006 W5).
 agent_body() { # agent_body NAME PROMPT_FILE KEY
-    printf '{"name":"%s","system_prompt":%s,"model_provider":"%s","model_name":"%s","tools":%s,"fallback_reply":%s}' \
+    printf '{"name":"%s","system_prompt":%s,"model_provider":"%s","model_name":"%s","tools":%s,"fallback_reply":%s,"unsupported_message_reply":%s}' \
         "$1" "$(json_string < "$PACK/$2")" "$MODEL_PROVIDER" "$MODEL_NAME" \
-        "$(json_list "$PACK/herramientas.json" "$3")" "$(json_list "$PACK/respaldo.json" "$3")"
+        "$(json_list "$PACK/herramientas.json" "$3")" "$(json_list "$PACK/respaldo.json" "$3")" \
+        "$(json_list "$PACK/no-soportado.json" "$3")"
 }
 agent_patch() { # agent_patch PROMPT_FILE KEY
-    printf '{"system_prompt":%s,"fallback_reply":%s}' \
-        "$(json_string < "$PACK/$1")" "$(json_list "$PACK/respaldo.json" "$2")"
+    printf '{"system_prompt":%s,"fallback_reply":%s,"unsupported_message_reply":%s}' \
+        "$(json_string < "$PACK/$1")" "$(json_list "$PACK/respaldo.json" "$2")" \
+        "$(json_list "$PACK/no-soportado.json" "$2")"
 }
 # Without saved ids, the business's own agents are found by name before any is created.
 if [ -z "${CUSTOMER_AGENT_ID:-}" ] || [ -z "${OWNER_AGENT_ID:-}" ]; then
@@ -217,7 +220,7 @@ if [ -z "$CUSTOMER_AGENT_ID" ] || [ -z "$OWNER_AGENT_ID" ]; then
     save CUSTOMER_AGENT_ID "$CUSTOMER_AGENT_ID"
     save OWNER_AGENT_ID "$OWNER_AGENT_ID"
 else
-    say "Refreshing the prompts, tools and fallback replies of the existing agents..."
+    say "Refreshing the prompts, tools and fixed replies of the existing agents..."
     api PATCH "/v1/agents/$CUSTOMER_AGENT_ID" "$(agent_patch agente-clientes.prompt.md agente_clientes)" > /dev/null
     api PUT "/v1/agents/$CUSTOMER_AGENT_ID/tools" \
         "{\"tools\":$(json_list "$PACK/herramientas.json" agente_clientes)}" > /dev/null

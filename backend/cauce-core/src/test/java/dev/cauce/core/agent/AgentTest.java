@@ -183,6 +183,21 @@ class AgentTest {
     }
 
     @Test
+    void withUnsupportedMessageReply_stripsTheText_rejectsBlankOrOverlong_andNullIsThePlatformDefault() {
+        Agent agent = Agent.create(UUID.randomUUID(), "Camarero", "p", "anthropic", "claude-sonnet-4-7");
+
+        assertThat(agent.unsupportedMessageReply()).isEmpty();
+        assertThat(agent.withUnsupportedMessageReply("  Escríbeme, por favor.  ").unsupportedMessageReply())
+                .contains("Escríbeme, por favor.");
+        assertThatThrownBy(() -> agent.withUnsupportedMessageReply(" ")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> agent.withUnsupportedMessageReply("x".repeat(Agent.MAX_FALLBACK_REPLY_LENGTH + 1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(agent.edited(null, null, null, "Solo texto.").unsupportedMessageReply()).contains("Solo texto.");
+        assertThat(agent.withUnsupportedMessageReply("Solo texto.").edited("Otro", null, null).unsupportedMessageReply())
+                .as("an edit that leaves it out keeps it").contains("Solo texto.");
+    }
+
+    @Test
     void withFallbackReply_rejectsBlankAndOverlongText() {
         Agent agent = Agent.create(UUID.randomUUID(), "Bot", "p", "anthropic", "m");
 

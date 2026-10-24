@@ -136,14 +136,17 @@ public class ChannelWebhookService {
      * redelivery a no-op — one audit record, one reply.
      */
     private void answerUnsupported(ChannelConfig config, UnsupportedInboundMessage unsupported) {
+        Optional<String> text;
         TenantContext.setCurrentTenantId(config.tenantId());
         try {
-            if (!unsupportedRecorder.recordUnsupportedMessage(config, unsupported.messageType(),
-                    unsupported.providerMessageId())) {
-                return;
-            }
+            // The agent's own text (V55), else the adapter's platform default.
+            text = unsupportedRecorder.recordUnsupportedMessage(config, unsupported.messageType(),
+                    unsupported.providerMessageId(), unsupported.reply());
         } finally {
             TenantContext.clear();
+        }
+        if (text.isEmpty()) {
+            return; // a redelivery: answered the first time
         }
         Optional<OutboundChannelAdapter> outbound = adapterRegistry.outboundAdapter(config.channelType());
         if (outbound.isEmpty()) {
@@ -153,7 +156,7 @@ public class ChannelWebhookService {
         }
         // The interlocutor has just written: a channel with a reply window has it open.
         ChannelOutboundMessage reply = new ChannelOutboundMessage(unsupported.identityKind(),
-                unsupported.identityValue(), unsupported.reply());
+                unsupported.identityValue(), text.get());
         try {
             // Best-effort, off the webhook thread: the provider expects its 2xx quickly.
             outboundExecutor.execute(() -> {

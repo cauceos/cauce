@@ -61,7 +61,7 @@ class AgentControllerTest {
         UUID tenantId = UUID.randomUUID();
         Agent agent = Agent.create(tenantId, "Bot", "You are helpful", "anthropic", "claude-opus-4-8");
         given(agentService.createAgent(eq(tenantId), eq("Bot"), eq("You are helpful"),
-                eq("anthropic"), eq("claude-opus-4-8"), any(), any(), any(), any())).willReturn(agent);
+                eq("anthropic"), eq("claude-opus-4-8"), any(), any(), any(), any(), any())).willReturn(agent);
 
         mockMvc.perform(post("/v1/tenants/" + tenantId + "/agents")
                         .contentType(MediaType.APPLICATION_JSON).content(validBody()))
@@ -88,7 +88,7 @@ class AgentControllerTest {
     @Test
     void createAgent_nonClientTenant_returns422() throws Exception {
         UUID tenantId = UUID.randomUUID();
-        given(agentService.createAgent(eq(tenantId), any(), any(), any(), any(), any(), any(), any(), any()))
+        given(agentService.createAgent(eq(tenantId), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willThrow(new InvalidTenantTierException("not a CLIENT"));
 
         mockMvc.perform(post("/v1/tenants/" + tenantId + "/agents")
@@ -100,7 +100,7 @@ class AgentControllerTest {
     @Test
     void createAgent_unknownTenant_returns404() throws Exception {
         UUID tenantId = UUID.randomUUID();
-        given(agentService.createAgent(eq(tenantId), any(), any(), any(), any(), any(), any(), any(), any()))
+        given(agentService.createAgent(eq(tenantId), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willThrow(new TenantNotFoundException("no tenant"));
 
         mockMvc.perform(post("/v1/tenants/" + tenantId + "/agents")
@@ -113,7 +113,7 @@ class AgentControllerTest {
     void updateAgent_passesOnlyThePresentFields_andReturnsTheEditedAgent() throws Exception {
         UUID id = UUID.randomUUID();
         Agent agent = Agent.create(UUID.randomUUID(), "Bot", "Be brief.", "anthropic", "claude-opus-4-8");
-        given(agentService.updateAgent(id, null, "Be brief.", null, null, null)).willReturn(agent);
+        given(agentService.updateAgent(id, null, "Be brief.", null, null, null, null)).willReturn(agent);
 
         mockMvc.perform(patch("/v1/agents/" + id)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"system_prompt\":\"Be brief.\"}"))
@@ -131,7 +131,7 @@ class AgentControllerTest {
     @Test
     void updateAgent_notVisible_returns404() throws Exception {
         UUID id = UUID.randomUUID();
-        given(agentService.updateAgent(eq(id), any(), any(), any(), any(), any()))
+        given(agentService.updateAgent(eq(id), any(), any(), any(), any(), any(), any()))
                 .willThrow(new AgentNotFoundException("No agent found for id " + id));
 
         mockMvc.perform(patch("/v1/agents/" + id)

@@ -199,19 +199,19 @@ public class WhatsAppWebhookService {
                         + "neither recorded nor answered", type, number.id());
                 return;
             }
-            if (eventRecorder.recordUnsupportedMessage(number, type, providerMessageId)) {
-                sendTextOnlyReply(number, bsuid);
-            }
+            // The agent's own text (V55), else the platform's.
+            eventRecorder.recordUnsupportedMessage(number, type, providerMessageId,
+                    properties.getUnsupportedMessageReply()).ifPresent(text -> sendTextOnlyReply(number, bsuid, text));
         } finally {
             TenantContext.clear();
         }
     }
 
     /** Best-effort, off the webhook thread: Meta expects the 2xx quickly. */
-    private void sendTextOnlyReply(ChannelConfig number, String bsuid) {
+    private void sendTextOnlyReply(ChannelConfig number, String bsuid, String text) {
         // The interlocutor has just written, so the 24-hour window is open.
         ChannelOutboundMessage reply = new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, bsuid,
-                properties.getUnsupportedMessageReply(), clock.instant());
+                text, clock.instant());
         try {
             outboundExecutor.execute(() -> {
                 try {

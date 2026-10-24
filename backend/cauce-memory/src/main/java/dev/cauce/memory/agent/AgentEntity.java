@@ -61,6 +61,13 @@ public class AgentEntity {
     @Column(name = "fallback_reply")
     private String fallbackReply;
 
+    /**
+     * Per-agent reply to a message its channel delivered but Cauce does not read (ADR 0006, W5);
+     * null means the channel's platform default (V55).
+     */
+    @Column(name = "unsupported_message_reply")
+    private String unsupportedMessageReply;
+
     /** The tools the agent may use (ADR 0005, C4); empty by default (V29). */
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "tool_names", nullable = false, columnDefinition = "text[]")
@@ -113,6 +120,16 @@ public class AgentEntity {
                        String modelName, Double temperature, Integer maxResponseTokens,
                        AgentStatus status, String fallbackReply, String[] toolNames, boolean elidePastLookups,
                        PromptCacheRetention promptCacheRetention, Instant createdAt, Instant updatedAt) {
+        this(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature, maxResponseTokens,
+                status, fallbackReply, null, toolNames, elidePastLookups, promptCacheRetention, createdAt, updatedAt);
+    }
+
+    public AgentEntity(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
+                       String modelName, Double temperature, Integer maxResponseTokens,
+                       AgentStatus status, String fallbackReply, String unsupportedMessageReply, String[] toolNames,
+                       boolean elidePastLookups, PromptCacheRetention promptCacheRetention, Instant createdAt,
+                       Instant updatedAt) {
+        this.unsupportedMessageReply = unsupportedMessageReply;
         this.elidePastLookups = elidePastLookups;
         this.promptCacheRetention = promptCacheRetention;
         this.fallbackReply = fallbackReply;
@@ -184,6 +201,10 @@ public class AgentEntity {
 
     public String getFallbackReply() {
         return fallbackReply;
+    }
+
+    public String getUnsupportedMessageReply() {
+        return unsupportedMessageReply;
     }
 
     public String[] getToolNames() {

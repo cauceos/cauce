@@ -56,6 +56,15 @@ class AgentMapperTest {
     }
 
     @Test
+    void roundTrip_preservesTheReplyToAnUnsupportedMessage() {
+        Agent plain = Agent.create(UUID.randomUUID(), "Bot", "p", "anthropic", "claude-sonnet-4-7");
+        Agent replying = plain.withUnsupportedMessageReply("Solo leo texto.");
+
+        assertThat(mapper.toDomain(mapper.toEntity(plain)).unsupportedMessageReply()).isEmpty();
+        assertThat(mapper.toDomain(mapper.toEntity(replying)).unsupportedMessageReply()).contains("Solo leo texto.");
+    }
+
+    @Test
     void roundTrip_preservesWhetherTheAgentElidesPastLookups() {
         Agent plain = Agent.create(UUID.randomUUID(), "Bot", "prompt", "anthropic", "claude-sonnet-5-5");
         Agent eliding = plain.withPastLookupsElided(true);

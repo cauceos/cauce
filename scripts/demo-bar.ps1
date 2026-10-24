@@ -176,11 +176,14 @@ Write-Host '   Loaded.'
 $grants = Read-Utf8 "$Pack/herramientas.json" | ConvertFrom-Json
 # The text a person gets when an invocation fails for good (ADR 0005, C3), in the bar's language.
 $fallbacks = Read-Utf8 "$Pack/respaldo.json" | ConvertFrom-Json
+# The reply to a message Cauce does not read (a voice note, a photo; ADR 0006, W5).
+$unsupported = Read-Utf8 "$Pack/no-soportado.json" | ConvertFrom-Json
 $customerPrompt = Read-Utf8 "$Pack/agente-clientes.prompt.md"
 $ownerPrompt = Read-Utf8 "$Pack/agente-dueno.prompt.md"
-function New-AgentBody($name, $prompt, $tools, $fallback) {
+function New-AgentBody($name, $prompt, $tools, $fallback, $unsupportedReply) {
     return (@{ name = $name; system_prompt = $prompt; model_provider = $ModelProvider; model_name = $ModelName;
-               tools = @($tools); fallback_reply = $fallback } | ConvertTo-Json -Depth 4)
+               tools = @($tools); fallback_reply = $fallback; unsupported_message_reply = $unsupportedReply } |
+            ConvertTo-Json -Depth 4)
 }
 $CustomerAgentName = 'Camarero de La Esquina'
 $OwnerAgentName = "Canal del due$([char]0x00F1)o"
@@ -198,21 +201,25 @@ if (-not $CustomerAgentId -or -not $OwnerAgentId) {
     Say "Creating the agents ($ModelProvider / $ModelName)..."
     if (-not $CustomerAgentId) {
         $CustomerAgentId = (Invoke-Api POST "/v1/tenants/$BarTenantId/agents" `
-            (New-AgentBody $CustomerAgentName $customerPrompt $grants.agente_clientes $fallbacks.agente_clientes)).id
+            (New-AgentBody $CustomerAgentName $customerPrompt $grants.agente_clientes $fallbacks.agente_clientes `
+                $unsupported.agente_clientes)).id
     }
     if (-not $OwnerAgentId) {
         $OwnerAgentId = (Invoke-Api POST "/v1/tenants/$BarTenantId/agents" `
-            (New-AgentBody $OwnerAgentName $ownerPrompt $grants.agente_dueno $fallbacks.agente_dueno)).id
+            (New-AgentBody $OwnerAgentName $ownerPrompt $grants.agente_dueno $fallbacks.agente_dueno `
+                $unsupported.agente_dueno)).id
     }
     Save 'CUSTOMER_AGENT_ID' $CustomerAgentId
     Save 'OWNER_AGENT_ID' $OwnerAgentId
 } else {
-    Say 'Refreshing the prompts, tools and fallback replies of the existing agents...'
+    Say 'Refreshing the prompts, tools and fixed replies of the existing agents...'
     Invoke-Api PATCH "/v1/agents/$CustomerAgentId" (@{ system_prompt = $customerPrompt
-        fallback_reply = $fallbacks.agente_clientes } | ConvertTo-Json) | Out-Null
+        fallback_reply = $fallbacks.agente_clientes
+        unsupported_message_reply = $unsupported.agente_clientes } | ConvertTo-Json) | Out-Null
     Invoke-Api PUT "/v1/agents/$CustomerAgentId/tools" (@{ tools = @($grants.agente_clientes) } | ConvertTo-Json) | Out-Null
     Invoke-Api PATCH "/v1/agents/$OwnerAgentId" (@{ system_prompt = $ownerPrompt
-        fallback_reply = $fallbacks.agente_dueno } | ConvertTo-Json) | Out-Null
+        fallback_reply = $fallbacks.agente_dueno
+        unsupported_message_reply = $unsupported.agente_dueno } | ConvertTo-Json) | Out-Null
 }
 # How long each agent asks the provider to keep its prompt cached (retencion-cache.json, ADR 0010 S9).
 $retention = Read-Utf8 "$Pack/retencion-cache.json" | ConvertFrom-Json

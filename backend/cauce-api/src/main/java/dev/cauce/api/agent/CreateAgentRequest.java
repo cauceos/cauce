@@ -18,6 +18,8 @@ import java.util.List;
  * ({@code temperature} in [0.0, 1.0], {@code maxResponseTokens} positive). {@code modelProvider}
  * is only checked for non-blankness here; the set of supported providers is validated by the
  * service (it will move to the cauce-llm SPI), keeping provider knowledge out of the DTO.
+ * {@code fallbackReply} and {@code unsupportedMessageReply} are optional: null takes the platform's
+ * text (ADR 0005, C3; ADR 0006, W5).
  */
 public record CreateAgentRequest(
         @NotBlank String name,
@@ -27,5 +29,14 @@ public record CreateAgentRequest(
         @DecimalMin("0.0") @DecimalMax("1.0") Double temperature,
         @Positive Integer maxResponseTokens,
         @Size(max = Agent.MAX_FALLBACK_REPLY_LENGTH) String fallbackReply,
-        List<@NotBlank String> tools) {
+        List<@NotBlank String> tools,
+        @Size(max = Agent.MAX_FALLBACK_REPLY_LENGTH) String unsupportedMessageReply) {
+
+    /** A request that leaves the reply to an unsupported message to the platform. */
+    public CreateAgentRequest(String name, String systemPrompt, String modelProvider, String modelName,
+                              Double temperature, Integer maxResponseTokens, String fallbackReply,
+                              List<String> tools) {
+        this(name, systemPrompt, modelProvider, modelName, temperature, maxResponseTokens, fallbackReply, tools,
+                null);
+    }
 }

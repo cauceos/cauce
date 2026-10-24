@@ -222,6 +222,28 @@ class TelegramRoundTripIT extends AbstractApiIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM messages", Integer.class)).isZero();
     }
 
+    @Test
+    void telegramVoiceNote_toAnAgentWithItsOwnText_isAnsweredWithIt() throws Exception {
+        TELEGRAM.stubFor(post("/bot12345:bot-token/sendMessage").willReturn(okJson("{\"ok\": true}")));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/v1/agents/" + agentId)
+                        .header(HttpHeaders.AUTHORIZATION, clientAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"unsupported_message_reply\": \"Ahora solo leo texto: escríbemelo, porfa.\"}"))
+                .andExpect(status().isOk());
+
+        postUpdate("""
+                {"update_id": 7008,
+                 "message": {"message_id": 44, "chat": {"id": 987654321, "type": "private"},
+                             "date": 1751623000, "voice": {"file_id": "AwACAgQ", "duration": 2}}}
+                """).andExpect(status().isOk());
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                TELEGRAM.verify(1, postRequestedFor(urlEqualTo("/bot12345:bot-token/sendMessage"))
+                        .withRequestBody(equalToJson("{\"chat_id\": \"987654321\", \"text\": "
+                                + "\"Ahora solo leo texto: escríbemelo, porfa.\", \"parse_mode\": \"HTML\"}"))));
+    }
+
     // --- helpers ---
 
     private org.springframework.test.web.servlet.ResultActions postUpdate(String updateJson)

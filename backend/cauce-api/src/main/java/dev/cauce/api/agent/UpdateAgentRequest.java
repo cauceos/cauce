@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 /**
  * Body of {@code PATCH /v1/agents/{id}}: the agent's editable configuration. Every field is
  * optional; an absent (or null) field keeps its current value. {@code name} and
- * {@code fallbackReply}, when present, must not be blank. {@code elidePastLookups} turns on or off
+ * {@code fallbackReply} and {@code unsupportedMessageReply}, when present, must not be blank. {@code elidePastLookups} turns on or off
  * leaving earlier turns' lookup results out of the model's context (deferred R1).
  * {@code promptCacheRetention} is {@code SHORT} or {@code LONG}: how long the provider keeps the
  * agent's prompt prefix cached (ADR 0010, S9).
@@ -19,7 +19,15 @@ public record UpdateAgentRequest(
         @Pattern(regexp = NOT_BLANK, message = "must not be blank")
         @Size(max = Agent.MAX_FALLBACK_REPLY_LENGTH) String fallbackReply,
         Boolean elidePastLookups,
-        PromptCacheRetention promptCacheRetention) {
+        PromptCacheRetention promptCacheRetention,
+        @Pattern(regexp = NOT_BLANK, message = "must not be blank")
+        @Size(max = Agent.MAX_FALLBACK_REPLY_LENGTH) String unsupportedMessageReply) {
+
+    /** A request that leaves the reply to an unsupported message unchanged. */
+    public UpdateAgentRequest(String name, String systemPrompt, String fallbackReply, Boolean elidePastLookups,
+                              PromptCacheRetention promptCacheRetention) {
+        this(name, systemPrompt, fallbackReply, elidePastLookups, promptCacheRetention, null);
+    }
 
     /** At least one non-whitespace character, across lines. */
     static final String NOT_BLANK = "(?s).*[^\\s].*";

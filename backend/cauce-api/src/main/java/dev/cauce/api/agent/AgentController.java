@@ -39,7 +39,8 @@ public class AgentController {
                                                 @Valid @RequestBody CreateAgentRequest request) {
         var agent = agentService.createAgent(tenantId, request.name(), request.systemPrompt(),
                 request.modelProvider(), request.modelName(), request.temperature(), request.maxResponseTokens(),
-                request.fallbackReply(), request.tools() == null ? List.of() : request.tools());
+                request.fallbackReply(), request.unsupportedMessageReply(),
+                request.tools() == null ? List.of() : request.tools());
         return ResponseEntity.created(URI.create("/v1/agents/" + agent.id())).body(AgentResponse.from(agent));
     }
 
@@ -53,13 +54,14 @@ public class AgentController {
     }
 
     /**
-     * Edits the agent's name, system prompt, fallback reply, whether it elides past lookups and its
-     * prompt cache retention; an absent field is unchanged. An agent outside the caller's scope is a 404.
+     * Edits the agent's name, system prompt, fallback reply, reply to an unsupported message, whether
+     * it elides past lookups and its prompt cache retention; an absent field is unchanged. An agent outside the caller's scope is a 404.
      */
     @PatchMapping("/v1/agents/{id}")
     public AgentResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateAgentRequest request) {
         return AgentResponse.from(agentService.updateAgent(id, request.name(), request.systemPrompt(),
-                request.fallbackReply(), request.elidePastLookups(), request.promptCacheRetention()));
+                request.fallbackReply(), request.unsupportedMessageReply(), request.elidePastLookups(),
+                request.promptCacheRetention()));
     }
 
     @GetMapping("/v1/agents/{id}")

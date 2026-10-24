@@ -98,6 +98,22 @@ public class AgentService {
                              String modelProvider, String modelName,
                              Double temperature, Integer maxResponseTokens, String fallbackReply,
                              List<String> tools) {
+        return createAgent(tenantId, name, systemPrompt, modelProvider, modelName, temperature, maxResponseTokens,
+                fallbackReply, null, tools);
+    }
+
+    /**
+     * {@link #createAgent(UUID, String, String, String, String, Double, Integer, String, List)}, plus
+     * the reply to a message its channel delivered but Cauce does not read ({@code null}: the
+     * channel's platform default; ADR 0006, W5).
+     *
+     * @throws UnknownToolException if a tool name is not registered
+     */
+    @Transactional
+    public Agent createAgent(UUID tenantId, String name, String systemPrompt,
+                             String modelProvider, String modelName,
+                             Double temperature, Integer maxResponseTokens, String fallbackReply,
+                             String unsupportedMessageReply, List<String> tools) {
         TenantEntity tenant = tenantRepository.findById(tenantId).orElseThrow(() ->
                 new TenantNotFoundException("No tenant found for id " + tenantId));
         if (tenant.getTier() != Tier.CLIENT) {
@@ -109,7 +125,8 @@ public class AgentService {
         }
 
         Agent agent = Agent.create(tenantId, name, systemPrompt, modelProvider, modelName,
-                temperature, maxResponseTokens).withFallbackReply(fallbackReply).withTools(tools);
+                temperature, maxResponseTokens).withFallbackReply(fallbackReply)
+                .withUnsupportedMessageReply(unsupportedMessageReply).withTools(tools);
         requireRegistered(agent.toolNames());
         Agent saved = agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(agent)));
         // Admin audit in the same tx, in the owning tenant's chain; the prompt enters only
@@ -170,9 +187,20 @@ public class AgentService {
     @Transactional
     public Agent updateAgent(UUID agentId, String name, String systemPrompt, String fallbackReply,
                              Boolean elidePastLookups, PromptCacheRetention promptCacheRetention) {
+        return updateAgent(agentId, name, systemPrompt, fallbackReply, null, elidePastLookups, promptCacheRetention);
+    }
+
+    /**
+     * {@link #updateAgent(UUID, String, String, String, Boolean, PromptCacheRetention)}, plus the
+     * reply to a message its channel does not read ({@code null} keeps it; ADR 0006, W5).
+     */
+    @Transactional
+    public Agent updateAgent(UUID agentId, String name, String systemPrompt, String fallbackReply,
+                             String unsupportedMessageReply, Boolean elidePastLookups,
+                             PromptCacheRetention promptCacheRetention) {
         Agent current = agentRepository.findById(agentId).map(agentMapper::toDomain).orElseThrow(() ->
                 new AgentNotFoundException("No agent found for id " + agentId));
-        Agent edited = current.edited(name, systemPrompt, fallbackReply);
+        Agent edited = current.edited(name, systemPrompt, fallbackReply, unsupportedMessageReply);
         if (elidePastLookups != null) {
             edited = edited.withPastLookupsElided(elidePastLookups);
         }

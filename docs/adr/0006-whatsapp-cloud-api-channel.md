@@ -97,7 +97,10 @@ once no plaintext row can remain is registered as deferred work.
 ### W5 in detail
 
 The fixed text is a platform setting. Reusing C3's per-agent override would mean a second
-per-agent column and its write path, not a reuse, so a per-agent override is left out and noted.
+per-agent column and its write path, not a reuse, so a per-agent override was left out and noted.
+Since 2026-10-24 it exists (V55, `unsupported_message_reply` on the agent, the fallback reply's
+mechanism): an agent that sets it answers with its own text, in its business's language, on
+every channel; one that does not keeps the platform's.
 The text is sent directly through the outbound adapter (the message was not ingested, so it opens
 no thread) and the event is audited as `conduct.message.unsupported`: the message type and
 ids, no content.

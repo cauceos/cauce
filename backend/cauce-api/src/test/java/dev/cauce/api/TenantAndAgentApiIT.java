@@ -156,6 +156,33 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
     }
 
     @Test
+    void agentReplyToUnsupportedMessages_isSetAtCreation_editedByPatch_andNullByDefault() throws Exception {
+        UUID partnerId = createPartner();
+        UUID clientId = createClient(bearerFor(partnerId), partnerId);
+        String clientAuth = bearerFor(clientId);
+
+        String created = mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null,
+                                null, null, "  Solo leo texto.  ")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.unsupported_message_reply").value("Solo leo texto."))
+                .andReturn().getResponse().getContentAsString();
+        String agentId = objectMapper.readTree(created).get("id").asText();
+
+        mockMvc.perform(patchAs(clientAuth, "/v1/agents/" + agentId,
+                        java.util.Map.of("unsupported_message_reply", "Escríbeme, por favor.")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unsupported_message_reply").value("Escríbeme, por favor."));
+        mockMvc.perform(patchAs(clientAuth, "/v1/agents/" + agentId,
+                        java.util.Map.of("unsupported_message_reply", "   ")))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null,
+                                null, null)))
+                .andExpect(jsonPath("$.unsupported_message_reply").value((Object) null));
+    }
+
+    @Test
     void agentTools_areEmptyByDefault_grantedByPut_andValidatedAgainstTheRegistry() throws Exception {
         UUID partnerId = createPartner();
         UUID clientId = createClient(bearerFor(partnerId), partnerId);
