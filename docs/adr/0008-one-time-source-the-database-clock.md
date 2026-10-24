@@ -130,6 +130,30 @@ agent's previous reply, the request ended on the agent's turn, and the provider 
   pick due rows by `created_at` only decide who goes first, and their processing order was never
   guaranteed; they are left as they are.
 
+## Amendment (2026-10-24): the model reads the date from each message
+
+The database clock was the system's single source of time, but not the model's. A model has no
+"now" of its own: it learnt "today" from a clock tool, and the result of that call stays in the
+conversation. In the real test of 2026-10-24, a Saturday, a thread open since Thursday held the
+clock reading of that Thursday; asked for "tomorrow", the agent worked from it instead of calling
+the tool again, said "tomorrow, Friday the 23rd" and looked up availability on a past date.
+
+- **Each customer message reads with when it was sent.** When the agent's business has a time zone
+  (its profile), context assembly writes in front of every USER message
+  `[Sent Saturday 2026-10-24 18:40 Europe/Madrid]`: the message's `created_at`, stamped by the
+  database clock, in that zone. The newest one is "now". The prompt of a sector pack says to work
+  relative dates out from it, never from memory or an earlier result. The person and the API read
+  the message unstamped.
+- **A stamp per message, not "now" on the last one.** A message's stamp never changes, so the
+  conversation the provider caches reads the same on every later turn; a single "now" moved from
+  message to message would change the cached prefix each time. It also tells the model how much
+  time passed between two messages.
+- **A past date is refused.** Availability of a date before the business's today is a `PAST`
+  refusal whose message says what today is, as a booking of one already was: the tool corrects the
+  model rather than answering a past day as one with nothing left.
+
+An agent whose business has no time zone reads its messages as before; `get_current_time` stays.
+
 ## References
 
 - `backend/cauce-memory/src/main/java/dev/cauce/memory/time/DatabaseClock.java`

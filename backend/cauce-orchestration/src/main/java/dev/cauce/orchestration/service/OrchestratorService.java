@@ -3,6 +3,8 @@ package dev.cauce.orchestration.service;
 import dev.cauce.core.LogKeys;
 import dev.cauce.core.agent.Agent;
 import dev.cauce.core.agent.AgentNotFoundException;
+import dev.cauce.core.business.profile.BusinessProfile;
+import dev.cauce.core.business.profile.BusinessProfileSource;
 import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
@@ -52,6 +54,7 @@ import dev.cauce.tools.spi.ToolRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -137,6 +140,7 @@ public class OrchestratorService {
     private final MessageTracing tracing;
     private final Clock clock;
     private final VoiceNoteTranscription voiceNotes;
+    private final ObjectProvider<BusinessProfileSource> businessProfiles;
     private final InputTokenEstimateWarnings estimateWarnings = new InputTokenEstimateWarnings();
 
     public OrchestratorService(ConversationGateway conversationGateway,
@@ -152,7 +156,8 @@ public class OrchestratorService {
                                SpendGuard spendGuard,
                                MessageTracing tracing,
                                Clock clock,
-                               VoiceNoteTranscription voiceNotes) {
+                               VoiceNoteTranscription voiceNotes,
+                               ObjectProvider<BusinessProfileSource> businessProfiles) {
         this.conversationGateway = conversationGateway;
         this.llmProviderRegistry = llmProviderRegistry;
         this.contextBuilder = contextBuilder;
@@ -167,6 +172,7 @@ public class OrchestratorService {
         this.tracing = tracing;
         this.clock = clock;
         this.voiceNotes = voiceNotes;
+        this.businessProfiles = businessProfiles;
     }
 
     /**
@@ -217,6 +223,8 @@ public class OrchestratorService {
         int contextWindow = provider.servedContextWindow(agent.modelName())
                 .orElseGet(() -> ModelContextWindow.contextWindowFor(agent.modelName()));
         List<ToolDefinition> toolDefinitions = toolDefinitions(agent);
+        // ADR 0008, amendment: each customer message reads with when it was sent, in the business's zone.
+        ZoneId senderTimeZone = businessTimeZone(agent);
         // Deferred R1, behind a per-agent switch: earlier turns' lookups the agent can repeat.
         Set<String> elidedLookups = agent.elidesPastLookups() ? toolRegistry.lookupTools() : Set.of();
         // ADR 0007, B3: who the tools act for is decided here, never by the model.
@@ -230,7 +238,7 @@ public class OrchestratorService {
         for (int iteration = alreadyUsed; iteration < maxIterations; iteration++) {
             LlmInvocationContext context =
                     contextBuilder.build(messages, agent.modelName(), contextWindow, agent.systemPrompt(),
-                            toolDefinitions, elidedLookups);
+                            toolDefinitions, elidedLookups, senderTimeZone);
             eventPublisher.publishEvent(new ContextAssembled(invocationId, iteration,
                     agent.modelName(), context.messages().size(), context.estimatedTokens(),
                     context.contextWindowLimit(), Instant.now()));
@@ -375,6 +383,13 @@ public class OrchestratorService {
     }
 
     /** ADR 0010, S6, S7: the client's spend limit, checked before the model is called at all. */
+    /** The time zone of the agent's business, read under the invocation's tenant context; null if none. */
+    private ZoneId businessTimeZone(Agent agent) {
+        BusinessProfileSource profiles = businessProfiles.getIfAvailable();
+        return profiles == null ? null
+                : profiles.findProfile(agent.tenantId()).map(BusinessProfile::timeZone).orElse(null);
+    }
+
     private void checkSpend(Agent agent, UUID conversationId) {
         switch (spendGuard.check(agent)) {
             case ALLOWED -> {

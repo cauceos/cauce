@@ -10,9 +10,14 @@ import dev.cauce.llm.model.LlmMessage;
 import dev.cauce.llm.model.LlmRole;
 import dev.cauce.orchestration.exception.MessageTooLargeForContextException;
 import dev.cauce.orchestration.exception.PromptDoesNotFitContextException;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -41,6 +46,12 @@ import java.util.stream.Collectors;
  *
  * <p>FALLBACK messages are skipped entirely (ADR 0005, C3): they are the platform's reply to a
  * failed invocation, not a turn of the agent, and the model must not read them as its own.
+ *
+ * <p>When the agent's business has a time zone, each USER message reads with the moment it was sent
+ * in front ({@link #sentStamp}; ADR 0008, amendment of 2026-10-24): its database stamp, in that
+ * zone. The newest one is "now", so "tomorrow" is worked out from it, never from memory or from a
+ * clock reading earlier in a conversation that may span days. Each message carries its own stamp,
+ * the same on every later turn, so the cached conversation prefix never changes.
  */
 public final class ContextBuilder {
 
@@ -70,6 +81,9 @@ public final class ContextBuilder {
      * knows the text was heard, not written, and confirms what a mishearing would change.
      */
     public static final String TRANSCRIBED_VOICE_NOTE = "[Transcribed voice note] ";
+
+    /** How a stamp writes the moment a message was sent: "Saturday 2026-10-24 18:40". */
+    private static final DateTimeFormatter SENT = DateTimeFormatter.ofPattern("EEEE yyyy-MM-dd HH:mm", Locale.ENGLISH);
 
     /** What stands in for a past lookup's result when the agent elides them (deferred R1). */
     public static final String ELIDED_RESULT = "resultado omitido; vuelve a consultar si lo necesitas";
@@ -113,6 +127,17 @@ public final class ContextBuilder {
     public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
                                       int contextWindow, String systemPrompt, List<ToolDefinition> tools,
                                       Set<String> elidedLookups) {
+        return build(conversationMessages, modelName, contextWindow, systemPrompt, tools, elidedLookups, null);
+    }
+
+    /**
+     * {@link #build(List, String, int, String, List, Set)} for an agent whose business is in
+     * {@code senderTimeZone}: each USER message reads with its {@link #sentStamp} in that zone. Null:
+     * no stamps, the agent knows no time zone.
+     */
+    public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
+                                      int contextWindow, String systemPrompt, List<ToolDefinition> tools,
+                                      Set<String> elidedLookups, ZoneId senderTimeZone) {
         if (!elidedLookups.isEmpty()) {
             conversationMessages = elidePastLookups(conversationMessages, elidedLookups);
         }
@@ -130,7 +155,7 @@ public final class ContextBuilder {
             if (message.role() == MessageRole.FALLBACK) {
                 continue; // the platform's reply to a failure, not the agent's turn (ADR 0005, C3)
             }
-            int messageTokens = estimateTokens(message);
+            int messageTokens = estimateTokens(message, senderTimeZone);
 
             if (i == lastIndex && messageTokens > effectiveWindow) {
                 if (fixedTokens < historyWindow && messageTokens > historyWindow) {
@@ -157,7 +182,7 @@ public final class ContextBuilder {
         Collections.reverse(selected); // built newest-first; return chronological
         int firstUserTurn = 0;
         while (firstUserTurn < selected.size() && selected.get(firstUserTurn).role() != MessageRole.USER) {
-            runningTokens -= estimateTokens(selected.get(firstUserTurn));
+            runningTokens -= estimateTokens(selected.get(firstUserTurn), senderTimeZone);
             firstUserTurn++;
         }
         if (!selected.isEmpty() && firstUserTurn == selected.size()) {
@@ -167,7 +192,7 @@ public final class ContextBuilder {
                             + "' from its user message onwards");
         }
         List<LlmMessage> window = selected.subList(firstUserTurn, selected.size()).stream()
-                .map(ContextBuilder::toLlmMessage)
+                .map(message -> toLlmMessage(message, senderTimeZone))
                 .toList();
         return new LlmInvocationContext(
                 window, systemPrompt, runningTokens, fixedTokens, contextWindow, reservedForResponse);
@@ -223,8 +248,9 @@ public final class ContextBuilder {
      * {@code content()} is only the tool name), so they are added. A TOOL_RESULT's output is
      * already the message content, so no extra is added.
      */
-    private static int estimateTokens(Message message) {
-        int tokens = TokenEstimator.estimate(modelText(message));
+    private static int estimateTokens(Message message, ZoneId senderTimeZone) {
+        int tokens = TokenEstimator.estimate(message.role() == MessageRole.USER
+                ? userText(message, senderTimeZone) : modelText(message));
         if (message.toolContent().orElse(null) instanceof ToolCall call) {
             tokens += TokenEstimator.estimate(String.valueOf(call.input()));
         }
@@ -248,13 +274,33 @@ public final class ContextBuilder {
     }
 
     /**
+     * What the model reads for a USER message: {@link #modelText}, after the message's
+     * {@link #sentStamp} when the business has a time zone and the message its database stamp.
+     */
+    static String userText(Message message, ZoneId senderTimeZone) {
+        String text = modelText(message);
+        if (senderTimeZone == null || message.createdAt() == null) {
+            return text;
+        }
+        return sentStamp(message.createdAt(), senderTimeZone) + text;
+    }
+
+    /**
+     * The stamp a USER message reads with: when it was sent, in the business's zone —
+     * {@code "[Sent Saturday 2026-10-24 18:40 Europe/Madrid] "}.
+     */
+    public static String sentStamp(Instant sentAt, ZoneId zone) {
+        return "[Sent " + SENT.format(ZonedDateTime.ofInstant(sentAt, zone)) + " " + zone.getId() + "] ";
+    }
+
+    /**
      * Translates a domain {@link Message} to a neutral {@link LlmMessage}. Text roles map to
      * their {@link LlmRole}; tool roles use the neutral tool factories, carrying the structured
      * {@code toolContent} so the adapters can assemble each provider's tool wire format.
      */
-    private static LlmMessage toLlmMessage(Message message) {
+    private static LlmMessage toLlmMessage(Message message, ZoneId senderTimeZone) {
         return switch (message.role()) {
-            case USER -> new LlmMessage(LlmRole.USER, modelText(message));
+            case USER -> new LlmMessage(LlmRole.USER, userText(message, senderTimeZone));
             case AGENT -> new LlmMessage(LlmRole.ASSISTANT, message.content());
             case SYSTEM -> new LlmMessage(LlmRole.SYSTEM, message.content());
             case TOOL_CALL -> LlmMessage.toolCall((ToolCall) message.toolContent().orElseThrow());

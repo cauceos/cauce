@@ -99,6 +99,7 @@ class OrchestratorServiceTest {
     private ApplicationEventPublisher eventPublisher;
     private AgentReplyDispatcher replyDispatcher;
     private ObjectProvider<AgentReplyDispatcher> replyDispatcherProvider;
+    private ObjectProvider<dev.cauce.core.business.profile.BusinessProfileSource> businessProfiles;
     private Conversation conversation;
     private Agent agent;
 
@@ -117,6 +118,35 @@ class OrchestratorServiceTest {
         replyDispatcher = Mockito.mock(AgentReplyDispatcher.class);
         replyDispatcherProvider = Mockito.mock(ObjectProvider.class);
         when(replyDispatcherProvider.getIfAvailable()).thenReturn(replyDispatcher);
+        businessProfiles = Mockito.mock(ObjectProvider.class); // no business: no stamps
+    }
+
+    @Test
+    void respondToMessage_forABusinessWithATimeZone_readsEachCustomerMessageWithWhenItWasSent() {
+        stubLoadAndEchoAppend();
+        Message older = Message.from(conversationId, MessageRole.USER, "Hola")
+                .stampedAt(Instant.parse("2026-10-22T08:01:23Z"));
+        Message today = Message.from(conversationId, MessageRole.USER, "Mesa para dos mañana")
+                .stampedAt(Instant.parse("2026-10-24T16:40:44Z"));
+        when(gateway.load(conversationId, triggerId))
+                .thenReturn(new LoadedConversation(conversation, agent, List.of(older, today)));
+        dev.cauce.core.business.profile.BusinessProfileSource profiles =
+                Mockito.mock(dev.cauce.core.business.profile.BusinessProfileSource.class);
+        dev.cauce.core.business.profile.BusinessProfile profile =
+                Mockito.mock(dev.cauce.core.business.profile.BusinessProfile.class);
+        when(profile.timeZone()).thenReturn(java.time.ZoneId.of("Europe/Madrid"));
+        when(profiles.findProfile(tenantId)).thenReturn(Optional.of(profile));
+        when(businessProfiles.getIfAvailable()).thenReturn(profiles);
+        when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));
+        when(provider.invoke(any())).thenReturn(reply("¿Para el domingo 25?"));
+
+        serviceWith(emptyRegistry()).respondToMessage(invocationId, conversationId, triggerId);
+
+        ArgumentCaptor<LlmInvocation> captor = ArgumentCaptor.forClass(LlmInvocation.class);
+        verify(provider).invoke(captor.capture());
+        assertThat(captor.getValue().messages()).extracting(LlmMessage::content).containsExactly(
+                "[Sent Thursday 2026-10-22 10:01 Europe/Madrid] Hola",
+                "[Sent Saturday 2026-10-24 18:40 Europe/Madrid] Mesa para dos mañana");
     }
 
     @Test
@@ -819,7 +849,8 @@ class OrchestratorServiceTest {
         return new OrchestratorService(gateway, registry, new ContextBuilder(), toolRegistry,
                 environment, errorRecorder, usageRecorder, eventPublisher,
                 replyDispatcherProvider, loop, spendGuard,
-                dev.cauce.orchestration.tracing.MessageTracing.noop(), CLOCK, passThroughVoiceNotes());
+                dev.cauce.orchestration.tracing.MessageTracing.noop(), CLOCK, passThroughVoiceNotes(),
+                businessProfiles);
     }
 
     /** No voice note to transcribe: the conversation goes on as loaded. */

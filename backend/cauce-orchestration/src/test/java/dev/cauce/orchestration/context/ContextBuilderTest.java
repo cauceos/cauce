@@ -312,6 +312,36 @@ class ContextBuilderTest {
     }
 
     @Test
+    void build_withTheBusinessTimeZone_readsEachUserMessageWithWhenItWasSent_theSameOnEveryTurn() {
+        java.time.ZoneId madrid = java.time.ZoneId.of("Europe/Madrid");
+        // Two days apart, as in a thread that stays open: the newest stamp is "now".
+        Message thursday = Message.from(CONVERSATION, MessageRole.USER, "Hola")
+                .stampedAt(java.time.Instant.parse("2026-10-22T08:01:23Z"));
+        Message reply = Message.from(CONVERSATION, MessageRole.AGENT, "Buenas")
+                .stampedAt(java.time.Instant.parse("2026-10-22T08:01:25Z"));
+        Message note = Message.fromParts(CONVERSATION, MessageRole.USER, List.of(
+                dev.cauce.core.message.MessagePart.Audio.received("audio/ogg", "r", null, 4)
+                        .transcribed("Mesa para dos mañana", "a".repeat(64), 10, 4)))
+                .stampedAt(java.time.Instant.parse("2026-10-24T22:30:00Z")); // 00:30 on Sunday in Madrid
+
+        LlmInvocationContext first = builder.build(List.of(thursday, reply), MODEL, 200_000, SYSTEM_PROMPT,
+                List.of(), Set.of(), madrid);
+        LlmInvocationContext later = builder.build(List.of(thursday, reply, note), MODEL, 200_000, SYSTEM_PROMPT,
+                List.of(), Set.of(), madrid);
+
+        assertThat(later.messages()).extracting(LlmMessage::content).containsExactly(
+                "[Sent Thursday 2026-10-22 10:01 Europe/Madrid] Hola",
+                "Buenas",
+                "[Sent Sunday 2026-10-25 00:30 Europe/Madrid] [Transcribed voice note] Mesa para dos mañana");
+        assertThat(later.messages().get(0)).as("a message reads the same on every later turn: the cache holds")
+                .isEqualTo(first.messages().get(0));
+        assertThat(later.estimatedTokens()).isEqualTo(TokenEstimator.estimate(later.messages().get(0).content())
+                + TokenEstimator.estimate("Buenas") + TokenEstimator.estimate(later.messages().get(2).content()));
+        assertThat(builder.build(List.of(thursday), MODEL, SYSTEM_PROMPT).messages())
+                .as("without a time zone, no stamp").extracting(LlmMessage::content).containsExactly("Hola");
+    }
+
+    @Test
     void build_whenUnknownModel_usesConservativeFallbackWindow() {
         // An unregistered model no longer fails: ModelContextWindow returns a conservative
         // fallback window so the invocation degrades (history trimmed) rather than breaking.
