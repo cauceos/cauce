@@ -29,6 +29,7 @@ import dev.cauce.evals.scenario.Scenario;
 import dev.cauce.evals.scenario.Scenario.Kind;
 import dev.cauce.evals.scenario.RelativeDates;
 import dev.cauce.evals.scenario.ScenarioLoader;
+import dev.cauce.evals.scenario.ScenarioSelection;
 import dev.cauce.llm.spi.LlmProvider;
 import dev.cauce.llm.spi.LlmProviderRegistry;
 import dev.cauce.llm.spi.SystemDefaultLlmCredential;
@@ -160,7 +161,8 @@ class EvalBatteryRun {
                 .as("Batería completa desde un árbol desfasado: %s Para ejecutarla igualmente, -Pevals.forzar=true",
                         stale.orElse(""))
                 .isFalse();
-        List<Scenario> selected = select(new ScenarioLoader().loadAll(SETTINGS.evalsDir()));
+        List<Scenario> selected = ScenarioSelection.select(new ScenarioLoader().loadAll(SETTINGS.evalsDir()),
+                SETTINGS.tasks(), SETTINGS.scenarioIds());
         assertThat(selected).as("no scenario matches " + SETTINGS.selection()).isNotEmpty();
         List<Scenario> conversationsToRun = selected.stream().filter(s -> s.kind() == Kind.CONVERSATION).toList();
         List<Scenario> digests = selected.stream().filter(s -> s.kind() == Kind.DIGEST).toList();
@@ -180,7 +182,7 @@ class EvalBatteryRun {
         PriceTable prices = PriceTable.load(SETTINGS.evalsDir().resolve("precios.yaml"));
         Optional<PriceTable.Price> agentPrice = prices.priceOf(SETTINGS.agentProvider(), SETTINGS.agentModel());
         Optional<PriceTable.Price> judgePrice = judge.flatMap(j -> prices.priceOf(j.providerId(), j.model()));
-        Optional<RunSummary> previous = Report.previous(SETTINGS.evalsDir().resolve("historial"),
+        Optional<RunSummary> previous = Report.previous(List.of(SETTINGS.historyDir(), SETTINGS.newHistoryDir()),
                 SETTINGS.agentProvider() + "/" + SETTINGS.agentModel());
         Long inPerTurn = previous.filter(p -> p.tokens() != null && p.tokens().modelTurns() > 0)
                 .map(p -> p.tokens().input() / p.tokens().modelTurns()).orElse(null);
@@ -354,13 +356,6 @@ class EvalBatteryRun {
                 new SystemDefaultLlmCredential(providerId, environment)));
     }
 
-    private static List<Scenario> select(List<Scenario> all) {
-        return all.stream()
-                .filter(s -> SETTINGS.tasks().isEmpty() || SETTINGS.tasks().stream().anyMatch(s.task()::startsWith))
-                .filter(s -> SETTINGS.scenarioIds().isEmpty() || SETTINGS.scenarioIds().contains(s.id()))
-                .toList();
-    }
-
     /** The agent's tokens of the given invocations: every provider call they made, retries included. */
     private static RunSummary.ScenarioTokens tokensOf(JdbcTemplate admin, List<String> invocationIds) {
         if (invocationIds.isEmpty()) {
@@ -409,11 +404,13 @@ class EvalBatteryRun {
         } else if (!summary.valid()) {
             System.out.println("Ejecución inválida: nada escrito en el historial.");
         } else {
-            Path history = SETTINGS.evalsDir().resolve("historial");
-            Files.createDirectories(history);
-            Path summaryFile = history.resolve(stamp + "-" + SETTINGS.agentModel() + ".json");
+            // Outside git until moved by hand: an untracked summary in historial/ blocks a checkout.
+            Path pending = SETTINGS.newHistoryDir();
+            Files.createDirectories(pending);
+            Path summaryFile = pending.resolve(stamp + "-" + SETTINGS.agentModel() + ".json");
             Files.writeString(summaryFile, Report.json(summary), StandardCharsets.UTF_8);
-            System.out.println("Resumen para el historial (commitéalo): " + summaryFile);
+            System.out.println("Resumen (fuera de git): " + summaryFile);
+            System.out.println("Para el historial, muévelo a " + SETTINGS.historyDir() + " y commitéalo.");
         }
         System.out.println();
         System.out.println(Report.console(summary));

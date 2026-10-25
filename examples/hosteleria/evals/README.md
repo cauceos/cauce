@@ -34,7 +34,11 @@ commitea, o fuérzala con `-Pevals.forzar=true`, que no sirve de línea base. Un
 simulacro solo avisan. Antes de empezar
 estima el coste y, si supera `-Pevals.limite` (10 US$ por defecto), se para hasta que se confirme.
 El informe queda en `backend/cauce-evals/build/evals/` (con las trazas completas, fuera de git), y el
-resumen de cada ejecución en `historial/`, para commitearlo. No forma parte de `./gradlew build` ni
+resumen de cada ejecución en `historial-nuevo/`, ignorada por git: un resumen sin seguimiento nunca
+impide un `git checkout`. Llevarlo al historial es un paso explícito: moverlo a `historial/` y
+commitearlo. Cada ejecución se compara con la última de las dos carpetas. Un escenario o una tarea
+pedidos que no existen (`-Pevals.escenarios`, `-Pevals.tarea`) paran la ejecución con su nombre, en
+vez de ejecutar el resto. No forma parte de `./gradlew build` ni
 de CI. Una ejecución que no dice nada del agente falla y no va al historial: si el proveedor rechaza la
 clave (401), se para en el primer turno; si un escenario no tiene ninguna repetición válida, o las
 repeticiones con fallo de ejecución superan `-Pevals.umbral_fallos` (10 % por defecto), queda
@@ -183,3 +187,4 @@ notas reales no van al repositorio público.
 | `calibracion/` | Turnos reales con el juicio del dueño del paquete, para calibrar al juez |
 | `precios.yaml` | Precios por millón de tokens, con fecha, para estimar el coste |
 | `historial/` | Un resumen por ejecución: modelo, huella del prompt, commit, resultados, y tokens y coste de cada escenario |
+| `historial-nuevo/` | Los resúmenes aún no llevados a `historial/`; ignorada por git |

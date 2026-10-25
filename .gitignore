@@ -48,6 +48,9 @@ docker-compose.override.yml
 .quickstart/
 .demo-bar.env
 
+# --- Eval summaries not yet in the history: moved to historial/ by hand, when committed ---
+examples/*/evals/historial-nuevo/
+
 # --- Frontend (npm / Vite) ---
 node_modules/
 frontend/**/dist/

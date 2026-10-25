@@ -78,6 +78,19 @@ public record EvalSettings(Path repoRoot, String pack, List<String> tasks, List<
         return packDir().resolve("evals");
     }
 
+    /** The committed history: one summary per run that was moved into it. */
+    public Path historyDir() {
+        return evalsDir().resolve("historial");
+    }
+
+    /**
+     * Where a run writes its summary: ignored by git, so it never blocks a checkout; moving it into
+     * {@link #historyDir()} is the explicit step of committing it.
+     */
+    public Path newHistoryDir() {
+        return evalsDir().resolve("historial-nuevo");
+    }
+
     /** How the scenarios were selected, for the report, and whether the run measures R1. */
     public String selection() {
         String selected;

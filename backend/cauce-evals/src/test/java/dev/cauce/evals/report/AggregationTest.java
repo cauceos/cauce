@@ -191,6 +191,27 @@ class AggregationTest {
     }
 
     @Test
+    void aRunIsComparedWithTheNewest_ofTheHistoryAndOfWhatIsNotYetInIt(@org.junit.jupiter.api.io.TempDir
+                                                                       java.nio.file.Path dir) throws Exception {
+        java.nio.file.Path history = java.nio.file.Files.createDirectory(dir.resolve("historial"));
+        java.nio.file.Path notYet = dir.resolve("historial-nuevo");
+        java.nio.file.Files.writeString(history.resolve("2026-10-24T1550Z-claude-sonnet-5-5.json"), """
+                {"fecha": "2026-10-24T15:50Z", "modelo": "anthropic/claude-sonnet-5-5", "n": 5, "completa": true,
+                 "tasa_global": 1.0, "arbol_con_cambios": false, "escenarios": []}
+                """);
+
+        assertThat(Report.previous(List.of(history, notYet), "anthropic/claude-sonnet-5-5")).get()
+                .extracting(RunSummary::date).isEqualTo("2026-10-24T15:50Z");
+        java.nio.file.Files.createDirectory(notYet);
+        java.nio.file.Files.writeString(notYet.resolve("2026-10-25T0910Z-claude-sonnet-5-5.json"), """
+                {"fecha": "2026-10-25T09:10Z", "modelo": "anthropic/claude-sonnet-5-5", "n": 5, "completa": true,
+                 "tasa_global": 0.98, "arbol_con_cambios": false, "escenarios": []}
+                """);
+        assertThat(Report.previous(List.of(history, notYet), "anthropic/claude-sonnet-5-5")).get()
+                .extracting(RunSummary::date).isEqualTo("2026-10-25T09:10Z");
+    }
+
+    @Test
     void aScenarioWithLongWrites_andNoLongWritePrice_hasNoCost() {
         PriceTable.Price shortOnly = new PriceTable.Price("anthropic", "m", 2.0, 2.5, null, 0.1, 10.0, "2026-10-23");
         Aggregation.Meta meta = new Aggregation.Meta("2026-10-23T08:00Z", "abc", false, "anthropic/m", "ninguno",
