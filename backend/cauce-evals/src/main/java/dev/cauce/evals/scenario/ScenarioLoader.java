@@ -153,6 +153,15 @@ public final class ScenarioLoader {
     }
 
     private static void validate(String where, Expectation e, Set<String> aliases, boolean digest) {
+        for (List<String> texts : java.util.Arrays.asList(e.replyContains(), e.replyLacks())) {
+            for (String text : texts == null ? List.<String>of() : texts) {
+                try {
+                    RelativeDates.validatePlaceholders(text);
+                } catch (InvalidScenarioException invalid) {
+                    throw new InvalidScenarioException(where + invalid.getMessage());
+                }
+            }
+        }
         if (!digest) {
             require(e.digestContains() == null && e.digestLacks() == null,
                     where + "resumen_contiene/resumen_no_contiene go with an accion");

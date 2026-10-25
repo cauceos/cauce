@@ -95,13 +95,13 @@ public final class Checker {
             for (String expected : contains) {
                 // "no consta | no me consta": any of the alternatives is enough.
                 boolean found = Arrays.stream(expected.split(" \\| "))
-                        .anyMatch(alternative -> plain.contains(Text.plain(resolve(alternative.strip()))));
+                        .anyMatch(alternative -> plain.contains(Text.plain(text(alternative.strip()))));
                 results.add(CheckResult.of(name + " contiene «" + expected + "»", found, excerpt(actual)));
             }
         }
         if (lacks != null) {
             for (String expected : lacks) {
-                String value = resolve(expected);
+                String value = text(expected);
                 results.add(CheckResult.of(name + " no contiene «" + expected + "»", !plain.contains(Text.plain(value)),
                         excerpt(actual)));
             }
@@ -218,6 +218,14 @@ public final class Checker {
 
     private String resolve(String value) {
         return String.valueOf(resolve((Object) value));
+    }
+
+    /**
+     * An expected text: its variables resolved and its relative dates written out as the person's are
+     * ({@code {+1:dia_semana}}, «lunes»; {@code {+1}}, «lunes 26 de octubre»).
+     */
+    private String text(String value) {
+        return RelativeDates.render(resolve(value), dates);
     }
 
     /** The same value, comparing as text without case or surrounding spaces (YAML gives 6, the input 6). */

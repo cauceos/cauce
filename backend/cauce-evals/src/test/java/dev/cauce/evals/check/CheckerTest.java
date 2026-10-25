@@ -69,6 +69,19 @@ class CheckerTest {
     }
 
     @Test
+    void aReplyText_withARelativeDate_isTheDateWrittenOut() {
+        TurnTrace answered = new TurnTrace("¿Mañana abrís a mediodía?", List.of(),
+                "Mañana, viernes 23, abrimos a las 12:00.", null, null, change.state());
+
+        assertThat(checker.check("turno 1", expectation(null, null, null, null, List.of("{+1:dia_semana}"),
+                List.of("{+2:dia_semana}"), null), answered))
+                .extracting(CheckResult::outcome).containsExactly(Outcome.PASS, Outcome.PASS);
+        assertThat(checker.check("turno 1", expectation(null, null, null, null, List.of("{+0:dia_semana}"), null,
+                null), answered))
+                .extracting(CheckResult::outcome).containsExactly(Outcome.FAIL);
+    }
+
+    @Test
     void theState_isMatchedInItsVocabulary_countsByStatus_andRelativeDates() {
         ExpectedState state = new ExpectedState(Map.of("CONFIRMED", 1, "HELD", 1),
                 Map.of("estado", "HELD", "personas", 6, "codigo", "$r.codigo", "fecha", "proximo_sabado", "hora", "21:30"),

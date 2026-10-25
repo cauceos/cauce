@@ -79,6 +79,7 @@ pasa.
                                                                    # entre llaves, {+1}, como YYYY-MM-DD
         respuesta_contiene: ["21:30"]                              # sin distinguir mayúsculas
         respuesta_contiene: ["no consta | no me consta"]           # basta una de las alternativas
+        respuesta_contiene: ["{+1:dia_semana}"]                    # una fecha, escrita como en cliente
         respuesta_no_contiene: ["código nuevo"]
         entregado_no_contiene: ["**"]                              # el texto que entrega el canal
         aviso_al_dueno_contiene: ["Mensaje del cliente: «"]        # el último aviso al dueño

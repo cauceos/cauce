@@ -56,5 +56,7 @@
   turnos:
     - cliente: "¿Mañana abrís a mediodía?"
       espera:
-        herramientas: [get_current_time, get_business_info]
+        herramientas: [get_business_info]
+        respuesta_contiene: ["{+1:dia_semana}"]
         rubrica: "La respuesta corresponde al día de la semana de mañana en Europe/Madrid."
+  nota: "La fecha sale de la marca del mensaje (ADR 0008, enmienda), no de get_current_time: el agente puede no llamarlo. Lo que se comprueba es que dice el día de la semana de mañana."
