@@ -182,7 +182,8 @@ class EvalBatteryRun {
         PriceTable prices = PriceTable.load(SETTINGS.evalsDir().resolve("precios.yaml"));
         Optional<PriceTable.Price> agentPrice = prices.priceOf(SETTINGS.agentProvider(), SETTINGS.agentModel());
         Optional<PriceTable.Price> judgePrice = judge.flatMap(j -> prices.priceOf(j.providerId(), j.model()));
-        Optional<RunSummary> previous = Report.previous(List.of(SETTINGS.historyDir(), SETTINGS.newHistoryDir()),
+        // Compared only with what is in the history: a summary not moved into it was not kept.
+        Optional<RunSummary> previous = Report.previous(SETTINGS.historyDir(),
                 SETTINGS.agentProvider() + "/" + SETTINGS.agentModel());
         Long inPerTurn = previous.filter(p -> p.tokens() != null && p.tokens().modelTurns() > 0)
                 .map(p -> p.tokens().input() / p.tokens().modelTurns()).orElse(null);

@@ -36,7 +36,7 @@ estima el coste y, si supera `-Pevals.limite` (10 US$ por defecto), se para hast
 El informe queda en `backend/cauce-evals/build/evals/` (con las trazas completas, fuera de git), y el
 resumen de cada ejecución en `historial-nuevo/`, ignorada por git: un resumen sin seguimiento nunca
 impide un `git checkout`. Llevarlo al historial es un paso explícito: moverlo a `historial/` y
-commitearlo. Cada ejecución se compara con la última de las dos carpetas. Un escenario o una tarea
+commitearlo. Cada ejecución se compara solo con el historial commiteado, nunca con `historial-nuevo/`. Un escenario o una tarea
 pedidos que no existen (`-Pevals.escenarios`, `-Pevals.tarea`) paran la ejecución con su nombre, en
 vez de ejecutar el resto. No forma parte de `./gradlew build` ni
 de CI. Una ejecución que no dice nada del agente falla y no va al historial: si el proveedor rechaza la

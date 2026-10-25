@@ -45,31 +45,20 @@ public final class Report {
      * same model, or, the first time a model runs, the most recent of any. The report names it.
      */
     public static Optional<RunSummary> previous(Path history, String agentModel) {
-        return previous(List.of(history), agentModel);
-    }
-
-    /**
-     * As {@link #previous(Path, String)}, over several folders at once: the committed history and the
-     * summaries written since and not yet moved into it.
-     */
-    public static Optional<RunSummary> previous(List<Path> histories, String agentModel) {
-        List<Path> summaries = new java.util.ArrayList<>();
-        for (Path history : histories) {
-            if (Files.isDirectory(history)) {
-                try (Stream<Path> files = Files.list(history)) {
-                    files.filter(f -> f.toString().endsWith(".json")).forEach(summaries::add);
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-            }
+        if (!Files.isDirectory(history)) {
+            return Optional.empty();
         }
-        List<RunSummary> newestFirst = summaries.stream()
-                .sorted(Comparator.comparing((Path f) -> f.getFileName().toString()).reversed())
-                .map(Report::read)
-                .toList();
-        return newestFirst.stream().filter(s -> agentModel != null && agentModel.equals(s.agentModel()))
-                .findFirst()
-                .or(() -> newestFirst.stream().findFirst());
+        try (Stream<Path> files = Files.list(history)) {
+            List<RunSummary> newestFirst = files.filter(f -> f.toString().endsWith(".json"))
+                    .sorted(Comparator.comparing((Path f) -> f.getFileName().toString()).reversed())
+                    .map(Report::read)
+                    .toList();
+            return newestFirst.stream().filter(s -> agentModel != null && agentModel.equals(s.agentModel()))
+                    .findFirst()
+                    .or(() -> newestFirst.stream().findFirst());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static RunSummary read(Path file) {
