@@ -10,7 +10,7 @@ spring-dependency-management = "1.1.7"
 uuid-creator = "6.1.1"
 wiremock = "3.9.2"
 # Must match the OpenTelemetry API the Spring Boot BOM manages (1.49.0 for Boot 3.5).
-opentelemetry-instrumentation = "2.15.0-alpha"
+opentelemetry-instrumentation = "2.33.1-alpha"
 
 [libraries]
 # RFC 9562 UUIDv7 (time-ordered) generator. Used by the domain to mint ids.
