@@ -1,8 +1,8 @@
 # ADR 0014: A web-chat channel for online shops
 
-Status: **Proposed.** Records the decisions taken in the strategic chat on 2026-11-09, the
-shop-assistant mode (WC8) included. The ADR is completed, and accepted, in unit W0, after R2
-(ADR 0013). Nothing is built.
+Status: **Accepted** (2026-11-09, unit W0, with the owner's approval). Proposed the same day from
+the strategic chat's decisions (WC1–WC8), and completed in W0 with the public surface, the limits
+and the units. Nothing is built yet: W1–W7 build it, after R2 (ADR 0013).
 
 ## Context
 
@@ -19,125 +19,234 @@ own pages. The existing channels do not cover this:
 - **An anonymous public endpoint spends the tenant's money.** The spend limit (ADR 0010) is
   optional today.
 - **`SESSION_ID` already exists** in `IdentityKind` and in the CHECK of `V25` ("a web-chat
-  session", ADR 0004). No new kind is needed. What this ADR decides is its meaning.
+  session", ADR 0004), and `web_chat` is already a supported `channel_type`. No new kind or
+  channel name is needed. What this ADR decides is what they mean.
 - **The shop's questions need tools the bar's do not:** stock, and the state of an order.
+- **Per-channel capabilities** (ADR 0004, unit 3) are decided but not built. A product card is
+  the first outbound part a channel may not carry.
 
-## Decisions taken (2026-11-09)
+## Decision
 
 ### WC1 — A public key per agent, never an API key
 
-A channel config of type `web` carries a **public key** (`pk_…`). It is not secret and is not an
-`ApiKey`. It allows exactly three things: open a session, send a message to its agent, and read
-that session's own messages. The config also holds the allowed origins and the sealed Turnstile
-secret. The tenant is resolved from the key through a `SECURITY DEFINER` function (ADR 0001), and
-ingest then runs under RLS. The surface lives outside `/v1` and outside API-key auth. CORS is
-checked **per config**, against its allowed origins, never as a global property.
+A channel config of type `web_chat` carries a **public key** (`pk_` plus 24 random characters,
+unique). It is not secret and is not an `ApiKey`. It allows exactly three things: open a
+session, send a message to its agent, and read that session's own messages. The config also
+holds:
+
+- the **allowed origins**: exact `scheme://host[:port]` values, no wildcards in v1;
+- the **sealed Turnstile secret** and its site key (AES-GCM, `SecretCipher`, as for WhatsApp);
+- the privacy settings (WC5), the persona and the shop-assistant mode (WC8).
+
+The surface lives under **`/web/v1/**`**, outside `/v1` and outside API-key auth. The tenant is
+resolved from the public key through a `SECURITY DEFINER` function (ADR 0001), and everything after
+that runs under RLS. **CORS is checked per config**: the request's `Origin` must be one of that
+config's allowed origins, and the preflight answers only with that origin. There are no
+credentials and no cookies. Auth is a header, so `Access-Control-Allow-Credentials` is never sent.
+This is not the global CORS of `/v1`, which stays deferred.
+
+**Endpoints (v1):**
+
+| Method and path | Auth | What it does |
+|---|---|---|
+| `GET /web/v1/widget/{publicKey}/config` | none | The widget's public configuration (persona, notices, mode, signals, variants). It is cacheable and carries no identifier of the visitor. |
+| `POST /web/v1/sessions` | `X-Cauce-Public-Key`, Turnstile token | Opens a session (WC2). Returns the session token once, with its expiry. |
+| `POST /web/v1/messages` | `Authorization: Bearer <session token>` | Ingests a message, optionally with page context (WC8). The `Idempotency-Key` header works as on `/v1`. Answers 202 with the message and invocation ids. |
+| `GET /web/v1/messages?cursor=` | session token | The session's messages after the cursor (by `seq`), plus `awaiting_reply` while an invocation is in flight (WC4). |
+| `POST /web/v1/events` | session token | Widget events after the first message: add to cart, attributed purchase (WC8). |
+
+Out-of-scope or expired tokens get 401. An unknown public key and a disallowed origin both get 403
+with no detail.
 
 ### WC2 — An anonymous identity per browser session
 
-Opening a session needs a valid Cloudflare Turnstile token. Cauce mints a random session token,
-stores only its hash, and returns it to the widget. The identity is `SESSION_ID` with the
-session's id as its value, never the token.
-
-- **Lifetime: 30 days, sliding**, renewed by use. **Independent of R2** (ADR 0013): R2 closes the
-  thread after its window, while the session, and so the identity, survives. A person who comes
-  back within 30 days is the same identity in a new thread. Their bookings, cases and orders are
-  read by tool.
-- **The token lives in the shop page's `localStorage`.** This is deliberate and documented. It
-  is the shop's origin, not Cauce's, and it holds only an anonymous session's capability. The
-  playground's memory-only rule is about tenant API keys and does not apply here.
+- `POST /web/v1/sessions` needs a **valid Cloudflare Turnstile token**, verified server-side
+  (`siteverify`) with the config's secret. Cauce mints a **256-bit random session token**
+  (base64url), stores only its SHA-256, and returns it once.
+- A session is a row of a new tenant-scoped table, `web_sessions`, with RLS by the pattern of
+  this repo. It holds the config, the token hash, `last_seen_at`, `expires_at` and the consent (WC5).
+  The identity is `SESSION_ID` on channel `web_chat` with the **session's id** (UUIDv7) as its
+  value, never the token. The token is resolved to its session through a `SECURITY DEFINER`
+  function, and the rest runs under RLS.
+- **Lifetime: 30 days, sliding.** Each authenticated request moves `expires_at` to `now() + 30
+  days`, using the database clock (ADR 0008). **It is independent of R2** (ADR 0013): R2 closes the
+  thread after its window, while the session, and so the identity, survives. A person who comes back
+  within 30 days is the same identity in a new thread, and their bookings, cases and orders are read
+  by tool.
+- **The token lives in the shop page's `localStorage`.** This is deliberate. It is the shop's
+  origin, not Cauce's, and it holds only an anonymous session's capability: sending to one agent
+  and reading its own messages. The playground's memory-only rule is about tenant API keys and
+  does not apply here. Clearing site data ends the session.
+- **Retention.** An expired session, its token hash and its request counters are purged after
+  expiry. The purge's cutoff is SQL `now()`. Its messages stay with the thread, as on every
+  channel, under the business's retention (`docs/deferred.md`).
 
 ### WC3 — Abuse
 
-- Rate limits **per session and per IP**, in Redis. The IP is read from `CF-Connecting-IP` only
-  when the proxy is declared trusted.
-- Turnstile on opening a session (WC2).
-- **A spend limit is mandatory for a tenant with a web channel.** Creating a `web` config without
-  one is refused, and removing the limit while a `web` config is active is refused. The limit is
-  set from above (ADR 0010), so the client's partner or operator must set it first.
-- Bounds on message size and on messages per conversation (values in W0).
+- **Rate limits in Redis**, as token buckets keyed by session and by IP:
+
+  | Bucket | Limit |
+  |---|---|
+  | Sessions opened per IP | 10 per hour |
+  | Messages per session | 10 per minute, 100 per day |
+  | Messages per IP | 30 per minute |
+  | Reads (`GET /messages`) per session | 60 per minute |
+
+  These are platform defaults, overridable per config downwards only. A request over a limit gets
+  429 with `Retry-After`. The IP is read from `CF-Connecting-IP` only when the request comes
+  through a proxy declared trusted (`cauce.web.trusted-proxies`); otherwise it is the socket's
+  address. IPs are never stored raw. Redis keys use an HMAC of the IP under a key outside the
+  database, and expire with their bucket.
+- **Message bounds:** 2,000 characters per message and 200 messages per thread. Past the
+  thread's bound the widget offers to start again, and the person's session continues.
+- **Turnstile** on opening a session (WC2).
+- **A spend limit is mandatory for a tenant with a web channel.** Creating a `web_chat` config
+  without one is refused, and so is removing the limit while such a config is active. The limit is
+  set from above (ADR 0010), so the client's partner or operator must set it first. When it is
+  reached, the widget shows the agent's fallback reply, never silence.
 
 ### WC4 — Delivery: polling in v1, SSE later
 
-v1 reads replies by polling the session's messages after a `seq` cursor, the same model as the
-`api` channel. This works unchanged with the asynchronous orchestrator. SSE comes later, signalled
-after commit from the `AgentReplyDispatcher`. With more than one instance it needs a fan-out
-(Redis pub/sub or `LISTEN/NOTIFY`), to be decided then.
+v1 reads replies by **polling** `GET /web/v1/messages` after a `seq` cursor, the same model as the
+`api` channel. This works unchanged with the asynchronous orchestrator. While `awaiting_reply` is
+true the widget polls every 1.5 s. Once the reply has arrived it backs off to 10 s, and it stops
+after 2 minutes without activity. The response carries the person's own USER messages and the
+replies they received (AGENT, FALLBACK), never tool records or SYSTEM text.
+
+SSE comes later, signalled after commit from the `AgentReplyDispatcher`. With more than one
+instance it needs a fan-out (Redis pub/sub or `LISTEN/NOTIFY`), to be decided then.
 
 ### WC5 — The AI notice and privacy
 
-- **The AI notice is fixed.** The widget always says the person is talking to an AI (AI Act,
-  art. 50). It cannot be configured away.
-- **Privacy:** by default, an informational notice with a link to the shop's policy. **Explicit
-  acceptance before the first message can be turned on per channel.** Which one applies is the
-  data controller's choice (the shop), not Cauce's. Cauce provides both.
+- **The AI notice is fixed.** The widget always says, visibly and before the first message, that
+  the person is talking to an AI (AI Act, art. 50). No setting, persona or variant removes it.
+- **Privacy:** every config has a link to the shop's privacy policy (required). The default is
+  an **informational notice** with that link. **Explicit acceptance before the first message** can
+  be turned on per config. Then `POST /web/v1/sessions` requires `consent: true`, and the session
+  records when it was given and a hash of the notice's version. **Which one applies is the data
+  controller's choice (the shop), not Cauce's.** Cauce provides both and does not decide for
+  the shop.
 
 ### WC6 — Shop tools
 
-- **Stock is its own method on the catalog port** (`CatalogSource`), not a catalog attribute.
-  Stock changes far more often than the catalog, and a POS or e-commerce adapter answers it on its
-  own.
-- **Order status is a new port in `cauce-core`**, with a native adapter and no external system
-  integrated yet. An anonymous person asks with the **order number plus the email** on the order,
-  with **a limit of failed attempts per session and per IP**, so that order numbers cannot be
-  enumerated and a stranger's order is never shown.
+- **Stock is its own method on the catalog port**: `CatalogSource.stockOf(tenantId, refs)`
+  returns, per ref, `in_stock`, `out_of_stock` or `unknown`, and a quantity when the source has
+  one. Stock changes far more often than the catalog. A POS or e-commerce adapter answers it on its
+  own, and the native adapter keeps it beside the catalog with its own endpoint. The catalog tools
+  report it and never guess it.
+- **Order status is a new port in `cauce-core`**, `OrderStatusSource`. It returns an order's state
+  and its delivery dates, never its contents or the address. Its native adapter is loaded over the
+  API, for tests and evals; no external system is integrated yet. The tool `get_order_status` takes
+  the **order number plus the email** on the order. Both must match, and a mismatch reads exactly
+  like an order that does not exist.
+- **Failed attempts are limited**: 3 per session and 10 per IP hash per hour. Past the limit the
+  tool refuses with a reason the agent words, and the attempt is still counted. The ingest records
+  the request's IP hash on the session, so the asynchronous tool can count per IP without ever
+  seeing the IP.
 
 ### WC7 — The harness
 
-A shop sector pack under `examples/` with its reference data and scenarios: catalog, stock, an
-order verified by number and email, a stranger's order refused, a prompt-injection attempt, and
-the AI notice. The harness's run stops assuming the bar's fixture (`bar-ejemplo`, `carta.json`).
+A shop sector pack, `examples/comercio/`, with its reference data and scenarios: catalog, stock,
+an order verified by number and email, a stranger's order refused, a prompt-injection attempt, and
+the AI notice. The harness's run stops assuming the bar's fixture (`bar-ejemplo`, `carta.json`):
+the fixture and its menu file come from the pack.
 
-### WC8 — The shop-assistant mode (added 2026-11-09)
+### WC8 — The shop-assistant mode
 
 A mode of the widget that behaves like a shop assistant who is present in the shop without
-getting in the way. It is configured per channel and builds on WC1–WC7.
+getting in the way. It is configured per channel.
 
 - **A presence bubble from page load.** An avatar and a short phrase, shown without covering the
-  page's content. It is static: **no model call** and no request carrying personal data.
-- **Opening proactively, only on signals computed in the browser.** The signals are configurable
-  per channel: coming back to the same product page, comparing products, a cart left idle, and
-  exit intent. **There is no fixed timer by default.** The widget opens proactively **at most once
-  per session, and never again after the person has closed it.**
-- **The proactive greeting is a template, not the model.** The model only comes in when the person
-  answers. Then the page context (the product being viewed, the cart) reaches the agent as
-  **structured data** attached to the message, not as free text the page writes into the
-  conversation. The agent treats it as data from the shop page, never as instructions.
-- **Product cards with an "Add to cart" button.** This is a new part of the outbound content, an
-  extension of ADR 0004's message parts. A card only ever shows **a product from the catalog**,
-  by its reference, with name, price and stock taken from the catalog port, never from the model's
-  text. The button acts in the shop's page, through a hook the shop wires. Cauce does not touch
-  the cart.
-- **A persona with a configurable name and avatar.** The **AI notice is always visible** (WC5),
-  whatever the persona.
-- **Variants per channel, with metrics.** Different bubbles, phrases, signals or templates can be
-  configured per channel and compared on: openings (proactive and on demand), conversations,
-  add-to-carts from a card, and **attributed purchases**. A purchase is attributed when the shop
-  reports it through the hook. The attribution window is decided in W0.
-- **Privacy: nothing leaves the browser until the first message.** The signals and the page
-  context are computed and kept in the browser. Before the person writes, Cauce receives no
-  request, which also means no session (WC2) and no Turnstile. The ADR records what is stored at
-  each step: in the browser (the "closed" and "already opened" flags, the variant assigned) and in
-  Cauce from the first message on (the session, the messages, the page context sent with them).
-  Whether proactive opening needs prior consent is **the data controller's decision**, like WC5's
-  acceptance, and the channel offers a setting for it.
-- **Scenarios** in the shop pack (WC7): a recommendation made only from the catalog, a product
-  out of stock (the agent says so and offers an alternative from the catalog), and correct use of
-  the page context (the agent answers about the product being viewed and does not treat the
-  context as an instruction).
+  page's content. It is static, built from `GET /web/v1/widget/{publicKey}/config`. **No model
+  call** and no request carrying anything about the visitor.
+- **Opening proactively, only on signals computed in the browser.** Each signal is enabled and
+  tuned per channel:
 
-## To be completed in W0
+  | Signal | Default definition |
+  |---|---|
+  | Back to the same product | Second view of the same product page in the session |
+  | Comparing | Three or more product pages within 5 minutes |
+  | Idle cart | A cart the shop reported non-empty, unchanged for 3 minutes |
+  | Exit intent | The pointer leaves through the top of the viewport (desktop only) |
 
-- The public surface's endpoints and payloads, and the widget's embedding contract (one
-  `<script>` with the public key).
-- The values of the limits (WC3) and of the failed-attempt limit (WC6).
-- The units W1–W7 and their order, and where WC8 fits among them.
-- WC8: the signals' definitions, the attribution window, and the shape of the card part.
+  **There is no fixed timer by default.** The widget opens proactively **at most once per
+  session, and never again after the person has closed it**.
+- **The proactive greeting is a template**, chosen per signal, with no model call. The model only
+  comes in when the person answers. Then the **page context** reaches the agent as structured data
+  attached to the message: the product ref being viewed, the cart's refs and quantities, and the
+  path. Refs not in the catalog are dropped. The agent reads it as data from the shop page, labelled
+  as such, never as instructions, and it never contains free text from the page.
+- **Product cards with "Add to cart".** The agent calls a tool, `show_products(refs)`, that
+  accepts only catalog refs. Each ref becomes a **product card part** of the reply, a new outbound
+  part in ADR 0004's model. A card stores the ref only. Name, price and stock come from the catalog
+  port when it is read, never from the model's text, and a ref no longer in the catalog is
+  omitted. The button calls a hook the shop wires (`onAddToCart(ref, quantity)`), and Cauce never
+  touches the cart. This lands ADR 0004's capabilities for `web_chat`. A channel that cannot carry
+  a card receives its name and price as text.
+- **A persona with a configurable name and avatar.** The AI notice stays visible (WC5), whatever
+  the persona.
+- **Variants per channel, with metrics.** Up to five variants per config (bubble phrase, signals,
+  templates), assigned at random in the browser and kept for the session. The metrics, by config
+  and variant, are `cauce.web.*` counters for proactive and on-demand openings, conversations, adds
+  to cart from a card, and attributed purchases. A purchase is attributed when the shop reports it
+  through `trackPurchase({orderId, value})` **within 7 days of the session's last message**.
+- **Privacy: nothing about the visitor leaves the browser until the first message.** The signals,
+  the page context, the variant and the "opened" and "closed" flags are computed and kept in the
+  browser (`localStorage`, documented with the widget). Before the person writes, the only request
+  is the anonymous configuration read: no session, no Turnstile, no event. As a consequence,
+  **openings that end without a message are not counted by default**. Each config can enable an
+  anonymous opening counter that sends only the variant and the signal, with no session and no
+  identifier, with the controller deciding (below). From the first message on, Cauce stores the
+  session (WC2), the messages, the page context sent with them, and the events.
+- **Whether proactive opening, or the anonymous counter, needs prior consent is the data
+  controller's decision**, like WC5's acceptance. Each config offers both settings, off by default.
+- **Scenarios** in the shop pack:
+  - a recommendation made only from the catalog;
+  - a product out of stock, where the agent says so and offers an alternative from the catalog;
+  - correct use of the page context: the agent answers about the product being viewed and does not
+    follow an instruction hidden in it.
+
+### Units
+
+| Unit | Content |
+|---|---|
+| **W1** | The `web_chat` config: public key, allowed origins, per-config CORS, sealed Turnstile secret, privacy settings. The mandatory spend limit. The anonymous config read. |
+| **W2** | Sessions: Turnstile verification, `web_sessions`, the token, the `SESSION_ID` identity, the 30-day sliding expiry and its purge, consent. |
+| **W3** | Messages over `/web/v1`: ingest into the existing pipeline, polling with `awaiting_reply`, Redis rate limits and message bounds. |
+| **W4** | The widget (`frontend/web-widget`): one `<script>` with the public key, Shadow DOM, chat, AI notice, privacy notice or acceptance, polling. |
+| **W5** | Shop tools: `CatalogSource.stockOf`, `OrderStatusSource` and its native adapter, `get_order_status` with its attempt limits. |
+| **W6** | The shop pack and the harness: `examples/comercio/`, a fixture-agnostic run, the WC7 scenarios. |
+| **W7** | The shop-assistant mode (WC8): bubble, signals, templates, page context, `show_products` and the card part (with ADR 0004's capabilities for `web_chat`), persona, variants and their metrics, and the WC8 scenarios. |
+
+The order is dependency first: W1–W3 make the channel work over HTTP and W4 puts it in a page.
+W5 and W6 make it a shop's agent, and W7 builds on all of them. Each unit lands with its tests,
+and the units that touch a pack also land with a full battery.
+
+## Consequences
+
+- A shop embeds one script and gets an agent that never holds tenant authority in the browser.
+- The spend limit stops being optional for the tenants most exposed to anonymous traffic.
+- Redis gets its first use (rate limits), and the deployment gains two secrets outside the
+  database: the IP-hash key and the Turnstile secrets, the latter sealed.
+- Opening metrics are partial by default, by design: the visitor's privacy comes before the
+  variant comparison, unless the controller decides otherwise.
+- The product card is the first part a channel may not carry, so ADR 0004's capabilities stop
+  being deferred for `web_chat`.
+
+## Not decided here
+
+- SSE and its fan-out across instances (WC4).
+- Wildcard origins.
+- Integrating an external e-commerce or order system (WC6 defines the ports only).
+- A server-side purchase webhook, as an alternative to the browser's `trackPurchase`.
 
 ## References
 
 - `docs/adr/0001-rls-escape-hatches.md`: resolving a tenant without context
 - `docs/adr/0002-authority-model.md`: who sets the spend limit
-- `docs/adr/0004-identity-message-parts-and-channel-capabilities.md`: `SESSION_ID`
+- `docs/adr/0004-identity-message-parts-and-channel-capabilities.md`: `SESSION_ID`, message parts,
+  capabilities
+- `docs/adr/0006-whatsapp-cloud-api-channel.md`: sealed channel secrets
+- `docs/adr/0008-one-time-source-the-database-clock.md`: expiries and purges
 - `docs/adr/0010-usage-prices-and-spend-limits.md`: the spend limit
 - `docs/adr/0013-new-thread-after-inactivity.md`: R2
