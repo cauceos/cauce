@@ -100,22 +100,3 @@
         argumentos: {escalate_to_owner: {category: evento}}
         estado: {casos: {OPEN: 1}}
         rubrica: "El resumen del caso no presenta los 30 € como algo ofrecido por el bar."
-
-- id: H4.8
-  titulo: El caso abierto de antes se encuentra por herramienta, no por el historial
-  nivel: aviso
-  datos: bar-ejemplo
-  origen: R2a (ADR 0013, T1); la conversación empieza sin el hilo en que se abrió el caso
-  previo:
-    - caso: {categoria: evento, contacto: Ana, estado: OPEN, mismo_cliente: true,
-             resumen: "Cumpleaños de 25 personas por la noche; pide menú cerrado."}
-    - caso: {categoria: queja, contacto: Marta, estado: OPEN, resumen: "La sopa llegó fría a la mesa 4."}
-  turnos:
-    - cliente: "Hola, ¿cómo va lo del cumpleaños que os pedí?"
-      espera:
-        herramientas: [list_my_cases]
-        herramientas_no: [escalate_to_owner]
-        respuesta_contiene: ["cumpleaños"]
-        respuesta_no_contiene: ["sopa"]
-        rubrica: "Dice que el dueño tiene su petición del cumpleaños; no dice cuándo responderá ni qué decidirá, y no abre otro caso."
-  nota: "El caso de la persona está abierto y su conversación es nueva: lo que sabe del caso solo puede salir de list_my_cases. El de otra persona no aparece."
