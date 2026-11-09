@@ -59,7 +59,7 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
                     .andExpect(jsonPath("$.fallback_reply").value(fallbacks.get(agent).asText()))
                     .andExpect(jsonPath("$.unsupported_message_reply").value(unsupported.get(agent).asText()));
         }
-        assertThat(grants.get("agente_clientes")).hasSize(11);
+        assertThat(grants.get("agente_clientes")).hasSize(12);
         JsonNode retention = objectMapper.readTree(read("retencion-cache.json"));
         assertThat(retention.get("agente_clientes").asText()).isEqualTo("LONG");
         assertThat(dev.cauce.core.agent.PromptCacheRetention.valueOf(retention.get("agente_dueno").asText()))
@@ -81,7 +81,7 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
         assertThat(new JdbcTemplate(adminDataSource).queryForObject(
                 "SELECT last_error FROM pending_invocations WHERE id = ?::uuid", String.class, invocationId))
                 .contains("The system prompt and tools do not fit the context window of 4096 tokens")
-                .contains("(11 tools)");
+                .contains("(12 tools)");
         assertThat(llm.invocations()).as("the prompt is never sent for the server to cut").isEmpty();
     }
 
@@ -97,7 +97,7 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
                 getAs(clientAuth, "/v1/invocations/" + invocationId)
                         .andExpect(jsonPath("$.status").value("COMPLETED")));
         assertThat(llm.invocations()).hasSize(1);
-        assertThat(llm.invocations().get(0).tools()).hasSize(11);
+        assertThat(llm.invocations().get(0).tools()).hasSize(12);
     }
 
     private UUID createCustomerAgent() throws Exception {

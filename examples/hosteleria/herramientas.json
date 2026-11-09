@@ -10,7 +10,8 @@
     "propose_cancellation",
     "confirm_booking",
     "list_my_bookings",
-    "escalate_to_owner"
+    "escalate_to_owner",
+    "list_my_cases"
   ],
   "agente_dueno": []
 }
