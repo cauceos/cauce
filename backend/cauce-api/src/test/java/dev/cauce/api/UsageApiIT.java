@@ -224,9 +224,4 @@ class UsageApiIT extends AbstractBusinessApiIT {
                         .andExpect(jsonPath("$.status").value(expected)));
         return accepted;
     }
-
-    protected ResultActions postJson(String auth, String path, String json) throws Exception {
-        return mockMvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, auth)
-                .contentType(MediaType.APPLICATION_JSON).content(json));
-    }
 }

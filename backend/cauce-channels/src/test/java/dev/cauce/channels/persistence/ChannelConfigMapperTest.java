@@ -12,6 +12,17 @@ import org.junit.jupiter.api.Test;
 
 class ChannelConfigMapperTest {
 
+    @Test
+    void roundTrip_preservesAWebChatsPublicKey_andSealsItsTurnstileSecret() {
+        ChannelConfig web = ChannelConfig.createWebChat(UUID.randomUUID(), UUID.randomUUID(),
+                "pk_ABCDEFGHIJKLMNOPQRSTUVWX", "secreto-de-turnstile");
+        ChannelConfigEntity entity = mapper.toEntity(web);
+
+        assertThat(entity.getPublicKey()).isEqualTo("pk_ABCDEFGHIJKLMNOPQRSTUVWX");
+        assertThat(entity.getCredential()).doesNotContain("secreto");
+        assertThat(mapper.toDomain(entity)).isEqualTo(web);
+    }
+
     private final ChannelConfigMapper mapper = new ChannelConfigMapper(new AesGcmSecretCipher(SecretEncryptionProperties.DEV_ONLY_KEY));
 
     @Test

@@ -126,6 +126,18 @@ class SpendLimitServiceTest {
     }
 
     @Test
+    void removeLimit_whileSomethingTheTenantRunsRequiresIt_isRefused_andNothingIsDeleted() {
+        TenantContext.setCurrentTenantId(partner.id());
+        SpendLimitService guarded = new SpendLimitService(repository, mapper, tenantService, auditRecorder,
+                Clock.fixed(NOW, ZoneOffset.UTC), () -> List.of(tenantId -> tenantId.equals(client.id())));
+
+        assertThatThrownBy(() -> guarded.removeLimit(client.id()))
+                .isInstanceOf(dev.cauce.core.usage.SpendLimitRequiredException.class);
+        verify(repository, never()).delete(any());
+        verifyNoInteractions(auditRecorder);
+    }
+
+    @Test
     void removeLimit_deletesAndAudits_orDoesNothingWithoutOne() {
         TenantContext.setCurrentTenantId(partner.id());
         SpendLimit existing = SpendLimit.create(client.id(), new BigDecimal("30.00"), partner.id(), NOW);

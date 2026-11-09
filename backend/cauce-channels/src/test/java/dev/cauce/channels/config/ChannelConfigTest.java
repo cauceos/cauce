@@ -27,6 +27,22 @@ class ChannelConfigTest {
     }
 
     @Test
+    void createWebChat_isRoutedByItsPublicKey_withTheTurnstileSecretAsCredential_andNoWebhookSecret() {
+        ChannelConfig web = ChannelConfig.createWebChat(TENANT_ID, AGENT_ID, "pk_ABCDEFGHIJKLMNOPQRSTUVWX", "secreto");
+
+        assertThat(web.channelType()).isEqualTo("web_chat");
+        assertThat(web.isPublicKeyRouted()).isTrue();
+        assertThat(web.isAppRouted()).isFalse();
+        assertThat(web.credential()).isEqualTo("secreto");
+        assertThat(web.webhookSecretHash()).isNull();
+        assertThatThrownBy(() -> web.withWebhookSecretHash("h"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ChannelConfig(web.id(), TENANT_ID, AGENT_ID,
+                "web_chat", "s", "hash", ChannelConfigStatus.ACTIVE, web.createdAt(), null, null, "pk_x"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("public-key");
+    }
+
+    @Test
     void create_mintsTimeOrderedIds() {
         ChannelConfig first = ChannelConfig.create(TENANT_ID, AGENT_ID, "telegram", "t", "h");
         ChannelConfig second = ChannelConfig.create(TENANT_ID, AGENT_ID, "telegram", "t", "h");

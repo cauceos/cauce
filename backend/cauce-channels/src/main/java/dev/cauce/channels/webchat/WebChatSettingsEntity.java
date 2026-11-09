@@ -1,0 +1,73 @@
+package dev.cauce.channels.webchat;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import java.util.UUID;
+
+/** JPA mapping of {@code web_chat_settings} (V59); RLS-filtered by its config's tenant. */
+@Entity
+@Table(name = "web_chat_settings")
+public class WebChatSettingsEntity {
+
+    @Id
+    @Column(name = "channel_config_id", nullable = false, updatable = false)
+    private UUID channelConfigId;
+
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private UUID tenantId;
+
+    @Column(name = "allowed_origins", nullable = false, columnDefinition = "text[]")
+    private String[] allowedOrigins = new String[0];
+
+    @Column(name = "turnstile_site_key", nullable = false, length = 100)
+    private String turnstileSiteKey;
+
+    @Column(name = "privacy_policy_url", nullable = false, length = 500)
+    private String privacyPolicyUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "consent_mode", nullable = false, length = 20)
+    private ConsentMode consentMode;
+
+    protected WebChatSettingsEntity() {
+        // for JPA
+    }
+
+    public WebChatSettingsEntity(UUID channelConfigId, UUID tenantId, String[] allowedOrigins, String turnstileSiteKey,
+                                 String privacyPolicyUrl, ConsentMode consentMode) {
+        this.channelConfigId = channelConfigId;
+        this.tenantId = tenantId;
+        this.allowedOrigins = allowedOrigins;
+        this.turnstileSiteKey = turnstileSiteKey;
+        this.privacyPolicyUrl = privacyPolicyUrl;
+        this.consentMode = consentMode;
+    }
+
+    public UUID getChannelConfigId() {
+        return channelConfigId;
+    }
+
+    public UUID getTenantId() {
+        return tenantId;
+    }
+
+    public String[] getAllowedOrigins() {
+        return allowedOrigins;
+    }
+
+    public String getTurnstileSiteKey() {
+        return turnstileSiteKey;
+    }
+
+    public String getPrivacyPolicyUrl() {
+        return privacyPolicyUrl;
+    }
+
+    public ConsentMode getConsentMode() {
+        return consentMode;
+    }
+}

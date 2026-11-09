@@ -83,6 +83,15 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         this.clock = clock;
     }
 
+    /**
+     * The public web-chat surface carries a session token, never an API key, in its {@code Bearer}
+     * header (ADR 0014, WC2): it is not this filter's to read.
+     */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return request.getRequestURI().startsWith("/web/");
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {

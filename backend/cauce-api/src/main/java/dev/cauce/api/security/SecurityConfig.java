@@ -52,6 +52,10 @@ public class SecurityConfig {
                         // verified by the adapter (ChannelWebhookService) before anything
                         // is processed.
                         .requestMatchers("/webhooks/**").permitAll()
+                        // The public web-chat surface (ADR 0014): no API key ever lives in a browser.
+                        // WebChatCorsFilter resolves the channel by its public key and checks the
+                        // origin first; a session token authenticates what needs it.
+                        .requestMatchers("/web/**").permitAll()
                         // Everything else — the /v1 API surface and non-health actuator endpoints —
                         // requires a valid API key. ApiKeyAuthenticationFilter authenticates the
                         // Bearer key and derives the tenant context from the validated principal.

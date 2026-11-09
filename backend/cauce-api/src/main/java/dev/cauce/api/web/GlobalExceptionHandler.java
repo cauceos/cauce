@@ -5,21 +5,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import dev.cauce.api.channel.InvalidChannelConfigRequestException;
+import dev.cauce.business.owner.OwnerNotLinkedException;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
-import dev.cauce.api.channel.InvalidChannelConfigRequestException;
+import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.whatsapp.AppOutsideHierarchyException;
 import dev.cauce.channels.whatsapp.PhoneNumberAlreadyBoundException;
 import dev.cauce.channels.whatsapp.app.WhatsAppAppNotFoundException;
-import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.core.agent.AgentNotFoundException;
 import dev.cauce.core.agent.UnknownToolException;
 import dev.cauce.core.apikey.ApiKeyAlreadyRevokedException;
 import dev.cauce.core.apikey.ApiKeyNotFoundException;
-import dev.cauce.business.owner.OwnerNotLinkedException;
 import dev.cauce.core.business.booking.AgendaNotFoundException;
-import dev.cauce.core.business.handoff.HandoffNotFoundException;
 import dev.cauce.core.business.catalog.CatalogNotFoundException;
+import dev.cauce.core.business.handoff.HandoffNotFoundException;
 import dev.cauce.core.business.profile.BusinessProfileNotFoundException;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.conversation.InvalidChannelTypeException;
@@ -28,6 +28,7 @@ import dev.cauce.core.message.MessageNotFoundException;
 import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.MissingTenantContextException;
 import dev.cauce.core.tenant.TenantNotFoundException;
+import dev.cauce.core.usage.SpendLimitRequiredException;
 import dev.cauce.llm.exception.LlmAuthenticationException;
 import dev.cauce.llm.exception.LlmInvalidRequestException;
 import dev.cauce.llm.exception.LlmRateLimitException;
@@ -123,6 +124,7 @@ public class GlobalExceptionHandler {
             Map.entry(InvalidPendingInvocationTransitionException.class, "invalid_pending_invocation_transition"),
             // 403 FORBIDDEN
             Map.entry(OwnSpendLimitException.class, "spend_limit_set_by_ancestor"),
+            Map.entry(SpendLimitRequiredException.class, "spend_limit_required"),
             // 422 UNPROCESSABLE_ENTITY
             Map.entry(InvalidTenantTierException.class, "invalid_tenant_tier"),
             Map.entry(UnknownToolException.class, "unknown_tool"),
@@ -246,6 +248,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             ApiKeyAlreadyRevokedException.class,
             PhoneNumberAlreadyBoundException.class,
+            SpendLimitRequiredException.class,
             MaxRetriesExceededException.class,
             InvalidPendingInvocationTransitionException.class})
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex) {

@@ -92,6 +92,11 @@ abstract class AbstractBusinessApiIT extends AbstractApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
+    protected ResultActions postJson(String auth, String path, String json) throws Exception {
+        return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path)
+                .header(HttpHeaders.AUTHORIZATION, auth).contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
     protected ResultActions getAs(String auth, String path) throws Exception {
         return mockMvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, auth));
     }

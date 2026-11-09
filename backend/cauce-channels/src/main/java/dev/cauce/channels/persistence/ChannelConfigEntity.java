@@ -44,6 +44,9 @@ public class ChannelConfigEntity {
     @Column(name = "phone_number_id", updatable = false, length = 64)
     private String phoneNumberId;
 
+    @Column(name = "public_key", updatable = false, length = 40)
+    private String publicKey;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private ChannelConfigStatus status;
@@ -65,6 +68,15 @@ public class ChannelConfigEntity {
                                String credential, String webhookSecretHash,
                                ChannelConfigStatus status, Instant createdAt, UUID whatsappAppId,
                                String phoneNumberId) {
+        this(id, tenantId, agentId, channelType, credential, webhookSecretHash, status, createdAt, whatsappAppId,
+                phoneNumberId, null);
+    }
+
+    public ChannelConfigEntity(UUID id, UUID tenantId, UUID agentId, String channelType,
+                               String credential, String webhookSecretHash,
+                               ChannelConfigStatus status, Instant createdAt, UUID whatsappAppId,
+                               String phoneNumberId, String publicKey) {
+        this.publicKey = publicKey;
         this.whatsappAppId = whatsappAppId;
         this.phoneNumberId = phoneNumberId;
         this.id = id;
@@ -75,6 +87,10 @@ public class ChannelConfigEntity {
         this.webhookSecretHash = webhookSecretHash;
         this.status = status;
         this.createdAt = createdAt;
+    }
+
+    public String getPublicKey() {
+        return publicKey;
     }
 
     public UUID getId() {

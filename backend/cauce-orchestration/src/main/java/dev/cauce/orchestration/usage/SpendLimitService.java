@@ -5,6 +5,8 @@ import dev.cauce.core.tenant.InvalidTenantTierException;
 import dev.cauce.core.tenant.Tenant;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.core.tenant.Tier;
+import dev.cauce.core.usage.SpendLimitRequiredException;
+import dev.cauce.core.usage.SpendLimitRequirement;
 import dev.cauce.orchestration.audit.UsageAuditEvents;
 import dev.cauce.orchestration.persistence.SpendLimitMapper;
 import dev.cauce.orchestration.persistence.SpendLimitRepository;
@@ -18,6 +20,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,14 +40,34 @@ public class SpendLimitService {
     private final TenantService tenantService;
     private final AuditEventRecorder auditRecorder;
     private final Clock clock;
+    private final Supplier<List<SpendLimitRequirement>> requirements;
 
     public SpendLimitService(SpendLimitRepository repository, SpendLimitMapper mapper, TenantService tenantService,
                              AuditEventRecorder auditRecorder, Clock clock) {
+        this(repository, mapper, tenantService, auditRecorder, clock, List::of);
+    }
+
+    /**
+     * {@code requirements}: what may make a limit mandatory for a tenant (ADR 0014, WC3), looked up
+     * when a limit is removed: the module that owns such a channel depends on this service.
+     */
+    @Autowired
+    public SpendLimitService(SpendLimitRepository repository, SpendLimitMapper mapper, TenantService tenantService,
+                             AuditEventRecorder auditRecorder, Clock clock,
+                             ObjectProvider<SpendLimitRequirement> requirements) {
+        this(repository, mapper, tenantService, auditRecorder, clock,
+                () -> requirements.orderedStream().toList());
+    }
+
+    SpendLimitService(SpendLimitRepository repository, SpendLimitMapper mapper, TenantService tenantService,
+                              AuditEventRecorder auditRecorder, Clock clock,
+                              Supplier<List<SpendLimitRequirement>> requirements) {
         this.repository = repository;
         this.mapper = mapper;
         this.tenantService = tenantService;
         this.auditRecorder = auditRecorder;
         this.clock = clock;
+        this.requirements = requirements;
     }
 
     /**
@@ -72,10 +97,15 @@ public class SpendLimitService {
      * @throws dev.cauce.core.tenant.TenantNotFoundException if the tenant is not visible
      * @throws InvalidTenantTierException if the tenant is not a CLIENT
      * @throws OwnSpendLimitException if the caller is the tenant itself
+     * @throws SpendLimitRequiredException if something the tenant runs needs the limit (ADR 0014, WC3)
      */
     @Transactional
     public void removeLimit(UUID tenantId) {
         UUID actorId = requireManagedBy(tenantId);
+        if (requirements.get().stream().anyMatch(requirement -> requirement.requiresSpendLimit(tenantId))) {
+            throw new SpendLimitRequiredException("Tenant " + tenantId + " has an active channel open to anonymous "
+                    + "traffic, which needs a spend limit: disable it before removing the limit");
+        }
         repository.findByTenantId(tenantId).ifPresent(entity -> {
             repository.delete(entity);
             auditRecorder.record(UsageAuditEvents.spendLimitRemoved(tenantId, entity.getMonthlyLimitUsd(), actorId));

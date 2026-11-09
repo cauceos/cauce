@@ -32,7 +32,8 @@ public final class ChannelConfigMapper {
                 config.status(),
                 config.createdAt(),
                 config.whatsappAppId(),
-                config.phoneNumberId());
+                config.phoneNumberId(),
+                config.publicKey());
     }
 
     public ChannelConfig toDomain(ChannelConfigEntity entity) {
@@ -48,6 +49,7 @@ public final class ChannelConfigMapper {
                 entity.getStatus(),
                 entity.getCreatedAt(),
                 entity.getWhatsappAppId(),
-                entity.getPhoneNumberId());
+                entity.getPhoneNumberId(),
+                entity.getPublicKey());
     }
 }

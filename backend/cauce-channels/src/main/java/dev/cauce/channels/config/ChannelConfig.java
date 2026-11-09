@@ -24,10 +24,12 @@ import java.util.UUID;
  * the hash of the server-generated webhook secret; the plaintext is returned exactly once
  * at creation and verified on every webhook via the {@code ApiKeyHasher} port.
  *
- * <p>Two shapes, mirrored by the V31 CHECK (ADR 0006, W2): a <b>per-config webhook</b>
- * (Telegram) has a {@code webhookSecretHash} and no app binding; an <b>app-routed</b> number
- * (WhatsApp) has the {@code whatsappAppId} that receives its webhooks and its {@code phoneNumberId},
- * and no webhook secret of its own.
+ * <p>Three shapes, mirrored by the V59 CHECK: a <b>per-config webhook</b> (Telegram) has a
+ * {@code webhookSecretHash} and no app binding; an <b>app-routed</b> number (WhatsApp, ADR 0006, W2)
+ * has the {@code whatsappAppId} that receives its webhooks and its {@code phoneNumberId}, and no
+ * webhook secret of its own; a <b>public-key-routed</b> channel (web chat, ADR 0014, WC1) has the
+ * {@code publicKey} a browser reaches it with, and neither. A web chat's credential is its Turnstile
+ * secret.
  */
 public record ChannelConfig(UUID id,
                             UUID tenantId,
@@ -38,7 +40,8 @@ public record ChannelConfig(UUID id,
                             ChannelConfigStatus status,
                             Instant createdAt,
                             UUID whatsappAppId,
-                            String phoneNumberId) {
+                            String phoneNumberId,
+                            String publicKey) {
 
     public ChannelConfig {
         Objects.requireNonNull(id, "id must not be null");
@@ -48,7 +51,12 @@ public record ChannelConfig(UUID id,
         requireText(credential, "credential");
         Objects.requireNonNull(status, "status must not be null");
         Objects.requireNonNull(createdAt, "createdAt must not be null");
-        if (whatsappAppId == null) {
+        if (publicKey != null) {
+            requireText(publicKey, "publicKey");
+            if (webhookSecretHash != null || whatsappAppId != null || phoneNumberId != null) {
+                throw new IllegalArgumentException("a public-key-routed config has no webhook secret and no app");
+            }
+        } else if (whatsappAppId == null) {
             requireText(webhookSecretHash, "webhookSecretHash");
             if (phoneNumberId != null) {
                 throw new IllegalArgumentException("phoneNumberId requires a whatsappAppId");
@@ -64,8 +72,28 @@ public record ChannelConfig(UUID id,
     /** A per-config-webhook config (no app binding). */
     public ChannelConfig(UUID id, UUID tenantId, UUID agentId, String channelType, String credential,
                          String webhookSecretHash, ChannelConfigStatus status, Instant createdAt) {
-        this(id, tenantId, agentId, channelType, credential, webhookSecretHash, status, createdAt, null, null);
+        this(id, tenantId, agentId, channelType, credential, webhookSecretHash, status, createdAt, null, null, null);
     }
+
+    /** A per-config-webhook or app-routed config (no public key). */
+    public ChannelConfig(UUID id, UUID tenantId, UUID agentId, String channelType, String credential,
+                         String webhookSecretHash, ChannelConfigStatus status, Instant createdAt,
+                         UUID whatsappAppId, String phoneNumberId) {
+        this(id, tenantId, agentId, channelType, credential, webhookSecretHash, status, createdAt, whatsappAppId,
+                phoneNumberId, null);
+    }
+
+    /**
+     * Binds a new web-chat channel to {@code agentId} (ADR 0014, WC1): reached by browsers through
+     * {@code publicKey}, with {@code turnstileSecret} as its credential.
+     */
+    public static ChannelConfig createWebChat(UUID tenantId, UUID agentId, String publicKey, String turnstileSecret) {
+        return new ChannelConfig(UuidGenerator.newV7(), tenantId, agentId, WEB_CHAT, turnstileSecret, null,
+                ChannelConfigStatus.ACTIVE, Instant.now(), null, null, Objects.requireNonNull(publicKey, "publicKey"));
+    }
+
+    /** The channel type of a web chat, as {@code SupportedChannels} names it. */
+    public static final String WEB_CHAT = "web_chat";
 
     /**
      * Binds a new channel instance to {@code agentId}, owned by {@code tenantId} (the
@@ -97,8 +125,16 @@ public record ChannelConfig(UUID id,
         if (isAppRouted()) {
             throw new IllegalStateException("an app-routed config has no webhook secret of its own");
         }
+        if (isPublicKeyRouted()) {
+            throw new IllegalStateException("a public-key-routed config has no webhook secret");
+        }
         return new ChannelConfig(id, tenantId, agentId, channelType, credential, newWebhookSecretHash, status,
-                createdAt, null, null);
+                createdAt, null, null, null);
+    }
+
+    /** Whether browsers reach this config by its public key (a web chat) rather than a webhook. */
+    public boolean isPublicKeyRouted() {
+        return publicKey != null;
     }
 
     /** Whether this config receives its webhooks through an app rather than its own URL. */
