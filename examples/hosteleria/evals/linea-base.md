@@ -1,13 +1,15 @@
 # Línea base del agente de clientes del bar
 
-**Vigente:** la batería completa [`2026-10-24T1550Z`](historial/2026-10-24T1550Z-claude-sonnet-5-5.json)
-sobre `df32239`, con el prompt vigente, N = 5: **100 %** global en sus 41 escenarios y **todos los
-bloqueantes al 100 %**, H3.14 incluido. Sustituye a `1138Z`, la última válida, porque cambió el
-prompt: la regla de las notas de voz (ADR 0012, V7) y la de no completar por su cuenta un teléfono,
-un nombre o un alérgeno mal oídos, con H3.14 bloqueante. El
+**Vigente:** la batería completa [`2026-11-09T1555Z`](historial/2026-11-09T1555Z-claude-sonnet-5-5.json)
+sobre `7831d27`, con el prompt vigente, N = 5: **100 %** global en sus 49 escenarios y **todos los
+bloqueantes al 100 %**. Sustituye a `1550Z` porque cambió el prompt: consultar la disponibilidad en
+el mismo turno en que se propone (`9e2d9dc`, G3) y buscar los casos abiertos con `list_my_cases`
+(R2a, ADR 0013). También cambió el agente: hilo nuevo tras 24 h sin mensajes (R2b), una herramienta
+más y la reserva de respuesta que sigue al agente (ADR 0005, enmienda de 2026-11-09). Y hay tres
+escenarios nuevos: H4.8, H3.20 y H4.9. El
 [coste por conversación del bar](#coste-por-conversación-del-bar) sigue siendo el medido en `1138Z`.
 
-**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `1600d77bc9ac` · **Juez:** ninguno
+**Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `1acbedbf4b19` · **Juez:** ninguno
 
 > **No cuentan `1320Z`, `1422Z` ni `1516Z`.** Se ejecutaron desde un worktree parado en `64ca30e`,
 > con el prompt anterior (huella `43c8a0cc2043`) y la versión de H3.14 de ese commit, todavía aviso
@@ -38,9 +40,54 @@ H3.13 → **100 %** (`0914Z`). El experimento R1 (`0941Z`) no cambia la línea b
 (`1315Z`): **86 %** y seis bloqueantes por debajo del 100 %, **no aprobado**. → Prompt con la regla
 de las notas de voz y escenario H3.14; `1320Z` lo midió desde un worktree desfasado y no cuenta. →
 H3.14 propone sin volver a consultar, regla de no completar datos mal oídos y H3.14 bloqueante →
-**100 %** (`1550Z`), bloqueantes al 100 %.
+**100 %** (`1550Z`), bloqueantes al 100 %. → Mensajes con su hora: G3 y H1.4 al 0 % (`1001Z`, sin
+commitear). H1.4 era la comprobación; G3 lleva la consulta de disponibilidad en el turno de la
+propuesta, y G1 ya no cuenta un plato nombrado antes sin dato nuevo (`1349Z`, sin commitear, G3 al
+80 %). → R2 y `list_my_cases` → **100 %** (`1555Z`), bloqueantes al 100 %.
 
-## Línea base vigente · 2026-10-24T1550Z
+## Línea base vigente · 2026-11-09T1555Z
+
+| Commit | Huella del prompt | Turnos de modelo | Coste |
+|---|---|---|---|
+| `7831d27` | `1acbedbf4b19` | 320 | 1,6489 US$ |
+
+| Entrada | Leída de caché | Escrita en caché | Salida |
+|---|---|---|---|
+| 4.745.460 | 4.632.209 (97,6 %) | 111.247 | 73.669 |
+
+- Se compara con `1550Z`, la última del historial que git tiene registrada: desde `7f9b0e9` el
+  arnés ya no compara con un resumen suelto en la carpeta.
+- El resumen sale marcado «con cambios sin commitear» por el `historial/` del worktree: faltaba
+  `2026-10-24T1320Z` y sobraba un `2026-10-25T0932Z` que nunca se commiteó. Ni el prompt ni los
+  escenarios tenían cambios: la huella es la de `7831d27`.
+- La entrada por turno de modelo sube de 14.323 (`1550Z`) a 14.830 tokens (+4 %): una herramienta
+  más, la regla de `list_my_cases` y la de la disponibilidad en el turno de la propuesta. Los tres
+  escenarios nuevos añaden 40 turnos de modelo. El coste sube de 1,5326 a 1,6489 US$.
+- La estimación de tokens de entrada del presupuesto de contexto queda en 1,036 de lo facturado de
+  media (mínimo 0,894, máximo 1,073) en sus 682 llamadas: la calibración a 2,5 caracteres por token
+  se sostiene.
+- G3, H1.4, H3.19, H3.20, H4.8 y H4.9 al 100 %. Las ejecuciones `1001Z` y `1349Z`, en las que G3 y
+  H1.4 fallaron, no entran en el historial: midieron un prompt y unas comprobaciones que ya no
+  rigen.
+
+### Tasas
+
+**Global: 100 %** (205 de 205 repeticiones con todas sus comprobaciones en verde; 4 escenarios
+cubiertos por tests de integración).
+
+| Tarea | Tasa |
+|---|---|
+| 00 · anclaje | 100 % |
+| 01 · información | 100 % |
+| 02 · carta | 100 % |
+| 03 · reservas | 100 % |
+| 04 · escalado | 100 % |
+| 05 · resumen | 100 % |
+
+Reglas generales (G1 y carta sin inventar), al 100 %. **Bloqueantes por debajo del 100 %:** ninguno.
+**Avisos bajo el umbral del 90 %:** ninguno. 130 comprobaciones de rúbrica, pendientes de juez.
+
+## Línea base anterior · 2026-10-24T1550Z · 100 %
 
 | Commit | Huella del prompt | Turnos de modelo | Coste |
 |---|---|---|---|
