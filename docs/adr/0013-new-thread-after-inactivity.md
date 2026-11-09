@@ -2,7 +2,8 @@
 
 Status: Accepted, not implemented. Records R2 as decided in the strategic chat on 2026-11-09, in
 two units: R2a (`list_my_cases`) and R2b (closing on inactivity). R2a lands first, because R2b
-only works if nothing depends on the history.
+only works if nothing depends on the history. Confirmed the same day: a FALLBACK counts as
+activity, and an invocation in flight keeps its thread because the reaper bounds that case (T2).
 
 ## Context
 
@@ -83,7 +84,11 @@ conversations. If two messages race, one closes and both land in the same new th
 
 **An invocation in flight keeps its thread.** If the conversation has a PENDING or RUNNING
 invocation, it is not closed, whatever its age. The reply that is coming belongs to that thread.
-With a 24-hour window this only happens when the worker has been stuck longer than the window.
+The reaper bounds the case. A claim older than `cauce.orchestration.worker.reaper.timeout-ms`
+(12 minutes by default) is treated as orphaned and goes back to PENDING, or to ABANDONED once its
+attempt budget is gone, and retries are bounded by the backoff and the attempt limit. So an invocation stays "in
+flight" for minutes, never anywhere near the 24-hour window. The next message after it settles
+closes the thread.
 
 Only OPEN conversations are closed for inactivity. ESCALATED and ARCHIVED ones are left alone.
 
