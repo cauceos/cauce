@@ -240,6 +240,36 @@ and the units that touch a pack also land with a full battery.
 - Integrating an external e-commerce or order system (WC6 defines the ports only).
 - A server-side purchase webhook, as an alternative to the browser's `trackPurchase`.
 
+## Amendment (2026-11-09): the strategic chat's answers to W0, and the key in the path
+
+- **The opening counter (WC8)** is optional and off by default. It keeps **aggregates only, per
+  variant and day**: no session id, no IP, no identifier of any kind travels or is stored.
+- **The initial values (WC3, WC4, WC6, WC8) are accepted**, and each config can set its own. A
+  rate limit can be set lower than the platform's default, never higher.
+- **The anonymous configuration read is accepted.** It is the only request before the first
+  message.
+- **The IP is used only for the request limits and is never recorded.** It is not stored in the
+  database, in an audit entry or in a log line, and it is not sent to Turnstile (`remoteip` is
+  omitted). The limits key Redis on an HMAC of it, which expires with its bucket. WC6's per-IP
+  limit on failed order lookups follows the same rule: the ingest leaves the HMAC in Redis next
+  to the session, expiring with the hour it counts, and the asynchronous tool reads it there.
+  Nothing is written on the session row.
+- **The public key goes in the path, not in a header** (found while building W1). A browser's
+  CORS preflight carries the names of the request's headers, never their values, so a key in
+  `X-Cauce-Public-Key` could not tell the preflight which config's origins apply. Every
+  endpoint is therefore under `/web/v1/{publicKey}/`:
+
+  | Method and path | Auth |
+  |---|---|
+  | `GET /web/v1/{publicKey}/config` | none |
+  | `POST /web/v1/{publicKey}/sessions` | Turnstile token |
+  | `POST /web/v1/{publicKey}/messages` | session token, which must belong to that key's config |
+  | `GET /web/v1/{publicKey}/messages?cursor=` | session token |
+  | `POST /web/v1/{publicKey}/events` | session token |
+
+  A request without an `Origin` header (not a browser) is not a CORS concern. Turnstile, the
+  session token and the limits still apply to it.
+
 ## References
 
 - `docs/adr/0001-rls-escape-hatches.md`: resolving a tenant without context
