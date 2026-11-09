@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 class ConversationTest {
 
     private static final UUID AGENT = UUID.randomUUID();
+    /** The moment a transition is given, as the database clock would (ADR 0008). */
+    private static final Instant NOW = Instant.parse("2026-11-09T15:00:00Z");
     private static final Identity IDENTITY =
             Identity.create(UUID.randomUUID(), "whatsapp", IdentityKind.PHONE_NUMBER, "+34612345678");
 
@@ -89,96 +91,96 @@ class ConversationTest {
 
     @Test
     void close_fromOpen_returnsClosedWithClosedAt() {
-        Conversation closed = conversationIn(ConversationStatus.OPEN).close();
+        Conversation closed = conversationIn(ConversationStatus.OPEN).close(NOW);
 
         assertThat(closed.status()).isEqualTo(ConversationStatus.CLOSED);
-        assertThat(closed.closedAt()).isNotNull();
+        assertThat(closed.closedAt()).isEqualTo(NOW);
     }
 
     @Test
     void close_fromEscalated_returnsClosed_preservingEscalatedAt() {
-        Conversation escalated = conversationIn(ConversationStatus.OPEN).escalate();
+        Conversation escalated = conversationIn(ConversationStatus.OPEN).escalate(NOW);
 
-        Conversation closed = escalated.close();
+        Conversation closed = escalated.close(NOW);
 
         assertThat(closed.status()).isEqualTo(ConversationStatus.CLOSED);
-        assertThat(closed.closedAt()).isNotNull();
+        assertThat(closed.closedAt()).isEqualTo(NOW);
         assertThat(closed.escalatedAt()).isEqualTo(escalated.escalatedAt());
     }
 
     @Test
     void close_fromClosed_throws() {
-        assertThatThrownBy(() -> conversationIn(ConversationStatus.CLOSED).close())
+        assertThatThrownBy(() -> conversationIn(ConversationStatus.CLOSED).close(NOW))
                 .isInstanceOf(InvalidConversationTransitionException.class)
                 .hasMessageContaining("Cannot transition Conversation");
     }
 
     @Test
     void close_fromArchived_throws() {
-        assertThatThrownBy(() -> conversationIn(ConversationStatus.ARCHIVED).close())
+        assertThatThrownBy(() -> conversationIn(ConversationStatus.ARCHIVED).close(NOW))
                 .isInstanceOf(InvalidConversationTransitionException.class);
     }
 
     @Test
     void escalate_fromOpen_returnsEscalatedWithEscalatedAt() {
-        Conversation escalated = conversationIn(ConversationStatus.OPEN).escalate();
+        Conversation escalated = conversationIn(ConversationStatus.OPEN).escalate(NOW);
 
         assertThat(escalated.status()).isEqualTo(ConversationStatus.ESCALATED);
-        assertThat(escalated.escalatedAt()).isNotNull();
+        assertThat(escalated.escalatedAt()).isEqualTo(NOW);
         assertThat(escalated.closedAt()).isNull();
     }
 
     @Test
     void escalate_fromClosed_throws() {
-        assertThatThrownBy(() -> conversationIn(ConversationStatus.CLOSED).escalate())
+        assertThatThrownBy(() -> conversationIn(ConversationStatus.CLOSED).escalate(NOW))
                 .isInstanceOf(InvalidConversationTransitionException.class);
     }
 
     @Test
     void escalate_fromEscalated_throws() {
-        assertThatThrownBy(() -> conversationIn(ConversationStatus.ESCALATED).escalate())
+        assertThatThrownBy(() -> conversationIn(ConversationStatus.ESCALATED).escalate(NOW))
                 .isInstanceOf(InvalidConversationTransitionException.class);
     }
 
     @Test
     void escalate_fromArchived_throws() {
-        assertThatThrownBy(() -> conversationIn(ConversationStatus.ARCHIVED).escalate())
+        assertThatThrownBy(() -> conversationIn(ConversationStatus.ARCHIVED).escalate(NOW))
                 .isInstanceOf(InvalidConversationTransitionException.class);
     }
 
     @Test
     void archive_fromOpen_returnsArchivedWithArchivedAt() {
-        Conversation archived = conversationIn(ConversationStatus.OPEN).archive();
+        Conversation archived = conversationIn(ConversationStatus.OPEN).archive(NOW);
 
         assertThat(archived.status()).isEqualTo(ConversationStatus.ARCHIVED);
-        assertThat(archived.archivedAt()).isNotNull();
+        assertThat(archived.archivedAt()).isEqualTo(NOW);
     }
 
     @Test
     void archive_fromClosed_returnsArchived_preservingClosedAt() {
-        Conversation closed = conversationIn(ConversationStatus.OPEN).close();
+        Conversation closed = conversationIn(ConversationStatus.OPEN).close(NOW);
 
-        Conversation archived = closed.archive();
+        Conversation archived = closed.archive(NOW);
 
         assertThat(archived.status()).isEqualTo(ConversationStatus.ARCHIVED);
-        assertThat(archived.archivedAt()).isNotNull();
+        assertThat(archived.archivedAt()).isEqualTo(NOW);
         assertThat(archived.closedAt()).isEqualTo(closed.closedAt());
     }
 
     @Test
     void archive_fromEscalated_returnsArchived_preservingEscalatedAt() {
-        Conversation escalated = conversationIn(ConversationStatus.OPEN).escalate();
+        Conversation escalated = conversationIn(ConversationStatus.OPEN).escalate(NOW);
 
-        Conversation archived = escalated.archive();
+        Conversation archived = escalated.archive(NOW);
 
         assertThat(archived.status()).isEqualTo(ConversationStatus.ARCHIVED);
-        assertThat(archived.archivedAt()).isNotNull();
+        assertThat(archived.archivedAt()).isEqualTo(NOW);
         assertThat(archived.escalatedAt()).isEqualTo(escalated.escalatedAt());
     }
 
     @Test
     void archive_fromArchived_throws() {
-        assertThatThrownBy(() -> conversationIn(ConversationStatus.ARCHIVED).archive())
+        assertThatThrownBy(() -> conversationIn(ConversationStatus.ARCHIVED).archive(NOW))
                 .isInstanceOf(InvalidConversationTransitionException.class);
     }
 
@@ -186,7 +188,7 @@ class ConversationTest {
     void transitions_doNotMutateOriginalInstance() {
         Conversation open = conversationIn(ConversationStatus.OPEN);
 
-        Conversation closed = open.close();
+        Conversation closed = open.close(NOW);
 
         // equals() is id-based, so compare identity and fields, not equality.
         assertThat(closed).isNotSameAs(open);

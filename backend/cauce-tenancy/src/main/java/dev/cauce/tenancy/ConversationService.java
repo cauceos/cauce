@@ -159,7 +159,7 @@ public class ConversationService {
      */
     @Transactional
     public Conversation closeConversation(UUID conversationId) {
-        return applyTransition(conversationId, Conversation::close);
+        return applyTransition(conversationId, conversation -> conversation.close(clock.instant()));
     }
 
     /**
@@ -171,7 +171,7 @@ public class ConversationService {
      */
     @Transactional
     public Conversation escalateConversation(UUID conversationId) {
-        return applyTransition(conversationId, Conversation::escalate);
+        return applyTransition(conversationId, conversation -> conversation.escalate(clock.instant()));
     }
 
     /**
@@ -183,7 +183,7 @@ public class ConversationService {
      */
     @Transactional
     public Conversation archiveConversation(UUID conversationId) {
-        return applyTransition(conversationId, Conversation::archive);
+        return applyTransition(conversationId, conversation -> conversation.archive(clock.instant()));
     }
 
     /**

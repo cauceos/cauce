@@ -107,30 +107,34 @@ public final class Conversation {
      * Closes the conversation. Allowed from {@link ConversationStatus#OPEN} or
      * {@link ConversationStatus#ESCALATED} (a human resolves an escalation and closes).
      *
-     * @return a new closed conversation with {@code closedAt} set to now
+     * @param now the moment of the transition, from the database clock (ADR 0008)
+     * @return a new closed conversation with {@code closedAt} set to {@code now}
      * @throws InvalidConversationTransitionException if not OPEN or ESCALATED
      */
-    public Conversation close() {
+    public Conversation close(Instant now) {
+        Objects.requireNonNull(now, "now");
         if (status != ConversationStatus.OPEN && status != ConversationStatus.ESCALATED) {
             throw new InvalidConversationTransitionException(transitionError(ConversationStatus.CLOSED));
         }
         return new Conversation(id, agentId, identityId, channelConfigId,
-                ConversationStatus.CLOSED, startedAt, lastMessageAt, Instant.now(), escalatedAt, archivedAt);
+                ConversationStatus.CLOSED, startedAt, lastMessageAt, now, escalatedAt, archivedAt);
     }
 
     /**
      * Escalates the conversation to a human. Allowed only from
      * {@link ConversationStatus#OPEN}; there is no de-escalation.
      *
-     * @return a new escalated conversation with {@code escalatedAt} set to now
+     * @param now the moment of the transition, from the database clock (ADR 0008)
+     * @return a new escalated conversation with {@code escalatedAt} set to {@code now}
      * @throws InvalidConversationTransitionException if not OPEN
      */
-    public Conversation escalate() {
+    public Conversation escalate(Instant now) {
+        Objects.requireNonNull(now, "now");
         if (status != ConversationStatus.OPEN) {
             throw new InvalidConversationTransitionException(transitionError(ConversationStatus.ESCALATED));
         }
         return new Conversation(id, agentId, identityId, channelConfigId,
-                ConversationStatus.ESCALATED, startedAt, lastMessageAt, closedAt, Instant.now(), archivedAt);
+                ConversationStatus.ESCALATED, startedAt, lastMessageAt, closedAt, now, archivedAt);
     }
 
     /**
@@ -138,15 +142,17 @@ public final class Conversation {
      * {@link ConversationStatus#ARCHIVED} (an absorbing state). Preserves any existing
      * {@code closedAt}/{@code escalatedAt}.
      *
-     * @return a new archived conversation with {@code archivedAt} set to now
+     * @param now the moment of the transition, from the database clock (ADR 0008)
+     * @return a new archived conversation with {@code archivedAt} set to {@code now}
      * @throws InvalidConversationTransitionException if already ARCHIVED
      */
-    public Conversation archive() {
+    public Conversation archive(Instant now) {
+        Objects.requireNonNull(now, "now");
         if (status == ConversationStatus.ARCHIVED) {
             throw new InvalidConversationTransitionException(transitionError(ConversationStatus.ARCHIVED));
         }
         return new Conversation(id, agentId, identityId, channelConfigId,
-                ConversationStatus.ARCHIVED, startedAt, lastMessageAt, closedAt, escalatedAt, Instant.now());
+                ConversationStatus.ARCHIVED, startedAt, lastMessageAt, closedAt, escalatedAt, now);
     }
 
     private String transitionError(ConversationStatus target) {
