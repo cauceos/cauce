@@ -8,6 +8,7 @@ import dev.cauce.core.business.profile.BusinessProfileSource;
 import dev.cauce.tools.business.BookingTools;
 import dev.cauce.tools.business.EscalateToOwnerTool;
 import dev.cauce.tools.business.GetBusinessInfoTool;
+import dev.cauce.tools.business.ListMyCasesTool;
 import dev.cauce.tools.business.RecordUnansweredQuestionTool;
 import dev.cauce.tools.business.SearchCatalogTool;
 import dev.cauce.tools.clock.ClockTool;
@@ -87,5 +88,11 @@ public class ToolsConfiguration {
     @Bean
     public EscalateToOwnerTool escalateToOwnerTool(ObjectProvider<HandoffSink> sinks) {
         return new EscalateToOwnerTool(sinks::getIfAvailable);
+    }
+
+    @Bean
+    public ListMyCasesTool listMyCasesTool(ObjectProvider<HandoffSink> sinks,
+                                           ObjectProvider<BusinessProfileSource> profiles) {
+        return new ListMyCasesTool(sinks::getIfAvailable, profiles::getIfAvailable);
     }
 }

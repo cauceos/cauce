@@ -21,4 +21,7 @@ public interface HandoffRepository extends JpaRepository<HandoffEntity, UUID> {
                                                                           UUID afterId, Limit limit);
 
     List<HandoffEntity> findByTenantIdAndStatusOrderByCreatedAtAsc(UUID tenantId, Handoff.Status status);
+
+    List<HandoffEntity> findByTenantIdAndIdentityIdAndStatusOrderByIdAsc(UUID tenantId, UUID identityId,
+                                                                        Handoff.Status status);
 }

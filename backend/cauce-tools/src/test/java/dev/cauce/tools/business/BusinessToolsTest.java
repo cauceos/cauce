@@ -165,6 +165,41 @@ class BusinessToolsTest {
                 .isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("word for word");
     }
 
+    @Test
+    void listMyCases_listsTheOpenCasesOfTheContextPerson_withTheDayInTheBusinessZone() {
+        HandoffSink sink = mock(HandoffSink.class);
+        BusinessProfileSource profiles = mock(BusinessProfileSource.class);
+        when(profiles.findProfile(tenantId)).thenReturn(Optional.of(BusinessProfile.create(tenantId, "Bar La Esquina",
+                "Europe/Madrid", "es", List.of())));
+        // 23:30 UTC on 7 November is already 8 November in Madrid.
+        when(sink.openForIdentity(tenantId, context.identityId())).thenReturn(List.of(Handoff.rehydrate(UUID.randomUUID(),
+                tenantId, "K7P2QX", context.agentId(), UUID.randomUUID(), context.identityId(), "grupo",
+                "Mesa para 12 el sábado", "Ana", null, null, Handoff.Status.OPEN,
+                Instant.parse("2026-11-07T23:30:00Z"), null)));
+
+        ListMyCasesTool tool = new ListMyCasesTool(() -> sink, () -> profiles);
+        ToolResult result = tool.execute(call("list_my_cases", Map.of()), context);
+
+        assertThat(tool.lookup()).isTrue();
+        assertThat(result.isError()).isFalse();
+        assertThat(result.output()).contains("\"code\":\"K7P2QX\"").contains("\"category\":\"grupo\"")
+                .contains("\"summary\":\"Mesa para 12 el sábado\"").contains("\"opened_on\":\"2026-11-08\"")
+                .contains("Do not say when the owner will answer").doesNotContain("Ana");
+    }
+
+    @Test
+    void listMyCases_withoutCases_saysSo_andWithoutThePort_isAnError() {
+        HandoffSink sink = mock(HandoffSink.class);
+        when(sink.openForIdentity(tenantId, context.identityId())).thenReturn(List.of());
+
+        String output = new ListMyCasesTool(() -> sink, () -> null).execute(call("list_my_cases", Map.of()), context)
+                .output();
+
+        assertThat(output).contains("\"cases\":[]").doesNotContain("next_step");
+        assertThat(new ListMyCasesTool(() -> null, () -> null).execute(call("list_my_cases", Map.of()), context)
+                .isError()).isTrue();
+    }
+
     private static ToolCall call(String name, Map<String, Object> input) {
         return new ToolCall("call-1", name, input);
     }

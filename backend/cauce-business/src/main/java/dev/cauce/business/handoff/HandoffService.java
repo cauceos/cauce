@@ -125,6 +125,13 @@ public class HandoffService implements HandoffSink {
         return page.stream().map(mapper::toDomain).toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<Handoff> openForIdentity(UUID tenantId, UUID identityId) {
+        return repository.findByTenantIdAndIdentityIdAndStatusOrderByIdAsc(tenantId, identityId, Handoff.Status.OPEN)
+                .stream().map(mapper::toDomain).toList();
+    }
+
     /** The OPEN handoffs of the business, oldest first: what the digest lists. */
     @Transactional(readOnly = true)
     public List<Handoff> openFor(UUID tenantId) {

@@ -44,7 +44,7 @@ agent's summary, and the local date it was opened. Resolved cases are not listed
 questions (`KnowledgeGapSink`) are not cases the person opened, so they are not listed either.
 
 The read goes on the same port the cases are written through: `HandoffSink` gains
-`openFor(tenantId, identityId)`, the way `BookingProvider` both writes and lists
+`openForIdentity(tenantId, identityId)`, the way `BookingProvider` both writes and lists
 (`upcomingFor`). The port keeps its name. Renaming it is not worth the churn. The native adapter
 reads `handoffs` under RLS. A person's cases follow their identity, not their thread, so they
 survive the new thread exactly as bookings do. Another channel is another identity (ADR 0004).

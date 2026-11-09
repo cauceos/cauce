@@ -22,6 +22,7 @@ import dev.cauce.core.business.handoff.InvalidHandoffCategoryException;
 import dev.cauce.core.business.handoff.UnquotedCustomerMessageException;
 import dev.cauce.core.business.owner.OwnerNotifier;
 import dev.cauce.core.business.owner.OwnerNotifier.Delivery;
+import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.inbound.InboundMessageInterceptor.InboundText;
 import dev.cauce.core.message.MessageRole;
@@ -257,6 +258,30 @@ class OwnerIT extends AbstractBusinessIntegrationTest {
         assertThatThrownBy(() -> as(f.clientA(), () -> handoffService.open(requester(),
                 new Handoff.Request("boda", "s", "Ana", null))))
                 .isInstanceOf(InvalidHandoffCategoryException.class).hasMessageContaining("evento");
+    }
+
+    @Test
+    void aPersonsOpenCases_followTheirIdentityIntoANewThread_withoutOthersOrResolvedOnes() {
+        Handoff open = as(f.clientA(), () -> handoffService.open(requester(), new Handoff.Request("grupo",
+                "Mesa para 12", "Ana", null))).handoff();
+        Handoff resolved = as(f.clientA(), () -> handoffService.open(requester(), new Handoff.Request("queja",
+                "La sopa estaba fría", "Ana", null))).handoff();
+        as(f.clientA(), () -> handoffService.resolve(resolved.id()));
+        Conversation someoneElse = as(f.clientA(), () -> conversationService.startConversation(f.agent().id(), "api",
+                IdentityKind.CLIENT_REFERENCE, "cliente-2", null));
+        as(f.clientA(), () -> handoffService.open(new Booking.Requester(f.clientA().id(), f.agent().id(),
+                someoneElse.id(), someoneElse.identityId(), UUID.randomUUID()),
+                new Handoff.Request("evento", "Cumpleaños", "Luis", null)));
+
+        as(f.clientA(), () -> conversationService.closeConversation(f.conversation().id()));
+        Conversation newThread = as(f.clientA(), () -> conversationService.startConversation(f.agent().id(), "api",
+                IdentityKind.CLIENT_REFERENCE, "cliente-1", null));
+
+        assertThat(newThread.identityId()).isEqualTo(f.conversation().identityId());
+        assertThat(as(f.clientA(), () -> handoffService.openForIdentity(f.clientA().id(), newThread.identityId())))
+                .extracting(Handoff::id).containsExactly(open.id());
+        assertThat(as(f.clientB(), () -> handoffService.openForIdentity(f.clientA().id(), newThread.identityId())))
+                .isEmpty();
     }
 
     private void linkOwner() {
