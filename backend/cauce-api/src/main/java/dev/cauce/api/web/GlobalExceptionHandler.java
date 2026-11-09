@@ -10,6 +10,9 @@ import dev.cauce.business.owner.OwnerNotLinkedException;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelPayloadException;
+import dev.cauce.channels.webchat.ConsentRequiredException;
+import dev.cauce.channels.webchat.TurnstileRejectedException;
+import dev.cauce.channels.webchat.TurnstileUnavailableException;
 import dev.cauce.channels.whatsapp.AppOutsideHierarchyException;
 import dev.cauce.channels.whatsapp.PhoneNumberAlreadyBoundException;
 import dev.cauce.channels.whatsapp.app.WhatsAppAppNotFoundException;
@@ -125,6 +128,9 @@ public class GlobalExceptionHandler {
             // 403 FORBIDDEN
             Map.entry(OwnSpendLimitException.class, "spend_limit_set_by_ancestor"),
             Map.entry(SpendLimitRequiredException.class, "spend_limit_required"),
+            Map.entry(ConsentRequiredException.class, "consent_required"),
+            Map.entry(TurnstileRejectedException.class, "turnstile_failed"),
+            Map.entry(TurnstileUnavailableException.class, "turnstile_unavailable"),
             // 422 UNPROCESSABLE_ENTITY
             Map.entry(InvalidTenantTierException.class, "invalid_tenant_tier"),
             Map.entry(UnknownToolException.class, "unknown_tool"),
@@ -178,7 +184,8 @@ public class GlobalExceptionHandler {
             InvalidIdempotencyKeyException.class,
             ChannelPayloadException.class,
             InvalidChannelConfigRequestException.class,
-            InvalidCursorException.class})
+            InvalidCursorException.class,
+            ConsentRequiredException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex) {
         return clientError(HttpStatus.BAD_REQUEST, ex);
     }
@@ -238,6 +245,16 @@ public class GlobalExceptionHandler {
         // (set by ApiKeyAuthenticationFilter from the validated key). Reaching here is a server
         // bug — return a generic 500 with no internals, and log the full detail server-side.
         return serverError(HttpStatus.INTERNAL_SERVER_ERROR, ex, GENERIC_500_MESSAGE);
+    }
+
+    @ExceptionHandler(TurnstileRejectedException.class)
+    public ResponseEntity<ErrorResponse> handleTurnstileRejected(TurnstileRejectedException ex) {
+        return clientError(HttpStatus.FORBIDDEN, ex);
+    }
+
+    @ExceptionHandler(TurnstileUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleTurnstileUnavailable(TurnstileUnavailableException ex) {
+        return clientError(HttpStatus.SERVICE_UNAVAILABLE, ex);
     }
 
     @ExceptionHandler(OwnSpendLimitException.class)

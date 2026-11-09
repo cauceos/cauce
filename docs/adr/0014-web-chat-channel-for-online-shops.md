@@ -2,7 +2,8 @@
 
 Status: **Accepted** (2026-11-09, unit W0, with the owner's approval). Proposed the same day from
 the strategic chat's decisions (WC1–WC8), and completed in W0 with the public surface, the limits
-and the units. Nothing is built yet: W1–W7 build it, after R2 (ADR 0013).
+and the units. W1 (the channel, its public key and per-config CORS) and W2 (sessions) are built;
+W3–W7 are not.
 
 ## Context
 

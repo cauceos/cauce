@@ -8,6 +8,9 @@ import dev.cauce.channels.whatsapp.WhatsAppChannelAdapter;
 import dev.cauce.channels.whatsapp.WhatsAppProperties;
 import dev.cauce.core.apikey.ApiKeyHasher;
 import dev.cauce.core.secret.SecretCipher;
+import dev.cauce.channels.webchat.CloudflareTurnstileVerifier;
+import dev.cauce.channels.webchat.TurnstileVerifier;
+import dev.cauce.channels.webchat.WebChatProperties;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -23,7 +26,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  */
 @Configuration
 @EnableConfigurationProperties({TelegramProperties.class, SecretEncryptionProperties.class,
-        WhatsAppProperties.class})
+        WhatsAppProperties.class, WebChatProperties.class})
 public class ChannelsConfig {
 
     /**
@@ -36,6 +39,15 @@ public class ChannelsConfig {
                 .connectTimeout(properties.getTimeout())
                 .build();
         return new WhatsAppChannelAdapter(httpClient, properties, clock);
+    }
+
+    /** Verifies a web chat's Turnstile tokens with Cloudflare (ADR 0014, WC2). */
+    @Bean
+    public TurnstileVerifier turnstileVerifier(WebChatProperties properties) {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(properties.getTurnstileTimeout())
+                .build();
+        return new CloudflareTurnstileVerifier(httpClient, properties);
     }
 
     /** Seals provider secrets at rest (ADR 0006, W3); fails startup on a missing or malformed key. */
