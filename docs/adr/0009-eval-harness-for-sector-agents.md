@@ -89,6 +89,12 @@ scenario failure.
 - **Not inventing the menu is deterministic too:** every dish and price a reply names appears in a
   tool result of that same turn.
 
+*Amended 2026-11-09:* naming again a dish the agent named in an earlier reply of the conversation,
+without stating a price or an allergen, is not talking about the menu, for G1 or for not inventing
+it: the first mention was checked in its own turn. A price or an allergen always needs the turn's
+search. This comes from G3 in `1349Z`: «Te he anotado la duda de la tarta de queso», after the
+previous turn had searched for the cheesecake and named it.
+
 ### E6 — An LLM judge only for what the record cannot answer
 
 - The judge reads one turn and its written `rubrica`: the person's message, the calls with a summary

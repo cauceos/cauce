@@ -132,10 +132,15 @@ termina ahí, queda fuera de todas las tasas del agente y el informe la muestra 
 
 Dos reglas valen para **todos los turnos de todos los escenarios**, sin escribirlas en cada uno:
 
-- **G1**: si la respuesta nombra un plato, un precio o un alérgeno de la carta, ese turno ha
-  llamado a `search_catalog`.
-- **Carta sin inventar**: cada plato y precio que nombra la respuesta aparece en un resultado de
-  herramienta de ese mismo turno.
+- **G1**: si la respuesta nombra un precio o un alérgeno de la carta, o un plato que el agente no
+  había nombrado en una respuesta anterior de la conversación, ese turno ha llamado a
+  `search_catalog`.
+- **Carta sin inventar**: cada precio que nombra la respuesta, y cada plato que no había nombrado
+  antes, aparece en un resultado de herramienta de ese mismo turno.
+
+Volver a nombrar un plato ya nombrado, sin afirmar nada de él («te he anotado la duda de la tarta de
+queso»), no es hablar de la carta: su primera mención ya pasó las dos reglas en su turno. Cualquier
+precio o alérgeno sigue exigiendo la consulta en el turno (G3, `1349Z`).
 
 ### Niveles
 

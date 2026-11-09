@@ -280,6 +280,7 @@ class EvalBatteryRun {
         List<CheckResult> results = new ArrayList<>();
         List<String> invocations = new ArrayList<>();
         StringBuilder transcript = new StringBuilder();
+        List<String> earlierReplies = new ArrayList<>();
         for (int i = 0; i < scenario.turns().size(); i++) {
             Scenario.Turn turn = scenario.turns().get(i);
             String prefix = "turno " + (i + 1);
@@ -316,8 +317,9 @@ class EvalBatteryRun {
                     results.add(rubric(prefix, turn, trace, judge));
                 }
             }
-            results.add(prefixed(prefix, GeneralRules.g1(trace, menu)));
-            results.add(prefixed(prefix, GeneralRules.grounded(trace, menu)));
+            results.add(prefixed(prefix, GeneralRules.g1(trace, earlierReplies, menu)));
+            results.add(prefixed(prefix, GeneralRules.grounded(trace, earlierReplies, menu)));
+            earlierReplies.add(trace.reply());
         }
         return new ScenarioRun(scenario, rep, results, transcript.toString().strip(),
                 tokensOf(new JdbcTemplate(services.adminDataSource()), invocations));

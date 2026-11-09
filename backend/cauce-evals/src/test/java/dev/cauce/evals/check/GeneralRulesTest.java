@@ -46,9 +46,9 @@ class GeneralRulesTest {
         TurnTrace searched = turn(CELIAC, new ToolUse("search_catalog", Map.of(), CATALOG_OUTPUT));
         TurnTrace unsearched = turn(CELIAC, new ToolUse("get_business_info", Map.of(), "{}"));
 
-        assertThat(GeneralRules.g1(searched, MENU).outcome()).isEqualTo(Outcome.PASS);
-        assertThat(GeneralRules.g1(unsearched, MENU).outcome()).isEqualTo(Outcome.FAIL);
-        assertThat(GeneralRules.g1(turn("Los lunes cerramos."), MENU).outcome()).isEqualTo(Outcome.NOT_APPLICABLE);
+        assertThat(GeneralRules.g1(searched, List.of(), MENU).outcome()).isEqualTo(Outcome.PASS);
+        assertThat(GeneralRules.g1(unsearched, List.of(), MENU).outcome()).isEqualTo(Outcome.FAIL);
+        assertThat(GeneralRules.g1(turn("Los lunes cerramos."), List.of(), MENU).outcome()).isEqualTo(Outcome.NOT_APPLICABLE);
     }
 
     @Test
@@ -57,10 +57,32 @@ class GeneralRulesTest {
         TurnTrace invented = turn("Te recomiendo los calamares a la romana (12,00 €).",
                 new ToolUse("search_catalog", Map.of(), CATALOG_OUTPUT));
 
-        assertThat(GeneralRules.grounded(grounded, MENU).outcome()).isEqualTo(Outcome.PASS);
-        CheckResult result = GeneralRules.grounded(invented, MENU);
+        assertThat(GeneralRules.grounded(grounded, List.of(), MENU).outcome()).isEqualTo(Outcome.PASS);
+        CheckResult result = GeneralRules.grounded(invented, List.of(), MENU);
         assertThat(result.outcome()).isEqualTo(Outcome.FAIL);
         assertThat(result.detail()).contains("Calamares a la romana").contains("12.00");
+    }
+
+    @Test
+    void aDishTheAgentNamedBefore_namedAgainWithoutAFact_isNotTalkingAboutTheMenu_butAFactStillNeedsTheSearch() {
+        // G3, 1349Z, repetition 3: turn 4 searched and named the cheesecake; turn 5 noted the question.
+        List<String> earlier = List.of("De la tarta de queso casera el bar no ha declarado los alérgenos. "
+                + "¿Quieres que anote lo de la tarta?");
+        TurnTrace noted = turn("Te he anotado la duda de la tarta de queso. Te dejo la reserva pendiente de confirmar.",
+                new ToolUse("record_unanswered_question", Map.of(), "{}"));
+        TurnTrace priced = turn("La tarta de queso cuesta 5,00 €.");
+        TurnTrace allergen = turn("La tarta de queso no lleva gluten.");
+        TurnTrace firstTime = turn("Te recomiendo los pimientos de Padrón.");
+
+        assertThat(GeneralRules.g1(noted, earlier, MENU).outcome()).isEqualTo(Outcome.NOT_APPLICABLE);
+        assertThat(GeneralRules.grounded(noted, earlier, MENU).outcome()).isEqualTo(Outcome.NOT_APPLICABLE);
+        assertThat(GeneralRules.g1(priced, earlier, MENU).outcome()).isEqualTo(Outcome.FAIL);
+        assertThat(GeneralRules.grounded(priced, earlier, MENU).detail()).contains("5.00");
+        assertThat(GeneralRules.g1(allergen, earlier, MENU).outcome()).isEqualTo(Outcome.FAIL);
+        assertThat(GeneralRules.g1(firstTime, earlier, MENU).outcome()).isEqualTo(Outcome.FAIL);
+        assertThat(GeneralRules.grounded(firstTime, earlier, MENU).detail()).contains("Pimientos de Padrón");
+        // Without the earlier reply, the same note names the dish for the first time.
+        assertThat(GeneralRules.g1(noted, List.of(), MENU).outcome()).isEqualTo(Outcome.FAIL);
     }
 
     private static TurnTrace turn(String reply, ToolUse... tools) {
