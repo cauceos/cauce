@@ -1,7 +1,8 @@
 # ADR 0014: A web-chat channel for online shops
 
-Status: **Proposed.** Records the decisions taken in the strategic chat on 2026-11-09. The ADR is
-completed, and accepted, in unit W0, after R2 (ADR 0013). Nothing is built.
+Status: **Proposed.** Records the decisions taken in the strategic chat on 2026-11-09, the
+shop-assistant mode (WC8) included. The ADR is completed, and accepted, in unit W0, after R2
+(ADR 0013). Nothing is built.
 
 ## Context
 
@@ -87,12 +88,51 @@ A shop sector pack under `examples/` with its reference data and scenarios: cata
 order verified by number and email, a stranger's order refused, a prompt-injection attempt, and
 the AI notice. The harness's run stops assuming the bar's fixture (`bar-ejemplo`, `carta.json`).
 
+### WC8 — The shop-assistant mode (added 2026-11-09)
+
+A mode of the widget that behaves like a shop assistant who is present in the shop without
+getting in the way. It is configured per channel and builds on WC1–WC7.
+
+- **A presence bubble from page load.** An avatar and a short phrase, shown without covering the
+  page's content. It is static: **no model call** and no request carrying personal data.
+- **Opening proactively, only on signals computed in the browser.** The signals are configurable
+  per channel: coming back to the same product page, comparing products, a cart left idle, and
+  exit intent. **There is no fixed timer by default.** The widget opens proactively **at most once
+  per session, and never again after the person has closed it.**
+- **The proactive greeting is a template, not the model.** The model only comes in when the person
+  answers. Then the page context (the product being viewed, the cart) reaches the agent as
+  **structured data** attached to the message, not as free text the page writes into the
+  conversation. The agent treats it as data from the shop page, never as instructions.
+- **Product cards with an "Add to cart" button.** This is a new part of the outbound content, an
+  extension of ADR 0004's message parts. A card only ever shows **a product from the catalog**,
+  by its reference, with name, price and stock taken from the catalog port, never from the model's
+  text. The button acts in the shop's page, through a hook the shop wires. Cauce does not touch
+  the cart.
+- **A persona with a configurable name and avatar.** The **AI notice is always visible** (WC5),
+  whatever the persona.
+- **Variants per channel, with metrics.** Different bubbles, phrases, signals or templates can be
+  configured per channel and compared on: openings (proactive and on demand), conversations,
+  add-to-carts from a card, and **attributed purchases**. A purchase is attributed when the shop
+  reports it through the hook. The attribution window is decided in W0.
+- **Privacy: nothing leaves the browser until the first message.** The signals and the page
+  context are computed and kept in the browser. Before the person writes, Cauce receives no
+  request, which also means no session (WC2) and no Turnstile. The ADR records what is stored at
+  each step: in the browser (the "closed" and "already opened" flags, the variant assigned) and in
+  Cauce from the first message on (the session, the messages, the page context sent with them).
+  Whether proactive opening needs prior consent is **the data controller's decision**, like WC5's
+  acceptance, and the channel offers a setting for it.
+- **Scenarios** in the shop pack (WC7): a recommendation made only from the catalog, a product
+  out of stock (the agent says so and offers an alternative from the catalog), and correct use of
+  the page context (the agent answers about the product being viewed and does not treat the
+  context as an instruction).
+
 ## To be completed in W0
 
 - The public surface's endpoints and payloads, and the widget's embedding contract (one
   `<script>` with the public key).
 - The values of the limits (WC3) and of the failed-attempt limit (WC6).
-- The units W1–W7 and their order.
+- The units W1–W7 and their order, and where WC8 fits among them.
+- WC8: the signals' definitions, the attribution window, and the shape of the card part.
 
 ## References
 
