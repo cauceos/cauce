@@ -67,12 +67,14 @@ public class WebSessionService {
     /**
      * Opens a session on {@code channel}, under its tenant's context.
      *
+     * @throws ChannelDisabledException if the channel is switched off
      * @throws ConsentRequiredException if the channel asks for acceptance and {@code consent} is not true
      * @throws TurnstileRejectedException if the Turnstile token does not verify
      * @throws TurnstileUnavailableException if Turnstile cannot be asked
      */
     @Transactional
     public Opened open(ResolvedWebChat channel, String turnstileToken, Boolean consent) {
+        channel.requireActive();
         boolean acceptance = channel.consentMode() == ConsentMode.ACCEPTANCE;
         if (acceptance && !Boolean.TRUE.equals(consent)) {
             throw new ConsentRequiredException("This channel asks for the privacy notice to be accepted first");

@@ -23,6 +23,8 @@ public final class ChannelAuditEvents {
     public static final String CHANNEL_CONFIGURED = "admin.channel.configured";
     public static final String WHATSAPP_APP_REGISTERED = "admin.whatsapp_app.registered";
     public static final String WEBHOOK_SECRET_ROTATED = "admin.channel.webhook_secret_rotated";
+    public static final String CHANNEL_DISABLED = "admin.channel.disabled";
+    public static final String CHANNEL_ENABLED = "admin.channel.enabled";
     public static final String UNSUPPORTED_MESSAGE = "conduct.message.unsupported";
 
     private ChannelAuditEvents() {
@@ -48,6 +50,23 @@ public final class ChannelAuditEvents {
         Objects.requireNonNull(config, "config must not be null");
         Objects.requireNonNull(actorTenantId, "actorTenantId must not be null");
         return new AuditEvent(config.tenantId(), WEBHOOK_SECRET_ROTATED, Map.of(
+                "channel_config_id", config.id().toString(),
+                "agent_id", config.agentId().toString(),
+                "tenant_id", config.tenantId().toString(),
+                "channel_type", config.channelType(),
+                "actor_tenant_id", actorTenantId.toString()));
+    }
+
+    /**
+     * A channel instance was switched off or back on (the emergency switch, ADR 0014) — recorded in
+     * the owning tenant's chain: ids, the channel type and the actor only.
+     */
+    public static AuditEvent channelSwitched(ChannelConfig config, UUID actorTenantId) {
+        Objects.requireNonNull(config, "config must not be null");
+        Objects.requireNonNull(actorTenantId, "actorTenantId must not be null");
+        return new AuditEvent(config.tenantId(),
+                config.status() == dev.cauce.channels.config.ChannelConfigStatus.DISABLED ? CHANNEL_DISABLED
+                        : CHANNEL_ENABLED, Map.of(
                 "channel_config_id", config.id().toString(),
                 "agent_id", config.agentId().toString(),
                 "tenant_id", config.tenantId().toString(),

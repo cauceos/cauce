@@ -152,6 +152,40 @@ class WebSessionApiIT extends AbstractBusinessApiIT {
         assertThat(admin.queryForObject("SELECT count(*) FROM web_sessions", Integer.class)).isZero();
     }
 
+    @Test
+    void theEmergencySwitch_stopsNewSessionsWithAClearError_freesTheSpendLimit_andNeedsItBackToEnable() throws Exception {
+        String key = createChannel("NOTICE");
+        String configId = channels.resolve(key).orElseThrow().channelConfigId().toString();
+
+        postJson(clientAuth, "/v1/channel-configs/" + configId + "/disable", "{}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DISABLED"));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/web/v1/" + key + "/config").header(HttpHeaders.ORIGIN, SHOP))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.active").value(false));
+        open(key, """
+                {"turnstile_token": "token-bueno"}
+                """).andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("channel_disabled"));
+        verify(turnstile, never()).verify(any(), any());
+        assertThat(admin.queryForObject("SELECT count(*) FROM audit_outbox WHERE event_type = 'admin.channel.disabled'",
+                Integer.class)).isEqualTo(1);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/v1/tenants/" + clientId + "/spend-limit").header(HttpHeaders.AUTHORIZATION, partnerAuth))
+                .andExpect(status().is2xxSuccessful());
+        postJson(clientAuth, "/v1/channel-configs/" + configId + "/enable", "{}")
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("spend_limit_required"));
+
+        putJson(partnerAuth, "/v1/tenants/" + clientId + "/spend-limit", """
+                {"monthly_limit_usd": 50}
+                """).andExpect(status().isOk());
+        postJson(clientAuth, "/v1/channel-configs/" + configId + "/enable", "{}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
+        open(key, """
+                {"turnstile_token": "token-bueno"}
+                """).andExpect(status().isCreated());
+        postJson(otherClientAuth, "/v1/channel-configs/" + configId + "/disable", "{}").andExpect(status().isNotFound());
+    }
+
     private ResultActions open(String key, String json) throws Exception {
         return mockMvc.perform(post("/web/v1/" + key + "/sessions").header(HttpHeaders.ORIGIN, SHOP)
                 .contentType(MediaType.APPLICATION_JSON).content(json));

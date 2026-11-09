@@ -10,6 +10,7 @@ import dev.cauce.business.owner.OwnerNotLinkedException;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelPayloadException;
+import dev.cauce.channels.webchat.ChannelDisabledException;
 import dev.cauce.channels.webchat.ConsentRequiredException;
 import dev.cauce.channels.webchat.TurnstileRejectedException;
 import dev.cauce.channels.webchat.TurnstileUnavailableException;
@@ -129,6 +130,7 @@ public class GlobalExceptionHandler {
             Map.entry(OwnSpendLimitException.class, "spend_limit_set_by_ancestor"),
             Map.entry(SpendLimitRequiredException.class, "spend_limit_required"),
             Map.entry(ConsentRequiredException.class, "consent_required"),
+            Map.entry(ChannelDisabledException.class, "channel_disabled"),
             Map.entry(TurnstileRejectedException.class, "turnstile_failed"),
             Map.entry(TurnstileUnavailableException.class, "turnstile_unavailable"),
             // 422 UNPROCESSABLE_ENTITY
@@ -266,6 +268,7 @@ public class GlobalExceptionHandler {
             ApiKeyAlreadyRevokedException.class,
             PhoneNumberAlreadyBoundException.class,
             SpendLimitRequiredException.class,
+            ChannelDisabledException.class,
             MaxRetriesExceededException.class,
             InvalidPendingInvocationTransitionException.class})
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex) {

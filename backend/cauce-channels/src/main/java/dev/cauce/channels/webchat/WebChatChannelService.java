@@ -95,9 +95,9 @@ public class WebChatChannelService implements SpendLimitRequirement {
     }
 
     /**
-     * The ACTIVE web chat reached by {@code publicKey}, before any tenant context exists: the V59
-     * {@code SECURITY DEFINER} function, nothing more. Empty for a malformed, unknown or disabled key,
-     * all alike.
+     * The web chat reached by {@code publicKey}, before any tenant context exists: the
+     * {@code SECURITY DEFINER} function (V61), nothing more. Empty for a malformed or unknown key, alike;
+     * a disabled one resolves with {@code active} false, so it can be refused clearly.
      */
     @Transactional(readOnly = true)
     @NoTenantContext
@@ -108,7 +108,8 @@ public class WebChatChannelService implements SpendLimitRequirement {
         return settingsRepository.resolveByPublicKey(publicKey).map(row -> new ResolvedWebChat(
                 row.getChannel_config_id(), row.getTenant_id(), row.getAgent_id(), row.getPublic_key(),
                 row.getAllowed_origins().isBlank() ? List.of() : Arrays.asList(row.getAllowed_origins().split(" ")),
-                row.getTurnstile_site_key(), row.getPrivacy_policy_url(), ConsentMode.valueOf(row.getConsent_mode())));
+                row.getTurnstile_site_key(), row.getPrivacy_policy_url(), ConsentMode.valueOf(row.getConsent_mode()),
+                "ACTIVE".equals(row.getStatus())));
     }
 
     @Override

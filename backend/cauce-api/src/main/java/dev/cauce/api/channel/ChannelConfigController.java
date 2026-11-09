@@ -61,6 +61,24 @@ public class ChannelConfigController {
      * goes through here. A config outside the caller's scope is a 404; a WhatsApp number, which
      * has no secret of its own, a 400.
      */
+    /**
+     * Switches a channel instance off, at once and without deleting its configuration (the emergency
+     * switch, ADR 0014). Idempotent; a config outside the caller's scope is a 404.
+     */
+    @PostMapping("/v1/channel-configs/{configId}/disable")
+    public ChannelStatusResponse disable(@PathVariable UUID configId) {
+        return ChannelStatusResponse.from(channelConfigService.disable(configId));
+    }
+
+    /**
+     * Switches a channel instance back on. A web chat needs its tenant's spend limit (409
+     * {@code spend_limit_required} otherwise). Idempotent.
+     */
+    @PostMapping("/v1/channel-configs/{configId}/enable")
+    public ChannelStatusResponse enable(@PathVariable UUID configId) {
+        return ChannelStatusResponse.from(channelConfigService.enable(configId));
+    }
+
     @PostMapping("/v1/channel-configs/{configId}/webhook-secret")
     public ChannelConfigResponse rotateWebhookSecret(@PathVariable UUID configId) {
         return ChannelConfigResponse.from(channelConfigService.rotateWebhookSecret(configId));

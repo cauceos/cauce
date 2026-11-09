@@ -34,6 +34,8 @@ public interface WebChatSettingsRepository extends JpaRepository<WebChatSettings
         String getPrivacy_policy_url();
 
         String getConsent_mode();
+
+        String getStatus();
     }
 
     /** Whether {@code tenantId} has an ACTIVE web chat, under RLS. */

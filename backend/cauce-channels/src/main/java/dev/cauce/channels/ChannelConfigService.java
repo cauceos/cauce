@@ -14,8 +14,10 @@ import dev.cauce.core.audit.AuditEventRecorder;
 import dev.cauce.core.conversation.InvalidChannelTypeException;
 import dev.cauce.core.tenant.NoTenantContext;
 import dev.cauce.core.tenant.TenantContext;
+import dev.cauce.core.usage.SpendLimitRequiredException;
 import dev.cauce.memory.agent.AgentEntity;
 import dev.cauce.memory.agent.AgentRepository;
+import dev.cauce.orchestration.usage.SpendLimitService;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -37,13 +39,16 @@ public class ChannelConfigService {
     private final ChannelAdapterRegistry adapterRegistry;
     private final ApiKeyHasher hasher;
     private final AuditEventRecorder auditRecorder;
+    private final SpendLimitService spendLimits;
 
     public ChannelConfigService(ChannelConfigRepository channelConfigRepository,
                                 ChannelConfigMapper channelConfigMapper,
                                 AgentRepository agentRepository,
                                 ChannelAdapterRegistry adapterRegistry,
                                 ApiKeyHasher hasher,
-                                AuditEventRecorder auditRecorder) {
+                                AuditEventRecorder auditRecorder,
+                                SpendLimitService spendLimits) {
+        this.spendLimits = spendLimits;
         this.channelConfigRepository = channelConfigRepository;
         this.channelConfigMapper = channelConfigMapper;
         this.agentRepository = agentRepository;
@@ -111,6 +116,49 @@ public class ChannelConfigService {
         auditRecorder.record(ChannelAuditEvents.webhookSecretRotated(
                 saved, TenantContext.getCurrentTenantId().orElseThrow()));
         return new ChannelConfigCreationResult(saved, webhookSecret);
+    }
+
+    /**
+     * Switches the config {@code configId} off (the emergency switch, ADR 0014): it stops taking
+     * traffic at once and keeps its whole configuration. A disabled web chat refuses new sessions and
+     * messages, and its tenant's spend limit may then be removed. Switching off a disabled config
+     * changes nothing and records nothing. Recorded as {@code admin.channel.disabled}.
+     *
+     * @throws ChannelConfigNotFoundException if the config is not visible
+     */
+    @Transactional
+    public ChannelConfig disable(UUID configId) {
+        return switchTo(configId, ChannelConfigStatus.DISABLED);
+    }
+
+    /**
+     * Switches the config {@code configId} back on. A web chat needs its tenant's spend limit again,
+     * as at creation (ADR 0014, WC3). Recorded as {@code admin.channel.enabled}; enabling an active
+     * config changes nothing and records nothing.
+     *
+     * @throws ChannelConfigNotFoundException if the config is not visible
+     * @throws SpendLimitRequiredException if it is a web chat and its tenant has no spend limit
+     */
+    @Transactional
+    public ChannelConfig enable(UUID configId) {
+        return switchTo(configId, ChannelConfigStatus.ACTIVE);
+    }
+
+    private ChannelConfig switchTo(UUID configId, ChannelConfigStatus status) {
+        ChannelConfig current = channelConfigRepository.findById(configId).map(channelConfigMapper::toDomain)
+                .orElseThrow(() -> new ChannelConfigNotFoundException("No channel config found for id " + configId));
+        if (current.status() == status) {
+            return current;
+        }
+        if (status == ChannelConfigStatus.ACTIVE && current.isPublicKeyRouted()
+                && spendLimits.status(current.tenantId()).monthlyLimitUsd() == null) {
+            throw new SpendLimitRequiredException("A web chat is open to anonymous traffic: tenant "
+                    + current.tenantId() + " needs a spend limit before it is enabled again");
+        }
+        ChannelConfig saved = channelConfigMapper.toDomain(channelConfigRepository.save(
+                channelConfigMapper.toEntity(current.withStatus(status))));
+        auditRecorder.record(ChannelAuditEvents.channelSwitched(saved, TenantContext.getCurrentTenantId().orElseThrow()));
+        return saved;
     }
 
     /**

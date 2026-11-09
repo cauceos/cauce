@@ -132,6 +132,15 @@ public record ChannelConfig(UUID id,
                 createdAt, null, null, null);
     }
 
+    /**
+     * This config with {@code newStatus}: the emergency switch (ADR 0014, amendment of 2026-11-09).
+     * Nothing else changes; a disabled config keeps its whole configuration, ready to enable again.
+     */
+    public ChannelConfig withStatus(ChannelConfigStatus newStatus) {
+        return new ChannelConfig(id, tenantId, agentId, channelType, credential, webhookSecretHash,
+                Objects.requireNonNull(newStatus, "newStatus"), createdAt, whatsappAppId, phoneNumberId, publicKey);
+    }
+
     /** Whether browsers reach this config by its public key (a web chat) rather than a webhook. */
     public boolean isPublicKeyRouted() {
         return publicKey != null;

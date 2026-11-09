@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import dev.cauce.channels.audit.ChannelAuditEvents;
 import dev.cauce.channels.config.ChannelConfig;
+import dev.cauce.channels.config.ChannelConfigStatus;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.persistence.ChannelConfigEntity;
 import dev.cauce.channels.persistence.ChannelConfigMapper;
@@ -53,6 +54,7 @@ class ChannelConfigServiceTest {
     private AuditEventRecorder auditRecorder;
     private ChannelConfigService service;
 
+    private dev.cauce.orchestration.usage.SpendLimitService spendLimits;
     private UUID agentId;
     private UUID tenantId;
     private UUID actorTenantId;
@@ -62,11 +64,12 @@ class ChannelConfigServiceTest {
         repository = mock(ChannelConfigRepository.class);
         agentRepository = mock(AgentRepository.class);
         auditRecorder = mock(AuditEventRecorder.class);
+        spendLimits = mock(dev.cauce.orchestration.usage.SpendLimitService.class);
         InboundChannelAdapter telegram = mock(InboundChannelAdapter.class);
         when(telegram.channelType()).thenReturn("telegram");
         service = new ChannelConfigService(repository, new ChannelConfigMapper(new AesGcmSecretCipher(SecretEncryptionProperties.DEV_ONLY_KEY)),
                 agentRepository, new ChannelAdapterRegistry(List.of(telegram), List.of()),
-                FAKE_HASHER, auditRecorder);
+                FAKE_HASHER, auditRecorder, spendLimits);
         agentId = UUID.randomUUID();
         tenantId = UUID.randomUUID();
         actorTenantId = UUID.randomUUID();
@@ -78,6 +81,45 @@ class ChannelConfigServiceTest {
     @AfterEach
     void tearDown() {
         TenantContext.clear();
+    }
+
+    @Test
+    void disable_switchesTheConfigOff_keepingItsConfiguration_auditsOnce_andIsIdempotent() {
+        ChannelConfig telegram = ChannelConfig.create(tenantId, agentId, "telegram", "token", "hash");
+        ChannelConfigMapper mapper = new ChannelConfigMapper(new AesGcmSecretCipher(SecretEncryptionProperties.DEV_ONLY_KEY));
+        when(repository.findById(telegram.id())).thenReturn(Optional.of(mapper.toEntity(telegram)),
+                Optional.of(mapper.toEntity(telegram.withStatus(ChannelConfigStatus.DISABLED))));
+
+        ChannelConfig disabled = service.disable(telegram.id());
+        service.disable(telegram.id());
+
+        assertThat(disabled.status()).isEqualTo(ChannelConfigStatus.DISABLED);
+        assertThat(disabled.credential()).isEqualTo("token");
+        assertThat(disabled.webhookSecretHash()).isEqualTo("hash");
+        ArgumentCaptor<AuditEvent> audit = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditRecorder).record(audit.capture());
+        assertThat(audit.getValue().eventType()).isEqualTo("admin.channel.disabled");
+        assertThat(audit.getValue().payload()).containsEntry("actor_tenant_id", actorTenantId.toString())
+                .doesNotContainKey("credential");
+    }
+
+    @Test
+    void enable_aWebChatWithoutASpendLimit_isRefused_andWithOne_switchesItOn() {
+        ChannelConfigMapper mapper = new ChannelConfigMapper(new AesGcmSecretCipher(SecretEncryptionProperties.DEV_ONLY_KEY));
+        ChannelConfig web = ChannelConfig.createWebChat(tenantId, agentId, "pk_ABCDEFGHIJKLMNOPQRSTUVWX", "secreto")
+                .withStatus(ChannelConfigStatus.DISABLED);
+        when(repository.findById(web.id())).thenReturn(Optional.of(mapper.toEntity(web)));
+        when(spendLimits.status(tenantId)).thenReturn(spendStatus(null), spendStatus(new java.math.BigDecimal("50.00")));
+
+        assertThatThrownBy(() -> service.enable(web.id()))
+                .isInstanceOf(dev.cauce.core.usage.SpendLimitRequiredException.class);
+        assertThat(service.enable(web.id()).status()).isEqualTo(ChannelConfigStatus.ACTIVE);
+    }
+
+    private dev.cauce.orchestration.usage.SpendStatus spendStatus(java.math.BigDecimal limit) {
+        return new dev.cauce.orchestration.usage.SpendStatus(tenantId, limit, java.time.YearMonth.of(2026, 11),
+                java.math.BigDecimal.ZERO, 0, limit == null ? dev.cauce.orchestration.usage.SpendLimit.SpendState.NONE
+                : dev.cauce.orchestration.usage.SpendLimit.SpendState.OK);
     }
 
     @Test

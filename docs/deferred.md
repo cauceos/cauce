@@ -72,7 +72,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
   same notes and harness before it is offered.
 
 - **Delivery guarantee.** Outbound delivery is best-effort: fire-and-forget on the `channelOutboundExecutor`, no outbox, no retries, no delivery dedup; failures are logged and the reply stays readable by polling. The `AgentReplyDispatcher` port carries the TODO: persist the delivery intent behind the same port and drain it from a scheduled dispatcher, additively.
-- **Channel-config list and disable endpoints.** Only creation exists. Without the list, the demo-bar scripts, which find the business and its agents again by name when `.demo-bar.env` is lost, bind the bots anew (the previous config of the same bot stays active, unused).
+- **A channel-config list endpoint.** Creation, the emergency switch (disable/enable) and the web chat's read exist; listing does not. Without the list, the demo-bar scripts, which find the business and its agents again by name when `.demo-bar.env` is lost, bind the bots anew (the previous config of the same bot stays active, unused).
 - **`SUPPORTED_CHANNELS` by SPI.** `ConversationService` validates `channel_type` against a hardcoded set; replacing it with the adapter registry needs a port, since a direct dependency would be a cycle.
 - **WhatsApp templates.** Outside the 24-hour customer service window a reply, or a fallback, is not sent: a loud failure (ADR 0006, W4). Sending approved templates there is a later unit.
 - **WhatsApp identity joining.** A changed number or BSUID (`system` webhook) starts a new identity and thread, with a WARN; joining the two is the memory subject ADR 0004 defers. The parent BSUID (`parent_user_id`, across portfolios) is not read.

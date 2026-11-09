@@ -271,6 +271,19 @@ and the units that touch a pack also land with a full battery.
   A request without an `Origin` header (not a browser) is not a CORS concern. Turnstile, the
   session token and the limits still apply to it.
 
+## Amendment (2026-11-09): the emergency switch, before W3
+
+Any channel config can be switched off and back on (`POST /v1/channel-configs/{id}/disable` and
+`/enable`), with the authority of the rest of the binding and audited as `admin.channel.disabled`
+and `admin.channel.enabled`. The switch takes effect at once and deletes nothing.
+
+- **A disabled web chat** still resolves by its key. Its configuration read says `active: false`,
+  so the widget can hide itself, and new sessions and messages get 409 `channel_disabled`, a clear
+  error rather than an unknown key.
+- **Its tenant's spend limit may then be removed.** WC3 holds the limit in place only while a web
+  chat is active. Enabling a web chat again needs the limit, as creation does.
+- The web channel goes on no public page before W3.
+
 ## References
 
 - `docs/adr/0001-rls-escape-hatches.md`: resolving a tenant without context
