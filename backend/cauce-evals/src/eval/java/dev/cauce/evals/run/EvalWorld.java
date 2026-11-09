@@ -362,10 +362,11 @@ final class EvalWorld {
                 }
             }
             if (setup.handoff() != null) {
+                Conversation owner = Boolean.TRUE.equals(setup.handoff().sameCustomer()) ? person : other;
                 admin.update("INSERT INTO handoffs (id, tenant_id, code, agent_id, conversation_id, identity_id, category, "
                                 + "summary, contact_name, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        UuidGenerator.newV7(), tenantId, Booking.newCode(), customerAgentId, other.id(),
-                        other.identityId(), setup.handoff().category(),
+                        UuidGenerator.newV7(), tenantId, Booking.newCode(), customerAgentId, owner.id(),
+                        owner.identityId(), setup.handoff().category(),
                         setup.handoff().summary() == null ? "Caso de prueba" : setup.handoff().summary(),
                         setup.handoff().contactName() == null ? "Marta" : setup.handoff().contactName(),
                         setup.handoff().status());

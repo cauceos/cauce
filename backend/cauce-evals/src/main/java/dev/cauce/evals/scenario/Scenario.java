@@ -104,12 +104,16 @@ public record Scenario(
             @JsonProperty("como") String alias) {
     }
 
-    /** An open case that exists before the first turn. */
+    /**
+     * A case that exists before the first turn: another person's unless {@code mismo_cliente: true},
+     * so a summary lists it without the person having asked for it.
+     */
     public record SetupCase(
             @JsonProperty("categoria") String category,
             @JsonProperty("contacto") String contactName,
             @JsonProperty("estado") String status,
-            @JsonProperty("resumen") String summary) {
+            @JsonProperty("resumen") String summary,
+            @JsonProperty("mismo_cliente") Boolean sameCustomer) {
     }
 
     /**

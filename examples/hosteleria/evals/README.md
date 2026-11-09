@@ -60,7 +60,8 @@ pasa.
   previo:                         # estado antes del primer turno (opcional)
     - reserva: {fecha: proximo_sabado, turno: cena, personas: 4, estado: CONFIRMED,
                 contacto: Ana, mismo_cliente: true, como: r}   # como: r -> $r.codigo en las comprobaciones
-    - caso: {categoria: evento, contacto: Marta, estado: OPEN, resumen: "..."}
+    - caso: {categoria: evento, contacto: Marta, estado: OPEN, resumen: "...", mismo_cliente: true}
+                                  # de otra persona salvo mismo_cliente: true (la reserva, al revés)
     - pregunta: "¿Tenéis wifi?"
     - dueno_vinculado: false      # por defecto el dueño está vinculado
     - hilo_anterior: {hace_dias: 2, cliente: "¿Abrís los lunes?", agente: "Hoy es {+0}. ..."}
