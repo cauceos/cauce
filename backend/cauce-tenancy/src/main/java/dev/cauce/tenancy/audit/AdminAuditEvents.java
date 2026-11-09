@@ -95,6 +95,7 @@ public final class AdminAuditEvents {
                 "prompt_length", agent.systemPrompt().length(),
                 "elide_past_lookups", agent.elidesPastLookups(),
                 "prompt_cache_retention", agent.promptCacheRetention().name(),
+                "new_thread_after_hours", agent.newThreadAfterHours(),
                 "actor_tenant_id", actorTenantId.toString()));
     }
 

@@ -198,6 +198,21 @@ public class AgentService {
     public Agent updateAgent(UUID agentId, String name, String systemPrompt, String fallbackReply,
                              String unsupportedMessageReply, Boolean elidePastLookups,
                              PromptCacheRetention promptCacheRetention) {
+        return updateAgent(agentId, name, systemPrompt, fallbackReply, unsupportedMessageReply, elidePastLookups,
+                promptCacheRetention, null);
+    }
+
+    /**
+     * {@link #updateAgent(UUID, String, String, String, String, Boolean, PromptCacheRetention)}, plus the
+     * hours without a conversational message after which a thread closes, 0 for never ({@code null}
+     * keeps it; ADR 0013, T3).
+     *
+     * @throws IllegalArgumentException if {@code newThreadAfterHours} is outside 0 to a year
+     */
+    @Transactional
+    public Agent updateAgent(UUID agentId, String name, String systemPrompt, String fallbackReply,
+                             String unsupportedMessageReply, Boolean elidePastLookups,
+                             PromptCacheRetention promptCacheRetention, Integer newThreadAfterHours) {
         Agent current = agentRepository.findById(agentId).map(agentMapper::toDomain).orElseThrow(() ->
                 new AgentNotFoundException("No agent found for id " + agentId));
         Agent edited = current.edited(name, systemPrompt, fallbackReply, unsupportedMessageReply);
@@ -206,6 +221,9 @@ public class AgentService {
         }
         if (promptCacheRetention != null) {
             edited = edited.withPromptCacheRetention(promptCacheRetention);
+        }
+        if (newThreadAfterHours != null) {
+            edited = edited.withNewThreadAfterHours(newThreadAfterHours);
         }
         Agent saved = agentMapper.toDomain(agentRepository.save(agentMapper.toEntity(edited)));
         auditRecorder.record(AdminAuditEvents.agentConfigurationUpdated(

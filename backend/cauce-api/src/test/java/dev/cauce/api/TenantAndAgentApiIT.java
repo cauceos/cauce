@@ -117,6 +117,30 @@ class TenantAndAgentApiIT extends AbstractApiIntegrationTest {
     }
 
     @Test
+    void patchAgent_setsTheThreadWindow_24HoursByDefault_0ForNever_andRejectsOneOutOfRange() throws Exception {
+        UUID partnerId = createPartner();
+        UUID clientId = createClient(bearerFor(partnerId), partnerId);
+        String clientAuth = bearerFor(clientId);
+        String body = mockMvc.perform(postAs(clientAuth, "/v1/tenants/" + clientId + "/agents",
+                        new CreateAgentRequest("Bot", "You are helpful", "anthropic", "claude-opus-4-8", null, null, null, null)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.new_thread_after_hours").value(24))
+                .andReturn().getResponse().getContentAsString();
+        String agentPath = "/v1/agents/" + objectMapper.readTree(body).get("id").asText();
+
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("new_thread_after_hours", 0)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.new_thread_after_hours").value(0))
+                .andExpect(jsonPath("$.name").value("Bot"));
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("name", "Otro")))
+                .andExpect(jsonPath("$.new_thread_after_hours").value(0));
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("new_thread_after_hours", -1)))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(patchAs(clientAuth, agentPath, java.util.Map.of("new_thread_after_hours", 8761)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void patchAgent_setsThePromptCacheRetention_shortByDefault_andRejectsAnUnknownOne() throws Exception {
         UUID partnerId = createPartner();
         UUID clientId = createClient(bearerFor(partnerId), partnerId);

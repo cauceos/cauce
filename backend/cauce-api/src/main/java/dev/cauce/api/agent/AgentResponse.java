@@ -26,6 +26,7 @@ public record AgentResponse(
         List<String> tools,
         boolean elidePastLookups,
         PromptCacheRetention promptCacheRetention,
+        int newThreadAfterHours,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -45,6 +46,7 @@ public record AgentResponse(
                 agent.toolNames(),
                 agent.elidesPastLookups(),
                 agent.promptCacheRetention(),
+                agent.newThreadAfterHours(),
                 agent.createdAt(),
                 agent.updatedAt());
     }

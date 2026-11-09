@@ -65,6 +65,15 @@ class AgentMapperTest {
     }
 
     @Test
+    void roundTrip_preservesTheThreadWindow() {
+        Agent plain = Agent.create(UUID.randomUUID(), "Bot", "prompt", "anthropic", "claude-sonnet-5-5");
+
+        assertThat(mapper.toDomain(mapper.toEntity(plain)).newThreadAfterHours()).isEqualTo(24);
+        assertThat(mapper.toDomain(mapper.toEntity(plain.withNewThreadAfterHours(0))).newThreadAfterHours()).isZero();
+        assertThat(mapper.toEntity(plain.withNewThreadAfterHours(72)).getNewThreadAfterHours()).isEqualTo(72);
+    }
+
+    @Test
     void roundTrip_preservesWhetherTheAgentElidesPastLookups() {
         Agent plain = Agent.create(UUID.randomUUID(), "Bot", "prompt", "anthropic", "claude-sonnet-5-5");
         Agent eliding = plain.withPastLookupsElided(true);

@@ -82,6 +82,10 @@ public class AgentEntity {
     @Column(name = "prompt_cache_retention", nullable = false, length = 10)
     private PromptCacheRetention promptCacheRetention = PromptCacheRetention.SHORT;
 
+    /** Hours without a conversational message before a new thread; 0 never (V58, ADR 0013). */
+    @Column(name = "new_thread_after_hours", nullable = false)
+    private int newThreadAfterHours = 24;
+
     protected AgentEntity() {
         // for JPA
     }
@@ -129,6 +133,17 @@ public class AgentEntity {
                        AgentStatus status, String fallbackReply, String unsupportedMessageReply, String[] toolNames,
                        boolean elidePastLookups, PromptCacheRetention promptCacheRetention, Instant createdAt,
                        Instant updatedAt) {
+        this(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature, maxResponseTokens,
+                status, fallbackReply, unsupportedMessageReply, toolNames, elidePastLookups, promptCacheRetention,
+                24, createdAt, updatedAt);
+    }
+
+    public AgentEntity(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
+                       String modelName, Double temperature, Integer maxResponseTokens,
+                       AgentStatus status, String fallbackReply, String unsupportedMessageReply, String[] toolNames,
+                       boolean elidePastLookups, PromptCacheRetention promptCacheRetention, int newThreadAfterHours,
+                       Instant createdAt, Instant updatedAt) {
+        this.newThreadAfterHours = newThreadAfterHours;
         this.unsupportedMessageReply = unsupportedMessageReply;
         this.elidePastLookups = elidePastLookups;
         this.promptCacheRetention = promptCacheRetention;
@@ -197,6 +212,10 @@ public class AgentEntity {
 
     public PromptCacheRetention getPromptCacheRetention() {
         return promptCacheRetention;
+    }
+
+    public int getNewThreadAfterHours() {
+        return newThreadAfterHours;
     }
 
     public String getFallbackReply() {

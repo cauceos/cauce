@@ -27,6 +27,7 @@ public final class AgentMapper {
                 agent.toolNames().toArray(String[]::new),
                 agent.elidesPastLookups(),
                 agent.promptCacheRetention(),
+                agent.newThreadAfterHours(),
                 agent.createdAt(),
                 agent.updatedAt());
     }
@@ -47,6 +48,7 @@ public final class AgentMapper {
                 List.of(entity.getToolNames()),
                 entity.isElidePastLookups(),
                 entity.getPromptCacheRetention(),
+                entity.getNewThreadAfterHours(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt());
     }

@@ -37,6 +37,10 @@ import java.util.UUID;
  *
  * <p>{@code promptCacheRetention}, {@link PromptCacheRetention#SHORT} by default, is how long the
  * provider is asked to keep the agent's prompt prefix cached (ADR 0010, S9).
+ *
+ * <p>{@code newThreadAfterHours}, {@value #DEFAULT_NEW_THREAD_AFTER_HOURS} by default, is how long a
+ * thread may go without a conversational message before the next message starts a new one; 0 never
+ * does (ADR 0013, T3).
  */
 public final class Agent {
 
@@ -45,6 +49,12 @@ public final class Agent {
 
     /** Upper bound of a configured fallback reply (mirrors the V28 CHECK). */
     public static final int MAX_FALLBACK_REPLY_LENGTH = 1000;
+
+    /** Hours without a conversational message after which the next one opens a new thread (ADR 0013). */
+    public static final int DEFAULT_NEW_THREAD_AFTER_HOURS = 24;
+
+    /** The largest window accepted, a year (mirrors the V58 CHECK). */
+    public static final int MAX_NEW_THREAD_AFTER_HOURS = 8760;
 
     private final UUID id;
     private final UUID tenantId;
@@ -60,14 +70,15 @@ public final class Agent {
     private final List<String> toolNames; // the granted tools; empty by default (ADR 0005, C4)
     private final boolean elidePastLookups; // off: the full history, as always
     private final PromptCacheRetention promptCacheRetention; // SHORT unless the agent asks for LONG
+    private final int newThreadAfterHours; // 0: a thread never closes for inactivity (ADR 0013)
     private final Instant createdAt;
     private final Instant updatedAt;
 
     private Agent(UUID id, UUID tenantId, String name, String systemPrompt, String modelProvider,
                   String modelName, Double temperature, int maxResponseTokens, AgentStatus status,
                   String fallbackReply, String unsupportedMessageReply, List<String> toolNames,
-                  boolean elidePastLookups, PromptCacheRetention promptCacheRetention, Instant createdAt,
-                  Instant updatedAt) {
+                  boolean elidePastLookups, PromptCacheRetention promptCacheRetention, int newThreadAfterHours,
+                  Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
@@ -82,6 +93,7 @@ public final class Agent {
         this.toolNames = toolNames;
         this.elidePastLookups = elidePastLookups;
         this.promptCacheRetention = promptCacheRetention;
+        this.newThreadAfterHours = newThreadAfterHours;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -117,6 +129,7 @@ public final class Agent {
                 List.of(),
                 false,
                 PromptCacheRetention.SHORT,
+                DEFAULT_NEW_THREAD_AFTER_HOURS,
                 now,
                 now);
     }
@@ -130,7 +143,7 @@ public final class Agent {
     public Agent withFallbackReply(String fallbackReply) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
                 maxResponseTokens, status, validatedFallbackReply(fallbackReply), unsupportedMessageReply, toolNames,
-                elidePastLookups, promptCacheRetention,
+                elidePastLookups, promptCacheRetention, newThreadAfterHours,
                 createdAt, updatedAt);
     }
 
@@ -143,7 +156,7 @@ public final class Agent {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
                 maxResponseTokens, status, fallbackReply,
                 validatedReply(unsupportedMessageReply, "unsupportedMessageReply"), toolNames, elidePastLookups,
-                promptCacheRetention, createdAt, updatedAt);
+                promptCacheRetention, newThreadAfterHours, createdAt, updatedAt);
     }
 
     /**
@@ -155,7 +168,7 @@ public final class Agent {
     public Agent withTools(Collection<String> tools) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
                 maxResponseTokens, status, fallbackReply, unsupportedMessageReply, validatedToolNames(tools), elidePastLookups,
-                promptCacheRetention, createdAt,
+                promptCacheRetention, newThreadAfterHours, createdAt,
                 updatedAt);
     }
 
@@ -163,7 +176,7 @@ public final class Agent {
     public Agent retooled(Collection<String> tools) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
                 maxResponseTokens, status, fallbackReply, unsupportedMessageReply, validatedToolNames(tools), elidePastLookups,
-                promptCacheRetention, createdAt,
+                promptCacheRetention, newThreadAfterHours, createdAt,
                 Instant.now());
     }
 
@@ -174,7 +187,7 @@ public final class Agent {
     public Agent withPastLookupsElided(boolean elide) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
                 maxResponseTokens, status, fallbackReply, unsupportedMessageReply, toolNames, elide, promptCacheRetention,
-                createdAt,
+                newThreadAfterHours, createdAt,
                 Instant.now());
     }
 
@@ -185,7 +198,21 @@ public final class Agent {
     public Agent withPromptCacheRetention(PromptCacheRetention retention) {
         return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
                 maxResponseTokens, status, fallbackReply, unsupportedMessageReply, toolNames, elidePastLookups,
-                Objects.requireNonNull(retention, "retention"), createdAt, Instant.now());
+                Objects.requireNonNull(retention, "retention"), newThreadAfterHours, createdAt, Instant.now());
+    }
+
+    /**
+     * Returns a copy of this agent whose threads close after {@code hours} without a conversational
+     * message, 0 for never ({@code updatedAt} moves to now): see the class description.
+     */
+    public Agent withNewThreadAfterHours(int hours) {
+        if (hours < 0 || hours > MAX_NEW_THREAD_AFTER_HOURS) {
+            throw new IllegalArgumentException("newThreadAfterHours must be between 0 and "
+                    + MAX_NEW_THREAD_AFTER_HOURS);
+        }
+        return new Agent(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, fallbackReply, unsupportedMessageReply, toolNames, elidePastLookups,
+                promptCacheRetention, hours, createdAt, Instant.now());
     }
 
     /**
@@ -207,7 +234,7 @@ public final class Agent {
                 fallbackReply == null ? this.fallbackReply : validatedFallbackReply(fallbackReply),
                 unsupportedMessageReply == null ? this.unsupportedMessageReply
                         : validatedReply(unsupportedMessageReply, "unsupportedMessageReply"),
-                toolNames, elidePastLookups, promptCacheRetention, createdAt, Instant.now());
+                toolNames, elidePastLookups, promptCacheRetention, newThreadAfterHours, createdAt, Instant.now());
     }
 
     /**
@@ -259,13 +286,25 @@ public final class Agent {
                 createdAt, updatedAt);
     }
 
-    /** Rebuilds an agent with its full configuration, including its reply to an unsupported message. */
+    /** Rebuilds an agent with its reply to an unsupported message, and the default thread window. */
     public static Agent rehydrate(UUID id, UUID tenantId, String name, String systemPrompt,
                                   String modelProvider, String modelName, Double temperature,
                                   Integer maxResponseTokens, AgentStatus status, String fallbackReply,
                                   String unsupportedMessageReply, List<String> toolNames, boolean elidePastLookups,
                                   PromptCacheRetention promptCacheRetention, Instant createdAt,
                                   Instant updatedAt) {
+        return rehydrate(id, tenantId, name, systemPrompt, modelProvider, modelName, temperature,
+                maxResponseTokens, status, fallbackReply, unsupportedMessageReply, toolNames, elidePastLookups,
+                promptCacheRetention, DEFAULT_NEW_THREAD_AFTER_HOURS, createdAt, updatedAt);
+    }
+
+    /** Rebuilds an agent with its full configuration, including its thread window (ADR 0013). */
+    public static Agent rehydrate(UUID id, UUID tenantId, String name, String systemPrompt,
+                                  String modelProvider, String modelName, Double temperature,
+                                  Integer maxResponseTokens, AgentStatus status, String fallbackReply,
+                                  String unsupportedMessageReply, List<String> toolNames, boolean elidePastLookups,
+                                  PromptCacheRetention promptCacheRetention, int newThreadAfterHours,
+                                  Instant createdAt, Instant updatedAt) {
         return new Agent(
                 Objects.requireNonNull(id, "id"),
                 Objects.requireNonNull(tenantId, "tenantId"),
@@ -281,6 +320,7 @@ public final class Agent {
                 List.copyOf(Objects.requireNonNull(toolNames, "toolNames")),
                 elidePastLookups,
                 Objects.requireNonNull(promptCacheRetention, "promptCacheRetention"),
+                newThreadAfterHours, // the V58 CHECK guarantees its range
                 Objects.requireNonNull(createdAt, "createdAt"),
                 Objects.requireNonNull(updatedAt, "updatedAt"));
     }
@@ -404,6 +444,11 @@ public final class Agent {
     }
 
     /** How long the provider is asked to keep the agent's prompt prefix cached (ADR 0010, S9). */
+    /** Hours without a conversational message after which a thread closes; 0 never (ADR 0013). */
+    public int newThreadAfterHours() {
+        return newThreadAfterHours;
+    }
+
     public PromptCacheRetention promptCacheRetention() {
         return promptCacheRetention;
     }

@@ -36,6 +36,23 @@ class AgentTest {
     }
 
     @Test
+    void newThreadAfterHours_is24ByDefault_survivesTheOtherEdits_andIsBoundedFrom0ToAYear() {
+        Agent agent = Agent.create(UUID.randomUUID(), "Bot", "p", "anthropic", "claude-sonnet-5-5");
+        Agent never = agent.withNewThreadAfterHours(0);
+
+        assertThat(agent.newThreadAfterHours()).isEqualTo(24);
+        assertThat(never.newThreadAfterHours()).isZero();
+        assertThat(never.edited("Otro", null, null).newThreadAfterHours()).isZero();
+        assertThat(never.withPastLookupsElided(true).withPromptCacheRetention(PromptCacheRetention.LONG)
+                .retooled(List.of("search_catalog")).newThreadAfterHours()).isZero();
+        assertThat(agent.withNewThreadAfterHours(8760).newThreadAfterHours()).isEqualTo(8760);
+        assertThatThrownBy(() -> agent.withNewThreadAfterHours(-1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> agent.withNewThreadAfterHours(8761))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void withPastLookupsElided_isOffByDefault_andSurvivesTheOtherEdits() {
         Agent agent = newAgent();
         Agent eliding = agent.withPastLookupsElided(true);
