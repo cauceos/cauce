@@ -153,7 +153,11 @@ once, without repetitions.
   cache read, cache write and output per million tokens, and the date). The cost is computed in the
   report and never stored as a fact, as the design rules require.
 - **Before a run starts**, the harness estimates its cost: turns × N × tokens per turn, taken from
-  the previous run, or from a default the first time.
+  the previous run, or from a default the first time. *Amended 2026-11-09:* the input is priced
+  with the shares read from and written to the cache in the last run of the same model in the
+  history, and uncached (a ceiling) when there is none. Priced uncached, the full battery was
+  estimated at 9.96 US$ against the 10 US$ limit, and cost 1.65 (`1555Z`, 97.6 % read from the
+  cache).
 - **Confirmation over the limit.** If the estimate exceeds a configurable limit (10 US$ by
   default), the run stops and asks for confirmation (`--confirmar`) before spending anything.
 - If the measured spend reaches the limit mid-run, the run stops and reports itself as incomplete.

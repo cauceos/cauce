@@ -196,8 +196,14 @@ class EvalBatteryRun {
                 .map(p -> p.tokens().input() / p.tokens().modelTurns()).orElse(null);
         Long outPerTurn = previous.filter(p -> p.tokens() != null && p.tokens().modelTurns() > 0)
                 .map(p -> p.tokens().output() / p.tokens().modelTurns()).orElse(null);
+        // The cache share only from a run of this same model: another model's cache says nothing of this one.
+        Optional<CostEstimate.CacheShare> cacheShare = previous
+                .filter(p -> (SETTINGS.agentProvider() + "/" + SETTINGS.agentModel()).equals(p.agentModel()))
+                .filter(p -> p.tokens() != null)
+                .flatMap(p -> CostEstimate.CacheShare.of(p.tokens().input(), p.tokens().cacheRead(),
+                        p.tokens().cacheWrite(), p.tokens().cacheWriteLong()));
         CostEstimate estimate = CostEstimate.of(modelTurns, (int) (judge.isPresent() ? rubrics + labelled * 3 : 0),
-                inPerTurn, outPerTurn, agentPrice, judgePrice);
+                inPerTurn, outPerTurn, cacheShare, agentPrice, judgePrice);
         System.out.printf("%nEvals: %d escenarios (%d conversaciones × %d, %d resúmenes, %d cubiertos por IT); "
                         + "%d turnos de modelo. Estimación: %s US$ (%s; límite %.2f US$)%n",
                 selected.size(), conversationsToRun.size(), n, digests.size(), covered.size(), modelTurns,

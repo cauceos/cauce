@@ -22,6 +22,22 @@ class CostEstimateTest {
     }
 
     @Test
+    void theEstimate_pricesTheInputWithTheCacheShareOfTheLastRunOfTheModel_orUncachedWithoutOne() {
+        Optional<PriceTable.Price> sonnet = PRICES.priceOf("anthropic", "claude-sonnet-5-5");
+        // 1555Z: 4,745,460 input over 320 model turns, 4,632,209 read from the cache, 111,247 written for an hour.
+        Optional<CostEstimate.CacheShare> share = CostEstimate.CacheShare.of(4_745_460, 4_632_209, 111_247, 111_247);
+
+        CostEstimate measured = CostEstimate.of(320, 0, 14_829L, 230L, share, sonnet, Optional.empty());
+        CostEstimate ceiling = CostEstimate.of(320, 0, 14_829L, 230L, Optional.empty(), sonnet, Optional.empty());
+
+        assertThat(measured.usd()).hasValueSatisfying(usd -> assertThat(usd).isBetween(1.4, 1.9));
+        assertThat(ceiling.usd()).hasValueSatisfying(usd -> assertThat(usd).isGreaterThan(9.5));
+        assertThat(measured.basis()).contains("97.6 %");
+        assertThat(ceiling.basis()).contains("sin caché");
+        assertThat(CostEstimate.CacheShare.of(0, 0, 0, 0)).isEmpty();
+    }
+
+    @Test
     void theEstimate_usesThePreviousRunOrTheDefaults_andWithoutAPriceItAlwaysNeedsConfirmation() {
         Optional<PriceTable.Price> sonnet = PRICES.priceOf("anthropic", "claude-sonnet-5-5");
 
