@@ -23,7 +23,7 @@ public final class ModelContextWindow {
 
     /**
      * Conservative context window assumed for a model absent from {@link #KNOWN_MODELS}. Chosen
-     * above {@code ContextBuilder.RESERVED_FOR_RESPONSE} so the effective window stays positive
+     * above the default response reservation of {@code ContextBuilder} so the effective window stays positive
      * and an unknown model still functions (trimming history) rather than failing every message.
      * Hardcoded by design — made configurable only if a real need arises.
      */

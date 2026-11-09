@@ -160,6 +160,20 @@ server cut the request without saying so.
   tokenizer and one pack's language; the metric is what says when another needs its own. The constants
   above are revised from that metric, not by guess.
 
+## Amendment (2026-11-09): the response reservation follows the agent
+
+The window held back a flat 10,000 tokens for the response (8K plus a 2K buffer) whatever the
+agent asked for. The bar's customer agent asks for 4096. With a twelfth tool its prompt and tools
+come to an estimated 6,473 tokens, and it no longer fitted a 16K window. Most of the reservation
+was for a response it never asks for.
+
+- **The reservation is the agent's `max_response_tokens` plus a 2,000-token buffer**, in a window
+  that keeps 4,096 tokens of history after it. A smaller window still reserves half of itself and
+  caps the response to that half, as before.
+- The hospitality pack's advised window on Ollama stays 32,768 (QUICKSTART, the pack's README).
+  `ReferenceBarPackIT` checks that the bar answers there, and that on 4,096 it fails as
+  `AGENT_MISCONFIGURED` with the window and the estimates in its reason.
+
 ## References
 
 - `backend/cauce-orchestration/src/main/java/dev/cauce/orchestration/service/OrchestratorService.java` — the loop

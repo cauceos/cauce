@@ -1,5 +1,6 @@
 package dev.cauce.orchestration.context;
 
+import dev.cauce.core.agent.Agent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -22,8 +23,12 @@ import org.junit.jupiter.api.Test;
 class ContextBuilderTest {
 
     private static final String MODEL = "claude-sonnet-4-7"; // 200_000 window
-    private static final int EFFECTIVE_WINDOW = 200_000 - ContextBuilder.RESERVED_FOR_RESPONSE; // 190_000
-    /** Unknown to ModelContextWindow: the 16_384 fallback, so 6_384 tokens of effective window. */
+    /** The reservation of an agent that asks for the default response tokens: 4096 + 2000. */
+    private static final int DEFAULT_RESERVATION = Agent.DEFAULT_MAX_RESPONSE_TOKENS + ContextBuilder.RESPONSE_BUFFER;
+    /** What the window arithmetic below was written for: an agent asking for 8000 reserves 10_000. */
+    private static final int ASKS_8000 = 8_000;
+    private static final int EFFECTIVE_WINDOW = 200_000 - (ASKS_8000 + ContextBuilder.RESPONSE_BUFFER); // 190_000
+    /** Unknown to ModelContextWindow: the 16_384 fallback, so 6_384 tokens of effective window for {@link #ASKS_8000}. */
     private static final String SMALL_MODEL = "some-unknown-model";
     private static final String SYSTEM_PROMPT = "You are a helpful assistant.";
     /** No prompt, for the tests whose arithmetic is the history's alone. */
@@ -37,6 +42,37 @@ class ContextBuilderTest {
         String prefix = tag + ":";
         String content = prefix + "x".repeat(chars - prefix.length());
         return Message.from(CONVERSATION, MessageRole.USER, content);
+    }
+
+    /** {@code builder.build} for an agent that asks for {@link #ASKS_8000} response tokens. */
+    private LlmInvocationContext asks8000(List<Message> messages, String model, String systemPrompt) {
+        return builder.build(messages, model, ModelContextWindow.contextWindowFor(model), systemPrompt, List.of(),
+                Set.of(), null, ASKS_8000);
+    }
+
+    @Test
+    void build_reservesTheAgentsResponseTokensPlusTheBuffer_notAFlatAmount() {
+        List<Message> hi = List.of(userMessageOfLength("hi", 10));
+
+        assertThat(builder.build(hi, MODEL, 200_000, SYSTEM_PROMPT, List.of(), Set.of(), null, 4096)
+                .reservedForResponse()).isEqualTo(6_096);
+        assertThat(builder.build(hi, MODEL, 200_000, SYSTEM_PROMPT, List.of(), Set.of(), null, 16_000)
+                .reservedForResponse()).isEqualTo(18_000);
+        assertThat(builder.build(hi, MODEL, 200_000, SYSTEM_PROMPT, List.of(), Set.of(), null, 16_000)
+                .responseTokens(16_000)).isEqualTo(16_000);
+    }
+
+    @Test
+    void build_anAgentOf6500TokensOfPromptAndTools_fitsA16KWindow_asking4096() {
+        // The bar's customer agent with twelve tools, 2026-11-09: 6473 estimated tokens. With the flat
+        // 10_000 it did not fit 16_384; with 4096 + 2000 it leaves room for its history.
+        String prompt = "p".repeat(16_180); // 6472 tokens
+        LlmInvocationContext context = builder.build(List.of(userMessageOfLength("hola", 10)), "qwen2.5:7b", 16_384,
+                prompt, List.of(), Set.of(), null, Agent.DEFAULT_MAX_RESPONSE_TOKENS);
+
+        assertThat(context.reservedForResponse()).isEqualTo(6_096);
+        assertThat(context.fixedTokens() + context.estimatedTokens() + context.reservedForResponse())
+                .isLessThanOrEqualTo(16_384);
     }
 
     @Test
@@ -120,9 +156,10 @@ class ContextBuilderTest {
 
     @Test
     void responseTokens_inALargeWindow_isTheAgentsOwn() {
-        LlmInvocationContext context = builder.build(List.of(userMessageOfLength("hi", 10)), MODEL, SYSTEM_PROMPT);
+        LlmInvocationContext context = builder.build(List.of(userMessageOfLength("hi", 10)), MODEL, 200_000,
+                SYSTEM_PROMPT, List.of(), Set.of(), null, 16_000);
 
-        assertThat(context.reservedForResponse()).isEqualTo(ContextBuilder.RESERVED_FOR_RESPONSE);
+        assertThat(context.reservedForResponse()).isEqualTo(16_000 + ContextBuilder.RESPONSE_BUFFER);
         assertThat(context.responseTokens(16_000)).isEqualTo(16_000);
     }
 
@@ -148,7 +185,7 @@ class ContextBuilderTest {
                 + TokenEstimator.estimate("Monday");
         assertThat(context.estimatedTokens()).isEqualTo(expected);
         assertThat(context.contextWindowLimit()).isEqualTo(200_000);
-        assertThat(context.reservedForResponse()).isEqualTo(10_000);
+        assertThat(context.reservedForResponse()).isEqualTo(DEFAULT_RESERVATION);
         assertThat(context.systemPrompt()).isEqualTo(SYSTEM_PROMPT);
     }
 
@@ -160,7 +197,7 @@ class ContextBuilderTest {
             messages.add(userMessageOfLength("MSG" + i, 5000));
         }
 
-        LlmInvocationContext context = builder.build(messages, MODEL, NO_PROMPT);
+        LlmInvocationContext context = asks8000(messages, MODEL, NO_PROMPT);
 
         assertThat(context.messages()).hasSize(95);
         assertThat(context.estimatedTokens()).isEqualTo(EFFECTIVE_WINDOW); // 190_000
@@ -175,7 +212,7 @@ class ContextBuilderTest {
         // 500_000 chars => ceil(500000/2.5) = 200_000 tokens > 190_000 effective window.
         Message huge = userMessageOfLength("HUGE", 500_000);
 
-        assertThatThrownBy(() -> builder.build(List.of(huge), MODEL, NO_PROMPT))
+        assertThatThrownBy(() -> asks8000(List.of(huge), MODEL, NO_PROMPT))
                 .isInstanceOf(MessageTooLargeForContextException.class)
                 .hasMessageContaining("200000")
                 .hasMessageContaining(String.valueOf(EFFECTIVE_WINDOW));
@@ -186,7 +223,7 @@ class ContextBuilderTest {
         // 475_000 chars => ceil(475000/2.5) = 190_000 tokens == effective window (boundary).
         Message exact = userMessageOfLength("EXACT", 475_000);
 
-        LlmInvocationContext context = builder.build(List.of(exact), MODEL, NO_PROMPT);
+        LlmInvocationContext context = asks8000(List.of(exact), MODEL, NO_PROMPT);
 
         assertThat(context.messages()).hasSize(1);
         assertThat(context.estimatedTokens()).isEqualTo(EFFECTIVE_WINDOW);
@@ -254,7 +291,7 @@ class ContextBuilderTest {
                 Message.from(CONVERSATION, MessageRole.AGENT, "Found it."),
                 userMessageOfLength("NEW", 5000));
 
-        LlmInvocationContext context = builder.build(messages, SMALL_MODEL, SYSTEM_PROMPT);
+        LlmInvocationContext context = asks8000(messages, SMALL_MODEL, SYSTEM_PROMPT);
 
         assertThat(context.messages()).hasSize(1);
         assertThat(context.messages().get(0).role()).isEqualTo(LlmRole.USER);
@@ -273,7 +310,7 @@ class ContextBuilderTest {
                 Message.toolCall(CONVERSATION, call),
                 Message.toolResult(CONVERSATION, result));
 
-        LlmInvocationContext context = builder.build(messages, SMALL_MODEL, SYSTEM_PROMPT);
+        LlmInvocationContext context = asks8000(messages, SMALL_MODEL, SYSTEM_PROMPT);
 
         assertThat(context.messages()).extracting(LlmMessage::role)
                 .containsExactly(LlmRole.USER, LlmRole.ASSISTANT, LlmRole.USER);
@@ -291,7 +328,7 @@ class ContextBuilderTest {
                 Message.toolCall(CONVERSATION, call),
                 Message.toolResult(CONVERSATION, ToolResult.success("call-3", "search", "r".repeat(12_145))));
 
-        assertThatThrownBy(() -> builder.build(messages, SMALL_MODEL, SYSTEM_PROMPT))
+        assertThatThrownBy(() -> asks8000(messages, SMALL_MODEL, SYSTEM_PROMPT))
                 .isInstanceOf(MessageTooLargeForContextException.class)
                 .hasMessageContaining("current turn");
     }
@@ -351,7 +388,7 @@ class ContextBuilderTest {
 
         assertThat(context.messages()).hasSize(1);
         assertThat(context.contextWindowLimit()).isEqualTo(16_384);
-        assertThat(context.reservedForResponse()).isEqualTo(10_000);
+        assertThat(context.reservedForResponse()).isEqualTo(DEFAULT_RESERVATION);
     }
 
     @Test
@@ -361,7 +398,7 @@ class ContextBuilderTest {
         assertThat(context.messages()).isEmpty();
         assertThat(context.estimatedTokens()).isZero();
         assertThat(context.contextWindowLimit()).isEqualTo(200_000);
-        assertThat(context.reservedForResponse()).isEqualTo(10_000);
+        assertThat(context.reservedForResponse()).isEqualTo(DEFAULT_RESERVATION);
     }
 
     @Test
@@ -374,7 +411,7 @@ class ContextBuilderTest {
         }
         String largeSystemPrompt = "s".repeat(125_000); // ceil(125000/2.5) = 50_000 tokens
 
-        LlmInvocationContext context = builder.build(messages, MODEL, largeSystemPrompt);
+        LlmInvocationContext context = asks8000(messages, MODEL, largeSystemPrompt);
 
         assertThat(context.messages()).hasSize(70);
         assertThat(context.messages().get(0).content()).startsWith("M5:");

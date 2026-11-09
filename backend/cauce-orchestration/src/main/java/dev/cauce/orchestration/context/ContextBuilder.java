@@ -1,5 +1,6 @@
 package dev.cauce.orchestration.context;
 
+import dev.cauce.core.agent.Agent;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.message.MessageRole;
@@ -27,8 +28,8 @@ import java.util.stream.Collectors;
  * persistence, no LLM call. Stateless and instantiable; {@code OrchestratorService} holds one as
  * an injected collaborator.
  *
- * <p>Strategy: reserve {@link #RESERVED_FOR_RESPONSE} tokens of the model's window for the
- * response and the estimate of what every request carries besides the history — the system prompt
+ * <p>Strategy: reserve the agent's response tokens plus {@link #RESPONSE_BUFFER} of the model's
+ * window for the response ({@link #reservedForResponse}), and the estimate of what every request carries besides the history — the system prompt
  * and the tool schemas ({@link #fixedTokens}) — then walk the conversation newest-first, including
  * each message while the running estimate fits the remaining (effective) window, and stop at the
  * first message that would overflow. The surviving slice is returned in chronological order.
@@ -56,12 +57,15 @@ import java.util.stream.Collectors;
 public final class ContextBuilder {
 
     /**
-     * 8K reserved for the model's response plus a 2K safety buffer — in a window large enough to
-     * keep {@link #MIN_HISTORY} after it. A smaller window (a local server's, e.g. Ollama's 4096)
-     * reserves half of itself instead ({@link #reservedForResponse}), so that it still holds a
-     * conversation.
+     * The safety margin held back on top of the response tokens the agent asks for: what the
+     * estimate of the rest may be short by. The reservation is the agent's {@code max_response_tokens}
+     * plus this, in a window large enough to keep {@link #MIN_HISTORY} after it; a smaller window (a
+     * local server's, e.g. Ollama's 4096) reserves half of itself instead
+     * ({@link #reservedForResponse}), so that it still holds a conversation. Until 2026-11-09 the
+     * reservation was a flat 10,000 whatever the agent asked for, which left the bar's agent, which
+     * asks for 4096, without room in a 16K window.
      */
-    static final int RESERVED_FOR_RESPONSE = 10_000;
+    static final int RESPONSE_BUFFER = 2_000;
 
     /** History a window must keep after the standard reservation for that reservation to apply. */
     static final int MIN_HISTORY = 4_096;
@@ -131,17 +135,28 @@ public final class ContextBuilder {
     }
 
     /**
+     * {@link #build(List, String, int, String, List, Set, ZoneId, int)} for an agent that asks for the
+     * default {@link Agent#DEFAULT_MAX_RESPONSE_TOKENS}.
+     */
+    public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
+                                      int contextWindow, String systemPrompt, List<ToolDefinition> tools,
+                                      Set<String> elidedLookups, ZoneId senderTimeZone) {
+        return build(conversationMessages, modelName, contextWindow, systemPrompt, tools, elidedLookups,
+                senderTimeZone, Agent.DEFAULT_MAX_RESPONSE_TOKENS);
+    }
+
+    /**
      * {@link #build(List, String, int, String, List, Set)} for an agent whose business is in
      * {@code senderTimeZone}: each USER message reads with its {@link #sentStamp} in that zone. Null:
      * no stamps, the agent knows no time zone.
      */
     public LlmInvocationContext build(List<Message> conversationMessages, String modelName,
                                       int contextWindow, String systemPrompt, List<ToolDefinition> tools,
-                                      Set<String> elidedLookups, ZoneId senderTimeZone) {
+                                      Set<String> elidedLookups, ZoneId senderTimeZone, int maxResponseTokens) {
         if (!elidedLookups.isEmpty()) {
             conversationMessages = elidePastLookups(conversationMessages, elidedLookups);
         }
-        int reservedForResponse = reservedForResponse(contextWindow);
+        int reservedForResponse = reservedForResponse(contextWindow, maxResponseTokens);
         int historyWindow = contextWindow - reservedForResponse;
         int fixedTokens = fixedTokens(systemPrompt, tools);
         int effectiveWindow = historyWindow - fixedTokens;
@@ -214,9 +229,13 @@ public final class ContextBuilder {
         return tokens;
     }
 
-    /** {@link #RESERVED_FOR_RESPONSE}, or half the window when that would leave under {@link #MIN_HISTORY}. */
-    static int reservedForResponse(int contextWindow) {
-        return contextWindow - RESERVED_FOR_RESPONSE >= MIN_HISTORY ? RESERVED_FOR_RESPONSE : contextWindow / 2;
+    /**
+     * The agent's {@code maxResponseTokens} plus {@link #RESPONSE_BUFFER}, or half the window when that
+     * would leave under {@link #MIN_HISTORY}.
+     */
+    static int reservedForResponse(int contextWindow, int maxResponseTokens) {
+        int standard = maxResponseTokens + RESPONSE_BUFFER;
+        return contextWindow - standard >= MIN_HISTORY ? standard : contextWindow / 2;
     }
 
     private static List<Message> elidePastLookups(List<Message> messages, Set<String> elidedLookups) {

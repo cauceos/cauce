@@ -18,8 +18,9 @@ import java.util.List;
  * @param fixedTokens        estimated tokens of the system prompt and the tool schemas, counted
  *                           against the window before the messages
  * @param contextWindowLimit the model's total context window, for info/debugging
- * @param reservedForResponse tokens held back for the response plus buffer: 8K + 2K, or half
- *                           of a window too small for that
+ * @param reservedForResponse tokens held back for the response: the agent's response tokens plus
+ *                           {@link ContextBuilder#RESPONSE_BUFFER}, or half of a window too small for
+ *                           that
  */
 public record LlmInvocationContext(
         List<LlmMessage> messages,
@@ -35,12 +36,12 @@ public record LlmInvocationContext(
 
     /**
      * The response tokens to ask the model for, given the agent's {@code requested}: in a window
-     * too small for the standard reservation, no more than was held back for the response, so
-     * that history and response together fit the window the provider serves. Otherwise the
-     * agent's own number, unchanged.
+     * too small for the standard reservation ({@code requested} plus the buffer), no more than was
+     * held back for the response, so that history and response together fit the window the
+     * provider serves. Otherwise the agent's own number, unchanged.
      */
     public int responseTokens(int requested) {
-        return reservedForResponse < ContextBuilder.RESERVED_FOR_RESPONSE
+        return reservedForResponse < requested + ContextBuilder.RESPONSE_BUFFER
                 ? Math.min(requested, reservedForResponse)
                 : requested;
     }

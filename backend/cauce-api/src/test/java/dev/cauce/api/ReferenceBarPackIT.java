@@ -86,8 +86,8 @@ class ReferenceBarPackIT extends AbstractBusinessApiIT {
     }
 
     @Test
-    void theBarsCustomerAgent_onAServedWindowOf16384_answers() throws Exception {
-        llm.serveContextWindow(16_384); // what QUICKSTART advises for the bar on Ollama
+    void theBarsCustomerAgent_onAServedWindowOf32768_answers() throws Exception {
+        llm.serveContextWindow(32_768); // what QUICKSTART and the pack's README advise for the bar on Ollama
         UUID agentId = createCustomerAgent();
 
         String invocationId = postHola(agentId);
