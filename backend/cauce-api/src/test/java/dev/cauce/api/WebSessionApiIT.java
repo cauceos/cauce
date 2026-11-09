@@ -110,10 +110,17 @@ class WebSessionApiIT extends AbstractBusinessApiIT {
                 """).andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("consent_required"));
         open(key, """
                 {"turnstile_token": "token-bueno", "consent": true}
+                """).andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("consent_required"));
+        open(key, """
+                {"turnstile_token": "token-bueno", "consent": true, "notice_version": "es-1"}
                 """).andExpect(status().isCreated());
 
-        assertThat(admin.queryForObject("SELECT consented_at IS NOT NULL AND length(consent_notice_hash) = 64 "
-                + "FROM web_sessions", Boolean.class)).isTrue();
+        // What was accepted: the widget's notice text, by its version, and the privacy link.
+        String expected = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest("notice:es-1\nprivacy:https://tienda.example.com/privacidad"
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertThat(admin.queryForObject("SELECT consent_notice_hash FROM web_sessions WHERE consented_at IS NOT NULL",
+                String.class)).isEqualTo(expected);
     }
 
     @Test

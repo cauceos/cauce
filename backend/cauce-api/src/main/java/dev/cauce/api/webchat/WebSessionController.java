@@ -34,7 +34,8 @@ public class WebSessionController {
                                                     @Valid @RequestBody OpenSessionRequest request) {
         TenantContext.setCurrentTenantId(channel.tenantId());
         try {
-            WebSessionService.Opened opened = sessions.open(channel, request.turnstileToken(), request.consent());
+            WebSessionService.Opened opened = sessions.open(channel, request.turnstileToken(), request.consent(),
+                    request.noticeVersion());
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(new OpenSessionResponse(opened.token(), opened.session().expiresAt()));
         } finally {

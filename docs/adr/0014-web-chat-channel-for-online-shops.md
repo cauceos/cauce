@@ -283,6 +283,10 @@ and `admin.channel.enabled`. The switch takes effect at once and deletes nothing
 - **Its tenant's spend limit may then be removed.** WC3 holds the limit in place only while a web
   chat is active. Enabling a web chat again needs the limit, as creation does.
 - The web channel goes on no public page before W3.
+- **What was accepted** (WC5) is the widget's notice text, by its version, together with the privacy
+  link. With acceptance, the widget sends `notice_version` with the session request, and the
+  session records SHA-256 of `notice:{version}` and `privacy:{url}`. A change to either is a
+  different notice.
 
 ## References
 

@@ -37,6 +37,7 @@ public class WebSessionService {
 
     static final String SESSION_OPENED = "conduct.web.session.opened";
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final java.util.regex.Pattern NOTICE_VERSION = java.util.regex.Pattern.compile("[A-Za-z0-9._-]{1,32}");
 
     private final WebSessionRepository sessions;
     private final ChannelConfigRepository configRepository;
@@ -68,16 +69,31 @@ public class WebSessionService {
      * Opens a session on {@code channel}, under its tenant's context.
      *
      * @throws ChannelDisabledException if the channel is switched off
-     * @throws ConsentRequiredException if the channel asks for acceptance and {@code consent} is not true
+     * @throws ConsentRequiredException if the channel asks for acceptance and {@code consent} is not true,
+     *         or the widget did not say which version of its notice text the person accepted
      * @throws TurnstileRejectedException if the Turnstile token does not verify
      * @throws TurnstileUnavailableException if Turnstile cannot be asked
      */
     @Transactional
     public Opened open(ResolvedWebChat channel, String turnstileToken, Boolean consent) {
+        return open(channel, turnstileToken, consent, null);
+    }
+
+    /**
+     * {@link #open(ResolvedWebChat, String, Boolean)} with the version of the widget's notice text the
+     * person saw: with acceptance, what was accepted is that text and the privacy link, and the
+     * session records a hash of both.
+     */
+    @Transactional
+    public Opened open(ResolvedWebChat channel, String turnstileToken, Boolean consent, String noticeVersion) {
         channel.requireActive();
         boolean acceptance = channel.consentMode() == ConsentMode.ACCEPTANCE;
         if (acceptance && !Boolean.TRUE.equals(consent)) {
             throw new ConsentRequiredException("This channel asks for the privacy notice to be accepted first");
+        }
+        if (acceptance && (noticeVersion == null || !NOTICE_VERSION.matcher(noticeVersion).matches())) {
+            throw new ConsentRequiredException("An accepted notice needs the notice_version of the widget's text "
+                    + "(1-32 letters, digits, '.', '_' or '-')");
         }
         ChannelConfig config = configRepository.findById(channel.channelConfigId()).map(configMapper::toDomain)
                 .orElseThrow(() -> new TurnstileRejectedException("No such channel"));
@@ -88,7 +104,7 @@ public class WebSessionService {
         var now = clock.instant();
         WebSessionEntity entity = new WebSessionEntity(UuidGenerator.newV7(), channel.tenantId(),
                 channel.channelConfigId(), hasher.hash(token), now.plus(Duration.ofDays(properties.getSessionDays())),
-                acceptance ? now : null, acceptance ? noticeHash(channel) : null);
+                acceptance ? now : null, acceptance ? noticeHash(noticeVersion, channel.privacyPolicyUrl()) : null);
         WebSession session = sessions.save(entity).toDomain();
         auditRecorder.record(new AuditEvent(channel.tenantId(), SESSION_OPENED, Map.of(
                 "session_id", session.id().toString(),
@@ -137,11 +153,14 @@ public class WebSessionService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    /** A hash of what the person accepted: the notice is the widget's fixed text and this link. */
-    private static String noticeHash(ResolvedWebChat channel) {
+    /**
+     * A hash of what the person accepted (ADR 0014, amendment): the version of the widget's notice text
+     * and the privacy link, so a later change of either is a different notice.
+     */
+    static String noticeHash(String noticeVersion, String privacyPolicyUrl) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(("privacy:" + channel.privacyPolicyUrl()).getBytes(StandardCharsets.UTF_8));
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(("notice:" + noticeVersion + "\nprivacy:"
+                    + privacyPolicyUrl).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
