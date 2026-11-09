@@ -8,7 +8,9 @@ import java.util.UUID;
  * ({@link InvocationRequested}) through the agentic loop's rounds ({@link ContextAssembled},
  * {@link LlmInvoked}, {@link LlmResponded} or {@link LlmFailed}, {@link ToolCallRequested}, {@link ToolExecuted})
  * to a terminal outcome ({@link InvocationCompleted} or {@link InvocationFailed}, the latter
- * followed by {@link FallbackSent} when the person got the fallback reply).
+ * followed by {@link FallbackSent} when the person got the fallback reply). {@link ConversationClosed}
+ * goes with the {@link InvocationRequested} of a message that found its thread past the agent's
+ * window and opened a new one (ADR 0013).
  *
  * <p>Events are emitted synchronously via Spring's {@code ApplicationEventPublisher} at the
  * point where the step's effects are already durable (each loop round commits through short
@@ -18,7 +20,7 @@ import java.util.UUID;
  */
 public sealed interface OrchestrationEvent
         permits InvocationRequested, ContextAssembled, LlmInvoked, LlmResponded, LlmFailed,
-        ToolCallRequested, ToolExecuted, InvocationCompleted, InvocationFailed, FallbackSent {
+        ToolCallRequested, ToolExecuted, InvocationCompleted, InvocationFailed, FallbackSent, ConversationClosed {
 
     /** The id of the queued invocation ({@code pending_invocations} row) this event belongs to. */
     UUID invocationId();

@@ -60,6 +60,40 @@ public interface ConversationRepository extends JpaRepository<ConversationEntity
      * a setter; the caller passes the new message's timestamp for conversational
      * consistency. Subject to the conversations RLS policy in the current transaction.
      */
+    /**
+     * How long an OPEN conversation has gone without a conversational message, and its agent's
+     * window (ADR 0013, T2): seconds from its newest USER, AGENT or FALLBACK message (its start, when
+     * it has none) to the database's {@code now()}. Tool calls, tool results and SYSTEM records do
+     * not count. Empty when the conversation is not OPEN, or not visible (RLS).
+     */
+    @Query(value = """
+            SELECT CAST(EXTRACT(EPOCH FROM (now() - COALESCE(
+                       (SELECT max(m.created_at) FROM messages m
+                         WHERE m.conversation_id = c.id AND m.role IN ('USER', 'AGENT', 'FALLBACK')),
+                       c.started_at))) AS bigint) AS "idleSeconds",
+                   a.new_thread_after_hours AS "windowHours"
+              FROM conversations c JOIN agents a ON a.id = c.agent_id
+             WHERE c.id = :conversationId AND c.status = 'OPEN'
+            """, nativeQuery = true)
+    Optional<Inactivity> findInactivity(@Param("conversationId") UUID conversationId);
+
+    /** What {@link #findInactivity} reads. */
+    interface Inactivity {
+        long getIdleSeconds();
+
+        int getWindowHours();
+    }
+
+    /**
+     * Closes the conversation if it is still OPEN, stamping {@code closed_at} with the database's
+     * {@code now()} (ADR 0008). Returns 1 when this call closed it, 0 when it was no longer OPEN (a
+     * concurrent message closed it first). Subject to the conversations RLS policy.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "UPDATE conversations SET status = 'CLOSED', closed_at = now() "
+            + "WHERE id = :conversationId AND status = 'OPEN'", nativeQuery = true)
+    int closeIfOpen(@Param("conversationId") UUID conversationId);
+
     @Modifying
     @Query("update ConversationEntity c set c.lastMessageAt = :timestamp where c.id = :conversationId")
     int touchLastMessageAt(@Param("conversationId") UUID conversationId,

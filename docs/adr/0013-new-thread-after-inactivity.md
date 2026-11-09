@@ -55,7 +55,8 @@ asked for earlier, the same way it already uses `list_my_bookings`.
 ### T2 — R2b: the thread closes when the next message arrives, never on a timer
 
 Closing happens **inside the ingest transaction of the next inbound message**
-(`InboundMessageService`, ADR 0004), before the OPEN conversation is resolved. There is no
+(`InboundMessageService`, ADR 0004), right after the OPEN conversation is resolved and the
+idempotency key, if any, is claimed: a duplicate that lost the claim never touches the thread. There is no
 scheduled task. A thread nobody writes to stays OPEN until someone writes, and closing it then
 costs nothing extra.
 
@@ -68,9 +69,10 @@ costs nothing extra.
 **A conversational message is a USER message or a reply the person received: AGENT or FALLBACK.**
 TOOL_CALL, TOOL_RESULT and SYSTEM records do not count, and neither does
 `conversations.last_message_at`, which every append advances. The age is computed in SQL against
-`now()` (ADR 0008): `max(created_at)` over those roles of the conversation, compared with
-`now() - window`. `closed_at` is stamped with the database clock. As part of R2b, `close()` takes
-`now` as an argument, as the domain does elsewhere, instead of reading `Instant.now()`.
+`now()` (ADR 0008): `now() - max(created_at)` over those roles of the conversation (its
+`started_at` when it has none), compared with the window. `closed_at` is stamped with the
+database's `now()`. As part of R2b, `close()` takes `now` as an argument, as the domain does
+elsewhere, instead of reading `Instant.now()`.
 
 **Outbound notices do not count.** Owner notices, nightly digests and, when they exist, reminders
 are not messages of any conversation today (`OwnerNotificationSender` delivers them without an
@@ -80,9 +82,10 @@ that writes to a person must not keep that person's thread alive.
 **Race safety follows the existing pattern.** The close is a conditional
 `UPDATE ... SET status = 'CLOSED' WHERE id = ? AND status = 'OPEN'`. The new thread is created by
 the insert-first `ON CONFLICT DO NOTHING` + re-`SELECT` on the partial unique index over OPEN
-conversations. If two messages race, one closes and both land in the same new thread.
+conversations. If two messages race, one closes and both land in the same new thread: the
+other finds the thread no longer OPEN and resolves the OPEN one again.
 
-**An invocation in flight keeps its thread.** If the conversation has a PENDING or RUNNING
+**An invocation in flight keeps its thread.** If the conversation has a PENDING or PROCESSING
 invocation, it is not closed, whatever its age. The reply that is coming belongs to that thread.
 The reaper bounds the case. A claim older than `cauce.orchestration.worker.reaper.timeout-ms`
 (12 minutes by default) is treated as orphaned and goes back to PENDING, or to ABANDONED once its
@@ -110,9 +113,11 @@ Each close for inactivity emits `conduct.conversation.closed` into the subject t
 hours and the idle time in seconds. These are ids and non-sensitive metadata only, per the audit
 sink's rule.
 
-It also publishes an `OrchestrationEvent` (`ConversationClosed`, with the reason), which
-`cauce-observability` turns into a counter `cauce.conversations.closed{reason}`. The event is
-observational and published inside the ingest transaction. The in-memory metrics listener is
+It also publishes an `OrchestrationEvent`, `ConversationClosed`, with the invocation of the message
+that opened the new thread, the reason and the idle time. `cauce-observability` turns it into a
+counter `cauce.conversation.closed{tenant_id, agent_id, reason}`, next to the other
+`cauce.conversation.*` meters. The event is observational and published inside the ingest
+transaction. The in-memory metrics listener is
 exempt from the `AFTER_COMMIT` question (`docs/deferred.md`).
 
 ### T5 — Quotes in a case come only from the current thread

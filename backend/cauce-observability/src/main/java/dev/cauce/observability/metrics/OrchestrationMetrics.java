@@ -1,6 +1,7 @@
 package dev.cauce.observability.metrics;
 
 import dev.cauce.orchestration.events.ContextAssembled;
+import dev.cauce.orchestration.events.ConversationClosed;
 import dev.cauce.orchestration.events.FallbackSent;
 import dev.cauce.orchestration.events.InvocationCompleted;
 import dev.cauce.orchestration.events.InvocationFailed;
@@ -63,6 +64,7 @@ public class OrchestrationMetrics {
     static final String CUSTOMER_MESSAGE_GAP = "cauce.conversation.customer_message.gap";
     static final String TURN_LATENCY = "cauce.orchestration.turn.latency";
     static final String FALLBACKS = "cauce.orchestration.fallbacks";
+    static final String CONVERSATIONS_CLOSED = "cauce.conversation.closed";
     static final String TENANT = "tenant_id";
     static final String AGENT = "agent_id";
 
@@ -119,6 +121,9 @@ public class OrchestrationMetrics {
                             .record(completed.turnLatency());
                 }
             }
+            case ConversationClosed closed ->
+                    registry.counter(CONVERSATIONS_CLOSED, TENANT, closed.tenantId().toString(),
+                            AGENT, closed.agentId().toString(), "reason", closed.reason()).increment();
             case FallbackSent fallback ->
                     registry.counter(FALLBACKS, TENANT, fallback.tenantId().toString(),
                             AGENT, fallback.agentId().toString(),

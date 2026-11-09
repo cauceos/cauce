@@ -36,6 +36,9 @@ class InboundMessageServiceIT extends AbstractOrchestrationIntegrationTest {
     @Autowired
     private InboundMessageService inboundMessageService;
 
+    @Autowired
+    private dev.cauce.tenancy.ConversationService conversationService;
+
     private JdbcTemplate jdbc;
 
     private Tenant operator;
@@ -90,6 +93,104 @@ class InboundMessageServiceIT extends AbstractOrchestrationIntegrationTest {
         UUID owningTenant = jdbc.queryForObject(
                 "SELECT tenant_id FROM pending_invocations WHERE id = ?", UUID.class, result.invocationId());
         assertThat(owningTenant).isEqualTo(clientA.id());
+    }
+
+    @Test
+    void ingest_afterTheWindowWithoutAConversationalMessage_closesTheThread_andOpensANewOne() {
+        InboundMessageResult first = ingestAs(clientA.id(), agent.id(), "api", "user-1", "Hola");
+        answered(first, 25);
+
+        InboundMessageResult second = ingestAs(clientA.id(), agent.id(), "api", "user-1", "¿Seguís abiertos?");
+
+        assertThat(second.conversationId()).isNotEqualTo(first.conversationId());
+        assertThat(jdbc.queryForObject("SELECT status FROM conversations WHERE id = ?", String.class,
+                first.conversationId())).isEqualTo("CLOSED");
+        assertThat(jdbc.queryForObject("SELECT closed_at IS NOT NULL AND closed_at >= now() - interval '1 minute' "
+                + "FROM conversations WHERE id = ?", Boolean.class, first.conversationId())).isTrue();
+        assertThat(jdbc.queryForObject("SELECT status FROM conversations WHERE id = ?", String.class,
+                second.conversationId())).isEqualTo("OPEN");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM messages WHERE conversation_id = ? AND role = 'USER'",
+                Integer.class, second.conversationId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_outbox WHERE event_type = 'conduct.conversation.closed'",
+                Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void ingest_withinTheWindow_orWithAWindowOf0_keepsTheThread() {
+        InboundMessageResult first = ingestAs(clientA.id(), agent.id(), "api", "user-1", "Hola");
+        answered(first, 23);
+        assertThat(ingestAs(clientA.id(), agent.id(), "api", "user-1", "Otra").conversationId())
+                .isEqualTo(first.conversationId());
+
+        jdbc.update("UPDATE agents SET new_thread_after_hours = 0 WHERE id = ?", agent.id());
+        jdbc.update("UPDATE pending_invocations SET status = 'COMPLETED', completed_at = now() WHERE conversation_id = ?", first.conversationId());
+        jdbc.update("UPDATE messages SET created_at = now() - interval '30 days' WHERE conversation_id = ?",
+                first.conversationId());
+        assertThat(ingestAs(clientA.id(), agent.id(), "api", "user-1", "Un mes después").conversationId())
+                .isEqualTo(first.conversationId());
+    }
+
+    @Test
+    void ingest_countsOnlyConversationalMessages_aFallbackAsOne_aSystemRecordNot() {
+        InboundMessageResult first = ingestAs(clientA.id(), agent.id(), "api", "user-1", "Hola");
+        answered(first, 30);
+        // A recent SYSTEM record does not keep the thread open (nor would a tool call or result).
+        insertMessage(first.conversationId(), "SYSTEM", "[orchestration_error] x", 1);
+        InboundMessageResult afterSystem = ingestAs(clientA.id(), agent.id(), "api", "user-1", "Hola otra vez");
+        assertThat(afterSystem.conversationId()).isNotEqualTo(first.conversationId());
+
+        // A recent FALLBACK does: the person received it.
+        answered(afterSystem, 30);
+        insertMessage(afterSystem.conversationId(), "FALLBACK", "Ahora no puedo responder.", 1);
+        assertThat(ingestAs(clientA.id(), agent.id(), "api", "user-1", "¿Y ahora?").conversationId())
+                .isEqualTo(afterSystem.conversationId());
+    }
+
+    @Test
+    void closeIfInactive_underAnotherBusinesssContext_doesNotSeeTheThread_underRls() {
+        InboundMessageResult first = ingestAs(clientA.id(), agent.id(), "api", "user-1", "Hola");
+        answered(first, 48);
+
+        TenantContext.setCurrentTenantId(clientB.id());
+        try {
+            assertThat(conversationService.closeIfInactive(first.conversationId()))
+                    .isInstanceOf(dev.cauce.tenancy.InactivityCheck.NoLongerOpen.class);
+        } finally {
+            TenantContext.clear();
+        }
+        assertThat(jdbc.queryForObject("SELECT status FROM conversations WHERE id = ?", String.class,
+                first.conversationId())).isEqualTo("OPEN");
+    }
+
+    @Test
+    void ingest_whileAnInvocationOfTheThreadIsInFlight_neverClosesIt() {
+        InboundMessageResult first = ingestAs(clientA.id(), agent.id(), "api", "user-1", "Hola");
+        // Still PENDING, as if the worker were stuck: the thread is old but its reply is coming.
+        jdbc.update("UPDATE messages SET created_at = now() - interval '3 days' WHERE conversation_id = ?",
+                first.conversationId());
+
+        assertThat(ingestAs(clientA.id(), agent.id(), "api", "user-1", "¿Hola?").conversationId())
+                .isEqualTo(first.conversationId());
+    }
+
+    /** The invocation of {@code ingested} completed and the agent answered, all {@code hoursAgo}. */
+    private void answered(InboundMessageResult ingested, int hoursAgo) {
+        jdbc.update("UPDATE pending_invocations SET status = 'COMPLETED', completed_at = now() WHERE conversation_id = ?",
+                ingested.conversationId());
+        insertMessage(ingested.conversationId(), "AGENT", "¡Hola! ¿En qué te ayudo?", 0);
+        jdbc.update("UPDATE messages SET created_at = now() - make_interval(hours => ?) WHERE conversation_id = ?",
+                hoursAgo, ingested.conversationId());
+        jdbc.update("UPDATE conversations SET started_at = now() - make_interval(hours => ?) WHERE id = ?",
+                hoursAgo, ingested.conversationId());
+    }
+
+    private void insertMessage(UUID conversationId, String role, String text, int minutesAgo) {
+        // A FALLBACK carries why the invocation failed (V28).
+        jdbc.update("INSERT INTO messages (id, conversation_id, role, parts, failure_type, created_at) VALUES (?, ?, ?, "
+                        + "jsonb_build_array(jsonb_build_object('type', 'text', 'text', ?::text)), ?, "
+                        + "now() - make_interval(mins => ?))",
+                UUID.randomUUID(), conversationId, role, text, "FALLBACK".equals(role) ? "LLM_ERROR" : null,
+                minutesAgo);
     }
 
     @Test

@@ -7,6 +7,7 @@ import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolResult;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +52,7 @@ public final class ConductAuditEvents {
     public static final String INVOCATION_FAILED = "conduct.invocation.failed";
     public static final String TOOL_CALLED = "conduct.tool.called";
     public static final String TOOL_RETURNED = "conduct.tool.returned";
+    public static final String CONVERSATION_CLOSED = "conduct.conversation.closed";
 
     // Reserved hook types — defined, never emitted until a transactional trigger exists.
     public static final String EXTERNAL_ACTION = "conduct.external.action";
@@ -76,6 +78,27 @@ public final class ConductAuditEvents {
                 "content_hash", AuditContentHash.ofParts(tenantId, userMessage.parts()),
                 "content_hash_version", AuditContentHash.PARTS_VERSION,
                 "content_length", userMessage.content().length()));
+    }
+
+    /**
+     * A thread closed for inactivity before the person's message, which opened {@code newConversationId}
+     * (ADR 0013, T4): which threads, the agent's window and how long the thread had gone without a
+     * conversational message. Ids and durations only, no content.
+     */
+    public static AuditEvent conversationClosed(UUID tenantId, UUID invocationId, UUID agentId,
+                                                UUID closedConversationId, UUID newConversationId,
+                                                int windowHours, Duration idle) {
+        Objects.requireNonNull(closedConversationId, "closedConversationId must not be null");
+        Objects.requireNonNull(newConversationId, "newConversationId must not be null");
+        Objects.requireNonNull(idle, "idle must not be null");
+        return new AuditEvent(tenantId, CONVERSATION_CLOSED, Map.of(
+                "invocation_id", invocationId.toString(),
+                "conversation_id", closedConversationId.toString(),
+                "new_conversation_id", newConversationId.toString(),
+                "agent_id", agentId.toString(),
+                "reason", "inactivity",
+                "window_hours", windowHours,
+                "idle_seconds", idle.toSeconds()));
     }
 
     /**

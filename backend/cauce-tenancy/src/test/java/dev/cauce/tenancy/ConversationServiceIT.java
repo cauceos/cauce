@@ -368,6 +368,38 @@ class ConversationServiceIT {
         assertThat(readTimestamp(conv.id(), "closed_at")).isEqualTo(closedAt); // unchanged
     }
 
+    @Test
+    void closeIfInactive_closesAThreadPastItsWindowByTheDatabaseClock_once() {
+        Conversation conversation = startForClientA("user-1");
+        jdbc.update("INSERT INTO messages (id, conversation_id, role, parts, created_at) VALUES (?, ?, 'USER', "
+                + "jsonb_build_array(jsonb_build_object('type', 'text', 'text', 'Hola')), now() - interval '2 days')",
+                UUID.randomUUID(), conversation.id());
+        jdbc.update("UPDATE conversations SET started_at = now() - interval '2 days' WHERE id = ?", conversation.id());
+
+        InactivityCheck check = asClientA(() -> conversationService.closeIfInactive(conversation.id()));
+
+        assertThat(check).isInstanceOfSatisfying(InactivityCheck.Closed.class, closed -> {
+            assertThat(closed.windowHours()).isEqualTo(24);
+            assertThat(closed.idle()).isBetween(java.time.Duration.ofHours(47), java.time.Duration.ofHours(49));
+        });
+        assertThat(jdbc.queryForObject("SELECT status FROM conversations WHERE id = ?", String.class,
+                conversation.id())).isEqualTo("CLOSED");
+        assertThat(asClientA(() -> conversationService.closeIfInactive(conversation.id())))
+                .as("closing twice: the second finds it closed").isInstanceOf(InactivityCheck.NoLongerOpen.class);
+    }
+
+    @Test
+    void closeIfInactive_keepsANewThread_andAnyThreadOfAnAgentWhoseWindowIs0() {
+        Conversation fresh = startForClientA("user-1");
+        assertThat(asClientA(() -> conversationService.closeIfInactive(fresh.id())))
+                .isInstanceOf(InactivityCheck.StillOpen.class);
+
+        jdbc.update("UPDATE agents SET new_thread_after_hours = 0 WHERE id = ?", agent.id());
+        jdbc.update("UPDATE conversations SET started_at = now() - interval '90 days' WHERE id = ?", fresh.id());
+        assertThat(asClientA(() -> conversationService.closeIfInactive(fresh.id())))
+                .isInstanceOf(InactivityCheck.StillOpen.class);
+    }
+
     private Conversation startForClientA(String clientReference) {
         return asClientA(() -> conversationService.startConversation(agent.id(), "api",
                 IdentityKind.CLIENT_REFERENCE, clientReference, null));

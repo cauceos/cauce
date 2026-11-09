@@ -118,6 +118,17 @@ public class PendingInvocationService {
                 .toList();
     }
 
+    /**
+     * Whether the conversation has an invocation still to answer, PENDING or PROCESSING: its thread is
+     * not closed for inactivity, since the reply that is coming belongs to it (ADR 0013, T2). The
+     * reaper bounds how long that lasts.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasInvocationInFlight(UUID conversationId) {
+        return pendingInvocationRepository.existsByConversationIdAndStatusIn(conversationId,
+                List.of(PendingInvocationStatus.PENDING, PendingInvocationStatus.PROCESSING));
+    }
+
     // === WORKER-FACING OPERATIONS (cross-tenant) ===
 
     /**

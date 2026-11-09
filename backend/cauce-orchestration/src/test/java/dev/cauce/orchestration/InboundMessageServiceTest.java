@@ -27,6 +27,7 @@ import dev.cauce.orchestration.persistence.IngestIdempotencyRecordEntity;
 import dev.cauce.orchestration.persistence.IngestIdempotencyRecordMapper;
 import dev.cauce.orchestration.persistence.IngestIdempotencyRecordRepository;
 import dev.cauce.tenancy.ConversationService;
+import dev.cauce.tenancy.InactivityCheck;
 import dev.cauce.tenancy.MessageService;
 import java.time.Instant;
 import java.util.Optional;
@@ -53,6 +54,7 @@ class InboundMessageServiceTest {
     @BeforeEach
     void setUp() {
         conversationService = mock(ConversationService.class);
+        when(conversationService.closeIfInactive(any())).thenReturn(new InactivityCheck.StillOpen());
         messageService = mock(MessageService.class);
         pendingInvocationService = mock(PendingInvocationService.class);
         idempotencyRecordRepository = mock(IngestIdempotencyRecordRepository.class);
@@ -89,6 +91,62 @@ class InboundMessageServiceTest {
         inOrder.verify(conversationService).resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null);
         inOrder.verify(messageService).appendMessage(conversation.id(), MessageRole.USER, text("Hola"));
         inOrder.verify(pendingInvocationService).enqueueInvocation(conversation.id(), userMessage.id(), null);
+    }
+
+    @Test
+    void ingest_aThreadPastItsWindow_isClosed_andTheMessageOpensANewOne_auditedAndPublished() {
+        UUID agentId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        Conversation old = Conversation.start(agentId, API_IDENTITY, null);
+        Conversation fresh = Conversation.start(agentId, API_IDENTITY, null);
+        Message userMessage = Message.from(fresh.id(), MessageRole.USER, "Hola");
+        PendingInvocation invocation = PendingInvocation.create(tenantId, fresh.id(), userMessage.id());
+        when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
+                .thenReturn(old, fresh);
+        when(conversationService.closeIfInactive(old.id()))
+                .thenReturn(new InactivityCheck.Closed(java.time.Duration.ofHours(50), 24));
+        when(messageService.appendMessage(fresh.id(), MessageRole.USER, text("Hola"))).thenReturn(userMessage);
+        when(pendingInvocationService.enqueueInvocation(fresh.id(), userMessage.id(), null)).thenReturn(invocation);
+
+        InboundMessageResult result = service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
+
+        assertThat(result.conversationId()).isEqualTo(fresh.id());
+        ArgumentCaptor<dev.cauce.core.audit.AuditEvent> audited = ArgumentCaptor.forClass(dev.cauce.core.audit.AuditEvent.class);
+        verify(auditRecorder, org.mockito.Mockito.times(2)).record(audited.capture());
+        dev.cauce.core.audit.AuditEvent closing = audited.getAllValues().get(0);
+        assertThat(closing.eventType()).isEqualTo("conduct.conversation.closed");
+        assertThat(closing.tenantId()).isEqualTo(tenantId);
+        assertThat(closing.payload()).containsEntry("conversation_id", old.id().toString())
+                .containsEntry("new_conversation_id", fresh.id().toString())
+                .containsEntry("reason", "inactivity").containsEntry("window_hours", 24)
+                .containsEntry("idle_seconds", 180_000L);
+        ArgumentCaptor<Object> published = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, org.mockito.Mockito.times(2)).publishEvent(published.capture());
+        assertThat(published.getAllValues()).anySatisfy(event -> {
+            assertThat(event).isInstanceOf(dev.cauce.orchestration.events.ConversationClosed.class);
+            var closedEvent = (dev.cauce.orchestration.events.ConversationClosed) event;
+            assertThat(closedEvent.invocationId()).isEqualTo(invocation.id());
+            assertThat(closedEvent.reason()).isEqualTo("inactivity");
+            assertThat(closedEvent.idle()).isEqualTo(java.time.Duration.ofHours(50));
+        });
+    }
+
+    @Test
+    void ingest_aThreadWithAnInvocationInFlight_isNeverCheckedForInactivity() {
+        UUID agentId = UUID.randomUUID();
+        Conversation conversation = Conversation.start(agentId, API_IDENTITY, null);
+        Message userMessage = Message.from(conversation.id(), MessageRole.USER, "Hola");
+        when(conversationService.resolveOrStartConversation(agentId, "api", IdentityKind.CLIENT_REFERENCE, "user-1", null))
+                .thenReturn(conversation);
+        when(pendingInvocationService.hasInvocationInFlight(conversation.id())).thenReturn(true);
+        when(messageService.appendMessage(conversation.id(), MessageRole.USER, text("Hola"))).thenReturn(userMessage);
+        when(pendingInvocationService.enqueueInvocation(conversation.id(), userMessage.id(), null))
+                .thenReturn(PendingInvocation.create(UUID.randomUUID(), conversation.id(), userMessage.id()));
+
+        InboundMessageResult result = service.ingest(agentId, "api", null, IdentityKind.CLIENT_REFERENCE, "user-1", "Hola");
+
+        assertThat(result.conversationId()).isEqualTo(conversation.id());
+        verify(conversationService, never()).closeIfInactive(any());
     }
 
     @Test

@@ -113,6 +113,15 @@ class OrchestrationMetricsTest {
     }
 
     @Test
+    void on_conversationClosed_countsItPerTenantAgentAndReason() {
+        metrics.on(new dev.cauce.orchestration.events.ConversationClosed(INVOCATION_ID, TENANT_ID, AGENT_ID,
+                "inactivity", java.time.Duration.ofHours(30), NOW));
+
+        assertThat(registry.counter(OrchestrationMetrics.CONVERSATIONS_CLOSED, "tenant_id", TENANT_ID.toString(),
+                "agent_id", AGENT_ID.toString(), "reason", "inactivity").count()).isEqualTo(1.0);
+    }
+
+    @Test
     void on_invocationFailed_tagsFailureType() {
         metrics.on(new InvocationFailed(INVOCATION_ID, InvocationFailureType.LLM_ERROR,
                 "401", NOW));

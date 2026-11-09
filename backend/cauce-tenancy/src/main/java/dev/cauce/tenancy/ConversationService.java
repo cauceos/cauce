@@ -12,6 +12,7 @@ import dev.cauce.memory.conversation.ConversationEntity;
 import dev.cauce.memory.conversation.ConversationMapper;
 import dev.cauce.memory.conversation.ConversationRepository;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -140,6 +141,31 @@ public class ConversationService {
         return findActiveConversation(candidate.agentId(), candidate.identityId(), channelConfigId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Expected an OPEN conversation after insert-or-skip for agent " + candidate.agentId()));
+    }
+
+    /**
+     * Closes the OPEN conversation {@code conversationId} if it has gone longer than its agent's
+     * window without a conversational message (ADR 0013, T2): a USER, AGENT or FALLBACK message,
+     * never a tool call, a tool result or a SYSTEM record. The age is the database's, from
+     * {@code now()} (ADR 0008), and so is {@code closed_at}. An agent whose window is 0 never
+     * closes. The close is conditional on the thread still being OPEN, so of two messages racing,
+     * one closes and the other finds it {@link InactivityCheck.NoLongerOpen}.
+     */
+    @Transactional
+    public InactivityCheck closeIfInactive(UUID conversationId) {
+        Optional<ConversationRepository.Inactivity> inactivity = conversationRepository.findInactivity(conversationId);
+        if (inactivity.isEmpty()) {
+            return new InactivityCheck.NoLongerOpen();
+        }
+        int windowHours = inactivity.get().getWindowHours();
+        long idleSeconds = inactivity.get().getIdleSeconds();
+        if (windowHours == 0 || idleSeconds < windowHours * 3600L) {
+            return new InactivityCheck.StillOpen();
+        }
+        if (conversationRepository.closeIfOpen(conversationId) == 0) {
+            return new InactivityCheck.NoLongerOpen();
+        }
+        return new InactivityCheck.Closed(Duration.ofSeconds(idleSeconds), windowHours);
     }
 
     /** Lists the conversations of an agent; RLS filters out agents the context cannot see. */

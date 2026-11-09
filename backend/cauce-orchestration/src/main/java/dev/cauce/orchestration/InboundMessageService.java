@@ -9,12 +9,14 @@ import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.orchestration.audit.ConductAuditEvents;
+import dev.cauce.orchestration.events.ConversationClosed;
 import dev.cauce.orchestration.events.InvocationRequested;
 import dev.cauce.orchestration.exception.InvalidIdempotencyKeyException;
 import dev.cauce.orchestration.persistence.IngestIdempotencyRecordMapper;
 import dev.cauce.orchestration.persistence.IngestIdempotencyRecordRepository;
 import dev.cauce.orchestration.tracing.MessageTracing;
 import dev.cauce.tenancy.ConversationService;
+import dev.cauce.tenancy.InactivityCheck;
 import dev.cauce.tenancy.MessageService;
 import java.time.Duration;
 import java.time.Instant;
@@ -189,6 +191,22 @@ public class InboundMessageService {
             }
         }
 
+        // ADR 0013, T2: a thread past its agent's window closes now, and this message opens a new one,
+        // unless an invocation of it is still in flight. After the idempotency claim, so a duplicate
+        // that lost it never touches the thread.
+        UUID closedConversationId = null;
+        InactivityCheck.Closed closed = null;
+        if (!pendingInvocationService.hasInvocationInFlight(conversation.id())) {
+            InactivityCheck check = conversationService.closeIfInactive(conversation.id());
+            if (check instanceof InactivityCheck.Closed byThis) {
+                closedConversationId = conversation.id();
+                closed = byThis;
+            }
+            if (check instanceof InactivityCheck.Closed || check instanceof InactivityCheck.NoLongerOpen) {
+                conversation = conversationService.resolveOrStartConversation(
+                        agentId, channelType, identityKind, identityValue, channelConfigId);
+            }
+        }
         MDC.put(LogKeys.CONVERSATION_ID, conversation.id().toString());
         // ADR 0010, S10: how long the person took since their previous message, for the cache retention.
         Optional<Instant> previousMessageAt = messageService.lastMessageAt(conversation.id(), MessageRole.USER);
@@ -204,6 +222,12 @@ public class InboundMessageService {
         // rolls back, no audit record survives — absence of the fact means absence of the
         // record. Only the winning path records: an idempotent replay is audit-silent, like
         // it is event-silent.
+        if (closed != null) {
+            auditRecorder.record(ConductAuditEvents.conversationClosed(invocation.tenantId(), invocation.id(),
+                    agentId, closedConversationId, conversation.id(), closed.windowHours(), closed.idle()));
+            eventPublisher.publishEvent(new ConversationClosed(invocation.id(), invocation.tenantId(), agentId,
+                    ConversationClosed.INACTIVITY, closed.idle(), Instant.now()));
+        }
         auditRecorder.record(ConductAuditEvents.messageReceived(invocation.tenantId(),
                 invocation.id(), agentId, channelType, conversation.identityId(), userMessage));
         // Published synchronously INSIDE the ingest transaction: if it rolls back, the event

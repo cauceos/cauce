@@ -2,6 +2,7 @@ package dev.cauce.orchestration.persistence;
 
 import dev.cauce.orchestration.PendingInvocationStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,6 +26,8 @@ public interface PendingInvocationRepository extends JpaRepository<PendingInvoca
     List<PendingInvocationEntity> findByTenantId(UUID tenantId);
 
     List<PendingInvocationEntity> findByConversationId(UUID conversationId);
+
+    boolean existsByConversationIdAndStatusIn(UUID conversationId, Collection<PendingInvocationStatus> statuses);
 
     List<PendingInvocationEntity> findByStatus(PendingInvocationStatus status);
 
