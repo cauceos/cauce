@@ -64,6 +64,8 @@ pasa.
                                   # de otra persona salvo mismo_cliente: true (la reserva, al revés)
     - pregunta: "¿Tenéis wifi?"
     - dueno_vinculado: false      # por defecto el dueño está vinculado
+    - hilo_nuevo_tras_horas: 0    # la ventana del agente de clientes (ADR 0013): 0, nunca un hilo
+                                  # nuevo; sin esta entrada, la del agente (24 h)
     - hilo_anterior: {hace_dias: 2, cliente: "¿Abrís los lunes?", agente: "Hoy es {+0}. ..."}
                                   # el hilo de la persona, abierto hace N días y sin cerrar: su mensaje,
                                   # la consulta de get_current_time de aquel día (consulta_reloj: false
@@ -92,6 +94,7 @@ pasa.
           preguntas: 1                                             # preguntas sin respuesta anotadas
           avisos: {HANDOFF: 1}                                     # avisos al dueño, por tipo
           aviso: {tipo: HANDOFF, estado: NOT_SENT, motivo: no_owner_recipient}
+          hilos: {OPEN: 1, CLOSED: 1}                              # hilos de la persona con el agente
         rubrica: "..."             # criterio para el juez, solo donde no hay otra forma de comprobarlo
   cubierto_por: BookingIT#...      # test de integración que ya garantiza lo que impone el código
   nota: ...                        # texto libre, no se comprueba

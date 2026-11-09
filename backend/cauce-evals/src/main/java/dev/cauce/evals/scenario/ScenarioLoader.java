@@ -31,6 +31,7 @@ public final class ScenarioLoader {
 
     static final Set<String> STATUSES = Set.of("HELD", "CONFIRMED", "CANCELLED");
     static final Set<String> CASE_STATUSES = Set.of("OPEN", "RESOLVED");
+    static final Set<String> THREAD_STATUSES = Set.of("OPEN", "CLOSED");
     static final Set<String> NOTICE_KINDS = Set.of("HANDOFF", "DAILY_DIGEST");
     static final Set<String> BOOKING_FIELDS = Set.of("estado", "fecha", "turno", "hora", "personas", "codigo",
             "contacto");
@@ -102,9 +103,13 @@ public final class ScenarioLoader {
         for (Setup setup : s.setup()) {
             int set = (setup.booking() != null ? 1 : 0) + (setup.handoff() != null ? 1 : 0)
                     + (setup.question() != null ? 1 : 0) + (setup.ownerLinked() != null ? 1 : 0)
-                    + (setup.earlierThread() != null ? 1 : 0);
+                    + (setup.earlierThread() != null ? 1 : 0) + (setup.newThreadAfterHours() != null ? 1 : 0);
             require(set == 1, where + "each previo entry holds exactly one of reserva, caso, pregunta, dueno_vinculado, "
-                    + "hilo_anterior");
+                    + "hilo_anterior, hilo_nuevo_tras_horas");
+            if (setup.newThreadAfterHours() != null) {
+                require(setup.newThreadAfterHours() >= 0 && setup.newThreadAfterHours() <= 8760,
+                        where + "hilo_nuevo_tras_horas must be between 0 (never) and 8760");
+            }
             if (setup.earlierThread() != null) {
                 Scenario.SetupThread t = setup.earlierThread();
                 require(t.daysAgo() != null && t.daysAgo() >= 1, where + "hilo_anterior needs hace_dias >= 1");
@@ -171,6 +176,7 @@ public final class ScenarioLoader {
             keysIn(where + "estado.reservas", state.bookingCounts(), STATUSES);
             keysIn(where + "estado.reserva", state.booking(), BOOKING_FIELDS);
             keysIn(where + "estado.casos", state.caseCounts(), CASE_STATUSES);
+            keysIn(where + "estado.hilos", state.threadCounts(), THREAD_STATUSES);
             keysIn(where + "estado.caso", state.handoff(), CASE_FIELDS);
             keysIn(where + "estado.avisos", state.noticeCounts(), NOTICE_KINDS);
             keysIn(where + "estado.aviso", state.notice(), NOTICE_FIELDS);

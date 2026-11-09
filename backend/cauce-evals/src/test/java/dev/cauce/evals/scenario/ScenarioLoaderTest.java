@@ -74,6 +74,45 @@ class ScenarioLoaderTest {
     }
 
     @Test
+    void theThreadWindow_isAPrevioEntryFrom0ToAYear_andTheThreadsAreAStateInTheirVocabulary() throws Exception {
+        Scenario loaded = loader.load(file("""
+                - id: X7
+                  titulo: t
+                  nivel: aviso
+                  datos: bar-ejemplo
+                  previo:
+                    - hilo_nuevo_tras_horas: 0
+                  turnos:
+                    - cliente: "hola"
+                      espera:
+                        estado: {hilos: {OPEN: 1, CLOSED: 0}}
+                """)).get(0);
+
+        assertThat(loaded.setup().get(0).newThreadAfterHours()).isZero();
+        assertThat(loaded.turns().get(0).expectation().state().threadCounts()).containsEntry("OPEN", 1);
+        assertThatThrownBy(() -> loader.load(file("""
+                - id: X8
+                  titulo: t
+                  nivel: aviso
+                  datos: bar-ejemplo
+                  previo:
+                    - hilo_nuevo_tras_horas: -1
+                  turnos:
+                    - cliente: "hola"
+                """))).isInstanceOf(InvalidScenarioException.class).hasMessageContaining("hilo_nuevo_tras_horas");
+        assertThatThrownBy(() -> loader.load(file("""
+                - id: X9
+                  titulo: t
+                  nivel: aviso
+                  datos: bar-ejemplo
+                  turnos:
+                    - cliente: "hola"
+                      espera:
+                        estado: {hilos: {ARCHIVED: 1}}
+                """))).isInstanceOf(InvalidScenarioException.class).hasMessageContaining("ARCHIVED");
+    }
+
+    @Test
     void anUnknownKey_isALoadError_notAScenarioThatPasses() throws Exception {
         assertThatThrownBy(() -> loader.load(file("""
                 - id: X1

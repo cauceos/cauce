@@ -272,6 +272,7 @@
   datos: bar-ejemplo
   origen: prueba real del 2026-10-24 (un hilo abierto el jueves guardaba la hora de aquel día; el sábado, el agente tomó «mañana» por el viernes 23)
   previo:
+    - hilo_nuevo_tras_horas: 0      # sin R2 (ADR 0013): el hilo de hace dos días sigue abierto, como aquel día
     - hilo_anterior:
         hace_dias: 2
         cliente: "¿Abrís los lunes?"
@@ -282,5 +283,26 @@
       espera:
         argumentos: {check_availability: {date: "{+1}"}}
         herramientas_no: [confirm_booking]
-        estado: {reservas: {CONFIRMED: 0}}
+        estado: {reservas: {CONFIRMED: 0}, hilos: {OPEN: 1, CLOSED: 0}}
   nota: "El hilo se siembra con fecha de hace dos días a las 10:00 del bar, con la consulta de get_current_time de aquel día y la respuesta del agente que dice qué día era: lo mismo que había en la conversación real. «Mañana» es hoy + 1."
+
+- id: H3.20
+  titulo: Quien vuelve dos días después empieza hilo nuevo y encuentra su reserva por herramienta
+  nivel: aviso
+  datos: bar-ejemplo
+  origen: R2b (ADR 0013, T6)
+  previo:
+    - hilo_anterior:
+        hace_dias: 2
+        cliente: "Quiero reservar mesa para cuatro, a nombre de Ana."
+        agente: "Hecho, Ana: tu reserva queda confirmada. ¡Te esperamos!"
+    - reserva: {fecha: proximo_sabado, turno: cena, hora: "21:30", personas: 4, estado: CONFIRMED,
+                contacto: Ana, mismo_cliente: true, como: r}
+  turnos:
+    - cliente: "Hola, ¿a qué hora era mi reserva?"
+      espera:
+        herramientas: [list_my_bookings]
+        herramientas_no: [propose_booking, confirm_booking]
+        respuesta_contiene: ["21:30"]
+        estado: {hilos: {OPEN: 1, CLOSED: 1}, reservas: {CONFIRMED: 1}}
+  nota: "El hilo de hace dos días pasa de las 24 h del agente: el mensaje lo cierra y abre otro, sin la conversación de la reserva. La hora solo puede salir de list_my_bookings."

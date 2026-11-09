@@ -119,3 +119,25 @@
         respuesta_no_contiene: ["sopa"]
         rubrica: "Dice que el dueño tiene su petición del cumpleaños; no dice cuándo responderá ni qué decidirá, y no abre otro caso."
   nota: "El caso de la persona está abierto y su conversación es nueva: lo que sabe del caso solo puede salir de list_my_cases. El de otra persona no aparece."
+
+- id: H4.9
+  titulo: Quien vuelve dos días después empieza hilo nuevo y encuentra su caso por herramienta
+  nivel: aviso
+  datos: bar-ejemplo
+  origen: R2b (ADR 0013, T6)
+  previo:
+    - hilo_anterior:
+        hace_dias: 2
+        cliente: "Queremos celebrar un cumpleaños de 25 personas, soy Ana, 600 123 456."
+        agente: "Gracias, Ana. Ya tiene el dueño tu petición del cumpleaños y te contactará."
+    - caso: {categoria: evento, contacto: Ana, estado: OPEN, mismo_cliente: true,
+             resumen: "Cumpleaños de 25 personas; pide menú cerrado."}
+  turnos:
+    - cliente: "Hola, ¿sabéis algo de lo del cumpleaños?"
+      espera:
+        herramientas: [list_my_cases]
+        herramientas_no: [escalate_to_owner]
+        respuesta_contiene: ["cumpleaños"]
+        estado: {hilos: {OPEN: 1, CLOSED: 1}, casos: {OPEN: 1}}
+        rubrica: "Dice que el dueño tiene su petición del cumpleaños; no dice cuándo responderá ni qué decidirá, y no abre otro caso."
+  nota: "El hilo en que se pasó el caso al dueño queda cerrado por las 24 h del agente: lo que sabe del caso solo puede salir de list_my_cases."

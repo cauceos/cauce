@@ -82,6 +82,21 @@ class CheckerTest {
     }
 
     @Test
+    void theThreads_areCountedByStatus() {
+        TurnTrace returned = new TurnTrace("Hola", List.of(), "Hola", "Hola", null, new ObservedState(List.of(),
+                List.of(), 0, List.of(), 0, null, List.of("CLOSED", "OPEN")));
+        ExpectedState newThread = new ExpectedState(null, null, null, null, null, null, null, null,
+                Map.of("OPEN", 1, "CLOSED", 1));
+        ExpectedState sameThread = new ExpectedState(null, null, null, null, null, null, null, null,
+                Map.of("OPEN", 1, "CLOSED", 0));
+
+        assertThat(checker.check("turno 1", expectation(null, null, null, null, null, null, newThread), returned))
+                .extracting(CheckResult::outcome).containsOnly(Outcome.PASS);
+        assertThat(checker.check("turno 1", expectation(null, null, null, null, null, null, sameThread), returned))
+                .extracting(CheckResult::outcome).contains(Outcome.FAIL);
+    }
+
+    @Test
     void theState_isMatchedInItsVocabulary_countsByStatus_andRelativeDates() {
         ExpectedState state = new ExpectedState(Map.of("CONFIRMED", 1, "HELD", 1),
                 Map.of("estado", "HELD", "personas", 6, "codigo", "$r.codigo", "fecha", "proximo_sabado", "hora", "21:30"),

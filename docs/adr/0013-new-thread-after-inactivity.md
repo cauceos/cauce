@@ -1,7 +1,7 @@
 # ADR 0013: A new thread after inactivity, and the person's open cases by tool
 
-Status: Accepted, not implemented. Records R2 as decided in the strategic chat on 2026-11-09, in
-two units: R2a (`list_my_cases`) and R2b (closing on inactivity). R2a lands first, because R2b
+Status: Accepted and implemented (2026-11-09). Records R2 as decided in the strategic chat on
+2026-11-09, in two units: R2a (`list_my_cases`) and R2b (closing on inactivity). R2a lands first, because R2b
 only works if nothing depends on the history. Confirmed the same day: a FALLBACK counts as
 activity, and an invocation in flight keeps its thread because the reaper bounds that case (T2).
 
@@ -140,9 +140,11 @@ as the customer's words is something the agent saw in its context.
   comes back and asks how it is going. The checks are: a new thread, `list_my_cases`, and the case's
   code or category in the reply, with no promise of an answer on the owner's behalf.
 
-The harness gains a scenario-level setting for the agent's window. `hilo_anterior` gains the
-ability to leave a booking or a case behind it. It already backdates the messages, which is what
-T2 reads.
+The harness gains the agent's window as a `previo` entry (`hilo_nuevo_tras_horas`) and the
+person's threads as a state (`hilos: {OPEN: n, CLOSED: n}`). A booking or a case is left behind
+the earlier thread by seeding it for the same person next to `hilo_anterior`
+(`mismo_cliente: true`). `hilo_anterior` already backdates the messages, which is what T2 reads.
+The scenarios are H3.19 (window 0, one thread), H3.20 (the booking) and H4.9 (the case).
 
 ## Consequences
 
@@ -151,7 +153,7 @@ T2 reads.
   tools, and anything a future tool writes must be readable the same way, or R2 drops it.
 - A booking proposed and left unconfirmed for more than a day is confirmed in a new thread from
   `list_my_bookings` (it lists those waiting for confirmation), not from the old proposal's text.
-- R2b removes the R2 entry from `docs/deferred.md`.
+- R2b removed the R2 entry from `docs/deferred.md`.
 - The web channel (ADR 0014, after R2) keeps its 30-day session independent of this window. A
   session survives a new thread, and R2 closes the thread, not the identity.
 

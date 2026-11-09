@@ -71,7 +71,8 @@ public record Scenario(
             @JsonProperty("caso") SetupCase handoff,
             @JsonProperty("pregunta") String question,
             @JsonProperty("dueno_vinculado") Boolean ownerLinked,
-            @JsonProperty("hilo_anterior") SetupThread earlierThread) {
+            @JsonProperty("hilo_anterior") SetupThread earlierThread,
+            @JsonProperty("hilo_nuevo_tras_horas") Integer newThreadAfterHours) {
     }
 
     /**
@@ -165,6 +166,14 @@ public record Scenario(
             @JsonProperty("preguntas") Integer questions,
             @JsonProperty("avisos") Map<String, Integer> noticeCounts,
             @JsonProperty("aviso") Map<String, Object> notice,
-            @JsonProperty("resumenes") Integer digests) {
+            @JsonProperty("resumenes") Integer digests,
+            @JsonProperty("hilos") Map<String, Integer> threadCounts) {
+
+        /** A state that names no threads. */
+        public ExpectedState(Map<String, Integer> bookingCounts, Map<String, Object> booking,
+                             Map<String, Integer> caseCounts, Map<String, Object> handoff, Integer questions,
+                             Map<String, Integer> noticeCounts, Map<String, Object> notice, Integer digests) {
+            this(bookingCounts, booking, caseCounts, handoff, questions, noticeCounts, notice, digests, null);
+        }
     }
 }

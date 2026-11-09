@@ -144,6 +144,18 @@ final class EvalWorld {
                 throw new IllegalStateException("Could not turn R1 on for the customer agent: " + patched);
             }
         }
+        Optional<Integer> window = scenario.setup().stream().map(Setup::newThreadAfterHours)
+                .filter(java.util.Objects::nonNull).findFirst();
+        if (window.isPresent()) {
+            // ADR 0013, T3: the scenario sets how long the person's thread waits before a new one.
+            String patched = s.mockMvc().perform(patch("/v1/agents/" + customer).header(HttpHeaders.AUTHORIZATION, auth)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(s.json().writeValueAsString(Map.of("new_thread_after_hours", window.get()))))
+                    .andReturn().getResponse().getContentAsString();
+            if (s.json().readTree(patched).path("new_thread_after_hours").asInt(-1) != window.get()) {
+                throw new IllegalStateException("Could not set the customer agent's thread window: " + patched);
+            }
+        }
         UUID owner = createAgent(s, auth, tenantId, "Canal del dueño", read(s.packDir().resolve("agente-dueno.prompt.md")),
                 names(grants.get("agente_dueno")), fallbacks.get("agente_dueno").asText(), agentProvider, agentModel);
         EvalWorld world = new EvalWorld(s, scenario, tenantId, auth, customer);
@@ -308,8 +320,12 @@ final class EvalWorld {
                         rs.getString("content")), tenantId);
         List<String> digests = admin.queryForList("SELECT content FROM daily_digests WHERE tenant_id = ? "
                 + "ORDER BY created_at, id", String.class, tenantId);
+        // The person's threads with the customer agent, oldest first (ADR 0013).
+        List<String> threads = admin.queryForList("SELECT c.status FROM conversations c JOIN identities i "
+                + "ON i.id = c.identity_id WHERE c.agent_id = ? AND i.value = ? ORDER BY c.id", String.class,
+                customerAgentId, PERSON);
         return new ObservedState(bookings, cases, questions == null ? 0 : questions, notices, digests.size(),
-                digests.isEmpty() ? null : digests.get(digests.size() - 1));
+                digests.isEmpty() ? null : digests.get(digests.size() - 1), threads);
     }
 
     private void linkOwner(UUID ownerAgentId) throws Exception {

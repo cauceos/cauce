@@ -25,12 +25,19 @@ public record TurnTrace(String message, List<ToolUse> tools, String reply, Strin
 
     /** The business's records after the turn, in the vocabulary of the expected state. */
     public record ObservedState(List<ObservedBooking> bookings, List<ObservedCase> cases, int questions,
-                                List<ObservedNotice> notices, int digests, String latestDigest) {
+                                List<ObservedNotice> notices, int digests, String latestDigest, List<String> threads) {
 
         public ObservedState {
             bookings = List.copyOf(bookings);
             cases = List.copyOf(cases);
             notices = List.copyOf(notices);
+            threads = List.copyOf(threads);
+        }
+
+        /** A state read without the person's threads. */
+        public ObservedState(List<ObservedBooking> bookings, List<ObservedCase> cases, int questions,
+                             List<ObservedNotice> notices, int digests, String latestDigest) {
+            this(bookings, cases, questions, notices, digests, latestDigest, List.of());
         }
     }
 

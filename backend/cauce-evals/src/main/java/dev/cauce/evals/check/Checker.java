@@ -120,6 +120,13 @@ public final class Checker {
             boolean found = observed.bookings().stream().anyMatch(b -> matches(expected.booking(), b));
             results.add(CheckResult.of(name + " · reserva " + expected.booking(), found, "reservas: " + observed.bookings()));
         }
+        if (expected.threadCounts() != null) {
+            expected.threadCounts().forEach((status, count) -> {
+                long actual = observed.threads().stream().filter(status::equals).count();
+                results.add(CheckResult.of(name + " · hilos " + status, actual == count,
+                        "esperados " + count + ", hay " + actual + " " + observed.threads()));
+            });
+        }
         if (expected.caseCounts() != null) {
             expected.caseCounts().forEach((status, count) -> {
                 long actual = observed.cases().stream().filter(c -> c.status().equals(status)).count();

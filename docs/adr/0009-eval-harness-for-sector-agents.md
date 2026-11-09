@@ -192,7 +192,8 @@ failing check one example excerpt of the transcript.
 - A change to a prompt, a tool description or the model can be measured before and after with the
   same scenarios, the same N and a recorded cost. The first two such experiments are recorded in
   `docs/deferred.md`: R1 (eliding past turns' tool results, watching G1) and R2 (a new thread after
-  inactivity, with a "comes back the next day" scenario).
+  inactivity, with a "comes back the next day" scenario; decided in ADR 0013 and built, with H3.20
+  and H4.9).
 - The scenario files change shape (v2). The pack's README and `evals/README.md` document it, and the
   load-time validation keeps them honest.
 - Blocking is narrow on purpose: with 36 of 37 scenarios mandatory, a 100 % gate on all of them
