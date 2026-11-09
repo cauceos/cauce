@@ -170,7 +170,10 @@ on the same set of scenarios: rate deltas, new failures and fixed ones.
 *Amended 2026-10-25:* a run writes its summary to `historial-nuevo/`, which git ignores, and moving
 it into `historial/` is the explicit step of committing it. An untracked summary in `historial/`
 made `git checkout` of a newer tree fail, and a run from the old tree went on unnoticed. A run is
-compared only with the committed history: a summary never moved into it was not kept. For the
+compared only with the committed history: a summary never moved into it was not kept. *Amended
+2026-11-09:* "committed" is what `git ls-files` lists in `historial/`. A file left loose in the
+folder is never compared with (`1349Z` was compared with an untracked `0932Z`), and without git
+the run is compared with none. For the
 same reason as the folder, a selected scenario or task that does not exist fails the run instead of being skipped.
 
 ### E12 — The report

@@ -51,6 +51,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -182,9 +183,15 @@ class EvalBatteryRun {
         PriceTable prices = PriceTable.load(SETTINGS.evalsDir().resolve("precios.yaml"));
         Optional<PriceTable.Price> agentPrice = prices.priceOf(SETTINGS.agentProvider(), SETTINGS.agentModel());
         Optional<PriceTable.Price> judgePrice = judge.flatMap(j -> prices.priceOf(j.providerId(), j.model()));
-        // Compared only with what is in the history: a summary not moved into it was not kept.
+        // Compared only with what git keeps in the history (ADR 0009, E11): a summary moved into the
+        // folder but never committed, or one left there by another tree, was not kept.
+        Optional<Set<Path>> kept = GitState.trackedIn(SETTINGS.repoRoot(), SETTINGS.historyDir());
+        if (kept.isEmpty()) {
+            System.out.println("Sin git no se sabe qué guarda el historial: la ejecución no se compara con ninguna.");
+        }
         Optional<RunSummary> previous = Report.previous(SETTINGS.historyDir(),
-                SETTINGS.agentProvider() + "/" + SETTINGS.agentModel());
+                SETTINGS.agentProvider() + "/" + SETTINGS.agentModel(),
+                file -> kept.map(files -> files.contains(file.toAbsolutePath().normalize())).orElse(false));
         Long inPerTurn = previous.filter(p -> p.tokens() != null && p.tokens().modelTurns() > 0)
                 .map(p -> p.tokens().input() / p.tokens().modelTurns()).orElse(null);
         Long outPerTurn = previous.filter(p -> p.tokens() != null && p.tokens().modelTurns() > 0)

@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -45,11 +46,19 @@ public final class Report {
      * same model, or, the first time a model runs, the most recent of any. The report names it.
      */
     public static Optional<RunSummary> previous(Path history, String agentModel) {
+        return previous(history, agentModel, file -> true);
+    }
+
+    /**
+     * As {@link #previous(Path, String)}, among the files {@code kept} accepts only: the runner passes
+     * those git tracks, so a summary left loose in the folder is never compared with (ADR 0009, E11).
+     */
+    public static Optional<RunSummary> previous(Path history, String agentModel, Predicate<Path> kept) {
         if (!Files.isDirectory(history)) {
             return Optional.empty();
         }
         try (Stream<Path> files = Files.list(history)) {
-            List<RunSummary> newestFirst = files.filter(f -> f.toString().endsWith(".json"))
+            List<RunSummary> newestFirst = files.filter(f -> f.toString().endsWith(".json")).filter(kept)
                     .sorted(Comparator.comparing((Path f) -> f.getFileName().toString()).reversed())
                     .map(Report::read)
                     .toList();

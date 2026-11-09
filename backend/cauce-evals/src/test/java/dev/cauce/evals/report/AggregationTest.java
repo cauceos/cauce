@@ -191,6 +191,25 @@ class AggregationTest {
     }
 
     @Test
+    void previous_skipsASummaryTheHistoryDoesNotKeep_evenIfItIsNewer(@org.junit.jupiter.api.io.TempDir
+                                                                     java.nio.file.Path dir) throws Exception {
+        java.nio.file.Path kept = dir.resolve("2026-10-24T1550Z-claude-sonnet-5-5.json");
+        java.nio.file.Files.writeString(kept, """
+                {"fecha": "2026-10-24T15:50Z", "modelo": "anthropic/claude-sonnet-5-5", "n": 5, "completa": true,
+                 "tasa_global": 1.0, "arbol_con_cambios": false, "escenarios": []}
+                """);
+        // The loose summary of 1349Z's worktree: newer, in the folder, never committed.
+        java.nio.file.Files.writeString(dir.resolve("2026-10-25T0932Z-claude-sonnet-5-5.json"), """
+                {"fecha": "2026-10-25T09:32Z", "modelo": "anthropic/claude-sonnet-5-5", "n": 5, "completa": true,
+                 "tasa_global": 0.9, "arbol_con_cambios": false, "escenarios": []}
+                """);
+
+        assertThat(Report.previous(dir, "anthropic/claude-sonnet-5-5", kept::equals)).get()
+                .extracting(RunSummary::date).isEqualTo("2026-10-24T15:50Z");
+        assertThat(Report.previous(dir, "anthropic/claude-sonnet-5-5", file -> false)).isEmpty();
+    }
+
+    @Test
     void aScenarioWithLongWrites_andNoLongWritePrice_hasNoCost() {
         PriceTable.Price shortOnly = new PriceTable.Price("anthropic", "m", 2.0, 2.5, null, 0.1, 10.0, "2026-10-23");
         Aggregation.Meta meta = new Aggregation.Meta("2026-10-23T08:00Z", "abc", false, "anthropic/m", "ninguno",

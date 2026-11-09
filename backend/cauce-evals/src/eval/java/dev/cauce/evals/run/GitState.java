@@ -4,7 +4,10 @@ import dev.cauce.evals.report.Provenance;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * The tree a run comes from, read with git: its commit, whether it has uncommitted changes, and how
@@ -41,6 +44,23 @@ final class GitState {
             return new Provenance("desconocido", List.of(), UPSTREAM, null);
         }
         return new Provenance(commit, changed, UPSTREAM, behind(repoRoot));
+    }
+
+    /**
+     * The files git tracks under {@code dir}, as absolute normalized paths; empty without git. A tracked
+     * file deleted from the working tree is listed, but there is nothing to read.
+     */
+    static Optional<Set<Path>> trackedIn(Path repoRoot, Path dir) {
+        try {
+            Path root = repoRoot.toAbsolutePath().normalize();
+            String relative = root.relativize(dir.toAbsolutePath().normalize()).toString().replace('\\', '/');
+            return Optional.of(command(root, "git", "ls-files", "--", relative).lines()
+                    .filter(line -> !line.isBlank())
+                    .map(line -> root.resolve(line.strip()).normalize())
+                    .collect(Collectors.toUnmodifiableSet()));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
     }
 
     /** The path of a {@code --porcelain} line ("XY path", or "XY old -> new" for a rename). */
