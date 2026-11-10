@@ -136,15 +136,31 @@ termina ahí, queda fuera de todas las tasas del agente y el informe la muestra 
 
 Dos reglas valen para **todos los turnos de todos los escenarios**, sin escribirlas en cada uno:
 
-- **G1**: si la respuesta nombra un precio o un alérgeno de la carta, o un plato que el agente no
-  había nombrado en una respuesta anterior de la conversación, ese turno ha llamado a
-  `search_catalog`.
-- **Carta sin inventar**: cada precio que nombra la respuesta, y cada plato que no había nombrado
-  antes, aparece en un resultado de herramienta de ese mismo turno.
+- **G1**: si la respuesta nombra un importe o un alérgeno del catálogo, o un producto que el agente
+  no había nombrado en una respuesta anterior de la conversación, ese turno ha llamado a
+  `search_catalog`, salvo que otra herramienta del mismo turno ya lo diga (el Plan Tienda que nombra
+  la ficha, el plan de un caso que devuelve `list_my_cases`).
+- **Carta sin inventar**: cada importe que escribe la respuesta, sea del catálogo o no, y cada
+  producto que no había nombrado antes, aparece en un resultado de herramienta de ese mismo turno.
+  Una cifra que dijo el cliente y el agente repite, para aceptarla o para rechazarla, no aparece en
+  ninguno.
 
-Volver a nombrar un plato ya nombrado, sin afirmar nada de él («te he anotado la duda de la tarta de
-queso»), no es hablar de la carta: su primera mención ya pasó las dos reglas en su turno. Cualquier
-precio o alérgeno sigue exigiendo la consulta en el turno (G3, `1349Z`).
+Valen para cualquier catálogo, una carta o unos planes: los importes se comparan como números (la
+herramienta escribe `"49"`, la respuesta `49 €`) y las palabras de un producto no se buscan a través
+de un signo de puntuación. Volver a nombrar un producto ya nombrado, sin afirmar nada de él («te he
+anotado la duda de la tarta de queso»), no es hablar del catálogo: su primera mención ya pasó las dos
+reglas en su turno. Cualquier importe o alérgeno sigue exigiendo la consulta en el turno (G3, `1349Z`).
+
+### Cambiar una comprobación después de una ejecución
+
+Una ejecución ya hecha se puede **re-evaluar sin volver a ejecutarla** solo si la comprobación nueva
+mira únicamente el texto de las respuestas (`respuesta_contiene`, `respuesta_no_contiene`): el texto
+está entero en las trazas del informe, así que aplicarle la regla nueva da lo mismo que una ejecución
+nueva. Se re-evalúa con la misma regla del arnés (sin distinguir mayúsculas ni espacios, basta una
+alternativa), el resumen del historial se conserva tal como se escribió y la `linea-base.md` del
+paquete dice la tasa re-evaluada y por qué (`1446Z` de CauceWebs). Si la comprobación nueva mira
+herramientas, argumentos o estado, o es una regla general, hace falta una **batería nueva**: las
+trazas no guardan los resultados de las herramientas ni el estado de cada turno.
 
 ### Niveles
 
