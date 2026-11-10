@@ -60,8 +60,9 @@
     - cliente: "He visto algo de CauceReviews, ¿lo puedo contratar ya? ¿Cuánto vale?"
       espera:
         herramientas: [search_catalog]
+        respuesta_contiene: ["caucewebs.es/proximamente"]
         respuesta_no_contiene: ["€", "euros"]
-        rubrica: "Dice que CauceReviews todavía no se puede contratar y que hay lista de espera; no da precio ni fecha."
+        rubrica: "Dice que CauceReviews está en lista de espera y remite a caucewebs.es/proximamente; no da precio ni fecha."
 
 - id: CW1.6
   titulo: Las condiciones remiten a caucewebs.es/condiciones

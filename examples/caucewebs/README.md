@@ -35,15 +35,22 @@ node examples/caucewebs/comprobar-precios.mjs                                   
 node examples/caucewebs/comprobar-precios.mjs --web https://staging.caucewebs.es  # contra otra copia de la web
 ```
 
-Lee las páginas públicas (precios, webs, tiendas, vídeos, preguntas, condiciones, próximamente) y
-avisa de cada diferencia: un precio de plan que no coincide con la tabla de `/precios/`, un importe
-que el paquete escribe (en el catálogo o en la ficha) y que no sale en ninguna página, o un servicio
-`previsto` que `/proximamente/` no enseña. Sale con 1 si hay alguna diferencia, o si no encuentra un
+Lee las páginas públicas (precios, webs, tiendas, vídeos, preguntas, condiciones, próximamente,
+recomienda) y avisa de cada diferencia: un precio de plan que no coincide con la tabla de `/precios/`,
+una cifra del programa de recomendación de `/recomienda/` (el 20 % del bar nuevo y su precio del
+primer año en cada plan, los 49 € y el 50 % de quien recomienda) que la ficha no dice tal cual, un
+importe o un porcentaje que el paquete escribe (en el catálogo o en la ficha) y que no sale en ninguna
+página, o un servicio `previsto` que `/proximamente/` no enseña. Sale con 1 si hay alguna diferencia, o si no encuentra un
 precio porque la página cambió de forma: entonces se revisa a mano y se ajusta el script. No se
 commitea con diferencias.
 
 Lo previsto (CauceReviews, CauceTeam) está en el catálogo porque la web lo enseña en `/proximamente/`;
-si deja de enseñarlo, sale del catálogo. De lo que no está en el catálogo el agente dice «ahora mismo
-no lo ofrecemos», sin anunciar productos futuros.
+si deja de enseñarlo, sale del catálogo. El agente lo nombra solo si le preguntan: «en lista de espera»,
+con el enlace a caucewebs.es/proximamente, sin fechas ni precios. De lo que no está en el catálogo dice
+«ahora mismo no lo ofrecemos», sin anunciar productos futuros.
+
+El programa de recomendación es una condición publicada, no una rebaja: está en la ficha
+(`recomienda_bar_nuevo`, `recomienda_quien_trae`) con las cifras exactas de caucewebs.es/recomienda,
+y el agente lo cuenta solo cuando viene a cuento, nunca como descuento que se negocia.
 
 `ReferenceCauceWebsPackIT` comprueba que la ficha, el catálogo y los dos agentes se cargan tal cual.

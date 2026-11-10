@@ -63,7 +63,7 @@
     },
     {
       "ref": "caucereviews", "section": "Módulos", "name": "CauceReviews",
-      "description": "Más reseñas en Google, todas respondidas, y cada semana sabes cómo vas frente a los bares de tu calle. Aún no se puede contratar: hay lista de espera.",
+      "description": "Más reseñas en Google, todas respondidas, y cada semana sabes cómo vas frente a los bares de tu calle. Aún no se puede contratar: está en lista de espera en caucewebs.es/proximamente.",
       "attributes": {
         "estado": "previsto",
         "precio": "sin precio todavía"
@@ -71,7 +71,7 @@
     },
     {
       "ref": "cauceteam", "section": "Módulos", "name": "CauceTeam",
-      "description": "Los camareros fichan con el móvil, los turnos se hacen en dos minutos y el registro horario queda listo si viene Inspección. Aún no se puede contratar: hay lista de espera.",
+      "description": "Los camareros fichan con el móvil, los turnos se hacen en dos minutos y el registro horario queda listo si viene Inspección. Aún no se puede contratar: está en lista de espera en caucewebs.es/proximamente.",
       "attributes": {
         "estado": "previsto",
         "precio": "sin precio todavía"

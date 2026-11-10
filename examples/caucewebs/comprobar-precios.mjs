@@ -22,15 +22,16 @@ const catalog = JSON.parse(readFileSync(option('--catalogo', join(here, 'caucewe
 const sheet = JSON.parse(readFileSync(option('--ficha', join(here, 'caucewebs', 'ficha.json')), 'utf8'));
 
 // Las páginas públicas donde salen precios y condiciones.
-const PAGES = ['', 'precios', 'webs', 'tiendas', 'videos', 'preguntas', 'condiciones', 'condiciones-tienda', 'proximamente'];
+const PAGES = ['', 'precios', 'webs', 'tiendas', 'videos', 'preguntas', 'condiciones', 'condiciones-tienda', 'proximamente', 'recomienda'];
 
 function text(html) {
   return html
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    // The site writes "20 %" and "49 €" with a non-breaking space; the pack, with a plain one.
+    .replace(/&nbsp;|[  ]/g, ' ')
     .replace(/\s+/g, ' ');
 }
 
@@ -45,6 +46,7 @@ for (const page of PAGES) {
   pages[page || 'portada'] = text(await response.text());
 }
 
+const everything = Object.values(pages).join(' ');
 const euros = (s) => Number(s.replace(/\./g, '').replace(',', '.'));
 const shown = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ','));
 const AMOUNT = '(\\d{1,4}(?:,\\d{2})?)\\s*€';
@@ -79,8 +81,38 @@ for (const { ref, field, page, pattern } of PUBLISHED) {
   }
 }
 
+// El programa de recomendación: cada cifra que /recomienda/ publica tiene que estar, tal cual, en la ficha.
+const REFERRAL = [
+  { fact: 'recomienda_bar_nuevo', what: 'descuento del bar nuevo', pattern: 'paga un (\\d{1,3}) % menos su primer año', unit: '%' },
+  { fact: 'recomienda_bar_nuevo', what: 'Básico, primer año', pattern: `Básico ${AMOUNT} Su primer año` },
+  { fact: 'recomienda_bar_nuevo', what: 'Básico con dominio, primer año', pattern: `Básico \\+ dominio ${AMOUNT} Su primer año` },
+  { fact: 'recomienda_bar_nuevo', what: 'Plus, primer año', pattern: `Plus ${AMOUNT} Su primer año` },
+  { fact: 'recomienda_quien_trae', what: 'premio del primer bar', pattern: `Tu primer bar ${AMOUNT} menos` },
+  { fact: 'recomienda_quien_trae', what: 'premio de cada bar más', pattern: `Cada bar más ${AMOUNT} menos` },
+  { fact: 'recomienda_quien_trae', what: 'porcentaje de cada bar más', pattern: 'cada uno de los siguientes, un (\\d{1,3}) %', unit: '%' },
+];
+for (const { fact, what, pattern, unit = '€' } of REFERRAL) {
+  const ours = sheet.facts?.[fact];
+  const match = pages.recomienda.match(new RegExp(pattern));
+  if (!ours) {
+    differences.push(`ficha, ${fact}: no está, pero ${web}/recomienda/ publica el programa.`);
+  } else if (!match) {
+    differences.push(`recomendación (${what}): no lo encuentro en ${web}/recomienda/; revísalo a mano y ajusta este script si la página cambió.`);
+  } else if (!ours.includes(`${match[1]} ${unit}`)) {
+    differences.push(`ficha, ${fact} (${what}): la web publica ${match[1]} ${unit} y la ficha no lo dice.`);
+  } else {
+    ok.push(`recomendación (${what}): ${match[1]} ${unit}`);
+  }
+}
+for (const [key, value] of Object.entries(sheet.facts ?? {})) {
+  for (const m of String(value).matchAll(/(\d{1,3}) %/g)) {
+    if (!new RegExp(`(^|\\D)${m[1]} %`).test(everything)) {
+      differences.push(`ficha, ${key}: escribe ${m[1]} %, que no sale en ninguna página de ${web}.`);
+    }
+  }
+}
+
 // Cada importe que escribe el paquete (descripciones, atributos y ficha) tiene que salir en alguna página.
-const everything = Object.values(pages).join(' ');
 const written = new Map();
 const collect = (where, value) => {
   for (const m of String(value).matchAll(/(\d{1,4}(?:,\d{2})?)\s*€/g)) {
