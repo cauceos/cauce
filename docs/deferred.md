@@ -109,6 +109,10 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 - **Chain break and failure states in `--color-danger`.** `.interface-design/system.md` makes danger (`#C8664B` + `--color-danger-bg`) the error signal, always with icon and label; neither token exists in `tokens.css` yet, and the playground still paints the broken chain link and failure marks in slate (`audit.css`, `conversation.css`). The same unit covers revoked keys and failed invocations.
 - **UI copy into the `src/i18n/` catalogue.** User-facing strings are literals in the components; `system.md` requires them in a per-locale catalogue (`en` only) so adding Spanish is one file. The vocabulary guard already scans `src/i18n/`.
 
+## Tests
+
+- **An IT's `TRUNCATE` can deadlock with the async worker of the previous test.** The cauce-api ITs share one Spring context, so the `PendingInvocationWorker` may still be processing an earlier test's invocation when the next test's setup truncates the tables: Postgres reports a deadlock (seen in `WebChatRateLimitsApiIT` on 2026-11-10, green on rerun), and the cut-off invocation logs an RLS violation on `llm_usage_records`. The fix is to quiesce the worker (or wait for it to drain) before the setup truncates, in the shared IT base; not done yet because it touches every IT's setup.
+
 ## Modules not started
 
 - `cauce-enterprise` contains only a `package-info.java`.
