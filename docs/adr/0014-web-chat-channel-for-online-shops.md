@@ -2,8 +2,9 @@
 
 Status: **Accepted** (2026-11-09, unit W0, with the owner's approval). Proposed the same day from
 the strategic chat's decisions (WC1–WC8), and completed in W0 with the public surface, the limits
-and the units. W1 (the channel, its public key and per-config CORS), W2 (sessions) and W3
-(messages, polling, bounds and request limits) are built; W4–W7 are not. The first shop is
+and the units. W1 (the channel, its public key and per-config CORS), W2 (sessions), W3 (messages,
+polling, bounds and request limits) and W4 (the widget, `frontend/web-widget`) are built; W5–W7 are
+not. The first shop is
 CauceWebs (amendment of 2026-11-10).
 
 ## Context

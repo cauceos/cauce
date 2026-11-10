@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Demo del widget en móvil</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #374151; font-family: system-ui, sans-serif; color: #fff; }
+    iframe { width: 390px; height: 844px; border: 0; border-radius: 24px; background: #fff; display: block; }
+  </style>
+</head>
+<body>
+  <!-- The demo at a phone's width (390 x 844), so the widget's media queries apply as on a phone. -->
+  <iframe id="phone" title="Teléfono de 390 por 844"></iframe>
+  <script>
+    document.getElementById('phone').src = 'index.html' + location.search
+  </script>
+</body>
+</html>

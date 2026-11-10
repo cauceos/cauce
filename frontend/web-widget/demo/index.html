@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo del widget</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; color: #111827; background: #f9fafb; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px 120px; line-height: 1.6; }
+    h1 { font-size: 1.75rem; }
+    code { background: #e5e7eb; padding: 1px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Página de prueba del chat web</h1>
+    <p>Esta página carga <code>dist/cauce-widget.js</code> como lo haría una tienda: una sola etiqueta
+      <code>&lt;script&gt;</code> con la clave pública del canal. Ábrela con
+      <code>?key=pk_…&amp;instance=http://localhost:8080</code>. Ejecuta antes <code>npm run build</code>.</p>
+    <p>El contenido de la página no debe quedar tapado: el botón del chat vive en una esquina y el panel
+      solo aparece al abrirlo.</p>
+  </main>
+  <script>
+    // As a shop's page would embed it, but with the key and the instance from this demo's URL.
+    const params = new URLSearchParams(location.search)
+    const script = document.createElement('script')
+    script.src = '/dist/cauce-widget.js'
+    script.defer = true
+    script.dataset.cauceKey = params.get('key') ?? ''
+    script.dataset.cauceInstance = params.get('instance') ?? 'http://localhost:8080'
+    document.body.appendChild(script)
+  </script>
+</body>
+</html>

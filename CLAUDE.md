@@ -66,6 +66,8 @@ What each module is *for* and which dependency rules it must respect. What each 
 
 - `playground` — a developer testing tool against a running Cauce instance, not the product. Sessions are memory-only; requests reach the instance through the Vite dev proxy (`/proxy/*` + `X-Cauce-Target` header). The static HTML mockups under `frontend/playground/referencias/` are the visual specification, not code.
 - `cauce-dashboard` — the operator interface for managing workspaces, agents, conversations, costs (Angular).
+- `web-widget` — the web chat a shop embeds (ADR 0014): one script, no framework, Shadow DOM, its look taken
+  from the channel's configuration. Its gate is `npm run build` (type-check, Vitest, bundle and weight budget).
 
 **Other top-level directories**:
 
