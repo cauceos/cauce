@@ -333,7 +333,8 @@ hash of the message. It has two versions, which coexist: nothing recorded is eve
   `parts` is the message as stored, an array of objects, each with its `type`: `text` (with
   `text`), `tool_call` (with `tool_call_id`, `tool_name`, `input`), `tool_result` (with
   `tool_call_id`, `tool_name`, `output`, `is_error`, and `product_cards` only when the result shows
-  some), `product_card` (with `ref`, in an agent's reply) or `audio`. An `audio` part, a voice note,
+  some), `product_card` (with `ref`, in an agent's reply), `page_context` (with `path` and, when
+  known, `product_ref`, `cart` of `ref` and `quantity`, and `greeting`, in a person's message) or `audio`. An `audio` part, a voice note,
   enters **as received**: with `media_type` and `provider_reference` only. What is learned of it
   later (the bytes' `sha256` and `size_bytes`, `duration_seconds`, the `transcript`) is stored in
   the same part but left out of this hash, which must not move once the message is audited; it

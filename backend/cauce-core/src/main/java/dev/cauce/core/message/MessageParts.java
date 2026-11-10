@@ -20,6 +20,8 @@ import java.util.Map;
  * {"type": "tool_result", "tool_call_id": "...", "tool_name": "...", "output": "...", "is_error": false,
  *  "product_cards": ["..."]}
  * {"type": "product_card", "ref": "..."}
+ * {"type": "page_context", "path": "/...", "product_ref": "...", "cart": [{"ref": "...", "quantity": 1}],
+ *  "greeting": "..."}
  * </pre>
  *
  * A tool result's {@code product_cards} is there only when it names some (ADR 0014, WC8), so a
@@ -47,6 +49,11 @@ public final class MessageParts {
     static final String KEY_IS_ERROR = "is_error";
     static final String KEY_PRODUCT_CARDS = "product_cards";
     static final String KEY_REF = "ref";
+    static final String KEY_PATH = "path";
+    static final String KEY_PRODUCT_REF = "product_ref";
+    static final String KEY_CART = "cart";
+    static final String KEY_QUANTITY = "quantity";
+    static final String KEY_GREETING = "greeting";
 
     private MessageParts() {
     }
@@ -99,6 +106,19 @@ public final class MessageParts {
                     }
                 }
                 case MessagePart.ProductCard card -> object.put(KEY_REF, card.ref());
+                case MessagePart.PageContext context -> {
+                    object.put(KEY_PATH, context.path());
+                    putIfKnown(object, KEY_PRODUCT_REF, context.productRef());
+                    if (!context.cart().isEmpty()) {
+                        object.put(KEY_CART, context.cart().stream().map(line -> {
+                            Map<String, Object> entry = new LinkedHashMap<>();
+                            entry.put(KEY_REF, line.ref());
+                            entry.put(KEY_QUANTITY, line.quantity());
+                            return entry;
+                        }).toList());
+                    }
+                    putIfKnown(object, KEY_GREETING, context.greeting());
+                }
             }
             json.add(object);
         }
@@ -128,10 +148,21 @@ public final class MessageParts {
                         (String) object.get(KEY_OUTPUT), Boolean.TRUE.equals(object.get(KEY_IS_ERROR)),
                         asStrings(object.get(KEY_PRODUCT_CARDS))));
                 case MessagePart.ProductCard.TYPE -> new MessagePart.ProductCard((String) object.get(KEY_REF));
+                case MessagePart.PageContext.TYPE -> new MessagePart.PageContext((String) object.get(KEY_PATH),
+                        (String) object.get(KEY_PRODUCT_REF), cartOf(object.get(KEY_CART)),
+                        (String) object.get(KEY_GREETING));
                 default -> throw new IllegalArgumentException("Unknown message part type: " + type);
             });
         }
         return parts;
+    }
+
+    private static List<MessagePart.PageContext.CartLine> cartOf(Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        return ((List<?>) value).stream().map(entry -> asMap(entry)).map(line -> new MessagePart.PageContext.CartLine(
+                (String) line.get(KEY_REF), asInteger(line.get(KEY_QUANTITY)))).toList();
     }
 
     private static List<String> asStrings(Object value) {

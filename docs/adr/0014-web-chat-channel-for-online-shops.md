@@ -391,6 +391,22 @@ page context; the events and their metrics; the widget; the pack's scenarios. Wh
   adapter declares the part types it carries beyond text (`carriedPartTypes`, none by default), the
   first piece of ADR 0004's unit 3. The web chat has no outbound adapter: its person reads the cards
   from the poll.
+- **The shop-assistant mode is the channel's `assistant`** (`PUT /v1/web-chat-channels/{id}/assistant`,
+  audited as `admin.web_chat.assistant_updated`), and the anonymous configuration read carries it
+  while it is on: the bubble, the button's label, the routes (a path prefix and the signals on there;
+  the longest prefix decides), the tuning of the signals, a template per signal and up to five
+  variants, each replacing the bubble, the templates or the signals. The two decisions of the data
+  controller are its `proactive_requires_consent` and `opening_counter`, both off by default.
+- **The page context is a part of the person's message**, `page_context`. The message request may carry
+  `context` (path, product on screen, cart) and `opening` (how the chat was opened, and the variant).
+  The service keeps the path without its query or fragment, so nothing a URL carries is stored, and only
+  the refs the catalog holds; a path that is not one leaves the context out and never refuses the
+  message. When the chat opened on a signal, the greeting is the channel's template for that signal and
+  variant, never text from the browser. The model reads the context as one labelled line after the
+  person's words.
+- **Openings and conversations are counted when the person writes**, as `cauce.web.openings` (kind,
+  signal) and `cauce.web.conversations`, tagged by channel config and variant; a variant the channel
+  does not declare reads as `none`. The `opening` itself is not stored.
 
 ## References
 

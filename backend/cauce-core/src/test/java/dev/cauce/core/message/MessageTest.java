@@ -324,4 +324,22 @@ class MessageTest {
                 List.of(new MessagePart.ProductCard("plan-plus")))).hasMessageContaining("blank");
         assertThatThrownBy(() -> new MessagePart.ProductCard(" ")).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void aPageContext_goesWithAPersonsMessage_once_andIsNotTheirWords() {
+        UUID conversation = UUID.randomUUID();
+        MessagePart.PageContext context = new MessagePart.PageContext("/pagar", "plan-plus", List.of(), null);
+        Message message = Message.fromParts(conversation, MessageRole.USER, List.of(new MessagePart.Text("¿Qué incluye?"),
+                context));
+
+        assertThat(message.content()).isEqualTo("¿Qué incluye?");
+        assertThat(message.pageContext()).contains(context);
+        assertThatThrownBy(() -> Message.fromParts(conversation, MessageRole.USER,
+                List.of(new MessagePart.Text("x"), context, context))).hasMessageContaining("at most one");
+        assertThatThrownBy(() -> Message.fromParts(conversation, MessageRole.AGENT,
+                List.of(new MessagePart.Text("x"), context))).hasMessageContaining("page context");
+        assertThatThrownBy(() -> new MessagePart.PageContext("/pagar?plan=x", null, List.of(), null))
+                .hasMessageContaining("path");
+        assertThatThrownBy(() -> new MessagePart.PageContext.CartLine("plan-plus", 0)).hasMessageContaining("quantity");
+    }
 }

@@ -89,4 +89,18 @@ class MessagePartsTest {
         assertThat(MessageParts.toJson(List.of(new MessagePart.ToolResultPart(ToolResult.success("c", "t", "o")))).get(0))
                 .doesNotContainKey("product_cards");
     }
+
+    @Test
+    void aPageContext_writesWhatItKnows_andReadsBackTheSame() {
+        MessagePart.PageContext full = new MessagePart.PageContext("/pagar", "plan-plus",
+                List.of(new MessagePart.PageContext.CartLine("plan-plus", 1)), "¿Te ayudo a terminar?");
+        MessagePart.PageContext bare = new MessagePart.PageContext("/", null, List.of(), null);
+
+        assertThat(MessageParts.fromJson(MessageParts.toJson(List.of(full, bare)))).containsExactly(full, bare);
+        assertThat(MessageParts.toJson(List.of(bare))).containsExactly(Map.of("type", "page_context", "path", "/"));
+        assertThat(MessageParts.fromJson(List.of(Map.of("type", "page_context", "path", "/pagar",
+                "cart", List.of(Map.of("ref", "plan-plus", "quantity", 1L))))).get(0))
+                .isEqualTo(new MessagePart.PageContext("/pagar", null,
+                        List.of(new MessagePart.PageContext.CartLine("plan-plus", 1)), null));
+    }
 }

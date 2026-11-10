@@ -125,13 +125,35 @@ public class WebChatChannelService implements SpendLimitRequirement {
         return channel;
     }
 
+    /**
+     * Replaces the shop-assistant mode of the web chat {@code channelConfigId} (ADR 0014, WC8), at once for
+     * every widget that reads its configuration next; null takes it away. Audited as
+     * {@code admin.web_chat.assistant_updated}, ids only.
+     *
+     * @throws dev.cauce.channels.config.ChannelConfigNotFoundException if it is not a visible web chat
+     */
+    @Transactional
+    public WebChatChannel updateAssistant(UUID channelConfigId, WebChatAssistant assistant) {
+        WebChatSettingsEntity entity = settingsRepository.findById(channelConfigId).orElseThrow(() ->
+                new dev.cauce.channels.config.ChannelConfigNotFoundException("No web chat channel found for id "
+                        + channelConfigId));
+        entity.setAssistant(writeJson(assistant));
+        settingsRepository.save(entity);
+        WebChatChannel channel = find(channelConfigId).orElseThrow();
+        auditRecorder.record(new dev.cauce.core.audit.AuditEvent(channel.config().tenantId(), ASSISTANT_UPDATED,
+                java.util.Map.of("channel_config_id", channelConfigId.toString(),
+                        "actor_tenant_id", TenantContext.getCurrentTenantId().orElseThrow().toString())));
+        return channel;
+    }
+
     /** The web chat {@code channelConfigId}, if it is visible under the current context (RLS). */
     @Transactional(readOnly = true)
     public Optional<WebChatChannel> find(UUID channelConfigId) {
         return configRepository.findById(channelConfigId).map(configMapper::toDomain)
                 .filter(ChannelConfig::isPublicKeyRouted)
                 .flatMap(config -> settingsRepository.findById(config.id())
-                        .map(entity -> new WebChatChannel(config, toDomain(entity), read(entity.getAppearance()))));
+                        .map(entity -> new WebChatChannel(config, toDomain(entity), read(entity.getAppearance()),
+                                readAssistant(entity.getAssistant()))));
     }
 
     /**
@@ -152,7 +174,7 @@ public class WebChatChannelService implements SpendLimitRequirement {
                 "ACTIVE".equals(row.getStatus()), new WebChatLimits(row.getSessions_per_ip_hour(),
                         row.getMessages_per_session_minute(), row.getMessages_per_session_day(),
                         row.getMessages_per_ip_minute(), row.getReads_per_session_minute()),
-                read(row.getAppearance())));
+                read(row.getAppearance()), readAssistant(row.getAssistant())));
     }
 
     @Override
@@ -162,14 +184,19 @@ public class WebChatChannelService implements SpendLimitRequirement {
     }
 
     static final String APPEARANCE_UPDATED = "admin.web_chat.appearance_updated";
+    static final String ASSISTANT_UPDATED = "admin.web_chat.assistant_updated";
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     private static String write(WebChatAppearance appearance) {
-        if (appearance == null) {
+        return writeJson(appearance);
+    }
+
+    private static String writeJson(Object value) {
+        if (value == null) {
             return null;
         }
         try {
-            return JSON.writeValueAsString(appearance);
+            return JSON.writeValueAsString(value);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalStateException(e);
         }
@@ -184,6 +211,18 @@ public class WebChatChannelService implements SpendLimitRequirement {
             return JSON.readValue(json, WebChatAppearance.class);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalStateException("A stored web-chat appearance cannot be read", e);
+        }
+    }
+
+    /** The stored shop-assistant mode; null when none is stored. A stored one was validated when written. */
+    private static WebChatAssistant readAssistant(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return JSON.readValue(json, WebChatAssistant.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("A stored web-chat assistant mode cannot be read", e);
         }
     }
 

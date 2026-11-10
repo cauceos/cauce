@@ -157,6 +157,44 @@ class WebChatChannelApiIT extends AbstractBusinessApiIT {
     }
 
     @Test
+    void theShopAssistantMode_isSetOnTheChannel_readByTheWidgetWhileOn_andItsShapeChecked() throws Exception {
+        setLimit();
+        String body = postJson(clientAuth, "/v1/agents/" + createAgent(clientId, clientAuth, List.of())
+                + "/web-chat-channels", CREATE).andExpect(status().isCreated()).andReturn().getResponse()
+                .getContentAsString();
+        String id = objectMapper.readTree(body).get("id").asText();
+        String key = objectMapper.readTree(body).get("public_key").asText();
+        String assistant = """
+                {"enabled": true, "bubble": "¿Te ayudo a elegir plan?", "card_button_label": "Contratar",
+                 "routes": [{"path": "/", "signals": ["comparing"]}, {"path": "/pagar", "signals": ["idle_cart", "exit_intent"]}],
+                 "templates": {"idle_cart": "¿Te ayudo a terminar?"},
+                 "variants": [{"id": "b", "bubble": "¿Hablamos?"}]}
+                """;
+        mockMvc.perform(get("/web/v1/" + key + "/config").header(HttpHeaders.ORIGIN, SHOP))
+                .andExpect(jsonPath("$.assistant").doesNotExist());
+
+        putAssistant(id, assistant).andExpect(status().isOk())
+                .andExpect(jsonPath("$.assistant.routes[1].path").value("/pagar"));
+        mockMvc.perform(get("/web/v1/" + key + "/config").header(HttpHeaders.ORIGIN, SHOP))
+                .andExpect(jsonPath("$.assistant.bubble").value("¿Te ayudo a elegir plan?"))
+                .andExpect(jsonPath("$.assistant.tuning.idle_cart_minutes").value(3))
+                .andExpect(jsonPath("$.assistant.variants[0].id").value("b"));
+        assertThat(new JdbcTemplate(adminDataSource).queryForObject("SELECT count(*) FROM audit_outbox WHERE "
+                + "event_type = 'admin.web_chat.assistant_updated'", Integer.class)).isEqualTo(1);
+
+        putAssistant(id, assistant.replace("\"comparing\"]", "\"on_load\"]")).andExpect(status().isBadRequest());
+        putAssistant(id, assistant.replace("\"enabled\": true", "\"enabled\": false")).andExpect(status().isOk());
+        mockMvc.perform(get("/web/v1/" + key + "/config").header(HttpHeaders.ORIGIN, SHOP))
+                .andExpect(jsonPath("$.assistant").doesNotExist());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions putAssistant(String id, String json) throws Exception {
+        return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/v1/web-chat-channels/" + id + "/assistant").header(HttpHeaders.AUTHORIZATION, clientAuth)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content(json));
+    }
+
+    @Test
     void aChannelWithoutALook_getsTheNeutralOne() throws Exception {
         String key = createChannel();
 

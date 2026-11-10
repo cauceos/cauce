@@ -2,6 +2,7 @@ package dev.cauce.api.channel;
 
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.webchat.WebChatAppearance;
+import dev.cauce.channels.webchat.WebChatAssistant;
 import dev.cauce.channels.webchat.WebChatChannelService;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -44,6 +45,16 @@ public class WebChatChannelController {
     @PutMapping("/v1/web-chat-channels/{id}/appearance")
     public WebChatChannelResponse updateAppearance(@PathVariable UUID id, @RequestBody WebChatAppearance appearance) {
         return WebChatChannelResponse.from(service.updateAppearance(id, appearance));
+    }
+
+    /**
+     * Replaces the channel's shop-assistant mode (ADR 0014, WC8): bubble, signals by route, templates and
+     * variants. A body of {@code null} takes it away.
+     */
+    @PutMapping("/v1/web-chat-channels/{id}/assistant")
+    public WebChatChannelResponse updateAssistant(@PathVariable UUID id,
+                                                  @RequestBody(required = false) WebChatAssistant assistant) {
+        return WebChatChannelResponse.from(service.updateAssistant(id, assistant));
     }
 
     @GetMapping("/v1/web-chat-channels/{id}")

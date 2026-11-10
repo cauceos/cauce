@@ -12,7 +12,7 @@ import java.util.Optional;
  */
 public sealed interface MessagePart
         permits MessagePart.Text, MessagePart.Audio, MessagePart.ToolCallPart, MessagePart.ToolResultPart,
-        MessagePart.ProductCard {
+        MessagePart.ProductCard, MessagePart.PageContext {
 
     /** The part's kind as the stored form and the content hash v2 name it ({@link MessageParts}). */
     String type();
@@ -143,6 +143,70 @@ public sealed interface MessagePart
             }
             if (ref.length() > MAX_REF_LENGTH) {
                 throw new IllegalArgumentException("ref must be at most " + MAX_REF_LENGTH + " characters");
+            }
+        }
+
+        @Override
+        public String type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Where the person was when they wrote, as the shop's page reported it (ADR 0014, WC8): the page's
+     * path, the catalog ref of the item on screen and the cart's refs and quantities, every ref already
+     * checked against the catalog, and the greeting the widget showed when it opened on its own, taken
+     * from the channel's configuration. Never free text from the page: it is data the agent reads as
+     * such, labelled, never as the person's words or as instructions. It is not text either: a message's
+     * {@link Message#content()} leaves it out.
+     *
+     * @param path the page's path, without query or fragment
+     * @param productRef the item on screen, null when none
+     * @param cart the cart's lines, empty when none
+     * @param greeting what the widget said when it opened on a signal, null otherwise
+     */
+    record PageContext(String path, String productRef, java.util.List<CartLine> cart, String greeting)
+            implements MessagePart {
+
+        public static final String TYPE = "page_context";
+        public static final int MAX_PATH_LENGTH = 200;
+        public static final int MAX_CART_LINES = 20;
+        public static final int MAX_GREETING_LENGTH = 300;
+
+        /** One line of the cart: a catalog ref and how many. */
+        public record CartLine(String ref, int quantity) {
+
+            public static final int MAX_QUANTITY = 99;
+
+            public CartLine {
+                requireRef(ref, "a cart line's ref");
+                if (quantity < 1 || quantity > MAX_QUANTITY) {
+                    throw new IllegalArgumentException("a cart line's quantity is between 1 and " + MAX_QUANTITY);
+                }
+            }
+        }
+
+        public PageContext {
+            if (path == null || !path.startsWith("/") || path.length() > MAX_PATH_LENGTH
+                    || path.contains("?") || path.contains("#")) {
+                throw new IllegalArgumentException("path is the page's path, starting with '/', without query or "
+                        + "fragment, of at most " + MAX_PATH_LENGTH + " characters");
+            }
+            if (productRef != null) {
+                requireRef(productRef, "productRef");
+            }
+            cart = cart == null ? java.util.List.of() : java.util.List.copyOf(cart);
+            if (cart.size() > MAX_CART_LINES) {
+                throw new IllegalArgumentException("cart holds at most " + MAX_CART_LINES + " lines");
+            }
+            if (greeting != null && (greeting.isBlank() || greeting.length() > MAX_GREETING_LENGTH)) {
+                throw new IllegalArgumentException("greeting holds 1 to " + MAX_GREETING_LENGTH + " characters");
+            }
+        }
+
+        private static void requireRef(String ref, String field) {
+            if (ref == null || ref.isBlank() || ref.length() > ProductCard.MAX_REF_LENGTH) {
+                throw new IllegalArgumentException(field + " holds 1 to " + ProductCard.MAX_REF_LENGTH + " characters");
             }
         }
 

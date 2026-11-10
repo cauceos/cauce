@@ -10,11 +10,21 @@ import java.util.UUID;
  * WC1): what deciding a browser's request needs, never the credential. A disabled channel resolves
  * too ({@code active} false), so its widget gets a clear refusal rather than an unknown key. The
  * caller establishes {@code tenantId} as the context and everything after runs under RLS.
+ * {@code assistant} is the shop-assistant mode (WC8), null for a chat without it.
  */
 public record ResolvedWebChat(UUID channelConfigId, UUID tenantId, UUID agentId, String publicKey,
                               List<String> allowedOrigins, String turnstileSiteKey, String privacyPolicyUrl,
                               ConsentMode consentMode, boolean active, WebChatLimits limits,
-                              WebChatAppearance appearance) {
+                              WebChatAppearance appearance, WebChatAssistant assistant) {
+
+    /** A channel without the shop-assistant mode. */
+    public ResolvedWebChat(UUID channelConfigId, UUID tenantId, UUID agentId, String publicKey,
+                           List<String> allowedOrigins, String turnstileSiteKey, String privacyPolicyUrl,
+                           ConsentMode consentMode, boolean active, WebChatLimits limits,
+                           WebChatAppearance appearance) {
+        this(channelConfigId, tenantId, agentId, publicKey, allowedOrigins, turnstileSiteKey, privacyPolicyUrl,
+                consentMode, active, limits, appearance, null);
+    }
 
     /** A channel with the platform's neutral look. */
     public ResolvedWebChat(UUID channelConfigId, UUID tenantId, UUID agentId, String publicKey,

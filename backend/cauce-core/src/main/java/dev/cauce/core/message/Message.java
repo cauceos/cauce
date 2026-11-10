@@ -203,16 +203,25 @@ public final class Message {
 
     /**
      * The text of {@code parts}: each text verbatim, a tool part's rendering, one per line. A product
-     * card is not text and adds nothing: it is read from the catalog where it is shown.
+     * card and a page context are not text and add nothing: a card is read from the catalog where it is
+     * shown, and a page context is data about the page, not the person's words.
      */
     private static String render(List<MessagePart> parts) {
-        return parts.stream().filter(part -> !(part instanceof MessagePart.ProductCard)).map(part -> switch (part) {
+        return parts.stream().filter(part -> !(part instanceof MessagePart.ProductCard)
+                && !(part instanceof MessagePart.PageContext)).map(part -> switch (part) {
             case MessagePart.Text text -> text.text();
             case MessagePart.Audio audio -> audio.transcriptText().orElse(UNTRANSCRIBED_AUDIO);
             case MessagePart.ToolCallPart toolCall -> toolCall.call().toolName();
             case MessagePart.ToolResultPart toolResult -> renderContent(toolResult.result());
             case MessagePart.ProductCard ignored -> "";
+            case MessagePart.PageContext ignored -> "";
         }).collect(Collectors.joining("\n"));
+    }
+
+    /** Where the person was when they wrote this message, if the shop's page said (ADR 0014, WC8). */
+    public Optional<MessagePart.PageContext> pageContext() {
+        return parts.stream().filter(MessagePart.PageContext.class::isInstance).map(MessagePart.PageContext.class::cast)
+                .findFirst();
     }
 
     /** The catalog refs of the product cards this message carries, in order (ADR 0014, WC8). */
@@ -223,8 +232,8 @@ public final class Message {
 
     /**
      * Enforces the message invariants: at least one part and a non-blank text; a tool role is
-     * exactly its one tool part, of the role's kind; USER is text and audio parts, AGENT text and
-     * product cards (ADR 0014, WC8), every other role text parts only (an agent does not speak, ADR
+     * exactly its one tool part, of the role's kind; USER is text and audio parts and at most one page
+     * context, AGENT text and product cards (ADR 0014, WC8), every other role text parts only (an agent does not speak, ADR
      * 0012, V6); a failure type is present exactly for FALLBACK.
      */
     private static void validate(MessageRole role, List<MessagePart> parts, String failureType) {
@@ -261,6 +270,13 @@ public final class Message {
                 if (role != MessageRole.AGENT && parts.stream().anyMatch(MessagePart.ProductCard.class::isInstance)) {
                     throw new IllegalArgumentException(role + " must not carry product cards");
                 }
+                long contexts = parts.stream().filter(MessagePart.PageContext.class::isInstance).count();
+                if (contexts > 0 && role != MessageRole.USER) {
+                    throw new IllegalArgumentException(role + " must not carry a page context");
+                }
+                if (contexts > 1) {
+                    throw new IllegalArgumentException("a message carries at most one page context");
+                }
             }
         }
     }
@@ -295,6 +311,7 @@ public final class Message {
             case MessagePart.Text ignored -> Optional.empty();
             case MessagePart.Audio ignored -> Optional.empty();
             case MessagePart.ProductCard ignored -> Optional.empty();
+            case MessagePart.PageContext ignored -> Optional.empty();
         };
     }
 

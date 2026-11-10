@@ -48,6 +48,8 @@ public interface WebChatSettingsRepository extends JpaRepository<WebChatSettings
         Integer getReads_per_session_minute();
 
         String getAppearance();
+
+        String getAssistant();
     }
 
     /** Whether {@code tenantId} has an ACTIVE web chat, under RLS. */

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.cauce.core.message.Message;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolDefinition;
@@ -462,5 +463,19 @@ class ContextBuilderTest {
         assertThat(elided.estimatedTokens()).isLessThan(full.estimatedTokens());
         assertThat(full.messages().stream().filter(m -> m.toolContent() instanceof ToolResult)
                 .map(m -> ((ToolResult) m.toolContent()).output())).doesNotContain(ContextBuilder.ELIDED_RESULT);
+    }
+
+    @Test
+    void aPageContext_readsAsLabelledDataAfterThePersonsWords_neverAsTheirWords() {
+        Message message = Message.fromParts(UUID.randomUUID(), MessageRole.USER, List.of(
+                new MessagePart.Text("¿Qué incluye?"),
+                new MessagePart.PageContext("/pagar", "plan-plus", List.of(new MessagePart.PageContext.CartLine("plan-plus", 1)),
+                        "¿Te ayudo a terminar?")));
+
+        assertThat(ContextBuilder.modelText(message)).isEqualTo("¿Qué incluye?\n" + ContextBuilder.PAGE_CONTEXT
+                + "path /pagar; viewing plan-plus; cart plan-plus x1; the chat opened by itself and you greeted: "
+                + "\"¿Te ayudo a terminar?\"]");
+        assertThat(ContextBuilder.pageContextLine(new MessagePart.PageContext("/", null, List.of(), null)))
+                .isEqualTo(ContextBuilder.PAGE_CONTEXT + "path /]");
     }
 }

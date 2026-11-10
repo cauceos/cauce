@@ -5,6 +5,7 @@ import dev.cauce.channels.webchat.ResolvedWebChat;
 import dev.cauce.channels.webchat.WebChatMessageService;
 import dev.cauce.orchestration.InboundMessageResult;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -32,10 +33,13 @@ public class WebChatMessageController {
     private final WebChatRateLimiter limiter;
     private final ClientIps ips;
     private final ProductCards productCards;
+    private final WebChatMetrics metrics;
 
     public WebChatMessageController(WebChatSessions sessions, WebChatMessageService messages,
-                                    WebChatRateLimiter limiter, ClientIps ips, ProductCards productCards) {
+                                    WebChatRateLimiter limiter, ClientIps ips, ProductCards productCards,
+                                    WebChatMetrics metrics) {
         this.productCards = productCards;
+        this.metrics = metrics;
         this.sessions = sessions;
         this.messages = messages;
         this.limiter = limiter;
@@ -51,7 +55,7 @@ public class WebChatMessageController {
             @RequestBody SendWebMessageRequest request,
             HttpServletRequest http) {
         String ip = ips.hashOf(http);
-        InboundMessageResult result = sessions.run(channel, authorization, session -> {
+        WebChatMessageService.Sent sent = sessions.run(channel, authorization, session -> {
             limiter.hit(channel.channelConfigId(), channel.limits(), WebChatRateLimiter.Bucket.MESSAGES_PER_IP_MINUTE, ip);
             String subject = session.id().toString();
             limiter.hit(channel.channelConfigId(), channel.limits(),
@@ -59,10 +63,35 @@ public class WebChatMessageController {
             limiter.hit(channel.channelConfigId(), channel.limits(), WebChatRateLimiter.Bucket.MESSAGES_PER_SESSION_DAY,
                     subject);
             return messages.send(channel, session, request.content(), idempotencyKey,
-                    Boolean.TRUE.equals(request.newThread()));
+                    Boolean.TRUE.equals(request.newThread()), pageOf(request));
         });
+        // ADR 0014, WC8: openings and conversations, by channel and variant; nothing about the person.
+        String variant = metrics.variantOf(channel, request.opening() == null ? null : request.opening().variant());
+        if (request.opening() != null) {
+            metrics.opening(channel, variant, request.opening().kind(), request.opening().signal());
+        }
+        if (sent.newConversation()) {
+            metrics.conversation(channel, variant);
+        }
+        InboundMessageResult result = sent.result();
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new SendWebMessageResponse(result.conversationId(),
                 result.messageId(), result.invocationId()));
+    }
+
+    /** The page context the request carries, unchecked: the service checks it against the catalog. */
+    private static WebChatMessageService.PageInput pageOf(SendWebMessageRequest request) {
+        SendWebMessageRequest.Context context = request.context();
+        if (context == null) {
+            return null;
+        }
+        SendWebMessageRequest.Opening opening = request.opening();
+        String signal = opening != null && SendWebMessageRequest.Opening.PROACTIVE.equals(opening.kind())
+                ? opening.signal() : null;
+        return new WebChatMessageService.PageInput(context.path(), context.productRef(),
+                context.cart() == null ? List.of() : context.cart().stream()
+                        .map(line -> line == null ? null : new WebChatMessageService.CartInput(line.ref(), line.quantity()))
+                        .toList(),
+                signal, opening == null ? null : opening.variant());
     }
 
     @GetMapping("/web/v1/{publicKey}/messages")

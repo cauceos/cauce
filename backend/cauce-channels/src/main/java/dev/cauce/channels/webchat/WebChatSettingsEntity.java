@@ -61,6 +61,19 @@ public class WebChatSettingsEntity {
         this.appearance = appearance;
     }
 
+    /** The shop-assistant mode as JSON (V65); null is a chat without it. */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "assistant", columnDefinition = "jsonb")
+    private String assistant;
+
+    public String getAssistant() {
+        return assistant;
+    }
+
+    public void setAssistant(String assistant) {
+        this.assistant = assistant;
+    }
+
     protected WebChatSettingsEntity() {
         // for JPA
     }
