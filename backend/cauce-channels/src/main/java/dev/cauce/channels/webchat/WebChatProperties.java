@@ -23,12 +23,15 @@ public class WebChatProperties {
     private int messagesPerIpMinute = WebChatLimits.PLATFORM.messagesPerIpMinute();
     private int readsPerSessionMinute = WebChatLimits.PLATFORM.readsPerSessionMinute();
 
+    /** base64("cauce-dev-only-insecure-iphash-1"): 32 bytes, public, dev and tests only. */
+    public static final String DEV_ONLY_IP_HASH_KEY = "Y2F1Y2UtZGV2LW9ubHktaW5zZWN1cmUtaXBoYXNoLTE=";
+
     /**
      * The key IPs are hashed with for the request limits (base64, 32 bytes), outside the database: an IP is
-     * never stored or logged (ADR 0014, amendment). Without one, a random key per process is used, which
-     * keeps limits per instance only.
+     * never stored or logged (ADR 0014, amendment). Required in prod (no default there), like the secrets
+     * encryption key; the default here is public and exists for local development and tests only.
      */
-    private String ipHashKey;
+    private String ipHashKey = DEV_ONLY_IP_HASH_KEY;
 
     /**
      * Proxies whose {@code CF-Connecting-IP} header is trusted as the visitor's IP (exact addresses);

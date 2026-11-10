@@ -352,8 +352,10 @@ so it can move from a tunnel to Cauce OS's own server without the page changing.
   surface would be worse than an unavailable one. Past a limit the answer is 429 `rate_limited`
   with `Retry-After`.
 - **The IP's HMAC key** is `cauce.web.ip-hash-key` (base64, 32 bytes), outside the database.
-  Without it, each process uses a random key of its own and logs a warning, which keeps the per-IP
-  limits per instance. `cauce.web.trusted-proxies` lists the exact addresses whose
+  Since 2026-11-10 it is a required production secret, treated like the secrets encryption key
+  (`docs/operations/production.md`): without it, or with one that is not 32 bytes, the instance
+  does not start, so every instance hashes under the same key. Outside prod a public default
+  serves. `cauce.web.trusted-proxies` lists the exact addresses whose
   `CF-Connecting-IP` is believed.
 - A channel's own limits are set at creation (`limits`), each positive and no higher than the
   platform's (`cauce.web.*`).

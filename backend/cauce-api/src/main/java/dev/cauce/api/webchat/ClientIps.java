@@ -4,14 +4,11 @@ import dev.cauce.channels.webchat.WebChatProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,23 +20,31 @@ import org.springframework.stereotype.Component;
 @Component
 public class ClientIps {
 
-    private static final Logger log = LoggerFactory.getLogger(ClientIps.class);
     static final String CF_CONNECTING_IP = "CF-Connecting-IP";
 
     private final byte[] key;
     private final Set<String> trustedProxies;
 
     public ClientIps(WebChatProperties properties) {
-        if (properties.getIpHashKey() == null || properties.getIpHashKey().isBlank()) {
-            byte[] random = new byte[32];
-            new SecureRandom().nextBytes(random);
-            this.key = random;
-            log.warn("cauce.web.ip-hash-key is not set: the web chat's per-IP limits use a key of this process "
-                    + "only, so each instance counts on its own. Set it for more than one instance.");
-        } else {
-            this.key = Base64.getDecoder().decode(properties.getIpHashKey().strip());
-        }
+        this.key = keyOf(properties.getIpHashKey());
         this.trustedProxies = Set.copyOf(properties.getTrustedProxies());
+    }
+
+    /** The key, or why the instance cannot start: like the secrets encryption key, never a fallback. */
+    private static byte[] keyOf(String configured) {
+        if (configured == null || configured.isBlank()) {
+            throw new IllegalStateException("cauce.web.ip-hash-key is not configured");
+        }
+        byte[] key;
+        try {
+            key = Base64.getDecoder().decode(configured.strip());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("cauce.web.ip-hash-key is not valid base64", e);
+        }
+        if (key.length != 32) {
+            throw new IllegalStateException("cauce.web.ip-hash-key must be 32 bytes, got " + key.length);
+        }
+        return key;
     }
 
     /** The HMAC of the request's visitor IP, hex. */

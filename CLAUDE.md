@@ -369,7 +369,7 @@ role (`cauce.admin.datasource.*`) runs Flyway migrations and the operator bootst
 must bypass RLS. Locally both point at the same database, with `cauce_app` created by the
 init script above and granted by migration `V10`. In production, set `DATABASE_*` to the
 `cauce_app` credentials and `ADMIN_DATABASE_*` to the owner; the `cauce_app` role must be
-provisioned out of band before first start (ops runbook), after which `V10` grants it.
+provisioned out of band before first start ([production runbook](docs/operations/production.md)), after which `V10` grants it.
 Anything that must see across tenants (the async worker/reaper, the audit drainer, webhook
 resolution) goes through a narrow `SECURITY DEFINER` function and then re-establishes a
 tenant context under RLS — never a bypass role (see `docs/adr/0001-rls-escape-hatches.md`).
@@ -513,6 +513,8 @@ The `cauce-enterprise` module is under a separate commercial license. Code in `c
 
 ## References
 
+- [Production runbook](docs/operations/production.md) — the required production secrets and the
+  first-start steps
 - [Audit chain format](docs/spec/audit-chain-format.md) — normative spec of the audit entry
   hash preimages, chaining, signature and key registry, with test vectors
 - [Audit chain verifier](tools/audit-chain-verifier/README.md) — reference verifier written
