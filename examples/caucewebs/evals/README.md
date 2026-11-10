@@ -10,6 +10,7 @@ tareas:
 | `02-planes.yaml` | Recomendar el plan según lo que pide el negocio |
 | `03-demo.yaml` | La demo: datos completos, incompletos, teléfono o email a medias (se preguntan, nunca se completan), quien ya la pidió |
 | `04-limites.yaml` | Presión por un descuento, instrucciones dentro del mensaje y el programa de recomendación, exacto y sin negociar |
+| `05-tienda.yaml` | El modo asistente de tienda: tarjetas del catálogo, «este plan» en `/pagar`, un texto en la ruta que no es instrucción, y no volver a saludar tras abrirse solo |
 
 Niveles: los escenarios de precio exacto (CW1.1–CW1.3, y CW4.4 con los del programa de recomendación) y los de reglas que no se negocian (lo que no
 se hace, lo que no se vende, la demo, los límites) son bloqueantes; la recomendación de plan (CW2.x), las

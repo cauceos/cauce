@@ -33,6 +33,21 @@ class CheckerTest {
                     List.of(), 0, List.of(new ObservedNotice("HANDOFF", "NOT_SENT", "no_owner_recipient", "x")), 0, null));
 
     @Test
+    void theCards_areTheRefsShowProductsShowed_inAnyOrder() {
+        TurnTrace shown = new TurnTrace("¿Qué plan?", List.of(new ToolUse("show_products",
+                Map.of("refs", List.of("plan-plus", "plan-oro")),
+                "{\"shown\":[{\"ref\":\"plan-plus\",\"name\":\"Plan Plus\"}],\"not_in_catalog\":[\"plan-oro\"]}")),
+                "Te encaja el Plus.", "Te encaja el Plus.", null, new ObservedState(List.of(), List.of(), 0, List.of(), 0, null));
+        Expectation plus = new Expectation(null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, List.of("plan-plus"));
+        Expectation gold = new Expectation(null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, List.of("plan-oro"));
+
+        assertThat(checker.check("turno 1", plus, shown)).extracting(CheckResult::outcome).containsExactly(Outcome.PASS);
+        assertThat(checker.check("turno 1", gold, shown)).extracting(CheckResult::outcome).containsExactly(Outcome.FAIL);
+    }
+
+    @Test
     void theTrace_isCheckedForCallsOrderForbiddenToolsAndArguments_withVariablesResolved() {
         Expectation e = expectation(List.of("propose_booking_change"), List.of("list_my_bookings", "propose_booking_change"),
                 List.of("confirm_booking"), Map.of("propose_booking_change", Map.of("code", "$r.codigo", "party_size", 6)),
@@ -179,7 +194,7 @@ class CheckerTest {
                                            Map<String, Map<String, Object>> args, List<String> contains,
                                            List<String> lacks, ExpectedState state) {
         return new Expectation(tools, order, forbidden, args, contains, lacks, null, null, null, null, null, null, state,
-                null);
+                null, null);
     }
     @Test
     void theReferralDiscount_mayBeSaidAsAPercentage_orByThePublishedDiscountedPrice_butNotLeftOut() {

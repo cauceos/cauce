@@ -74,6 +74,9 @@ pasa.
     - cliente: "texto que escribe el cliente"
       nota_de_voz: true          # opcional: el texto es lo que transcribió una nota de voz (ADR 0012);
                                  # llega al agente marcado como nota de voz transcrita, sin transcribir nada
+      contexto: {ruta: /pagar, producto: plan-plus,            # opcional, no con nota_de_voz: dónde estaba, como lo manda la página del
+                 carrito: [{ref: plan-plus, cantidad: 1}],      # chat web (ADR 0014, WC8); abierto_por: la señal
+                 abierto_por: idle_cart}                        # con que se abrió solo, saluda la plantilla del paquete
       espera:
         herramientas: [list_my_bookings, propose_booking_change]   # en este turno, en cualquier orden
         orden: [check_availability, propose_booking]               # en este orden (subsecuencia)
@@ -84,6 +87,7 @@ pasa.
         respuesta_contiene: ["no consta | no me consta"]           # basta una de las alternativas
         respuesta_contiene: ["{+1:dia_semana}"]                    # una fecha, escrita como en cliente
         respuesta_no_contiene: ["código nuevo"]
+        tarjetas: [plan-plus]                                      # refs que show_products enseñó (ADR 0014, WC8)
         entregado_no_contiene: ["**"]                              # el texto que entrega el canal
         aviso_al_dueno_contiene: ["Mensaje del cliente: «"]        # el último aviso al dueño
         estado:                                                    # registros tras el turno

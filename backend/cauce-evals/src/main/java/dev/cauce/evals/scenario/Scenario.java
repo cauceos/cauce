@@ -126,11 +126,17 @@ public record Scenario(
     public record Turn(
             @JsonProperty("cliente") String message,
             @JsonProperty("nota_de_voz") Boolean voiceNote,
+            @JsonProperty("contexto") PageContext context,
             @JsonProperty("espera") Expectation expectation) {
 
         /** A written message. */
         public Turn(String message, Expectation expectation) {
-            this(message, null, expectation);
+            this(message, null, null, expectation);
+        }
+
+        /** A message, a voice note or not, with no page context. */
+        public Turn(String message, Boolean voiceNote, Expectation expectation) {
+            this(message, voiceNote, null, expectation);
         }
 
         /** Whether the message is the transcription of a voice note. */
@@ -154,7 +160,24 @@ public record Scenario(
             @JsonProperty("resumen_contiene") List<String> digestContains,
             @JsonProperty("resumen_no_contiene") List<String> digestLacks,
             @JsonProperty("estado") ExpectedState state,
-            @JsonProperty("rubrica") String rubric) {
+            @JsonProperty("rubrica") String rubric,
+            @JsonProperty("tarjetas") List<String> cards) {
+    }
+
+    /**
+     * Where the person was when they wrote, as the shop's page reports it to the web chat (ADR 0014, WC8):
+     * the page's path, the product on screen and the cart, by catalog ref, and the signal the chat opened
+     * on by itself ({@code abierto_por}), whose greeting is the pack's template for it.
+     */
+    public record PageContext(
+            @JsonProperty("ruta") String path,
+            @JsonProperty("producto") String productRef,
+            @JsonProperty("carrito") List<CartLine> cart,
+            @JsonProperty("abierto_por") String openedOn) {
+    }
+
+    /** One cart line of a page context. */
+    public record CartLine(@JsonProperty("ref") String ref, @JsonProperty("cantidad") Integer quantity) {
     }
 
     /** The records after the turn, in the fixed vocabulary; what is not named is not checked. */

@@ -148,6 +148,14 @@ public final class ScenarioLoader {
             } catch (InvalidScenarioException e) {
                 throw new InvalidScenarioException(where + e.getMessage());
             }
+            if (turn.context() != null) {
+                Scenario.PageContext context = turn.context();
+                require(context.path() != null && context.path().startsWith("/") && !context.path().contains("?"),
+                        where + "contexto.ruta is a path starting with '/', without query");
+                require(context.openedOn() == null || SIGNALS.contains(context.openedOn()),
+                        where + "contexto.abierto_por is one of " + SIGNALS);
+                require(!Boolean.TRUE.equals(turn.voiceNote()), where + "a voice note carries no contexto");
+            }
             if (turn.expectation() != null) {
                 validate(where, turn.expectation(), aliases, false);
             }
@@ -156,6 +164,9 @@ public final class ScenarioLoader {
             validate(where, s.expectation(), aliases, true);
         }
     }
+
+    /** The signals a web chat opens on by itself (ADR 0014, WC8). */
+    static final Set<String> SIGNALS = Set.of("back_to_product", "comparing", "idle_cart", "exit_intent");
 
     private static void validate(String where, Expectation e, Set<String> aliases, boolean digest) {
         for (List<String> texts : java.util.Arrays.asList(e.replyContains(), e.replyLacks())) {

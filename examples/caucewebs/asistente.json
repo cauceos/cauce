@@ -1,0 +1,44 @@
+{
+  "enabled": true,
+  "bubble": "¿Te ayudo a elegir tu web?",
+  "card_button_label": "Contratar",
+  "routes": [
+    {
+      "path": "/",
+      "signals": [
+        "comparing",
+        "back_to_product"
+      ]
+    },
+    {
+      "path": "/pagar",
+      "signals": [
+        "idle_cart",
+        "exit_intent"
+      ]
+    }
+  ],
+  "tuning": {
+    "comparing_views": 3,
+    "comparing_minutes": 5,
+    "idle_cart_minutes": 3
+  },
+  "templates": {
+    "comparing": "¿Dudas entre planes? Dime cómo es tu bar y te digo cuál te encaja.",
+    "back_to_product": "¿Te cuento algo más de este plan?",
+    "idle_cart": "¿Te ayudo a terminar? Si tienes alguna duda del plan, pregúntame.",
+    "exit_intent": "Antes de irte: ¿te preparo una demo gratis de tu web, sin compromiso?"
+  },
+  "variants": [
+    {
+      "id": "a"
+    },
+    {
+      "id": "b",
+      "bubble": "¿Hablamos de la web de tu bar?"
+    }
+  ],
+  "proactive_requires_consent": false,
+  "opening_counter": false,
+  "opening_counter_requires_consent": false
+}

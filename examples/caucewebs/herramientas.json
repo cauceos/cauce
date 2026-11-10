@@ -3,6 +3,7 @@
     "get_current_time",
     "get_business_info",
     "search_catalog",
+    "show_products",
     "record_unanswered_question",
     "escalate_to_owner",
     "list_my_cases"

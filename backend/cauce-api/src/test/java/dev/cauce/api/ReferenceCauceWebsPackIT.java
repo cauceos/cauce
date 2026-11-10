@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import dev.cauce.channels.webchat.WebChatAssistant;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,7 +53,12 @@ class ReferenceCauceWebsPackIT extends AbstractBusinessApiIT {
                                     "unsupported_message_reply", unsupported.get(agent).asText()))))
                     .andExpect(status().isCreated());
         }
-        assertThat(grants.get("agente_clientes")).hasSize(6);
+        assertThat(grants.get("agente_clientes")).hasSize(7);
+        // The shop-assistant mode (ADR 0014, WC8) as PUT /v1/web-chat-channels/{id}/assistant takes it.
+        WebChatAssistant assistant = objectMapper.readValue(read("asistente.json"), WebChatAssistant.class);
+        assertThat(assistant.enabled()).isTrue();
+        assertThat(assistant.greetingFor("idle_cart", null)).isPresent();
+        assertThat(assistant.routes()).extracting(WebChatAssistant.Route::path).containsExactly("/", "/pagar");
         assertThat(objectMapper.readTree(read("retencion-cache.json")).get("agente_clientes").asText()).isEqualTo("LONG");
     }
 

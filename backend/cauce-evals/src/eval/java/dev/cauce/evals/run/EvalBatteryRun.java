@@ -296,7 +296,7 @@ class EvalBatteryRun {
             String prefix = "turno " + (i + 1);
             // The person's dates are written out from today, so no scenario depends on the day it runs.
             String message = RelativeDates.render(turn.message(), world::resolveDate);
-            EvalWorld.Played played = world.turn(message, turn.isVoiceNote());
+            EvalWorld.Played played = world.turn(message, turn.isVoiceNote(), turn.context());
             invocations.add(played.invocationId());
             TurnTrace trace = played.trace();
             transcript.append("Cliente: ").append(message).append('\n');

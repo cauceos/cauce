@@ -13,6 +13,7 @@ está aquí, como datos e instrucciones; el código de Cauce no sabe qué es un 
 | `respaldo.json` | Texto que recibe la persona si su mensaje no se puede procesar (ADR 0005, C3) |
 | `no-soportado.json` | Texto que recibe la persona si manda algo que Cauce no lee |
 | `retencion-cache.json` | Caché del prompt de cada agente (ADR 0010, S9) |
+| `asistente.json` | El modo asistente de tienda del chat de caucewebs.es (ADR 0014, WC8): burbuja, señales por ruta (`/` y `/pagar`), saludos y variantes: `PUT /v1/web-chat-channels/{id}/assistant` |
 | `caucewebs/ficha.json` | Ficha del negocio, con las categorías de caso `demo` y `otro`: `PUT /v1/tenants/{id}/business-profile` |
 | `caucewebs/catalogo.json` | Lo único que se vende ahora: los planes de web, la tienda y los vídeos para redes, con precios sin IVA y lo que incluyen: `PUT .../catalog` |
 | `comprobar-precios.mjs` | Compara el catálogo y la ficha con los precios publicados en caucewebs.es (ver abajo) |
@@ -52,3 +53,18 @@ El programa de recomendación es una condición publicada, no una rebaja: está 
 y el agente lo cuenta solo cuando viene a cuento, nunca como descuento que se negocia.
 
 `ReferenceCauceWebsPackIT` comprueba que la ficha, el catálogo y los dos agentes se cargan tal cual.
+
+## El chat en caucewebs.es (W7)
+
+La página habla con el widget con `cauce(...)` (ver `frontend/web-widget/README.md`):
+
+- en la portada, `cauce('view', 'plan-plus')` cuando un plan entra en pantalla (para la señal de comparar);
+- en `/pagar?plan=…`, `cauce('cart', [{ref: 'plan-plus', quantity: 1}])` con el plan elegido (la señal de
+  carrito parado: elegido y sin pagar durante 3 minutos);
+- en las dos, `cauce('onAddToCart', ref => location.href = '/pagar?plan=' + encodeURIComponent(ref))`, el
+  botón «Contratar» de las tarjetas;
+- al confirmarse el pago, `cauce('purchase', {orderId, value})`, que Cauce atribuye al chat si llega en los
+  7 días siguientes al último mensaje.
+
+Los refs son los del catálogo (`plan-basico`, `plan-basico-dominio`, `plan-plus`, `plan-tienda`).
+

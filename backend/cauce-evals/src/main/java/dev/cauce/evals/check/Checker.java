@@ -11,9 +11,11 @@ import dev.cauce.evals.scenario.Scenario.ExpectedState;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,6 +26,8 @@ import java.util.regex.Pattern;
  * by what the scenario's {@code previo} minted, and relative dates by the business's calendar.
  */
 public final class Checker {
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     private static final Pattern VARIABLE = Pattern.compile("\\$([a-z][a-z0-9_]*)\\.codigo");
 
@@ -63,6 +67,9 @@ public final class Checker {
         if (e.arguments() != null) {
             e.arguments().forEach((tool, expected) -> results.add(arguments(prefix, tool, expected, turn.tools())));
         }
+        if (e.cards() != null) {
+            results.add(cards(prefix, e.cards(), turn.tools()));
+        }
         texts(results, prefix + " · respuesta", turn.reply(), e.replyContains(), e.replyLacks());
         texts(results, prefix + " · entregado", turn.delivered(), e.deliveredContains(), e.deliveredLacks());
         texts(results, prefix + " · aviso al dueño", turn.latestNotice(), e.noticeContains(), e.noticeLacks());
@@ -71,6 +78,27 @@ public final class Checker {
             state(results, prefix + " · estado", e.state(), turn.state());
         }
         return results;
+    }
+
+    /**
+     * The turn showed every one of {@code expected} as a product card (ADR 0014, WC8): the refs that
+     * {@code show_products} accepted, which are the cards the reply carries, in any order.
+     */
+    private static CheckResult cards(String prefix, List<String> expected, List<ToolUse> uses) {
+        Set<String> shown = new LinkedHashSet<>();
+        for (ToolUse use : uses) {
+            if (!use.name().equals("show_products")) {
+                continue;
+            }
+            try {
+                JSON.readTree(use.output()).path("shown").forEach(card -> shown.add(card.path("ref").asText()));
+            } catch (java.io.IOException | RuntimeException e) {
+                // a result that is not the tool's JSON shows no card
+            }
+        }
+        List<String> missing = expected.stream().filter(ref -> !shown.contains(ref)).toList();
+        return CheckResult.of(prefix + " · tarjetas", missing.isEmpty(),
+                missing.isEmpty() ? "mostradas: " + shown : "faltan " + missing + "; mostradas: " + shown);
     }
 
     private CheckResult arguments(String prefix, String tool, Map<String, Object> expected, List<ToolUse> uses) {

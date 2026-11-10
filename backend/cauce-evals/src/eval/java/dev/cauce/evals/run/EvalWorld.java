@@ -199,10 +199,30 @@ final class EvalWorld {
      * reads it marked as one and nothing is sent to a transcriber.
      */
     Played turn(String message, boolean voiceNote) throws Exception {
+        return turn(message, voiceNote, null);
+    }
+
+    /**
+     * {@link #turn(String, boolean)} with where the person was (ADR 0014, WC8): the message goes through
+     * the ingest with its page context, as the web chat sends it once checked, and the greeting of a chat
+     * that opened by itself is the pack's template for the signal ({@code asistente.json}).
+     */
+    Played turn(String message, boolean voiceNote, Scenario.PageContext page) throws Exception {
         UUID conversationId;
         UUID messageId;
         String invocationId;
-        if (voiceNote) {
+        if (page != null) {
+            List<MessagePart.PageContext.CartLine> cart = page.cart() == null ? List.of() : page.cart().stream()
+                    .map(line -> new MessagePart.PageContext.CartLine(line.ref(),
+                            line.quantity() == null ? 1 : line.quantity())).toList();
+            MessagePart.PageContext context = new MessagePart.PageContext(page.path(), page.productRef(), cart,
+                    greetingFor(page.openedOn()));
+            InboundMessageResult accepted = asTenant(tenantId, () -> s.inbound().ingestParts(customerAgentId, "api",
+                    null, IdentityKind.CLIENT_REFERENCE, PERSON, List.of(new MessagePart.Text(message), context), null));
+            conversationId = accepted.conversationId();
+            messageId = accepted.messageId();
+            invocationId = accepted.invocationId().toString();
+        } else if (voiceNote) {
             InboundMessageResult accepted = asTenant(tenantId, () -> s.inbound().ingestParts(customerAgentId, "api",
                     null, IdentityKind.CLIENT_REFERENCE, PERSON,
                     List.of(new MessagePart.Audio("audio/ogg", "eval-voice-note", null, null, null, message)), null));
@@ -229,6 +249,16 @@ final class EvalWorld {
         });
         s.dispatcher().dispatchDue();
         return new Played(trace(message, conversationId, messageId), invocationId, executionFailure(invocationId));
+    }
+
+    /** The pack's greeting template for {@code signal}, from its {@code asistente.json}; null without one. */
+    private String greetingFor(String signal) throws Exception {
+        Path assistant = s.packDir().resolve("asistente.json");
+        if (signal == null || !Files.exists(assistant)) {
+            return null;
+        }
+        JsonNode template = s.json().readTree(Files.readString(assistant)).path("templates").path(signal);
+        return template.isTextual() ? template.asText() : null;
     }
 
     /** Why the invocation did not complete (status, failure type and the internal error), if it did not. */

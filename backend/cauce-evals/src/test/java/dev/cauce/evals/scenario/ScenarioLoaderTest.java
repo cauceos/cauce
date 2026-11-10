@@ -54,6 +54,32 @@ class ScenarioLoaderTest {
     }
 
     @Test
+    void aTurnsPageContext_andTheCardsItExpects_areRead_andTheContextChecked() throws Exception {
+        Path file = dir.resolve("contexto.yaml");
+        Files.writeString(file, """
+                - id: X1
+                  titulo: en /pagar
+                  nivel: aviso
+                  datos: caucewebs
+                  turnos:
+                    - cliente: "¿Qué incluye?"
+                      contexto: {ruta: /pagar, producto: plan-plus, carrito: [{ref: plan-plus, cantidad: 1}], abierto_por: idle_cart}
+                      espera:
+                        tarjetas: [plan-plus]
+                """);
+
+        Scenario.Turn turn = loader.load(file).get(0).turns().get(0);
+        assertThat(turn.context()).isEqualTo(new Scenario.PageContext("/pagar", "plan-plus",
+                List.of(new Scenario.CartLine("plan-plus", 1)), "idle_cart"));
+        assertThat(turn.expectation().cards()).containsExactly("plan-plus");
+
+        Files.writeString(file, Files.readString(file).replace("abierto_por: idle_cart", "abierto_por: al_cargar"));
+        assertThatThrownBy(() -> loader.load(file)).hasMessageContaining("abierto_por");
+        Files.writeString(file, Files.readString(file).replace("ruta: /pagar", "ruta: pagar"));
+        assertThatThrownBy(() -> loader.load(file)).hasMessageContaining("ruta");
+    }
+
+    @Test
     void anEarlierThread_needsItsDaysAndBothTexts() throws Exception {
         Scenario loaded = loader.load(file("""
                 - id: X5

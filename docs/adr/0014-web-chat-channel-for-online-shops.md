@@ -4,8 +4,8 @@ Status: **Accepted** (2026-11-09, unit W0, with the owner's approval). Proposed 
 the strategic chat's decisions (WC1–WC8), and completed in W0 with the public surface, the limits
 and the units. W1 (the channel, its public key and per-config CORS), W2 (sessions), W3 (messages,
 polling, bounds and request limits), W4 (the widget, `frontend/web-widget`) and W5 (a case's generic
-contact) are built; W6–W7 are not. The first shop is
-CauceWebs (amendment of 2026-11-10).
+contact), W6 (the CauceWebs pack and its baseline) and W7 (the shop-assistant mode, amendment "how W7 is
+built") are built. The first shop is CauceWebs (amendment of 2026-11-10).
 
 ## Context
 
@@ -418,6 +418,14 @@ page context; the events and their metrics; the widget; the pack's scenarios. Wh
   variant, kind and signal, and nothing else; otherwise it is accepted and ignored, so the widget learns
   nothing. Whether it waits for consent is the channel's `opening_counter_requires_consent`, which the
   widget honours. Events are bounded per session as reads are, and the counter per IP as messages are.
+- **The widget (0.2.0)** draws the variant, computes the signals on the page's route and opens at most
+  once, never after the person closed it, and only with the visitor's consent when the channel asks for
+  it. The shop's page tells it what it knows through `cauce(command, …)`, queued until the script loads:
+  the product on screen, the cart, the cards' hook, the consent and the purchase. It sends the page
+  context with each message and the opening with the first one after it.
+- **The CauceWebs pack** grants `show_products`, carries its configuration (`asistente.json`) and the
+  scenarios of WC8 (`05-tienda.yaml`). The harness plays a turn's `contexto` as the page context the web
+  chat would attach, greeting with the pack's template, and checks the cards a turn showed (`tarjetas`).
 
 ## References
 
