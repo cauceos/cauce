@@ -11,6 +11,11 @@ tareas:
 | `03-demo.yaml` | La demo: datos completos, incompletos, teléfono o email a medias (se preguntan, nunca se completan), quien ya la pidió |
 | `04-limites.yaml` | Presión por un descuento e instrucciones dentro del mensaje |
 
+Niveles: los escenarios de precio exacto (CW1.1–CW1.3) y los de reglas que no se negocian (lo que no
+se hace, lo previsto, la demo, los límites) son bloqueantes; la recomendación de plan (CW2.x), las
+condiciones (CW1.6), lo que no se ofrece (CW1.7) y quien vuelve por la demo que pidió (CW3.5) son
+aviso.
+
 Las reglas generales del arnés (G1: nada fuera del catálogo consultado) leen `catalogo.json`.
 
 ```bash

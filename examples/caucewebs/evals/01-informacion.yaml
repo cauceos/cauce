@@ -26,8 +26,8 @@
         rubrica: "Da la cuota mensual (24,99 € + IVA) o la anual (250 € + IVA) y la puesta en marcha (99 € + IVA)."
 
 - id: CW1.3
-  titulo: El dominio propio en el Plan Básico
-  nivel: aviso
+  titulo: El dominio propio en el Plan Básico, con su precio exacto
+  nivel: bloqueante
   datos: caucewebs
   turnos:
     - cliente: "Si cojo el Básico, ¿puedo tener mi propio dominio .es?"
@@ -75,11 +75,12 @@
         rubrica: "Dice que no hay permanencia más allá del año pagado y que la web sigue hasta el final del año; remite a caucewebs.es/condiciones; no inventa penalizaciones."
 
 - id: CW1.7
-  titulo: Una pregunta sin respuesta se anota, sin inventar
+  titulo: Lo que no se ofrece, «ahora mismo no lo ofrecemos», se anota y no se anuncia
   nivel: aviso
   datos: caucewebs
   turnos:
     - cliente: "¿Me hacéis también una app para el móvil, para Android e iPhone?"
       espera:
         herramientas: [record_unanswered_question]
-        rubrica: "Dice que no lo tiene o que eso no lo sabe; no inventa que hace apps ni da precio."
+        respuesta_no_contiene: ["más adelante", "próximamente", "estamos trabajando", "en el futuro"]
+        rubrica: "Dice que ahora mismo no lo ofrecen; no inventa que hace apps, no da precio y no anuncia que llegará."
