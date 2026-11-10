@@ -350,6 +350,21 @@ so it can move from a tunnel to Cauce OS's own server without the page changing.
 - A channel's own limits are set at creation (`limits`), each positive and no higher than the
   platform's (`cauce.web.*`).
 
+## Amendment (2026-11-10): where the widget is served from
+
+The Cauce instance serves the widget itself, at a versioned path,
+`/web/widget/{version}/cauce-widget.js`. The file comes from `cauce.web.widget-dir`, laid out by the
+widget's build (`dist/release/{version}/`).
+
+- A released version never changes, so it is cached for a year as `immutable`.
+- The tag a shop pastes carries the version's Subresource Integrity hash and
+  `crossorigin="anonymous"`. The response therefore allows any origin to read it, as SRI needs.
+- A version that is not there is the API's 404.
+- A CDN in front waits in `docs/deferred.md`.
+
+The widget's checks on a physical phone and with a screen reader are a checklist in its README, run by
+CauceWebs on the hidden test page before publishing.
+
 ## References
 
 - `docs/adr/0001-rls-escape-hatches.md`: resolving a tenant without context

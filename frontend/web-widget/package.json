@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5174",
-    "build": "tsc -p tsconfig.json && vitest run && vite build && node scripts/size.mjs",
+    "build": "tsc -p tsconfig.json && vitest run && vite build && node scripts/size.mjs && node scripts/release.mjs",
     "test": "vitest run"
   },
   "devDependencies": {

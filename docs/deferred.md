@@ -59,6 +59,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 ## Channels
 
+- **The web widget on a CDN.** The Cauce instance serves `cauce-widget.js` itself, at `/web/widget/{version}/cauce-widget.js` with a year's immutable cache and the tag's SRI hash (ADR 0014, W4). A CDN in front would spare the instance the downloads. Not needed while one instance serves a few shops.
 - **A paid European transcriber, measured on the same ten voice notes (November).** The local Whisper
   is the only transcriber (ADR 0012, V3). The reference a paid adapter must beat, measured on
   2026-10-24 with ten real voice notes of the hospitality pack (`-Pevals.voz`, Spanish, laptop CPU, clock times compared as said; seconds per note once the

@@ -7,10 +7,19 @@ at WCAG AA contrast), so each shop's chat wears that shop's brand.
 
 ## Embedding it
 
+The Cauce instance serves each release at a versioned path, cached for a year as immutable. The tag pins
+the version and its Subresource Integrity hash, so the browser refuses a file that is not exactly the
+released one. `npm run build` writes it in `dist/release/{version}/embed.html`:
+
 ```html
-<script src="https://<where cauce-widget.js is served>/cauce-widget.js"
+<script src="https://<cauce instance>/web/widget/0.1.0/cauce-widget.js"
+        integrity="sha384-…" crossorigin="anonymous"
         data-cauce-key="pk_…" data-cauce-instance="https://<cauce instance>" defer></script>
 ```
+
+To publish a release, copy `dist/release/{version}/` into the instance's `cauce.web.widget-dir`
+(`WEB_WIDGET_DIR` in production). A new version is a new directory, and old tags keep working. Change
+`version` in `package.json` for every change to the widget: a path's file must never change.
 
 - `data-cauce-key` is the channel's public key (`POST /v1/agents/{id}/web-chat-channels`). It is not a
   secret, and no API key ever goes in a page.
@@ -46,6 +55,35 @@ at WCAG AA contrast), so each shop's chat wears that shop's brand.
 - On a phone (≤ 480 px wide) the dialog takes the whole screen, respecting the safe areas.
 - Motion is off under `prefers-reduced-motion`.
 - Contrast is held at AA by the API, which refuses a colour pair below it.
+
+## Checking it on a phone and with a screen reader
+
+Before publishing on a real page (the hidden test page first), go through this on a physical phone:
+
+**Phone (iOS Safari and Android Chrome)**
+- [ ] The launcher sits in the bottom corner and covers nothing important, including the iOS home bar.
+- [ ] Opening it fills the screen. The header, the AI notice and the field are visible with the keyboard
+      up, and the field is not hidden behind the keyboard.
+- [ ] Tapping the field does not zoom the page.
+- [ ] Sending from the keyboard's send key and from the button both work. A long reply scrolls inside the
+      chat, not the page behind it.
+- [ ] Rotating the phone keeps the chat usable.
+- [ ] The privacy link opens in a new tab and coming back keeps the conversation.
+- [ ] Closing the chat and reloading the page keeps the conversation (same session).
+- [ ] With the connection off, sending shows the friendly message and the contact, never an error code.
+
+**Screen reader (VoiceOver on iOS, TalkBack on Android, NVDA or VoiceOver on desktop)**
+- [ ] The launcher is announced as a button with its label and as collapsed/expanded.
+- [ ] Opening it announces the dialog by its name, and the AI notice is read.
+- [ ] The field is announced as "Tu mensaje" (or "Your message").
+- [ ] A reply is announced when it arrives without moving the focus, with who says it.
+- [ ] The friendly message when the service cannot answer is announced.
+- [ ] The privacy link (or the acceptance box) is reachable and announced.
+- [ ] Escape on desktop closes the chat and the focus returns to the launcher.
+
+**Keyboard only (desktop)**
+- [ ] Tab reaches the launcher, then inside the chat the close button, the privacy link, the field and
+      Send, with a visible focus ring on each.
 
 ## Building and trying it
 

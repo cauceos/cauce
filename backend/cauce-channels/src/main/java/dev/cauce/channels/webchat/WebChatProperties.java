@@ -36,6 +36,20 @@ public class WebChatProperties {
      */
     private java.util.List<String> trustedProxies = java.util.List.of();
 
+    /**
+     * Where the instance serves the web widget from (ADR 0014, W4): a directory laid out as the widget's
+     * build lays it, {@code {version}/cauce-widget.js}. Unset, the instance serves no widget.
+     */
+    private String widgetDir;
+
+    public String getWidgetDir() {
+        return widgetDir;
+    }
+
+    public void setWidgetDir(String widgetDir) {
+        this.widgetDir = widgetDir;
+    }
+
     /** The platform's request limits. */
     public WebChatLimits limits() {
         return new WebChatLimits(sessionsPerIpHour, messagesPerSessionMinute, messagesPerSessionDay,
