@@ -3,6 +3,7 @@ package dev.cauce.api.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -67,6 +68,25 @@ class GlobalExceptionHandlerIT extends AbstractApiIntegrationTest {
                 .andExpect(jsonPath("$.message").value("tenant 123 not found"))
                 .andExpect(jsonPath("$.request_id").isNotEmpty())
                 .andExpect(header().exists(RequestIdFilter.REQUEST_ID_HEADER));
+    }
+
+    @Test
+    void anUnknownRoute_is404InTheApisErrorShape_withoutInternalDetail() throws Exception {
+        mockMvc.perform(get("/v1/no-such-route").header(HttpHeaders.AUTHORIZATION, bearer))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("not_found"))
+                .andExpect(jsonPath("$.message").value("Not found"))
+                .andExpect(jsonPath("$.request_id").isNotEmpty())
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("static"))));
+    }
+
+    @Test
+    void aMethodTheRouteDoesNotTake_is405InTheApisErrorShape() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/v1/me").header(HttpHeaders.AUTHORIZATION, bearer))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.error").value("method_not_allowed"))
+                .andExpect(jsonPath("$.request_id").isNotEmpty());
     }
 
     @Test
