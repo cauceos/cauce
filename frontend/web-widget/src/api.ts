@@ -1,4 +1,4 @@
-import type { ChannelConfig, MessagePage, Sent } from './types'
+import type { ChannelConfig, MessagePage, Opening, PageContext, Sent } from './types'
 
 /**
  * Why a request did not succeed, as the widget acts on it. A person never sees any of these words:
@@ -63,12 +63,28 @@ export class WebChatApi {
     return this.request('/sessions', { method: 'POST', body: JSON.stringify(body) })
   }
 
-  send(token: string, content: string, newThread: boolean, idempotencyKey: string): Promise<Sent> {
+  send(token: string, content: string, newThread: boolean, idempotencyKey: string,
+    extra: { context?: PageContext; opening?: Opening } = {}): Promise<Sent> {
+    const body: Record<string, unknown> = { content }
+    if (newThread) body.new_thread = true
+    if (extra.context) body.context = extra.context
+    if (extra.opening) body.opening = extra.opening
     return this.request('/messages', {
       method: 'POST',
-      body: JSON.stringify(newThread ? { content, new_thread: true } : { content }),
+      body: JSON.stringify(body),
       headers: { Authorization: 'Bearer ' + token, 'Idempotency-Key': idempotencyKey },
     })
+  }
+
+  /** An event after the first message (WC8): an add to cart from a card, or a purchase the shop reports. */
+  event(token: string, body: Record<string, unknown>): Promise<unknown> {
+    return this.request('/events', { method: 'POST', body: JSON.stringify(body),
+      headers: { Authorization: 'Bearer ' + token } }, true)
+  }
+
+  /** An opening for the anonymous counter (WC8): no session, no identifier. */
+  opening(body: Opening): Promise<unknown> {
+    return this.request('/openings', { method: 'POST', body: JSON.stringify(body) }, true)
   }
 
   read(token: string, cursor: string | null): Promise<MessagePage> {
@@ -76,7 +92,8 @@ export class WebChatApi {
     return this.request('/messages' + query, { method: 'GET', headers: { Authorization: 'Bearer ' + token } })
   }
 
-  private async request<T>(path: string, init: RequestInit & { headers?: Record<string, string> }): Promise<T> {
+  private async request<T>(path: string, init: RequestInit & { headers?: Record<string, string> },
+    emptyOk = false): Promise<T> {
     let response: Response
     try {
       response = await fetch(this.base + path, {
@@ -91,6 +108,7 @@ export class WebChatApi {
     if (!response.ok) {
       throw new WidgetError(await failureOf(response))
     }
+    if (emptyOk && response.status === 204) return undefined as T
     return (await response.json()) as T
   }
 }

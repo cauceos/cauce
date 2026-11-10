@@ -16,6 +16,35 @@ export interface Appearance {
   locale: 'es' | 'en'
 }
 
+/** A signal the browser computes for the shop-assistant mode (ADR 0014, WC8). */
+export type Signal = 'back_to_product' | 'comparing' | 'idle_cart' | 'exit_intent'
+
+export interface Route {
+  path: string
+  signals: Signal[]
+}
+
+export interface Variant {
+  id: string
+  bubble: string | null
+  templates: Partial<Record<Signal, string>> | null
+  signals: Signal[] | null
+}
+
+/** The shop-assistant mode (WC8): present only while the channel turns it on. */
+export interface Assistant {
+  enabled: boolean
+  bubble: string | null
+  card_button_label: string | null
+  routes: Route[]
+  tuning: { comparing_views: number; comparing_minutes: number; idle_cart_minutes: number }
+  templates: Partial<Record<Signal, string>>
+  variants: Variant[]
+  proactive_requires_consent: boolean
+  opening_counter: boolean
+  opening_counter_requires_consent: boolean
+}
+
 export interface ChannelConfig {
   public_key: string
   turnstile_site_key: string
@@ -24,6 +53,15 @@ export interface ChannelConfig {
   consent_required: boolean
   active: boolean
   appearance: Appearance
+  assistant?: Assistant | null
+}
+
+/** A product card of a reply, as the catalog fills it in now (WC8). */
+export interface Card {
+  ref: string
+  name: string
+  description: string | null
+  price: number | null
 }
 
 export interface ChatMessage {
@@ -31,6 +69,26 @@ export interface ChatMessage {
   role: 'user' | 'agent'
   text: string
   created_at: string
+  cards?: Card[]
+}
+
+export interface CartLine {
+  ref: string
+  quantity: number
+}
+
+/** Where the person is, as the shop's page tells the widget: refs only, never free text. */
+export interface PageContext {
+  path: string
+  product_ref?: string
+  cart?: CartLine[]
+}
+
+/** How the chat was opened before a message, and the variant drawn. */
+export interface Opening {
+  kind: 'proactive' | 'on_demand'
+  signal?: Signal
+  variant?: string
 }
 
 export interface MessagePage {

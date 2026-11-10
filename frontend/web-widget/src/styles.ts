@@ -54,6 +54,17 @@ button,textarea,input{font:inherit;color:inherit}
 .btn{min-height:44px;padding:0 16px;border:0;border-radius:8px;background:var(--c-primary);color:var(--c-on-primary);
   cursor:pointer;font-weight:600}
 .btn:disabled{opacity:.6;cursor:not-allowed}
+.presence{position:fixed;right:16px;bottom:84px;z-index:2147483646;max-width:min(300px,calc(100vw - 32px));
+  display:flex;align-items:flex-start;gap:4px;padding:4px 4px 4px 12px;background:var(--c-bg);color:var(--c-text);
+  border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.presence[hidden]{display:none}
+.presence .say{flex:1;min-height:44px;padding:8px 0;border:0;background:transparent;text-align:left;cursor:pointer}
+.presence .icon{width:36px;height:36px}
+.cards{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;white-space:normal}
+.card{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid currentColor;border-radius:10px}
+.card p{margin:0;font-size:.875rem}
+.card .price{font-weight:700}
+.card .btn{align-self:flex-start;margin-top:4px}
 @media (max-width:480px){
   .panel{inset:0;width:100%;height:100%;height:100dvh;border-radius:0;
     padding-bottom:env(safe-area-inset-bottom)}

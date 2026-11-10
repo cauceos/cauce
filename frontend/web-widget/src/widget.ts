@@ -1,9 +1,10 @@
 import { WebChatApi, WidgetError, type Failure } from './api'
+import { ShopAssistant } from './assistant'
 import * as storage from './storage'
 import { STYLES, themeOf } from './styles'
 import { NOTICE_VERSION, TEXTS, type Texts } from './texts'
 import { turnstileToken } from './turnstile'
-import type { ChannelConfig, ChatMessage, MessagePage } from './types'
+import type { Card, CartLine, ChannelConfig, ChatMessage, MessagePage, Opening, PageContext, Signal } from './types'
 
 /** How often the widget polls (ADR 0014, WC4): soon while a reply is coming, slowly after, then not. */
 export const POLL_AWAITING_MS = 1500
@@ -17,7 +18,13 @@ export interface Dependencies {
   schedule: (fn: () => void, ms: number) => unknown
   cancel: (handle: unknown) => void
   newKey: () => string
+  random: () => number
+  path: () => string
+  finePointer: () => boolean
 }
+
+/** What the shop's page hands the widget's "add to cart" button: the card's ref and how many. */
+export type AddToCart = (ref: string, quantity: number) => void
 
 const CHAT_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2z"/></svg>'
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>'
@@ -46,8 +53,14 @@ export class Widget {
   private pollHandle: unknown = null
   private lastActivity = 0
   private sending = false
+  private readonly assistant: ShopAssistant | null
+  private product: string | undefined
+  private cart: CartLine[] = []
+  private addToCart: AddToCart | null = null
+  private pendingOpening: Opening | null = null
 
   private launcher!: HTMLButtonElement
+  private presence: HTMLElement | null = null
   private panel!: HTMLElement
   private log!: HTMLOListElement
   private status!: HTMLElement
@@ -62,7 +75,15 @@ export class Widget {
     this.token = storage.load(this.key, 'session')
     this.host = el('div', { 'data-cauce-chat': '' })
     this.root = this.host.attachShadow({ mode: 'open' })
+    const mode = config.assistant
+    this.assistant = mode && mode.enabled ? new ShopAssistant(mode, this.key, deps) : null
     this.render()
+    if (this.assistant) {
+      this.assistant.whenSignalled((signal, greeting) => this.openBySignal(signal, greeting))
+      document.addEventListener('mouseout', (e) => {
+        if (!e.relatedTarget && e.clientY <= 0) this.assistant?.exitIntent()
+      })
+    }
   }
 
   private render(): void {
@@ -77,6 +98,17 @@ export class Widget {
     if (a.avatar_url) this.launcher.append(el('img', { src: a.avatar_url, alt: '' }))
     this.launcher.append(el('span', { 'aria-hidden': 'true' }, a.launcher_label ?? a.name))
     this.launcher.addEventListener('click', () => (this.panel.hidden ? this.open() : this.close()))
+    const phrase = this.assistant?.bubble()
+    if (phrase) {
+      // The presence bubble (WC8): static, from the configuration, beside the launcher, never over the page.
+      this.presence = el('div', { class: 'presence' })
+      const say = el('button', { type: 'button', class: 'say' }, phrase)
+      say.addEventListener('click', () => this.open())
+      const dismiss = el('button', { type: 'button', class: 'icon', 'aria-label': this.t.dismiss })
+      dismiss.innerHTML = CLOSE_ICON
+      dismiss.addEventListener('click', () => this.hidePresence())
+      this.presence.append(say, dismiss)
+    }
 
     this.panel = el('section', { id: 'cauce-panel', class: 'panel', role: 'dialog', 'aria-modal': 'false',
       'aria-labelledby': 'cauce-title', 'aria-describedby': 'cauce-ai' })
@@ -124,7 +156,7 @@ export class Widget {
 
     const privacy = this.privacyBlock()
     this.panel.append(head, this.log, this.status, this.notice, privacy, form)
-    root.append(this.launcher, this.panel)
+    root.append(...(this.presence ? [this.presence] : []), this.launcher, this.panel)
     this.root.append(style, root)
   }
 
@@ -144,18 +176,83 @@ export class Widget {
     return p
   }
 
+  /** Opens the chat because the person asked: the launcher, the bubble, or the shop's page on their behalf. */
   open(): void {
-    this.panel.hidden = false
-    this.launcher.setAttribute('aria-expanded', 'true')
-    this.input.focus()
-    if (this.token) this.touch()
+    this.openAs({ kind: 'on_demand' })
   }
 
+  /** Closes the chat. The person closed it: with the shop-assistant mode, it never opens by itself again. */
   close(): void {
     this.panel.hidden = true
     this.launcher.setAttribute('aria-expanded', 'false')
     this.stopPolling()
+    this.assistant?.closedByPerson()
     this.launcher.focus()
+  }
+
+  private openAs(opening: Opening): void {
+    if (!this.panel.hidden) return
+    this.panel.hidden = false
+    this.launcher.setAttribute('aria-expanded', 'true')
+    this.hidePresence()
+    if (this.assistant) {
+      this.assistant.opened()
+      this.pendingOpening = { ...opening, variant: this.assistant.variantId() }
+      if (this.assistant.mayCountOpenings()) {
+        void this.deps.api.opening(this.pendingOpening).catch(() => {})
+      }
+    }
+    this.input.focus()
+    if (this.token) this.touch()
+  }
+
+  /** A signal opened the chat (WC8): its greeting is the configuration's template, not a model's reply. */
+  private openBySignal(signal: Signal, greeting: string): void {
+    if (!this.panel.hidden) return
+    this.log.append(this.bubble('agent', greeting))
+    this.openAs({ kind: 'proactive', signal })
+  }
+
+  private hidePresence(): void {
+    if (this.presence) this.presence.hidden = true
+  }
+
+  // --- what the shop's page tells the widget (WC8): refs and numbers only, never free text ---
+
+  /** The product on screen, by catalog ref; a view of it may signal. */
+  viewProduct(ref: string): void {
+    this.product = ref
+    this.assistant?.viewProduct(ref)
+  }
+
+  /** The shop's cart, by catalog ref; one left unchanged may signal. */
+  setCart(lines: CartLine[]): void {
+    this.cart = lines.filter((l) => typeof l?.ref === 'string' && Number.isInteger(l.quantity) && l.quantity > 0)
+    this.assistant?.setCart(this.cart)
+  }
+
+  /** What a card's button does: the shop's own hook. Without one, a card shows no button. */
+  onAddToCart(hook: AddToCart): void {
+    this.addToCart = hook
+  }
+
+  /** The visitor's consent, from the shop's consent banner, for what the channel makes wait for it. */
+  consent(granted: boolean): void {
+    this.assistant?.consent(granted)
+  }
+
+  /** A purchase the shop confirms: reported only when this browser has talked to the chat. */
+  trackPurchase(purchase: { orderId: string; value: number }): void {
+    if (!this.token || !purchase || typeof purchase.orderId !== 'string' || typeof purchase.value !== 'number') return
+    void this.deps.api.event(this.token, { type: 'purchase', order_id: purchase.orderId, value: purchase.value,
+      variant: this.assistant?.variantId() }).catch(() => {})
+  }
+
+  private context(): PageContext {
+    const context: PageContext = { path: this.deps.path() }
+    if (this.product) context.product_ref = this.product
+    if (this.cart.length > 0) context.cart = this.cart
+    return context
   }
 
   /** Sends what the person wrote; with {@code newThread}, starts a new conversation first. */
@@ -188,7 +285,9 @@ export class Widget {
     for (let attempt = 0; attempt < 2; attempt++) {
       const token = await this.session()
       try {
-        await this.deps.api.send(token, text, newThread, key)
+        await this.deps.api.send(token, text, newThread, key, this.assistant
+          ? { context: this.context(), opening: this.pendingOpening ?? undefined } : {})
+        this.pendingOpening = null
         return
       } catch (e) {
         if (e instanceof WidgetError && e.failure.kind === 'session' && attempt === 0) {
@@ -275,9 +374,41 @@ export class Widget {
   private append(m: ChatMessage): boolean {
     if (this.shown.has(m.id)) return false
     this.shown.add(m.id)
-    this.log.append(this.bubble(m.role, m.text))
+    const li = this.bubble(m.role, m.text)
+    if (m.role === 'agent' && m.cards && m.cards.length > 0) li.append(this.cards(m.cards))
+    this.log.append(li)
     this.log.scrollTop = this.log.scrollHeight
     return true
+  }
+
+  /** A reply's product cards (WC8): name, price and description from the catalog, and the shop's button. */
+  private cards(cards: Card[]): HTMLUListElement {
+    const list = el('ul', { class: 'cards', 'aria-label': this.t.cards })
+    const locale = this.config.appearance.locale === 'en' ? 'en-IE' : 'es-ES'
+    for (const card of cards) {
+      const item = el('li', { class: 'card' })
+      item.append(el('strong', {}, card.name))
+      if (card.price !== null && card.price !== undefined) {
+        const price = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR',
+          minimumFractionDigits: Number.isInteger(card.price) ? 0 : 2 }).format(card.price)
+        item.append(el('span', { class: 'price' }, price))
+      }
+      if (card.description) item.append(el('p', {}, card.description))
+      if (this.addToCart) {
+        const label = this.config.assistant?.card_button_label ?? this.t.addToCart
+        const buy = el('button', { type: 'button', class: 'btn', 'aria-label': label + ': ' + card.name }, label)
+        buy.addEventListener('click', () => {
+          this.addToCart?.(card.ref, 1)
+          if (this.token) {
+            void this.deps.api.event(this.token, { type: 'add_to_cart', ref: card.ref, quantity: 1,
+              variant: this.assistant?.variantId() }).catch(() => {})
+          }
+        })
+        item.append(buy)
+      }
+      list.append(item)
+    }
+    return list
   }
 
   private bubble(role: 'user' | 'agent', text: string): HTMLLIElement {
@@ -341,5 +472,8 @@ export function defaultDependencies(api: WebChatApi): Dependencies {
     schedule: (fn, ms) => window.setTimeout(fn, ms),
     cancel: (handle) => window.clearTimeout(handle as number),
     newKey: () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2)),
+    random: () => Math.random(),
+    path: () => window.location.pathname,
+    finePointer: () => window.matchMedia?.('(hover: hover) and (pointer: fine)').matches ?? false,
   }
 }

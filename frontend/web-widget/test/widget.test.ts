@@ -23,22 +23,33 @@ interface Fake {
   calls: string[]
   pages: MessagePage[]
   timers: Array<() => void>
+  delays: number[]
   failSend: WidgetError | null
+  sent: Array<{ context?: unknown; opening?: unknown }>
+  events: Array<Record<string, unknown>>
+  openings: unknown[]
+  path: string
+  fine: boolean
 }
 
 function fake(): Fake {
-  const f: Fake = { calls: [], pages: [], timers: [], failSend: null, deps: null as unknown as Dependencies }
+  const f: Fake = { calls: [], pages: [], timers: [], delays: [], failSend: null, sent: [], events: [], openings: [],
+    path: '/', fine: true, deps: null as unknown as Dependencies }
   const api = {
     config: async () => BRAND,
     openSession: async (_t: string, consent?: boolean, version?: string) => {
       f.calls.push(`session consent=${consent ?? false} version=${consent ? version : '-'}`)
       return { session_token: 'tok' }
     },
-    send: async (token: string, content: string, newThread: boolean) => {
+    send: async (token: string, content: string, newThread: boolean, _key: string,
+      extra: { context?: unknown; opening?: unknown } = {}) => {
       f.calls.push(`send ${token} ${content} new=${newThread}`)
+      f.sent.push(extra)
       if (f.failSend) throw f.failSend
       return { conversation_id: 'c1', message_id: 'm1', invocation_id: 'i1' }
     },
+    event: async (_token: string, body: Record<string, unknown>) => { f.events.push(body) },
+    opening: async (body: unknown) => { f.openings.push(body) },
     read: async () => {
       f.calls.push('read')
       return f.pages.shift() ?? { conversation_id: 'c1', data: [], next_cursor: null, awaiting_reply: false }
@@ -48,9 +59,12 @@ function fake(): Fake {
     api,
     turnstile: async () => { f.calls.push('turnstile'); return 'challenge' },
     now: () => 0,
-    schedule: (fn) => { f.timers.push(fn); return f.timers.length },
-    cancel: () => {},
+    schedule: (fn, ms) => { f.timers.push(fn); f.delays.push(ms); return f.timers.length },
+    cancel: (handle) => { f.timers[(handle as number) - 1] = () => {} },
     newKey: () => 'key-1',
+    random: () => 0.7,
+    path: () => f.path,
+    finePointer: () => f.fine,
   }
   return f
 }
@@ -192,3 +206,173 @@ describe('failureOf', () => {
     expect(await failureOf(response(403, { error: 'forbidden' }))).toEqual({ kind: 'unavailable' })
   })
 })
+
+const SHOP: ChannelConfig = {
+  ...BRAND,
+  assistant: {
+    enabled: true, bubble: '¿Te ayudo a elegir plan?', card_button_label: 'Contratar',
+    routes: [{ path: '/', signals: ['comparing', 'back_to_product'] }, { path: '/pagar', signals: ['idle_cart', 'exit_intent'] }],
+    tuning: { comparing_views: 3, comparing_minutes: 5, idle_cart_minutes: 3 },
+    templates: { idle_cart: '¿Te ayudo a terminar el pago?', exit_intent: '¿Te vas? Te ayudo.', comparing: '¿Dudas entre planes?' },
+    variants: [{ id: 'a', bubble: null, templates: null, signals: null },
+      { id: 'b', bubble: '¿Hablamos?', templates: { idle_cart: '¿Algo te frena?' }, signals: null }],
+    proactive_requires_consent: false, opening_counter: false, opening_counter_requires_consent: false,
+  },
+}
+
+/** Runs the timer the widget scheduled with {@code ms}, the last one. */
+function runTimer(f: Fake, ms: number): void {
+  const at = f.delays.lastIndexOf(ms)
+  expect(at).toBeGreaterThanOrEqual(0)
+  f.timers[at]()
+}
+
+describe('the shop-assistant mode', () => {
+  it('shows the variant\'s bubble from page load, without a request, and keeps the variant for the visitor', () => {
+    const f = fake()
+    const w = mount(SHOP, f)
+
+    expect($<HTMLButtonElement>(w, '.presence .say').textContent).toBe('¿Hablamos?') // random 0.7 draws "b"
+    expect(f.calls).toEqual([])
+    expect(localStorage.getItem('cauce:web:pk_ABCDEFGHIJKLMNOPQRSTUVWX:variant')).toBe('b')
+    $<HTMLButtonElement>(w, '.presence .say').click()
+    expect($<HTMLElement>(w, '.panel').hidden).toBe(false)
+    expect($<HTMLElement>(w, '.presence').hidden).toBe(true)
+  })
+
+  it('opens by itself on an idle cart at /pagar, once, with the variant\'s template, and never after the person closed it', () => {
+    const f = fake()
+    f.path = '/pagar'
+    const w = mount(SHOP, f)
+    w.setCart([{ ref: 'plan-plus', quantity: 1 }])
+    runTimer(f, 3 * 60_000)
+
+    expect($<HTMLElement>(w, '.panel').hidden).toBe(false)
+    expect($<HTMLElement>(w, '.log').textContent).toContain('¿Algo te frena?')
+    w.close()
+    w.setCart([{ ref: 'plan-basico', quantity: 1 }])
+    runTimer(f, 3 * 60_000)
+    expect($<HTMLElement>(w, '.panel').hidden).toBe(true)
+
+    // A new page load of the same browser: still closed by the person, so no proactive opening.
+    const again = fake()
+    again.path = '/pagar'
+    const w2 = mount(SHOP, again)
+    w2.setCart([{ ref: 'plan-plus', quantity: 1 }])
+    runTimer(again, 3 * 60_000)
+    expect($<HTMLElement>(w2, '.panel').hidden).toBe(true)
+  })
+
+  it('opens only on its route\'s signals, desktop-only exit intent, and with consent when the channel requires it', () => {
+    const f = fake()
+    const w = mount(SHOP, f)
+    w.setCart([{ ref: 'plan-plus', quantity: 1 }]) // idle cart is not on at "/"
+    runTimer(f, 3 * 60_000)
+    expect($<HTMLElement>(w, '.panel').hidden).toBe(true)
+
+    const touch = fake()
+    touch.path = '/pagar'
+    touch.fine = false
+    const onPhone = mount(SHOP, touch)
+    document.dispatchEvent(new MouseEvent('mouseout', { clientY: -1 }))
+    expect($<HTMLElement>(onPhone, '.panel').hidden).toBe(true)
+
+    localStorage.clear()
+    const gated = fake()
+    gated.path = '/pagar'
+    const strict = { ...SHOP, assistant: { ...SHOP.assistant!, proactive_requires_consent: true } }
+    const w3 = mount(strict, gated)
+    w3.setCart([{ ref: 'plan-plus', quantity: 1 }])
+    runTimer(gated, 3 * 60_000)
+    expect($<HTMLElement>(w3, '.panel').hidden).toBe(true)
+    w3.consent(true)
+    w3.setCart([{ ref: 'plan-plus', quantity: 2 }])
+    runTimer(gated, 3 * 60_000)
+    expect($<HTMLElement>(w3, '.panel').hidden).toBe(false)
+  })
+
+  it('opens on comparing three products within five minutes, by ref', () => {
+    const f = fake()
+    const w = mount(SHOP, f)
+    w.viewProduct('plan-basico')
+    w.viewProduct('plan-plus')
+    expect($<HTMLElement>(w, '.panel').hidden).toBe(true)
+    w.viewProduct('plan-tienda')
+    expect($<HTMLElement>(w, '.panel').hidden).toBe(false)
+    expect($<HTMLElement>(w, '.log').textContent).toContain('¿Dudas entre planes?')
+  })
+
+  it('sends where the person is and how the chat opened with the first message after the opening, only', async () => {
+    const f = fake()
+    f.path = '/pagar'
+    const w = mount(SHOP, f)
+    w.viewProduct('plan-plus')
+    w.setCart([{ ref: 'plan-plus', quantity: 1 }])
+    runTimer(f, 3 * 60_000)
+    $<HTMLTextAreaElement>(w, '#cauce-input').value = '¿Qué incluye?'
+    await w.submit(false)
+    $<HTMLTextAreaElement>(w, '#cauce-input').value = 'Vale'
+    await w.submit(false)
+
+    expect(f.sent[0]).toEqual({
+      context: { path: '/pagar', product_ref: 'plan-plus', cart: [{ ref: 'plan-plus', quantity: 1 }] },
+      opening: { kind: 'proactive', signal: 'idle_cart', variant: 'b' },
+    })
+    expect(f.sent[1].opening).toBeUndefined()
+    expect(f.sent[1].context).toEqual(f.sent[0].context)
+  })
+
+  it('shows a reply\'s cards from the catalog, whose button calls the shop\'s hook and is reported', async () => {
+    const f = fake()
+    const w = mount(SHOP, f)
+    const added: string[] = []
+    w.onAddToCart((ref, quantity) => added.push(`${ref}x${quantity}`))
+    $<HTMLButtonElement>(w, '.launcher').click()
+    $<HTMLTextAreaElement>(w, '#cauce-input').value = '¿Qué plan?'
+    await w.submit(false)
+    f.pages.push({ conversation_id: 'c1', next_cursor: 'm2', awaiting_reply: false, data: [
+      { id: 'm2', role: 'agent', text: 'Te encaja el Plus.', created_at: '2026-11-10T10:00:00Z',
+        cards: [{ ref: 'plan-plus', name: 'Plan Plus', description: 'Para cambios frecuentes.', price: 79 },
+          { ref: 'plan-tienda', name: 'Plan Tienda', description: null, price: 24.99 }] }] })
+    f.timers[f.timers.length - 1]()
+    await flush()
+
+    const cards = w.shadow.querySelectorAll('.card')
+    expect(cards).toHaveLength(2)
+    expect(cards[0].textContent).toContain('Plan Plus')
+    expect(cards[0].querySelector('.price')!.textContent!.replace(/\s/g, ' ')).toBe('79 €')
+    expect(cards[1].querySelector('.price')!.textContent!.replace(/\s/g, ' ')).toBe('24,99 €')
+    const buy = cards[0].querySelector('button')!
+    expect(buy.textContent).toBe('Contratar')
+    expect(buy.getAttribute('aria-label')).toBe('Contratar: Plan Plus')
+    buy.click()
+    expect(added).toEqual(['plan-plusx1'])
+    expect(f.events).toEqual([{ type: 'add_to_cart', ref: 'plan-plus', quantity: 1, variant: 'b' }])
+  })
+
+  it('reports a purchase only once this browser has talked to the chat, and counts openings only when the channel says', async () => {
+    const f = fake()
+    const counted = { ...SHOP, assistant: { ...SHOP.assistant!, opening_counter: true } }
+    const w = mount(counted, f)
+    w.trackPurchase({ orderId: 'CW-1', value: 79 })
+    expect(f.events).toEqual([])
+
+    $<HTMLButtonElement>(w, '.launcher').click()
+    expect(f.openings).toEqual([{ kind: 'on_demand', variant: 'b' }])
+    $<HTMLTextAreaElement>(w, '#cauce-input').value = 'Hola'
+    await w.submit(false)
+    w.trackPurchase({ orderId: 'CW-2', value: 95.59 })
+    expect(f.events).toEqual([{ type: 'purchase', order_id: 'CW-2', value: 95.59, variant: 'b' }])
+  })
+
+  it('without the mode, sends no context and shows no bubble', async () => {
+    const f = fake()
+    const w = mount(BRAND, f)
+    expect($<HTMLElement>(w, '.presence')).toBeNull()
+    $<HTMLButtonElement>(w, '.launcher').click()
+    $<HTMLTextAreaElement>(w, '#cauce-input').value = 'Hola'
+    await w.submit(false)
+    expect(f.sent[0]).toEqual({})
+  })
+})
+

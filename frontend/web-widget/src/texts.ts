@@ -24,6 +24,9 @@ export interface Texts {
   threadFull: string
   startOver: string
   invalid: string
+  dismiss: string
+  cards: string
+  addToCart: string
 }
 
 export const TEXTS: Record<'es' | 'en', Texts> = {
@@ -46,6 +49,9 @@ export const TEXTS: Record<'es' | 'en', Texts> = {
     threadFull: 'Esta conversación ya es muy larga.',
     startOver: 'Empezar una nueva',
     invalid: 'El mensaje está vacío o es demasiado largo.',
+    dismiss: 'Cerrar el aviso',
+    cards: 'Productos',
+    addToCart: 'Añadir',
   },
   en: {
     aiNotice: 'You are talking to an artificial intelligence assistant.',
@@ -66,5 +72,8 @@ export const TEXTS: Record<'es' | 'en', Texts> = {
     threadFull: 'This conversation is already very long.',
     startOver: 'Start a new one',
     invalid: 'The message is empty or too long.',
+    dismiss: 'Dismiss',
+    cards: 'Products',
+    addToCart: 'Add to cart',
   },
 }
