@@ -24,4 +24,6 @@ cd backend
 ./gradlew :cauce-evals:eval -Pevals.paquete=caucewebs -Pevals.n=5 --max-workers=2          # línea base
 ```
 
+La línea base vigente y su historia están en [`linea-base.md`](linea-base.md).
+
 `precios.yaml` es el mismo que el del bar: el precio es del modelo, no del paquete.
