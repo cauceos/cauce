@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import dev.cauce.api.channel.InvalidChannelConfigRequestException;
+import dev.cauce.api.webchat.RateLimitUnavailableException;
+import dev.cauce.api.webchat.RateLimitedException;
 import dev.cauce.business.owner.OwnerNotLinkedException;
 import dev.cauce.channels.WebhookAuthenticationException;
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
@@ -137,6 +139,8 @@ public class GlobalExceptionHandler {
             Map.entry(InvalidSessionException.class, "invalid_session"),
             Map.entry(InvalidWebMessageException.class, "invalid_message"),
             Map.entry(ThreadFullException.class, "thread_full"),
+            Map.entry(RateLimitedException.class, "rate_limited"),
+            Map.entry(RateLimitUnavailableException.class, "rate_limit_unavailable"),
             Map.entry(TurnstileRejectedException.class, "turnstile_failed"),
             Map.entry(TurnstileUnavailableException.class, "turnstile_unavailable"),
             // 422 UNPROCESSABLE_ENTITY
@@ -254,6 +258,19 @@ public class GlobalExceptionHandler {
         // (set by ApiKeyAuthenticationFilter from the validated key). Reaching here is a server
         // bug — return a generic 500 with no internals, and log the full detail server-side.
         return serverError(HttpStatus.INTERNAL_SERVER_ERROR, ex, GENERIC_500_MESSAGE);
+    }
+
+    @ExceptionHandler(RateLimitedException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimited(RateLimitedException ex) {
+        ResponseEntity<ErrorResponse> response = clientError(HttpStatus.TOO_MANY_REQUESTS, ex);
+        return ResponseEntity.status(response.getStatusCode())
+                .header(org.springframework.http.HttpHeaders.RETRY_AFTER, String.valueOf(ex.retryAfterSeconds()))
+                .body(response.getBody());
+    }
+
+    @ExceptionHandler(RateLimitUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimitUnavailable(RateLimitUnavailableException ex) {
+        return clientError(HttpStatus.SERVICE_UNAVAILABLE, ex);
     }
 
     @ExceptionHandler(InvalidSessionException.class)

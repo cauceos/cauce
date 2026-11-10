@@ -1,6 +1,7 @@
 package dev.cauce.api.channel;
 
 import dev.cauce.channels.webchat.ConsentMode;
+import dev.cauce.channels.webchat.WebChatLimits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -16,5 +17,19 @@ public record CreateWebChatChannelRequest(
         @NotBlank @Size(max = 100) String turnstileSiteKey,
         @NotEmpty @Size(max = 20) List<String> allowedOrigins,
         @NotBlank @Size(max = 500) String privacyPolicyUrl,
-        ConsentMode consentMode) {
+        ConsentMode consentMode,
+        Limits limits) {
+
+    /**
+     * The channel's own request limits (ADR 0014, WC3): each optional, positive and no higher than the
+     * platform's; an absent one keeps the platform's.
+     */
+    public record Limits(Integer sessionsPerIpHour, Integer messagesPerSessionMinute, Integer messagesPerSessionDay,
+                         Integer messagesPerIpMinute, Integer readsPerSessionMinute) {
+
+        WebChatLimits toDomain() {
+            return new WebChatLimits(sessionsPerIpHour, messagesPerSessionMinute, messagesPerSessionDay,
+                    messagesPerIpMinute, readsPerSessionMinute);
+        }
+    }
 }

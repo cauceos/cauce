@@ -35,10 +35,13 @@ public class WebChatChannelService implements SpendLimitRequirement {
     private final AgentRepository agentRepository;
     private final SpendLimitService spendLimits;
     private final AuditEventRecorder auditRecorder;
+    private final WebChatProperties properties;
 
     public WebChatChannelService(ChannelConfigRepository configRepository, ChannelConfigMapper configMapper,
                                  WebChatSettingsRepository settingsRepository, AgentRepository agentRepository,
-                                 SpendLimitService spendLimits, AuditEventRecorder auditRecorder) {
+                                 SpendLimitService spendLimits, AuditEventRecorder auditRecorder,
+                                 WebChatProperties properties) {
+        this.properties = properties;
         this.configRepository = configRepository;
         this.configMapper = configMapper;
         this.settingsRepository = settingsRepository;
@@ -49,7 +52,13 @@ public class WebChatChannelService implements SpendLimitRequirement {
 
     /** What a web chat is created with; the Turnstile secret is sealed at rest, never returned. */
     public record Creation(String turnstileSecret, String turnstileSiteKey, List<String> allowedOrigins,
-                           String privacyPolicyUrl, ConsentMode consentMode) {
+                           String privacyPolicyUrl, ConsentMode consentMode, WebChatLimits limits) {
+
+        /** A creation that keeps the platform's limits. */
+        public Creation(String turnstileSecret, String turnstileSiteKey, List<String> allowedOrigins,
+                        String privacyPolicyUrl, ConsentMode consentMode) {
+            this(turnstileSecret, turnstileSiteKey, allowedOrigins, privacyPolicyUrl, consentMode, null);
+        }
     }
 
     /**
@@ -57,7 +66,7 @@ public class WebChatChannelService implements SpendLimitRequirement {
      *
      * @throws AgentNotFoundException if the agent is not visible
      * @throws SpendLimitRequiredException if the agent's tenant has no spend limit
-     * @throws IllegalArgumentException if a setting is malformed
+     * @throws IllegalArgumentException if a setting is malformed, or a limit higher than the platform's
      */
     @Transactional
     public WebChatChannel create(UUID agentId, Creation creation) {
@@ -76,9 +85,11 @@ public class WebChatChannelService implements SpendLimitRequirement {
         }
         ChannelConfig config = ChannelConfig.createWebChat(agent.getTenantId(), agentId, publicKey,
                 creation.turnstileSecret().strip());
+        WebChatLimits limits = creation.limits() == null ? WebChatLimits.NONE
+                : creation.limits().validatedAgainst(properties.limits());
         WebChatSettings settings = new WebChatSettings(config.id(), config.tenantId(), creation.allowedOrigins(),
                 creation.turnstileSiteKey(), creation.privacyPolicyUrl(),
-                creation.consentMode() == null ? ConsentMode.NOTICE : creation.consentMode());
+                creation.consentMode() == null ? ConsentMode.NOTICE : creation.consentMode(), limits);
         ChannelConfig saved = configMapper.toDomain(configRepository.saveAndFlush(configMapper.toEntity(config)));
         settingsRepository.save(toEntity(settings));
         auditRecorder.record(ChannelAuditEvents.channelConfigured(saved, TenantContext.getCurrentTenantId().orElseThrow()));
@@ -109,7 +120,9 @@ public class WebChatChannelService implements SpendLimitRequirement {
                 row.getChannel_config_id(), row.getTenant_id(), row.getAgent_id(), row.getPublic_key(),
                 row.getAllowed_origins().isBlank() ? List.of() : Arrays.asList(row.getAllowed_origins().split(" ")),
                 row.getTurnstile_site_key(), row.getPrivacy_policy_url(), ConsentMode.valueOf(row.getConsent_mode()),
-                "ACTIVE".equals(row.getStatus())));
+                "ACTIVE".equals(row.getStatus()), new WebChatLimits(row.getSessions_per_ip_hour(),
+                        row.getMessages_per_session_minute(), row.getMessages_per_session_day(),
+                        row.getMessages_per_ip_minute(), row.getReads_per_session_minute())));
     }
 
     @Override
@@ -121,12 +134,12 @@ public class WebChatChannelService implements SpendLimitRequirement {
     private static WebChatSettingsEntity toEntity(WebChatSettings settings) {
         return new WebChatSettingsEntity(settings.channelConfigId(), settings.tenantId(),
                 settings.allowedOrigins().toArray(String[]::new), settings.turnstileSiteKey(),
-                settings.privacyPolicyUrl(), settings.consentMode());
+                settings.privacyPolicyUrl(), settings.consentMode(), settings.limits());
     }
 
     private static WebChatSettings toDomain(WebChatSettingsEntity entity) {
         return new WebChatSettings(entity.getChannelConfigId(), entity.getTenantId(),
                 List.of(entity.getAllowedOrigins()), entity.getTurnstileSiteKey(), entity.getPrivacyPolicyUrl(),
-                entity.getConsentMode());
+                entity.getConsentMode(), entity.getLimits());
     }
 }

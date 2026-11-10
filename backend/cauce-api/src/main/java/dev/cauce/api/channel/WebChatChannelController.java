@@ -31,7 +31,8 @@ public class WebChatChannelController {
                                                          @Valid @RequestBody CreateWebChatChannelRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(WebChatChannelResponse.from(service.create(agentId,
                 new WebChatChannelService.Creation(request.turnstileSecret(), request.turnstileSiteKey(),
-                        request.allowedOrigins(), request.privacyPolicyUrl(), request.consentMode()))));
+                        request.allowedOrigins(), request.privacyPolicyUrl(), request.consentMode(),
+                        request.limits() == null ? null : request.limits().toDomain()))));
     }
 
     @GetMapping("/v1/web-chat-channels/{id}")

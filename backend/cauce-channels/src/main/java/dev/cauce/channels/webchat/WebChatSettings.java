@@ -18,7 +18,17 @@ import java.util.UUID;
  * trailing slash, and {@code https} unless the host is the local machine. There are no wildcards.
  */
 public record WebChatSettings(UUID channelConfigId, UUID tenantId, List<String> allowedOrigins,
-                              String turnstileSiteKey, String privacyPolicyUrl, ConsentMode consentMode) {
+                              String turnstileSiteKey, String privacyPolicyUrl, ConsentMode consentMode,
+                              WebChatLimits limits) {
+
+    /** Settings that keep the platform's limits. */
+    public WebChatSettings(UUID channelConfigId, UUID tenantId, List<String> allowedOrigins, String turnstileSiteKey,
+                           String privacyPolicyUrl, ConsentMode consentMode) {
+        this(channelConfigId, tenantId, allowedOrigins, turnstileSiteKey, privacyPolicyUrl, consentMode,
+                WebChatLimits.NONE);
+    }
+
+    /** The compact constructor of the full shape. */
 
     public static final int MAX_ORIGINS = 20;
     public static final int MAX_SITE_KEY_LENGTH = 100;
@@ -33,6 +43,7 @@ public record WebChatSettings(UUID channelConfigId, UUID tenantId, List<String> 
         turnstileSiteKey = required(turnstileSiteKey, "turnstile_site_key", MAX_SITE_KEY_LENGTH);
         privacyPolicyUrl = validatedUrl(privacyPolicyUrl);
         Objects.requireNonNull(consentMode, "consentMode");
+        limits = limits == null ? WebChatLimits.NONE : limits;
     }
 
     /** Whether a browser on {@code origin} may call this channel. */

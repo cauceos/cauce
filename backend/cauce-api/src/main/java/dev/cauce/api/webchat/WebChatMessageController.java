@@ -3,6 +3,7 @@ package dev.cauce.api.webchat;
 import dev.cauce.channels.webchat.ResolvedWebChat;
 import dev.cauce.channels.webchat.WebChatMessageService;
 import dev.cauce.orchestration.InboundMessageResult;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -27,10 +28,15 @@ public class WebChatMessageController {
 
     private final WebChatSessions sessions;
     private final WebChatMessageService messages;
+    private final WebChatRateLimiter limiter;
+    private final ClientIps ips;
 
-    public WebChatMessageController(WebChatSessions sessions, WebChatMessageService messages) {
+    public WebChatMessageController(WebChatSessions sessions, WebChatMessageService messages,
+                                    WebChatRateLimiter limiter, ClientIps ips) {
         this.sessions = sessions;
         this.messages = messages;
+        this.limiter = limiter;
+        this.ips = ips;
     }
 
     @PostMapping("/web/v1/{publicKey}/messages")
@@ -39,9 +45,19 @@ public class WebChatMessageController {
             @RequestAttribute(WebChatPaths.CHANNEL_ATTRIBUTE) ResolvedWebChat channel,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @RequestBody SendWebMessageRequest request) {
-        InboundMessageResult result = sessions.run(channel, authorization, session -> messages.send(channel, session,
-                request.content(), idempotencyKey, Boolean.TRUE.equals(request.newThread())));
+            @RequestBody SendWebMessageRequest request,
+            HttpServletRequest http) {
+        String ip = ips.hashOf(http);
+        InboundMessageResult result = sessions.run(channel, authorization, session -> {
+            limiter.hit(channel.channelConfigId(), channel.limits(), WebChatRateLimiter.Bucket.MESSAGES_PER_IP_MINUTE, ip);
+            String subject = session.id().toString();
+            limiter.hit(channel.channelConfigId(), channel.limits(),
+                    WebChatRateLimiter.Bucket.MESSAGES_PER_SESSION_MINUTE, subject);
+            limiter.hit(channel.channelConfigId(), channel.limits(), WebChatRateLimiter.Bucket.MESSAGES_PER_SESSION_DAY,
+                    subject);
+            return messages.send(channel, session, request.content(), idempotencyKey,
+                    Boolean.TRUE.equals(request.newThread()));
+        });
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new SendWebMessageResponse(result.conversationId(),
                 result.messageId(), result.invocationId()));
     }
@@ -53,7 +69,10 @@ public class WebChatMessageController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestParam(required = false) UUID cursor,
             @RequestParam(required = false) Integer limit) {
-        return WebMessagePageResponse.from(sessions.run(channel, authorization,
-                session -> messages.read(channel, session, cursor, limit)));
+        return WebMessagePageResponse.from(sessions.run(channel, authorization, session -> {
+            limiter.hit(channel.channelConfigId(), channel.limits(), WebChatRateLimiter.Bucket.READS_PER_SESSION_MINUTE,
+                    session.id().toString());
+            return messages.read(channel, session, cursor, limit);
+        }));
     }
 }

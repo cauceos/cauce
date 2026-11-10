@@ -36,6 +36,16 @@ public interface WebChatSettingsRepository extends JpaRepository<WebChatSettings
         String getConsent_mode();
 
         String getStatus();
+
+        Integer getSessions_per_ip_hour();
+
+        Integer getMessages_per_session_minute();
+
+        Integer getMessages_per_session_day();
+
+        Integer getMessages_per_ip_minute();
+
+        Integer getReads_per_session_minute();
     }
 
     /** Whether {@code tenantId} has an ACTIVE web chat, under RLS. */

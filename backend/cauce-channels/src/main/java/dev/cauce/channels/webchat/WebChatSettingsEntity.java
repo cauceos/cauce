@@ -33,6 +33,21 @@ public class WebChatSettingsEntity {
     @Column(name = "consent_mode", nullable = false, length = 20)
     private ConsentMode consentMode;
 
+    @Column(name = "sessions_per_ip_hour")
+    private Integer sessionsPerIpHour;
+
+    @Column(name = "messages_per_session_minute")
+    private Integer messagesPerSessionMinute;
+
+    @Column(name = "messages_per_session_day")
+    private Integer messagesPerSessionDay;
+
+    @Column(name = "messages_per_ip_minute")
+    private Integer messagesPerIpMinute;
+
+    @Column(name = "reads_per_session_minute")
+    private Integer readsPerSessionMinute;
+
     protected WebChatSettingsEntity() {
         // for JPA
     }
@@ -45,6 +60,22 @@ public class WebChatSettingsEntity {
         this.turnstileSiteKey = turnstileSiteKey;
         this.privacyPolicyUrl = privacyPolicyUrl;
         this.consentMode = consentMode;
+    }
+
+    public WebChatSettingsEntity(UUID channelConfigId, UUID tenantId, String[] allowedOrigins, String turnstileSiteKey,
+                                 String privacyPolicyUrl, ConsentMode consentMode, WebChatLimits limits) {
+        this(channelConfigId, tenantId, allowedOrigins, turnstileSiteKey, privacyPolicyUrl, consentMode);
+        this.sessionsPerIpHour = limits.sessionsPerIpHour();
+        this.messagesPerSessionMinute = limits.messagesPerSessionMinute();
+        this.messagesPerSessionDay = limits.messagesPerSessionDay();
+        this.messagesPerIpMinute = limits.messagesPerIpMinute();
+        this.readsPerSessionMinute = limits.readsPerSessionMinute();
+    }
+
+    /** The channel's own limits; null where it keeps the platform's. */
+    public WebChatLimits getLimits() {
+        return new WebChatLimits(sessionsPerIpHour, messagesPerSessionMinute, messagesPerSessionDay,
+                messagesPerIpMinute, readsPerSessionMinute);
     }
 
     public UUID getChannelConfigId() {

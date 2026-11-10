@@ -2,9 +2,9 @@
 
 Status: **Accepted** (2026-11-09, unit W0, with the owner's approval). Proposed the same day from
 the strategic chat's decisions (WC1–WC8), and completed in W0 with the public surface, the limits
-and the units. W1 (the channel, its public key and per-config CORS) and W2 (sessions) are built,
-and W3 (messages) is being built; W4–W7 are not. The first shop is CauceWebs (amendment of
-2026-11-10).
+and the units. W1 (the channel, its public key and per-config CORS), W2 (sessions) and W3
+(messages, polling, bounds and request limits) are built; W4–W7 are not. The first shop is
+CauceWebs (amendment of 2026-11-10).
 
 ## Context
 
@@ -330,6 +330,24 @@ so it can move from a tunnel to Cauce OS's own server without the page changing.
 - **Deployment:** the first test runs on a hidden page against an instance behind a tunnel, with
   `https://caucewebs.es` as the allowed origin. Production runs on Cauce OS's own server, never on
   CauceWebs's.
+
+## Amendment (2026-11-10): how W3 counts
+
+- **Fixed windows, not token buckets.** Each bucket of WC3 is a Redis counter per channel, subject
+  and window, incremented and given its lifetime in one atomic script, so a counter never outlives
+  its window. The bounds are the same per window; across a window's edge the rate can reach twice
+  the limit, which is accepted for one counter per subject.
+- **Order:** a session's open counts its IP before Turnstile is asked, so a flood never reaches
+  Cloudflare. A message counts its IP, then the session's minute and day, before the ingest.
+- **Redis down refuses the request** (503 `rate_limit_unavailable`): an unlimited anonymous
+  surface would be worse than an unavailable one. Past a limit the answer is 429 `rate_limited`
+  with `Retry-After`.
+- **The IP's HMAC key** is `cauce.web.ip-hash-key` (base64, 32 bytes), outside the database.
+  Without it, each process uses a random key of its own and logs a warning, which keeps the per-IP
+  limits per instance. `cauce.web.trusted-proxies` lists the exact addresses whose
+  `CF-Connecting-IP` is believed.
+- A channel's own limits are set at creation (`limits`), each positive and no higher than the
+  platform's (`cauce.web.*`).
 
 ## References
 
