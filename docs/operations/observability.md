@@ -72,6 +72,8 @@ What arrives:
 | Owner notices not sent (24 h) | `cauce_owner_notices_unsent` | — |
 | Clients past 80 % / at 100 % of their limit | `cauce_spend_alerts` | `threshold` |
 | Spend this month (US$) | `cauce_spend_month` | `tenant_id` |
+| Web chat responses (ADR 0014) | `cauce_web_responses` | `status` |
+| Web chat requests refused with the limiter down | `cauce_web_rate_limit_unavailable` | — |
 
 Tags never include a conversation, a message or an identity (ADR 0011, M1). With two agents per
 bar this is fine for tens of bars; review it from a few hundred.
@@ -107,6 +109,8 @@ per type. The script is idempotent: re-run it to change the bot or after editing
 | `cauce-queue-stuck` | the oldest due invocation has waited over 2 min | the worker's logs; is the application up, is the database reachable |
 | `cauce-audit-chain-behind` | audit events have waited over 5 min to be chained | ERROR logs of `AuditOutboxDrainer` in the logs stream |
 | `cauce-spend-limit-reached` | a client's agents are refused for its spend limit | `cauce_spend_month` for that `tenant_id`; raise or keep the limit |
+| `cauce-web-limiter-down` | a web chat request was refused because Redis could not count its limits (5 min) | Redis's container and the application's logs; the widget shows its friendly message and the channel's contact meanwhile |
+| `cauce-web-unavailable-rate` | over 20 % of the web chat's responses were 503 in 5 min (≥ 10) | `cauce_web_rate_limit_unavailable`; Turnstile (`turnstile_unavailable`) |
 
 The rules are evaluated every minute, and each series alerts on its own: a provider, an agent, a
 client. Once a series fires it stays silent for a while (30 min to 12 h, by rule), so a long outage

@@ -40,10 +40,12 @@ public class WebChatCorsFilter extends OncePerRequestFilter {
 
     private final WebChatChannelService channels;
     private final ObjectMapper objectMapper;
+    private final WebChatMetrics metrics;
 
-    public WebChatCorsFilter(WebChatChannelService channels, ObjectMapper objectMapper) {
+    public WebChatCorsFilter(WebChatChannelService channels, ObjectMapper objectMapper, WebChatMetrics metrics) {
         this.channels = channels;
         this.objectMapper = objectMapper;
+        this.metrics = metrics;
     }
 
     @Override
@@ -53,6 +55,15 @@ public class WebChatCorsFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        try {
+            decide(request, response, chain);
+        } finally {
+            metrics.response(response.getStatus()); // what the operator's 503 alert reads
+        }
+    }
+
+    private void decide(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         Optional<ResolvedWebChat> channel = WebChatPaths.publicKeyOf(request.getRequestURI()).flatMap(channels::resolve);
         String origin = request.getHeader(HttpHeaders.ORIGIN);

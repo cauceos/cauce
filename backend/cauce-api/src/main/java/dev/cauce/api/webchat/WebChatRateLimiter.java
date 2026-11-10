@@ -57,10 +57,12 @@ public class WebChatRateLimiter {
 
     private final StringRedisTemplate redis;
     private final WebChatProperties properties;
+    private final WebChatMetrics metrics;
 
-    public WebChatRateLimiter(StringRedisTemplate redis, WebChatProperties properties) {
+    public WebChatRateLimiter(StringRedisTemplate redis, WebChatProperties properties, WebChatMetrics metrics) {
         this.redis = redis;
         this.properties = properties;
+        this.metrics = metrics;
     }
 
     /**
@@ -77,6 +79,7 @@ public class WebChatRateLimiter {
         try {
             result = redis.execute(HIT, List.of(key), String.valueOf(bucket.window.toMillis()));
         } catch (DataAccessException e) {
+            metrics.limiterUnavailable(); // the operator is alerted (cauce-web-limiter-down)
             throw new RateLimitUnavailableException("The request limits cannot be checked", e);
         }
         long count = ((Number) result.get(0)).longValue();

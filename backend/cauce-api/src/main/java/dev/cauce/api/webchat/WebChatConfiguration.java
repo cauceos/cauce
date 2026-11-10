@@ -17,9 +17,10 @@ public class WebChatConfiguration {
 
     @Bean
     public FilterRegistrationBean<WebChatCorsFilter> webChatCorsFilter(WebChatChannelService channels,
-                                                                     ObjectMapper objectMapper) {
+                                                                     ObjectMapper objectMapper,
+                                                                     WebChatMetrics metrics) {
         FilterRegistrationBean<WebChatCorsFilter> registration =
-                new FilterRegistrationBean<>(new WebChatCorsFilter(channels, objectMapper));
+                new FilterRegistrationBean<>(new WebChatCorsFilter(channels, objectMapper, metrics));
         registration.addUrlPatterns(WebChatPaths.PREFIX + "*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
         return registration;

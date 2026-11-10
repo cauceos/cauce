@@ -115,6 +115,16 @@ alert "${PREFIX}spend-limit-reached" 15 720 \
   'sum by (tenant_id) (sum_over_time(cauce_orchestration_fallbacks{failure_type="SPEND_LIMIT_REACHED"}[15m])) > 0' \
   'Cliente {tenant_id}: {value} mensajes rechazados en 15 min'
 
+alert "${PREFIX}web-limiter-down" 5 30 \
+  "El limitador de peticiones del chat web no responde (Redis): sus peticiones se rechazan con 503." \
+  'sum(sum_over_time(cauce_web_rate_limit_unavailable[5m])) > 0' \
+  'Chat web: {value} peticiones rechazadas en 5 min sin poder contar sus límites'
+
+alert "${PREFIX}web-unavailable-rate" 5 30 \
+  "Más del 20 % de las respuestas del chat web fueron 503 en 5 minutos (al menos 10 respuestas)." \
+  'round(100 * sum(sum_over_time(cauce_web_responses{status="503"}[5m])) / sum(sum_over_time(cauce_web_responses[5m]))) > 20 and sum(sum_over_time(cauce_web_responses[5m])) >= 10' \
+  'Chat web: {value} % de respuestas 503'
+
 # --- The dashboard -----------------------------------------------------------------------------------
 DASHBOARD="$(dirname "$0")/dashboard.json"
 # The dashboards with this one's title, compared inside Python: no title crosses the shell's encoding.
