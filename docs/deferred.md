@@ -30,6 +30,7 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 ## Business capabilities (ADR 0007)
 
+- **Stock and order status for a shop (ADR 0014, WC6).** `CatalogSource.stockOf`, `OrderStatusSource` with its native adapter, and `get_order_status` (order number plus email, with failed attempts limited per session and per IP hash). Not built: the first shop, CauceWebs, sells plans with neither (ADR 0014, amendment of 2026-11-10). They land with the first shop that has stock, together with the out-of-stock scenario.
 - **Choosing an adapter per business.** Each business port (`BookingProvider`, `CatalogSource`, `BusinessProfileSource`, `HandoffSink`, `KnowledgeGapSink`) has one adapter, the native one. Selecting an external one per tenant (a String id validated by the service, like `model_provider`) arrives with the second adapter of a port (ADR 0007, B2).
 - **An MCP client.** Where it fits is recorded in ADR 0007, B11; nothing is built.
 - **Several venues of one business with a unified view.** One profile, catalog and agenda per CLIENT tenant; two venues are two tenants (B5).

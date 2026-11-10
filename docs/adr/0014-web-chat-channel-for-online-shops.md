@@ -2,8 +2,9 @@
 
 Status: **Accepted** (2026-11-09, unit W0, with the owner's approval). Proposed the same day from
 the strategic chat's decisions (WC1–WC8), and completed in W0 with the public surface, the limits
-and the units. W1 (the channel, its public key and per-config CORS) and W2 (sessions) are built;
-W3–W7 are not.
+and the units. W1 (the channel, its public key and per-config CORS) and W2 (sessions) are built,
+and W3 (messages) is being built; W4–W7 are not. The first shop is CauceWebs (amendment of
+2026-11-10).
 
 ## Context
 
@@ -215,9 +216,9 @@ getting in the way. It is configured per channel.
 | **W2** | Sessions: Turnstile verification, `web_sessions`, the token, the `SESSION_ID` identity, the 30-day sliding expiry and its purge, consent. |
 | **W3** | Messages over `/web/v1`: ingest into the existing pipeline, polling with `awaiting_reply`, Redis rate limits and message bounds. |
 | **W4** | The widget (`frontend/web-widget`): one `<script>` with the public key, Shadow DOM, chat, AI notice, privacy notice or acceptance, polling. |
-| **W5** | Shop tools: `CatalogSource.stockOf`, `OrderStatusSource` and its native adapter, `get_order_status` with its attempt limits. |
-| **W6** | The shop pack and the harness: `examples/comercio/`, a fixture-agnostic run, the WC7 scenarios. |
-| **W7** | The shop-assistant mode (WC8): bubble, signals, templates, page context, `show_products` and the card part (with ADR 0004's capabilities for `web_chat`), persona, variants and their metrics, and the WC8 scenarios. |
+| **W5** | What the first shop needs (amendment "The first shop: CauceWebs"): a case's generic contact, the `demo` category and the plans' `estado` attribute. Stock and orders wait for a shop with stock. |
+| **W6** | The first shop's pack and the harness: `examples/caucewebs/`, a fixture-agnostic run, its scenarios, and a first baseline. |
+| **W7** | The shop-assistant mode (WC8) on the landing page and on `/pagar`: bubble, signals by route, templates, page context, `show_products` with plan cards (with ADR 0004's capabilities for `web_chat`), persona, variants and their metrics, and its scenarios. |
 
 The order is dependency first: W1–W3 make the channel work over HTTP and W4 puts it in a page.
 W5 and W6 make it a shop's agent, and W7 builds on all of them. Each unit lands with its tests,
@@ -287,6 +288,48 @@ and `admin.channel.enabled`. The switch takes effect at once and deletes nothing
   link. With acceptance, the widget sends `notice_version` with the session request, and the
   session records SHA-256 of `notice:{version}` and `privacy:{url}`. A change to either is a
   different notice.
+
+## Amendment (2026-11-10): the first shop is CauceWebs
+
+The first shop is CauceWebs (`caucewebs.es`) itself, not an e-commerce site with stock. That
+changes W5–W7. W1–W4 do not change, except that the widget takes the instance's URL as an attribute,
+so it can move from a tunnel to Cauce OS's own server without the page changing.
+
+- **The catalog is the plans** (Básico, Básico con dominio, Plus, Tienda), each with its price and
+  what it includes. A declared attribute `estado` says whether a feature is `disponible` or
+  `previsto`. There is no stock and no order status, so `CatalogSource.stockOf`,
+  `OrderStatusSource` and `get_order_status` (WC6) wait, in `docs/deferred.md`, for the first shop
+  with stock.
+- **The sale is a demo request.** The agent collects the bar's name, its town and a contact, and
+  opens a case with `escalate_to_owner` (category `demo`). The case reaches the owner's bot as every
+  case does.
+- **A case's contact becomes generic:** a `contact` with its type (`phone` or `email`) and a format
+  check by type. An incomplete contact is asked for, never completed (the voice-note rule of ADR 0012
+  applied to writing).
+- **The agent's rules:**
+  - it never invents prices, conditions or features;
+  - what is planned is said to be planned;
+  - conditions are referred to `caucewebs.es/condiciones`.
+- **The shop-assistant mode (WC8)** runs on the landing page and on `/pagar`, with signals by route.
+  On `/pagar`, the idle cart is a plan chosen and not paid, and there is also exit intent. A card
+  is a plan, and its button takes the person to `/pagar?plan=…` through the shop's hook.
+  `trackPurchase` is called when the payment is confirmed.
+- **Scenarios:**
+  - exact prices;
+  - the right plan for what the bar asks for;
+  - a demo request with complete and with incomplete data;
+  - a question about something that does not exist;
+  - pressure for discounts;
+  - prompt injection;
+  - from WC8, a recommendation only from the catalog and correct use of the `/pagar` context. The
+    out-of-stock scenario waits with the stock.
+- **Tenancy:** a partner "CauceWebs" with a client "CauceWebs · ventas" for this agent, since the
+  spend limit is set on a client.
+- **Privacy:** an informational notice (`NOTICE`) linking to caucewebs.es's privacy policy, which
+  CauceWebs updates before publishing.
+- **Deployment:** the first test runs on a hidden page against an instance behind a tunnel, with
+  `https://caucewebs.es` as the allowed origin. Production runs on Cauce OS's own server, never on
+  CauceWebs's.
 
 ## References
 

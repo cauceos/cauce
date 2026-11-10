@@ -2,6 +2,7 @@ package dev.cauce.memory.message;
 
 import dev.cauce.core.message.MessageRole;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +24,17 @@ public interface MessageRepository extends JpaRepository<MessageEntity, UUID> {
      * ({@code ConversationGateway}), which needs the full thread.
      */
     List<MessageEntity> findByConversationIdOrderBySeqAsc(UUID conversationId);
+
+    /**
+     * A conversation's messages of {@code roles} after position {@code afterSeq}, in conversation order:
+     * the web chat's polling read (ADR 0014, WC4), which shows the person only what they wrote and the
+     * replies they received.
+     */
+    List<MessageEntity> findByConversationIdAndRoleInAndSeqGreaterThanOrderBySeqAsc(
+            UUID conversationId, Collection<MessageRole> roles, long afterSeq, Limit limit);
+
+    /** How many of a conversation's messages have one of {@code roles}: the web chat's thread bound. */
+    long countByConversationIdAndRoleIn(UUID conversationId, Collection<MessageRole> roles);
 
     /**
      * First keyset page of a conversation's messages without one role, in conversation order. The

@@ -12,6 +12,9 @@ import dev.cauce.channels.config.ChannelConfigNotFoundException;
 import dev.cauce.channels.spi.ChannelPayloadException;
 import dev.cauce.channels.webchat.ChannelDisabledException;
 import dev.cauce.channels.webchat.ConsentRequiredException;
+import dev.cauce.channels.webchat.InvalidSessionException;
+import dev.cauce.channels.webchat.InvalidWebMessageException;
+import dev.cauce.channels.webchat.ThreadFullException;
 import dev.cauce.channels.webchat.TurnstileRejectedException;
 import dev.cauce.channels.webchat.TurnstileUnavailableException;
 import dev.cauce.channels.whatsapp.AppOutsideHierarchyException;
@@ -131,6 +134,9 @@ public class GlobalExceptionHandler {
             Map.entry(SpendLimitRequiredException.class, "spend_limit_required"),
             Map.entry(ConsentRequiredException.class, "consent_required"),
             Map.entry(ChannelDisabledException.class, "channel_disabled"),
+            Map.entry(InvalidSessionException.class, "invalid_session"),
+            Map.entry(InvalidWebMessageException.class, "invalid_message"),
+            Map.entry(ThreadFullException.class, "thread_full"),
             Map.entry(TurnstileRejectedException.class, "turnstile_failed"),
             Map.entry(TurnstileUnavailableException.class, "turnstile_unavailable"),
             // 422 UNPROCESSABLE_ENTITY
@@ -187,7 +193,8 @@ public class GlobalExceptionHandler {
             ChannelPayloadException.class,
             InvalidChannelConfigRequestException.class,
             InvalidCursorException.class,
-            ConsentRequiredException.class})
+            ConsentRequiredException.class,
+            InvalidWebMessageException.class})
     public ResponseEntity<ErrorResponse> handleBadRequest(RuntimeException ex) {
         return clientError(HttpStatus.BAD_REQUEST, ex);
     }
@@ -249,6 +256,11 @@ public class GlobalExceptionHandler {
         return serverError(HttpStatus.INTERNAL_SERVER_ERROR, ex, GENERIC_500_MESSAGE);
     }
 
+    @ExceptionHandler(InvalidSessionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSession(InvalidSessionException ex) {
+        return clientError(HttpStatus.UNAUTHORIZED, ex);
+    }
+
     @ExceptionHandler(TurnstileRejectedException.class)
     public ResponseEntity<ErrorResponse> handleTurnstileRejected(TurnstileRejectedException ex) {
         return clientError(HttpStatus.FORBIDDEN, ex);
@@ -269,6 +281,7 @@ public class GlobalExceptionHandler {
             PhoneNumberAlreadyBoundException.class,
             SpendLimitRequiredException.class,
             ChannelDisabledException.class,
+            ThreadFullException.class,
             MaxRetriesExceededException.class,
             InvalidPendingInvocationTransitionException.class})
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex) {
