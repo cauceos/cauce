@@ -162,6 +162,10 @@ paquete dice la tasa re-evaluada y por qué (`1446Z` de CauceWebs). Si la compro
 herramientas, argumentos o estado, o es una regla general, hace falta una **batería nueva**: las
 trazas no guardan los resultados de las herramientas ni el estado de cada turno.
 
+La simulación de `a074531` sobre las respuestas de `1223Z` no es una re-evaluación: no le da al bar una
+tasa nueva, solo mostró que su detección de platos e importes no cambiaba. `1223Z` sigue vigente con su
+tasa tal como se ejecutó, y la próxima batería del bar se mide ya con las reglas nuevas.
+
 ### Niveles
 
 `bloqueante` es lo inaceptable: inventar platos o alérgenos, actuar sin la confirmación del
