@@ -1,11 +1,10 @@
 {
-  "declared_attributes": ["estado"],
+  "declared_attributes": [],
   "items": [
     {
       "ref": "plan-basico", "section": "Webs para bares y restaurantes", "name": "Plan Básico", "price": 49,
       "description": "Para bares que cambian la carta de vez en cuando. 49 € + IVA al año.",
       "attributes": {
-        "estado": "disponible",
         "periodo": "año",
         "iva": "precio sin IVA",
         "incluye": ["Todo lo que lleva la web", "Dirección tunegocio.caucewebs.es", "Una renovación de fotos al año"],
@@ -17,7 +16,6 @@
       "ref": "plan-basico-dominio", "section": "Webs para bares y restaurantes", "name": "Plan Básico con dominio propio", "price": 59,
       "description": "El Plan Básico con dominio propio .es. 59 € + IVA al año.",
       "attributes": {
-        "estado": "disponible",
         "periodo": "año",
         "iva": "precio sin IVA",
         "incluye": ["Todo lo del Plan Básico", "Dominio propio .es"],
@@ -29,7 +27,6 @@
       "ref": "plan-plus", "section": "Webs para bares y restaurantes", "name": "Plan Plus", "price": 79,
       "description": "Para los que cambian carta, precios o platos del día a menudo. 79 € + IVA al año.",
       "attributes": {
-        "estado": "disponible",
         "periodo": "año",
         "iva": "precio sin IVA",
         "incluye": ["Todo lo del Plan Básico", "Dominio propio .es incluido", "Menú del día y avisos en portada («Hoy partido», «Cerrado por vacaciones»)", "Fotos nuevas cuando quieras"],
@@ -41,7 +38,6 @@
       "ref": "plan-tienda", "section": "Tiendas online", "name": "Plan Tienda", "price": 24.99,
       "description": "Tienda online a medida con la marca del negocio. 24,99 € + IVA al mes o 250 € + IVA al año, más 99 € + IVA de puesta en marcha. Sin permanencia.",
       "attributes": {
-        "estado": "disponible",
         "periodo": "mes",
         "iva": "precios sin IVA",
         "cuota_anual": 250,
@@ -56,25 +52,8 @@
       "ref": "videos-redes", "section": "Vídeos para redes", "name": "Vídeos para redes",
       "description": "Vídeos cortos para redes sociales con la marca del negocio. Todavía no tienen precio cerrado; la muestra es gratis y sin compromiso, y lleva marca de agua.",
       "attributes": {
-        "estado": "disponible",
         "precio": "sin precio cerrado todavía",
         "muestra": "gratis y sin compromiso, con marca de agua"
-      }
-    },
-    {
-      "ref": "caucereviews", "section": "Módulos", "name": "CauceReviews",
-      "description": "Más reseñas en Google, todas respondidas, y cada semana sabes cómo vas frente a los bares de tu calle. Aún no se puede contratar: está en lista de espera en caucewebs.es/proximamente.",
-      "attributes": {
-        "estado": "previsto",
-        "precio": "sin precio todavía"
-      }
-    },
-    {
-      "ref": "cauceteam", "section": "Módulos", "name": "CauceTeam",
-      "description": "Los camareros fichan con el móvil, los turnos se hacen en dos minutos y el registro horario queda listo si viene Inspección. Aún no se puede contratar: está en lista de espera en caucewebs.es/proximamente.",
-      "attributes": {
-        "estado": "previsto",
-        "precio": "sin precio todavía"
       }
     }
   ]

@@ -22,7 +22,7 @@ const catalog = JSON.parse(readFileSync(option('--catalogo', join(here, 'caucewe
 const sheet = JSON.parse(readFileSync(option('--ficha', join(here, 'caucewebs', 'ficha.json')), 'utf8'));
 
 // Las páginas públicas donde salen precios y condiciones.
-const PAGES = ['', 'precios', 'webs', 'tiendas', 'videos', 'preguntas', 'condiciones', 'condiciones-tienda', 'proximamente', 'recomienda'];
+const PAGES = ['', 'precios', 'webs', 'tiendas', 'videos', 'preguntas', 'condiciones', 'condiciones-tienda', 'recomienda'];
 
 function text(html) {
   return html
@@ -127,15 +127,6 @@ for (const [key, value] of Object.entries(sheet.facts ?? {})) collect(`ficha, ${
 for (const [amount, where] of written) {
   if (!new RegExp(`(^|[^\\d,])${amount.replace(',', '\\,')}\\s*€`).test(everything)) {
     differences.push(`${where}: escribe ${amount} €, que no sale en ninguna página de ${web}.`);
-  }
-}
-
-// Lo previsto solo se nombra si la web pública ya lo enseña.
-for (const item of catalog.items.filter((i) => i.attributes?.estado === 'previsto')) {
-  if (pages.proximamente.includes(item.name)) {
-    ok.push(`${item.ref}: previsto, y la web lo enseña en /proximamente/`);
-  } else {
-    differences.push(`${item.ref}: está como previsto, pero ${web}/proximamente/ no lo enseña; quítalo del catálogo.`);
   }
 }
 

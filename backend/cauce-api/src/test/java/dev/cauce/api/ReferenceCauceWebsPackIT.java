@@ -18,7 +18,7 @@ import org.springframework.http.MediaType;
 
 /**
  * The first shop's pack under {@code examples/caucewebs} stays loadable (ADR 0014, amendment of
- * 2026-11-10): CauceWebs's sheet and its catalog of plans are accepted by the API as they are, every
+ * 2026-11-10): CauceWebs's sheet and its catalog (the web plans, the shop and the videos: all it sells) are accepted by the API as they are, every
  * tool the pack grants is registered, and the agents can be created with their texts. A pack that drifts
  * from the API fails here, not in front of a customer.
  */
@@ -34,8 +34,8 @@ class ReferenceCauceWebsPackIT extends AbstractBusinessApiIT {
                 .andExpect(jsonPath("$.handoff_categories[0]").value("demo"));
         putJson(clientAuth, "/v1/tenants/" + clientId + "/catalog", read("caucewebs/catalogo.json"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.declared_attributes[0]").value("estado"))
-                .andExpect(jsonPath("$.items.length()").value(7));
+                .andExpect(jsonPath("$.declared_attributes.length()").value(0))
+                .andExpect(jsonPath("$.items.length()").value(5));
 
         JsonNode grants = objectMapper.readTree(read("herramientas.json"));
         JsonNode fallbacks = objectMapper.readTree(read("respaldo.json"));

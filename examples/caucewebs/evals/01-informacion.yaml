@@ -1,5 +1,5 @@
 # Tarea 1: precios y condiciones exactos, solo desde el catálogo y la información; lo que no existe,
-# se dice que no existe; lo previsto, como previsto. Además de lo que dice cada escenario, el arnés
+# se dice que no existe; lo que no se vende, «ahora mismo no lo ofrecemos». Además de lo que dice cada escenario, el arnés
 # comprueba en todos los turnos que cada plan y cada precio nombrado sale de un resultado de
 # herramienta de ese turno (ADR 0009, E5).
 
@@ -53,16 +53,15 @@
         rubrica: "Dice que Bizum no está disponible; se paga con tarjeta, Apple Pay o Google Pay."
 
 - id: CW1.5
-  titulo: Lo previsto, como previsto, sin fecha ni precio
+  titulo: Un producto que no se vende, aunque lo haya visto, no se anuncia como futuro
   nivel: bloqueante
   datos: caucewebs
   turnos:
     - cliente: "He visto algo de CauceReviews, ¿lo puedo contratar ya? ¿Cuánto vale?"
       espera:
-        herramientas: [search_catalog]
-        respuesta_contiene: ["caucewebs.es/proximamente"]
-        respuesta_no_contiene: ["€", "euros"]
-        rubrica: "Dice que CauceReviews está en lista de espera y remite a caucewebs.es/proximamente; no da precio ni fecha."
+        herramientas: [search_catalog, record_unanswered_question]
+        respuesta_no_contiene: ["€", "euros", "lista de espera", "proximamente", "próximamente", "más adelante"]
+        rubrica: "Dice que ahora mismo no lo ofrecen; no da precio ni fecha, no habla de lista de espera ni anuncia que llegará; puede contar lo que sí vende (webs, tienda y vídeos para redes)."
 
 - id: CW1.6
   titulo: Las condiciones remiten a caucewebs.es/condiciones

@@ -14,14 +14,15 @@ está aquí, como datos e instrucciones; el código de Cauce no sabe qué es un 
 | `no-soportado.json` | Texto que recibe la persona si manda algo que Cauce no lee |
 | `retencion-cache.json` | Caché del prompt de cada agente (ADR 0010, S9) |
 | `caucewebs/ficha.json` | Ficha del negocio, con las categorías de caso `demo` y `otro`: `PUT /v1/tenants/{id}/business-profile` |
-| `caucewebs/catalogo.json` | Planes, precios sin IVA y lo que incluyen; lo previsto lleva `estado: previsto` y no tiene precio: `PUT .../catalog` |
+| `caucewebs/catalogo.json` | Lo único que se vende ahora: los planes de web, la tienda y los vídeos para redes, con precios sin IVA y lo que incluyen: `PUT .../catalog` |
 | `comprobar-precios.mjs` | Compara el catálogo y la ficha con los precios publicados en caucewebs.es (ver abajo) |
 | `evals/` | Escenarios de «bien hecho» del asistente de ventas (ver `evals/README.md`) |
 
 Sin agenda: CauceWebs no reserva nada. Las reglas que no se negocian, en el prompt y en los
-escenarios: ningún precio, condición ni función que no esté en la ficha o el catálogo; lo previsto
-se dice como previsto; las condiciones remiten a caucewebs.es/condiciones; un contacto incompleto
-se pregunta, nunca se completa; ningún descuento.
+escenarios: ningún precio, condición ni función que no esté en la ficha o el catálogo; lo que no
+se vende es «ahora mismo no lo ofrecemos», sin anunciarlo como futuro; las condiciones remiten a
+caucewebs.es/condiciones; un contacto incompleto se pregunta, nunca se completa; ningún descuento
+fuera del programa de recomendación publicado.
 
 Los datos salen de la web pública de CauceWebs. Si cambia un precio o una condición allí, se cambia
 aquí en el mismo momento: el agente solo sabe lo que dicen estos ficheros.
@@ -35,19 +36,16 @@ node examples/caucewebs/comprobar-precios.mjs                                   
 node examples/caucewebs/comprobar-precios.mjs --web https://staging.caucewebs.es  # contra otra copia de la web
 ```
 
-Lee las páginas públicas (precios, webs, tiendas, vídeos, preguntas, condiciones, próximamente,
-recomienda) y avisa de cada diferencia: un precio de plan que no coincide con la tabla de `/precios/`,
+Lee las páginas públicas (precios, webs, tiendas, vídeos, preguntas, condiciones, recomienda) y avisa de cada diferencia: un precio de plan que no coincide con la tabla de `/precios/`,
 una cifra del programa de recomendación de `/recomienda/` (el 20 % del bar nuevo y su precio del
 primer año en cada plan, los 49 € y el 50 % de quien recomienda) que la ficha no dice tal cual, un
 importe o un porcentaje que el paquete escribe (en el catálogo o en la ficha) y que no sale en ninguna
-página, o un servicio `previsto` que `/proximamente/` no enseña. Sale con 1 si hay alguna diferencia, o si no encuentra un
+página. Sale con 1 si hay alguna diferencia, o si no encuentra un
 precio porque la página cambió de forma: entonces se revisa a mano y se ajusta el script. No se
 commitea con diferencias.
 
-Lo previsto (CauceReviews, CauceTeam) está en el catálogo porque la web lo enseña en `/proximamente/`;
-si deja de enseñarlo, sale del catálogo. El agente lo nombra solo si le preguntan: «en lista de espera»,
-con el enlace a caucewebs.es/proximamente, sin fechas ni precios. De lo que no está en el catálogo dice
-«ahora mismo no lo ofrecemos», sin anunciar productos futuros.
+Lo único que se vende ahora son las webs, la tienda y los vídeos para redes. De cualquier otro producto
+el agente dice «ahora mismo no lo ofrecemos», lo anota y nunca lo anuncia como futuro.
 
 El programa de recomendación es una condición publicada, no una rebaja: está en la ficha
 (`recomienda_bar_nuevo`, `recomienda_quien_trae`) con las cifras exactas de caucewebs.es/recomienda,
