@@ -1,6 +1,7 @@
 package dev.cauce.api.support;
 
 import java.time.Clock;
+import java.time.Duration;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -80,10 +81,14 @@ public abstract class AbstractApiIntegrationTest {
 
     /**
      * Resets all tenant-scoped tables via the privileged owner connection. cauce_app is
-     * intentionally not granted TRUNCATE, so tests clean up through the owner.
+     * intentionally not granted TRUNCATE, so tests clean up through the owner. Retried when
+     * Postgres aborts it as a deadlock victim: another cached context's worker may still be on an
+     * earlier test's invocation (see {@link DeadlockRetry}).
      */
     protected void truncateAll() {
-        new JdbcTemplate(adminDataSource).execute(
-                "TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox, llm_usage_records, channel_inbound_receipts, channel_configs, whatsapp_apps, api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, identities, agents, tenants CASCADE");
+        JdbcTemplate jdbc = new JdbcTemplate(adminDataSource);
+        DeadlockRetry.run(() -> jdbc.execute(
+                "TRUNCATE TABLE audit_chain_heads, audit_log_entries, audit_outbox, llm_usage_records, channel_inbound_receipts, channel_configs, whatsapp_apps, api_keys, ingest_idempotency_records, pending_invocations, messages, conversations, identities, agents, tenants CASCADE"),
+                5, Duration.ofMillis(200));
     }
 }
