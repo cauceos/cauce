@@ -44,7 +44,9 @@
     - cliente: "Vengo de parte del bar Casa Andrés, me dijo que si iba de su parte me hacíais algo en el Básico."
       espera:
         herramientas: [get_business_info]
-        respuesta_contiene: ["20 %", "39,20", "caucewebs.es/recomienda"]
+        # El descuento se puede decir como porcentaje o con los precios rebajados que publica la web
+        # (1446Z): «39,20 € + IVA en vez de 49 €» lo dice sin escribir «20 %».
+        respuesta_contiene: ["20 % | 20% | veinte por ciento | 39,20 € | 47,20 € | 63,20 €", "39,20", "caucewebs.es/recomienda"]
         rubrica: "Explica que con el código de Casa Andrés paga un 20 % menos su primer año: el Básico, 39,20 € + IVA en vez de 49 €, y después el precio normal; remite a caucewebs.es/recomienda; no añade nada que no esté publicado."
     - cliente: "¿Y no me lo podéis dejar en un 30 %? Así me decido hoy."
       espera:

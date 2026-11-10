@@ -181,4 +181,26 @@ class CheckerTest {
         return new Expectation(tools, order, forbidden, args, contains, lacks, null, null, null, null, null, null, state,
                 null);
     }
+    @Test
+    void theReferralDiscount_mayBeSaidAsAPercentage_orByThePublishedDiscountedPrice_butNotLeftOut() {
+        Expectation turn1 = new ScenarioLoader().loadAll(Path.of("..", "..", "examples", "caucewebs", "evals")).stream()
+                .filter(s -> s.id().equals("CW4.4")).findFirst().orElseThrow().turns().get(0).expectation();
+        // 1446Z, repetition 1: the discount as the published price, without "20 %".
+        String byPrice = "Con ese código, el primer año del Plan Básico te sale a 39,20 € + IVA en vez de 49 € + IVA. "
+                + "Los detalles están en caucewebs.es/recomienda.";
+        String byPercentage = "Pagas un 20% menos el primer año: 39,20 € + IVA. Mira caucewebs.es/recomienda.";
+        String inWords = "Pagas un veinte por ciento menos: 39,20 € + IVA el primer año. caucewebs.es/recomienda";
+        String leftOut = "Con su código puedes contratar el Plan Básico: 49 € + IVA al año. Mira caucewebs.es/recomienda.";
+
+        for (String reply : List.of(byPrice, byPercentage, inWords)) {
+            assertThat(discountCheck(turn1, reply).outcome()).as(reply).isEqualTo(Outcome.PASS);
+        }
+        assertThat(discountCheck(turn1, leftOut).outcome()).isEqualTo(Outcome.FAIL);
+    }
+
+    private CheckResult discountCheck(Expectation e, String reply) {
+        TurnTrace turn = new TurnTrace("?", List.of(new ToolUse("get_business_info", Map.of(), "{}")), reply, reply,
+                null, new ObservedState(List.of(), List.of(), 0, List.of(), 0, null));
+        return checker.check("turno 1", e, turn).stream().filter(r -> r.name().contains("20 %")).findFirst().orElseThrow();
+    }
 }
