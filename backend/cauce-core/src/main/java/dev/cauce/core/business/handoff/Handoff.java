@@ -45,14 +45,14 @@ public final class Handoff {
     private final String category;
     private final String summary;
     private final String contactName;
-    private final String contactPhone;
+    private final Contact contact;
     private final String customerMessage;
     private final Status status;
     private final Instant createdAt;
     private final Instant resolvedAt;
 
     private Handoff(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId, UUID identityId,
-                    String category, String summary, String contactName, String contactPhone,
+                    String category, String summary, String contactName, Contact contact,
                     String customerMessage, Status status, Instant createdAt, Instant resolvedAt) {
         this.id = id;
         this.tenantId = tenantId;
@@ -63,7 +63,7 @@ public final class Handoff {
         this.category = category;
         this.summary = summary;
         this.contactName = contactName;
-        this.contactPhone = contactPhone;
+        this.contact = contact;
         this.customerMessage = customerMessage;
         this.status = status;
         this.createdAt = createdAt;
@@ -71,28 +71,36 @@ public final class Handoff {
     }
 
     /**
-     * What the agent hands over. The phone is optional, and so is {@code customerMessage}: the
-     * person's request in their own words, quoted from one of their messages — the adapter checks
-     * it is theirs — kept apart from the agent's summary, without the quotation marks it may have
-     * been wrapped in.
+     * What the agent hands over. The contact (a phone or an e-mail, ADR 0014) is optional, and so is
+     * {@code customerMessage}: the person's request in their own words, quoted from one of their
+     * messages — the adapter checks it is theirs — kept apart from the agent's summary, without the
+     * quotation marks it may have been wrapped in.
      */
-    public record Request(String category, String summary, String contactName, String contactPhone,
+    public record Request(String category, String summary, String contactName, Contact contact,
                           String customerMessage) {
 
         public Request {
             category = required(category, "category", MAX_CATEGORY_LENGTH).toLowerCase(Locale.ROOT);
             summary = required(summary, "summary", MAX_SUMMARY_LENGTH);
             contactName = required(contactName, "contact name", Booking.MAX_CONTACT_NAME_LENGTH);
-            contactPhone = contactPhone == null || contactPhone.isBlank() ? null
-                    : required(contactPhone, "contact phone", Booking.MAX_CONTACT_PHONE_LENGTH);
             customerMessage = customerMessage == null ? null : QUOTES.matcher(customerMessage).replaceAll("");
             customerMessage = customerMessage == null || customerMessage.isBlank() ? null
                     : required(customerMessage, "customer message", MAX_CUSTOMER_MESSAGE_LENGTH);
         }
 
-        /** A request without the person's own words. */
+        /** A request whose contact is a phone, checked as {@link Contact#phone}; blank is none. */
+        public Request(String category, String summary, String contactName, String contactPhone,
+                       String customerMessage) {
+            this(category, summary, contactName, phoneOrNone(contactPhone), customerMessage);
+        }
+
+        /** A request with a phone and without the person's own words. */
         public Request(String category, String summary, String contactName, String contactPhone) {
-            this(category, summary, contactName, contactPhone, null);
+            this(category, summary, contactName, phoneOrNone(contactPhone), null);
+        }
+
+        private static Contact phoneOrNone(String phone) {
+            return phone == null || phone.isBlank() ? null : Contact.phone(phone);
         }
     }
 
@@ -102,17 +110,17 @@ public final class Handoff {
         Objects.requireNonNull(request, "request");
         return new Handoff(UuidGenerator.newV7(), requester.tenantId(), Booking.newCode(), requester.agentId(),
                 requester.conversationId(), requester.identityId(), request.category(), request.summary(),
-                request.contactName(), request.contactPhone(), request.customerMessage(), Status.OPEN,
+                request.contactName(), request.contact(), request.customerMessage(), Status.OPEN,
                 Instant.now().truncatedTo(ChronoUnit.MICROS), null);
     }
 
     /** Rebuilds a persisted handoff. For the persistence layer only. */
     public static Handoff rehydrate(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId,
                                     UUID identityId, String category, String summary, String contactName,
-                                    String contactPhone, String customerMessage, Status status, Instant createdAt,
+                                    Contact contact, String customerMessage, Status status, Instant createdAt,
                                     Instant resolvedAt) {
         return new Handoff(id, tenantId, code, agentId, conversationId, identityId, category, summary, contactName,
-                contactPhone, customerMessage, status, createdAt, resolvedAt);
+                contact, customerMessage, status, createdAt, resolvedAt);
     }
 
     /** This handoff resolved now; resolving a resolved one keeps its first resolution. */
@@ -121,7 +129,7 @@ public final class Handoff {
             return this;
         }
         return new Handoff(id, tenantId, code, agentId, conversationId, identityId, category, summary, contactName,
-                contactPhone, customerMessage, Status.RESOLVED, createdAt,
+                contact, customerMessage, Status.RESOLVED, createdAt,
                 Instant.now().truncatedTo(ChronoUnit.MICROS));
     }
 
@@ -172,8 +180,14 @@ public final class Handoff {
         return contactName;
     }
 
+    /** How to reach the person, a phone or an e-mail, if they gave one. */
+    public Optional<Contact> contact() {
+        return Optional.ofNullable(contact);
+    }
+
+    /** The contact's value, if it is a phone. */
     public Optional<String> contactPhone() {
-        return Optional.ofNullable(contactPhone);
+        return contact().filter(c -> c.type() == Contact.Type.PHONE).map(Contact::value);
     }
 
     /** The person's request in their own words, if the agent quoted them; never the agent's text. */

@@ -116,6 +116,9 @@ class OwnerApiIT extends AbstractBusinessApiIT {
                 .andExpect(status().isOk()));
         assertThat(handoffs.get("data")).hasSize(1);
         assertThat(handoffs.at("/data/0/contact_name").asText()).isEqualTo("Marta");
+        assertThat(handoffs.at("/data/0/contact").asText()).isEqualTo("+34 600 111 222");
+        assertThat(handoffs.at("/data/0/contact_type").asText()).isEqualTo("PHONE");
+        assertThat(handoffs.at("/data/0/contact_phone").asText()).isEqualTo("+34 600 111 222");
         getAs(clientAuth, "/v1/tenants/" + clientId + "/owner-notifications").andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].kind").value("HANDOFF"))
                 .andExpect(jsonPath("$.data[0].status").value("SENT"));
@@ -126,6 +129,19 @@ class OwnerApiIT extends AbstractBusinessApiIT {
                 .andExpect(jsonPath("$.status").value("RESOLVED"));
         getAs(otherClientAuth, "/v1/tenants/" + clientId + "/handoffs").andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
+    @Test
+    void aCaseWithAnEmail_keepsItAsTheContact_andNoPhone() throws Exception {
+        UUID agentId = createAgent(clientId, clientAuth, List.of("escalate_to_owner"));
+        llm.script(toolCall("escalate_to_owner", Map.of("category", "evento", "summary", "Demo para el bar",
+                "contact_name", "Marta", "contact_email", "marta@barlaesquina.es")), finalReply("Hecho."));
+        sendAndProcess(agentId, "cliente-1", "Quiero una demo");
+
+        JsonNode handoffs = json(getAs(partnerAuth, "/v1/tenants/" + clientId + "/handoffs"));
+        assertThat(handoffs.at("/data/0/contact").asText()).isEqualTo("marta@barlaesquina.es");
+        assertThat(handoffs.at("/data/0/contact_type").asText()).isEqualTo("EMAIL");
+        assertThat(handoffs.at("/data/0/contact_phone").isNull()).isTrue();
     }
 
     @Test

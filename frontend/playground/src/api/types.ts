@@ -488,7 +488,11 @@ export interface HandoffResponse {
   category: string
   summary: string
   contact_name: string
+  /** The contact's value when it is a phone; kept for older clients, see contact. */
   contact_phone: string | null
+  /** How to reach the person, a phone or an e-mail (ADR 0014); null when they gave none. */
+  contact: string | null
+  contact_type: 'PHONE' | 'EMAIL' | null
   status: 'OPEN' | 'RESOLVED'
   created_at: string
   resolved_at: string | null

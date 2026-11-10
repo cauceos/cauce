@@ -37,14 +37,14 @@ class HandoffTest {
 
     @Test
     void request_keepsTheCustomersWordsApart_withoutTheQuotationMarksAroundThem() {
-        Handoff quoted = Handoff.open(requester, new Handoff.Request("evento", "25 personas", "Marta", null,
+        Handoff quoted = Handoff.open(requester, new Handoff.Request("evento", "25 personas", "Marta", (Contact) null,
                 " «¿Cuánto costaría?» "));
 
         assertThat(quoted.customerMessage()).contains("¿Cuánto costaría?");
         assertThat(quoted.summary()).isEqualTo("25 personas");
-        assertThat(new Handoff.Request("evento", "s", "n", null, " «» ").customerMessage()).isNull();
+        assertThat(new Handoff.Request("evento", "s", "n", (Contact) null, " «» ").customerMessage()).isNull();
         assertThat(new Handoff.Request("evento", "s", "n", null).customerMessage()).isNull();
-        assertThatThrownBy(() -> new Handoff.Request("c", "s", "n", null,
+        assertThatThrownBy(() -> new Handoff.Request("c", "s", "n", (Contact) null,
                 "x".repeat(Handoff.MAX_CUSTOMER_MESSAGE_LENGTH + 1))).isInstanceOf(IllegalArgumentException.class);
     }
 

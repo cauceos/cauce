@@ -19,6 +19,8 @@ public record HandoffResponse(
         String summary,
         String contactName,
         String contactPhone,
+        String contact,
+        String contactType,
         String customerMessage,
         String status,
         Instant createdAt,
@@ -27,7 +29,9 @@ public record HandoffResponse(
     public static HandoffResponse from(Handoff handoff) {
         return new HandoffResponse(handoff.id(), handoff.tenantId(), handoff.code(), handoff.agentId(),
                 handoff.conversationId(), handoff.identityId(), handoff.category(), handoff.summary(),
-                handoff.contactName(), handoff.contactPhone().orElse(null), handoff.customerMessage().orElse(null),
+                handoff.contactName(), handoff.contactPhone().orElse(null),
+                handoff.contact().map(c -> c.value()).orElse(null),
+                handoff.contact().map(c -> c.type().name()).orElse(null), handoff.customerMessage().orElse(null),
                 handoff.status().name(),
                 handoff.createdAt(), handoff.resolvedAt().orElse(null));
     }

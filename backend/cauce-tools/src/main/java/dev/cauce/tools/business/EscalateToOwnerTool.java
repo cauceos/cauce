@@ -2,6 +2,7 @@ package dev.cauce.tools.business;
 
 import dev.cauce.core.audit.CanonicalJson;
 import dev.cauce.core.business.booking.Booking;
+import dev.cauce.core.business.handoff.Contact;
 import dev.cauce.core.business.handoff.Handoff;
 import dev.cauce.core.business.handoff.HandoffSink;
 import dev.cauce.core.business.handoff.HandoffSink.HandoffReceipt;
@@ -48,7 +49,11 @@ public final class EscalateToOwnerTool implements Tool {
                                             + "it). Never paraphrase: a quote that is not theirs is refused."),
                             "contact_name", Map.of("type", "string", "description", "The person's name."),
                             "contact_phone", Map.of("type", "string",
-                                    "description", "A phone number to reach them, if they gave one.")),
+                                    "description", "A phone number to reach them, exactly as they gave it, if they "
+                                            + "gave one. Never complete a number that is missing digits: ask."),
+                            "contact_email", Map.of("type", "string",
+                                    "description", "An e-mail address to reach them, exactly as they gave it, if "
+                                            + "they gave one instead of a phone. Never complete it: ask.")),
                     "required", List.of("category", "summary", "contact_name"),
                     "additionalProperties", false));
 
@@ -63,6 +68,19 @@ public final class EscalateToOwnerTool implements Tool {
         return DEFINITION;
     }
 
+    /**
+     * The contact the agent handed over: a phone or an e-mail, at most one, checked as a whole one
+     * ({@link Contact}); an incomplete one comes back to the model to ask again.
+     */
+    private static Contact contactOf(ToolArguments args) {
+        String phone = args.text("contact_phone").filter(v -> !v.isBlank()).orElse(null);
+        String email = args.text("contact_email").filter(v -> !v.isBlank()).orElse(null);
+        if (phone != null && email != null) {
+            throw new IllegalArgumentException("give one contact: contact_phone or contact_email, not both");
+        }
+        return phone != null ? Contact.phone(phone) : email != null ? Contact.email(email) : null;
+    }
+
     @Override
     public ToolResult execute(ToolCall call, ToolExecutionContext context) {
         ToolArguments args = ToolArguments.of(call);
@@ -73,7 +91,7 @@ public final class EscalateToOwnerTool implements Tool {
         Handoff.Request request;
         try {
             request = new Handoff.Request(args.requiredText("category"), args.requiredText("summary"),
-                    args.requiredText("contact_name"), args.text("contact_phone").orElse(null),
+                    args.requiredText("contact_name"), contactOf(args),
                     args.text("customer_message").orElse(null));
         } catch (IllegalArgumentException e) {
             throw new InvalidToolArgumentException(e.getMessage());

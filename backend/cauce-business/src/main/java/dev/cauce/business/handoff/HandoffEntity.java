@@ -43,8 +43,12 @@ public class HandoffEntity {
     @Column(name = "contact_name", nullable = false, updatable = false, length = 100)
     private String contactName;
 
-    @Column(name = "contact_phone", updatable = false, length = 40)
-    private String contactPhone;
+    @Column(name = "contact", updatable = false, length = 254)
+    private String contact;
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "contact_type", updatable = false, length = 10)
+    private dev.cauce.core.business.handoff.Contact.Type contactType;
 
     @Column(name = "customer_message", updatable = false, length = 1000)
     private String customerMessage;
@@ -64,7 +68,8 @@ public class HandoffEntity {
     }
 
     public HandoffEntity(UUID id, UUID tenantId, String code, UUID agentId, UUID conversationId, UUID identityId,
-                         String category, String summary, String contactName, String contactPhone,
+                         String category, String summary, String contactName,
+                         dev.cauce.core.business.handoff.Contact contact,
                          String customerMessage, Handoff.Status status, Instant createdAt, Instant resolvedAt) {
         this.id = id;
         this.tenantId = tenantId;
@@ -75,7 +80,8 @@ public class HandoffEntity {
         this.category = category;
         this.summary = summary;
         this.contactName = contactName;
-        this.contactPhone = contactPhone;
+        this.contact = contact == null ? null : contact.value();
+        this.contactType = contact == null ? null : contact.type();
         this.customerMessage = customerMessage;
         this.status = status;
         this.createdAt = createdAt;
@@ -118,8 +124,9 @@ public class HandoffEntity {
         return contactName;
     }
 
-    public String getContactPhone() {
-        return contactPhone;
+    /** The stored contact, a phone or an e-mail, or null. */
+    public dev.cauce.core.business.handoff.Contact getContact() {
+        return contact == null ? null : new dev.cauce.core.business.handoff.Contact(contactType, contact);
     }
 
     public String getCustomerMessage() {

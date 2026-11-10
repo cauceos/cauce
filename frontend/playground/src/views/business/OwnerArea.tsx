@@ -65,7 +65,7 @@ export function CasesArea({ client, tenantId }: { client: ApiClient; tenantId: s
               </div>
               <div className="meta">
                 ref {handoff.code}
-                {handoff.contact_phone !== null && ` · ${handoff.contact_phone}`} · {formatUtc(handoff.created_at)}
+                {handoff.contact !== null && ` · ${handoff.contact}`} · {formatUtc(handoff.created_at)}
               </div>
               <div className="body">{handoff.summary}</div>
               {handoff.status === 'OPEN' && (

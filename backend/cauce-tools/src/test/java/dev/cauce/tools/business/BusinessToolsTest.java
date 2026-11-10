@@ -139,6 +139,31 @@ class BusinessToolsTest {
     }
 
     @Test
+    void escalateToOwner_takesAPhoneOrAnEmail_andAnIncompleteOrDoubleContactIsForTheModelToAsk() {
+        HandoffSink sink = mock(HandoffSink.class);
+        ArgumentCaptor<Handoff.Request> request = ArgumentCaptor.forClass(Handoff.Request.class);
+        when(sink.open(any(), request.capture())).thenAnswer(call -> new HandoffSink.HandoffReceipt(
+                Handoff.open(call.getArgument(0), call.getArgument(1)), true));
+        EscalateToOwnerTool tool = new EscalateToOwnerTool(() -> sink);
+
+        tool.execute(call("escalate_to_owner", Map.of("category", "demo", "summary", "Bar La Esquina, Zaragoza",
+                "contact_name", "Ana", "contact_email", "ana@barlaesquina.es")), context);
+        assertThat(request.getValue().contact())
+                .isEqualTo(new dev.cauce.core.business.handoff.Contact(dev.cauce.core.business.handoff.Contact.Type.EMAIL,
+                        "ana@barlaesquina.es"));
+
+        assertThatThrownBy(() -> tool.execute(call("escalate_to_owner", Map.of("category", "demo", "summary", "s",
+                "contact_name", "Ana", "contact_phone", "612 345 67")), context))
+                .isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("ask");
+        assertThatThrownBy(() -> tool.execute(call("escalate_to_owner", Map.of("category", "demo", "summary", "s",
+                "contact_name", "Ana", "contact_email", "ana@barlaesquina")), context))
+                .isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("never complete");
+        assertThatThrownBy(() -> tool.execute(call("escalate_to_owner", Map.of("category", "demo", "summary", "s",
+                "contact_name", "Ana", "contact_phone", "600 123 456", "contact_email", "ana@barlaesquina.es")),
+                context)).isInstanceOf(InvalidToolArgumentException.class).hasMessageContaining("not both");
+    }
+
+    @Test
     void escalateToOwner_withAnUnknownCategory_isAnArgumentTheModelMustFix() {
         HandoffSink sink = mock(HandoffSink.class);
         when(sink.open(any(), any())).thenThrow(new InvalidHandoffCategoryException("use one of evento, queja"));

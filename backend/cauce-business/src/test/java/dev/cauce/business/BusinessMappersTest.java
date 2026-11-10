@@ -113,11 +113,13 @@ class BusinessMappersTest {
         HandoffMapper mapper = new HandoffMapper();
         Booking.Requester requester = new Booking.Requester(tenantId, UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), UUID.randomUUID());
-        Handoff quoted = Handoff.open(requester, new Handoff.Request("evento", "25 personas", "Ana", "+34 600",
+        Handoff quoted = Handoff.open(requester, new Handoff.Request("evento", "25 personas", "Ana", "+34 600 123 456",
                 "Cuanto costaria"));
         Handoff plain = Handoff.open(requester, new Handoff.Request("queja", "Fria", "Luis", null)).resolved();
+        Handoff byEmail = Handoff.open(requester, new Handoff.Request("demo", "Bar, Zaragoza", "Marta",
+                dev.cauce.core.business.handoff.Contact.email("marta@bar.es"), null));
 
-        for (Handoff handoff : List.of(quoted, plain)) {
+        for (Handoff handoff : List.of(quoted, plain, byEmail)) {
             assertThat(mapper.toDomain(mapper.toEntity(handoff))).usingRecursiveComparison().isEqualTo(handoff);
         }
     }

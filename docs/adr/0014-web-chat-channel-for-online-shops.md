@@ -3,8 +3,8 @@
 Status: **Accepted** (2026-11-09, unit W0, with the owner's approval). Proposed the same day from
 the strategic chat's decisions (WC1–WC8), and completed in W0 with the public surface, the limits
 and the units. W1 (the channel, its public key and per-config CORS), W2 (sessions), W3 (messages,
-polling, bounds and request limits) and W4 (the widget, `frontend/web-widget`) are built; W5–W7 are
-not. The first shop is
+polling, bounds and request limits), W4 (the widget, `frontend/web-widget`) and W5 (a case's generic
+contact) are built; W6–W7 are not. The first shop is
 CauceWebs (amendment of 2026-11-10).
 
 ## Context
@@ -306,7 +306,15 @@ so it can move from a tunnel to Cauce OS's own server without the page changing.
   case does.
 - **A case's contact becomes generic:** a `contact` with its type (`phone` or `email`) and a format
   check by type. An incomplete contact is asked for, never completed (the voice-note rule of ADR 0012
-  applied to writing).
+  applied to writing). Built in W5:
+  - `escalate_to_owner` takes `contact_phone` or `contact_email`, at most one;
+  - a phone has 9 to 15 digits and an e-mail a name, an `@` and a domain with its ending;
+  - anything else returns to the model as an argument to fix, saying to ask the person and never to
+    complete it;
+  - the API's case keeps `contact_phone` and adds `contact` and `contact_type`.
+
+  The `demo` category and the plans' `estado` attribute need no code: they are the shop's profile
+  and catalog data (W6).
 - **The agent's rules:**
   - it never invents prices, conditions or features;
   - what is planned is said to be planned;

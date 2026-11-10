@@ -72,7 +72,7 @@ public final class DigestComposer {
         for (Handoff h : c.openHandoffs()) {
             text.append("\n· [").append(h.category()).append("] ref ").append(h.code()).append(" · ")
                     .append(h.contactName());
-            h.contactPhone().ifPresent(phone -> text.append(" (").append(phone).append(')'));
+            h.contact().ifPresent(contact -> text.append(" (").append(contact.value()).append(')'));
             text.append(" — ").append(shorten(h.summary()));
         }
 

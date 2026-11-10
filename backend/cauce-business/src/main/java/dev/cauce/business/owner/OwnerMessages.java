@@ -27,7 +27,7 @@ public final class OwnerMessages {
      */
     public static String handoff(String locale, Handoff handoff) {
         boolean es = spanish(locale);
-        String phone = handoff.contactPhone().map(p -> " · " + p).orElse("");
+        String phone = handoff.contact().map(c -> " · " + c.value()).orElse(""); // a phone or an e-mail
         String words = handoff.customerMessage()
                 .map(quote -> es
                         ? "\n\nMensaje del cliente: «" + quote + "»"

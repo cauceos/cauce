@@ -240,7 +240,7 @@ class OwnerIT extends AbstractBusinessIntegrationTest {
                 "Pero dime más o menos,   aunque sea aproximado. ¿30 € por persona?"));
 
         HandoffReceipt receipt = as(f.clientA(), () -> handoffService.open(requester(), new Handoff.Request("evento",
-                "Cumpleaños de 25 personas mañana; pregunta el precio.", "Ana", null,
+                "Cumpleaños de 25 personas mañana; pregunta el precio.", "Ana", (dev.cauce.core.business.handoff.Contact) null,
                 "«aunque sea aproximado. ¿30 € por persona?»")));
         dispatcher.dispatchDue();
 
@@ -249,7 +249,7 @@ class OwnerIT extends AbstractBusinessIntegrationTest {
                 .contains("\n\nResumen: Cumpleaños de 25 personas mañana; pregunta el precio.\n\n"
                         + "Mensaje del cliente: «aunque sea aproximado. ¿30 € por persona?»");
         assertThatThrownBy(() -> as(f.clientA(), () -> handoffService.open(requester(), new Handoff.Request("evento",
-                "s", "Ana", null, "Quiere un presupuesto para 25"))))
+                "s", "Ana", (dev.cauce.core.business.handoff.Contact) null, "Quiere un presupuesto para 25"))))
                 .isInstanceOf(UnquotedCustomerMessageException.class);
     }
 
