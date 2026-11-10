@@ -11,7 +11,8 @@ import java.util.Optional;
  * of part is a new case here, and every switch over the parts has to decide it.
  */
 public sealed interface MessagePart
-        permits MessagePart.Text, MessagePart.Audio, MessagePart.ToolCallPart, MessagePart.ToolResultPart {
+        permits MessagePart.Text, MessagePart.Audio, MessagePart.ToolCallPart, MessagePart.ToolResultPart,
+        MessagePart.ProductCard {
 
     /** The part's kind as the stored form and the content hash v2 name it ({@link MessageParts}). */
     String type();
@@ -116,6 +117,33 @@ public sealed interface MessagePart
 
         public ToolResultPart {
             Objects.requireNonNull(result, "result");
+        }
+
+        @Override
+        public String type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * A product card in an agent's reply (ADR 0014, WC8): the catalog ref of an item the agent showed,
+     * nothing else. Its name, price and stock are read from the catalog when the card is read, never
+     * from the model's text, and a ref no longer in the catalog is left out then. It is not text: a
+     * reply's {@link Message#content()} is its text parts alone, and a channel that cannot carry a card
+     * renders it as the item's name and price.
+     */
+    record ProductCard(String ref) implements MessagePart {
+
+        public static final String TYPE = "product_card";
+        public static final int MAX_REF_LENGTH = dev.cauce.core.business.catalog.CatalogItem.MAX_REF_LENGTH;
+
+        public ProductCard {
+            if (ref == null || ref.isBlank()) {
+                throw new IllegalArgumentException("ref must not be blank");
+            }
+            if (ref.length() > MAX_REF_LENGTH) {
+                throw new IllegalArgumentException("ref must be at most " + MAX_REF_LENGTH + " characters");
+            }
         }
 
         @Override

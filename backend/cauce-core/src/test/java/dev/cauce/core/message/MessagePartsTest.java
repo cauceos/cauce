@@ -72,4 +72,21 @@ class MessagePartsTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("video");
     }
+
+    @Test
+    void productCards_andAResultThatShowsThem_readBackTheSame_andAResultWithoutThemKeepsItsForm() {
+        // ADR 0014, WC8: the card stores its ref alone; a result without cards has no product_cards key,
+        // so its content hash v2 is the one it always had.
+        ToolResult showing = ToolResult.showing("c1", "show_products", "{}", List.of("plan-plus", "plan-basico"));
+        List<MessagePart> parts = List.of(new MessagePart.Text("Mira:"), new MessagePart.ProductCard("plan-plus"));
+
+        assertThat(MessageParts.fromJson(MessageParts.toJson(parts))).isEqualTo(parts);
+        assertThat(MessageParts.toJson(List.of(new MessagePart.ProductCard("plan-plus"))))
+                .containsExactly(Map.of("type", "product_card", "ref", "plan-plus"));
+        List<MessagePart> result = List.of(new MessagePart.ToolResultPart(showing));
+        assertThat(MessageParts.fromJson(MessageParts.toJson(result))).isEqualTo(result);
+        assertThat(MessageParts.toJson(result).get(0)).containsEntry("product_cards", List.of("plan-plus", "plan-basico"));
+        assertThat(MessageParts.toJson(List.of(new MessagePart.ToolResultPart(ToolResult.success("c", "t", "o")))).get(0))
+                .doesNotContainKey("product_cards");
+    }
 }

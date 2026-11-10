@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import dev.cauce.api.support.FakeLlmProvider;
 import dev.cauce.channels.webchat.TurnstileVerifier;
 import java.time.Duration;
 import java.util.List;
@@ -82,6 +83,48 @@ class WebChatMessagesApiIT extends AbstractBusinessApiIT {
                 .andExpect(jsonPath("$.data[0].role").value("agent"));
         read(token, "?cursor=" + UUID.randomUUID()).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("invalid_message"));
+    }
+
+    @Test
+    void theCardsAToolShows_reachTheReply_andAreReadFromTheCatalogWhenPolled() throws Exception {
+        // ADR 0014, WC8: show_products accepts catalog refs only, and the card stores the ref alone.
+        putJson(clientAuth, "/v1/tenants/" + clientId + "/catalog", """
+                {"declared_attributes": [], "items": [
+                  {"ref": "plan-plus", "section": "Webs", "name": "Plan Plus", "price": 79,
+                   "description": "Para los que cambian la carta a menudo."},
+                  {"ref": "plan-basico", "section": "Webs", "name": "Plan Básico", "price": 49}]}
+                """).andExpect(status().isOk());
+        String cardsKey = createChannel(createAgent(clientId, clientAuth, List.of("show_products")));
+        String cardsToken = openSession(cardsKey);
+        llm.script(FakeLlmProvider.toolCall("show_products", java.util.Map.of("refs", List.of("plan-plus", "plan-oro"))),
+                FakeLlmProvider.finalReply("Te encaja el Plus."));
+        mockMvc.perform(post("/web/v1/" + cardsKey + "/messages").header(HttpHeaders.ORIGIN, SHOP)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + cardsToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"content\": \"¿Qué plan me conviene?\"}"))
+                .andExpect(status().isAccepted());
+
+        worker.pollAndProcess();
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> readOf(cardsKey, cardsToken)
+                .andExpect(jsonPath("$.data.length()").value(2)));
+        readOf(cardsKey, cardsToken).andExpect(jsonPath("$.data[0].cards.length()").value(0))
+                .andExpect(jsonPath("$.data[1].text").value("Te encaja el Plus."))
+                .andExpect(jsonPath("$.data[1].cards.length()").value(1))
+                .andExpect(jsonPath("$.data[1].cards[0].ref").value("plan-plus"))
+                .andExpect(jsonPath("$.data[1].cards[0].name").value("Plan Plus"))
+                .andExpect(jsonPath("$.data[1].cards[0].price").value(79));
+
+        // The card is the catalog's now: a plan renamed is shown renamed, and one removed is not shown.
+        putJson(clientAuth, "/v1/tenants/" + clientId + "/catalog", """
+                {"declared_attributes": [], "items": [{"ref": "plan-plus", "section": "Webs", "name": "Plan Plus 2027",
+                  "price": 89}]}
+                """).andExpect(status().isOk());
+        readOf(cardsKey, cardsToken).andExpect(jsonPath("$.data[1].cards[0].name").value("Plan Plus 2027"))
+                .andExpect(jsonPath("$.data[1].cards[0].price").value(89));
+        putJson(clientAuth, "/v1/tenants/" + clientId + "/catalog", """
+                {"declared_attributes": [], "items": [{"ref": "plan-basico", "section": "Webs", "name": "Plan Básico",
+                  "price": 49}]}
+                """).andExpect(status().isOk());
+        readOf(cardsKey, cardsToken).andExpect(jsonPath("$.data[1].cards.length()").value(0));
     }
 
     @Test
@@ -172,6 +215,11 @@ class WebChatMessagesApiIT extends AbstractBusinessApiIT {
 
     private ResultActions read(String sessionToken, String query) throws Exception {
         return mockMvc.perform(get("/web/v1/" + key + "/messages" + query).header(HttpHeaders.ORIGIN, SHOP)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + sessionToken));
+    }
+
+    private ResultActions readOf(String publicKey, String sessionToken) throws Exception {
+        return mockMvc.perform(get("/web/v1/" + publicKey + "/messages").header(HttpHeaders.ORIGIN, SHOP)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + sessionToken));
     }
 

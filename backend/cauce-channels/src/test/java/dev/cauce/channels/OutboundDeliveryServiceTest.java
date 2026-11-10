@@ -16,19 +16,27 @@ import dev.cauce.channels.spi.ChannelAdapterRegistry;
 import dev.cauce.channels.spi.ChannelDeliveryException;
 import dev.cauce.channels.spi.ChannelOutboundMessage;
 import dev.cauce.channels.spi.OutboundChannelAdapter;
+import dev.cauce.core.business.catalog.Catalog;
+import dev.cauce.core.business.catalog.CatalogItem;
+import dev.cauce.core.business.catalog.CatalogSource;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.identity.Identity;
 import dev.cauce.core.identity.IdentityKind;
 import dev.cauce.core.message.Message;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tenant.TenantContext;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.core.task.SyncTaskExecutor;
 
 /**
@@ -44,6 +52,7 @@ class OutboundDeliveryServiceTest {
     private ChannelConfigService channelConfigService;
     private InterlocutorLookup interlocutorLookup;
     private OutboundDeliveryService service;
+    private CatalogSource catalogs;
     private Identity interlocutor;
 
     private Conversation conversation;
@@ -56,10 +65,14 @@ class OutboundDeliveryServiceTest {
         when(telegramOutbound.channelType()).thenReturn("telegram");
         channelConfigService = mock(ChannelConfigService.class);
         interlocutorLookup = mock(InterlocutorLookup.class);
+        catalogs = mock(CatalogSource.class);
+        StaticListableBeanFactory beans = new StaticListableBeanFactory();
+        beans.addBean("catalogs", catalogs);
         service = new OutboundDeliveryService(
                 new ChannelAdapterRegistry(List.of(), List.of(telegramOutbound)),
                 channelConfigService, interlocutorLookup, new SyncTaskExecutor(),
-                dev.cauce.orchestration.tracing.MessageTracing.noop());
+                dev.cauce.orchestration.tracing.MessageTracing.noop(),
+                new ProductCards(beans.getBeanProvider(CatalogSource.class)));
         interlocutor = Identity.create(TENANT_ID, "telegram", IdentityKind.PROVIDER_USER_ID, "987654321");
         when(interlocutorLookup.find(interlocutor.id())).thenReturn(Optional.of(interlocutor));
         config = ChannelConfig.create(TENANT_ID, AGENT_ID, "telegram", "12345:token", "hash");
@@ -102,6 +115,37 @@ class OutboundDeliveryServiceTest {
         // The task cleared its own context; the dispatching thread ends clean (SyncTaskExecutor
         // runs it on the same thread here).
         assertThat(TenantContext.getCurrentTenantId()).isEmpty();
+    }
+
+    @Test
+    void dispatchAgentReply_productCards_reachAChannelThatCannotCarryThem_asTheirNameAndPrice() {
+        // ADR 0014, WC8: Telegram carries no card; the catalog says what each card shows, now.
+        when(channelConfigService.findActiveConfig(config.id())).thenReturn(Optional.of(config));
+        when(catalogs.findCatalog(TENANT_ID)).thenReturn(Optional.of(Catalog.create(TENANT_ID, List.of(), List.of(
+                new CatalogItem("plan-plus", "Webs", "Plan Plus", null, new BigDecimal("79"), Map.of()),
+                new CatalogItem("plan-tienda", "Tiendas", "Plan Tienda", null, new BigDecimal("24.99"), Map.of())))));
+        Message withCards = Message.fromParts(conversation.id(), MessageRole.AGENT, List.of(
+                new MessagePart.Text("Te encajan estos dos:"), new MessagePart.ProductCard("plan-plus"),
+                new MessagePart.ProductCard("plan-tienda"), new MessagePart.ProductCard("plan-retirado")));
+
+        service.dispatchAgentReply(conversation, withCards);
+
+        verify(telegramOutbound).deliver(new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                "Te encajan estos dos:\n\n• Plan Plus: 79 €\n• Plan Tienda: 24,99 €"), config);
+    }
+
+    @Test
+    void dispatchAgentReply_aChannelThatCarriesCards_getsTheTextAlone() {
+        when(channelConfigService.findActiveConfig(config.id())).thenReturn(Optional.of(config));
+        when(telegramOutbound.carriedPartTypes()).thenReturn(Set.of(MessagePart.ProductCard.TYPE));
+        Message withCards = Message.fromParts(conversation.id(), MessageRole.AGENT, List.of(
+                new MessagePart.Text("Mira este:"), new MessagePart.ProductCard("plan-plus")));
+
+        service.dispatchAgentReply(conversation, withCards);
+
+        verify(telegramOutbound).deliver(new ChannelOutboundMessage(IdentityKind.PROVIDER_USER_ID, "987654321",
+                "Mira este:"), config);
+        verifyNoInteractions(catalogs);
     }
 
     @Test

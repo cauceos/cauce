@@ -11,6 +11,7 @@ import dev.cauce.tools.business.GetBusinessInfoTool;
 import dev.cauce.tools.business.ListMyCasesTool;
 import dev.cauce.tools.business.RecordUnansweredQuestionTool;
 import dev.cauce.tools.business.SearchCatalogTool;
+import dev.cauce.tools.business.ShowProductsTool;
 import dev.cauce.tools.clock.ClockTool;
 import dev.cauce.tools.spi.Tool;
 import java.time.Clock;
@@ -48,6 +49,11 @@ public class ToolsConfiguration {
     @Bean
     public SearchCatalogTool searchCatalogTool(ObjectProvider<CatalogSource> catalogs) {
         return new SearchCatalogTool(catalogs::getIfAvailable);
+    }
+
+    @Bean
+    public ShowProductsTool showProductsTool(ObjectProvider<CatalogSource> catalogs) {
+        return new ShowProductsTool(catalogs::getIfAvailable);
     }
 
     @Bean

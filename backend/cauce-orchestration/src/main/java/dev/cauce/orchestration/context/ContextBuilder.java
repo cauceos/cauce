@@ -289,7 +289,8 @@ public final class ContextBuilder {
             case MessagePart.Text text -> text.text();
             case MessagePart.ToolCallPart call -> call.call().toolName();
             case MessagePart.ToolResultPart result -> result.result().output();
-        }).collect(Collectors.joining("\n"));
+            case MessagePart.ProductCard card -> "";
+        }).filter(text -> !text.isEmpty()).collect(Collectors.joining("\n"));
     }
 
     /**

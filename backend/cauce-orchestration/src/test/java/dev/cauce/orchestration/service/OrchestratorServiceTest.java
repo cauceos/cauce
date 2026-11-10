@@ -417,6 +417,21 @@ class OrchestratorServiceTest {
     }
 
     @Test
+    void productCardsOfTurn_areTheRefsTheTurnsResultsShow_inOrder_onceEach_andCapped() {
+        Message earlier = Message.toolResult(conversationId, ToolResult.showing("e", "show_products", "{}", List.of("old")));
+        Message trigger = Message.from(conversationId, MessageRole.USER, "¿qué plan me conviene?");
+        List<Message> history = List.of(earlier, trigger,
+                Message.toolResult(conversationId, ToolResult.success("s", "search_catalog", "{}")),
+                Message.toolResult(conversationId, ToolResult.showing("a", "show_products", "{}", List.of("plan-plus", "plan-basico"))),
+                Message.toolResult(conversationId, ToolResult.showing("b", "show_products", "{}",
+                        List.of("plan-plus", "a", "b", "c", "d", "e"))));
+
+        assertThat(OrchestratorService.productCardsOfTurn(history, trigger.id()))
+                .containsExactly("plan-plus", "plan-basico", "a", "b", "c", "d");
+        assertThat(OrchestratorService.productCardsOfTurn(List.of(trigger), trigger.id())).isEmpty();
+    }
+
+    @Test
     void respondToMessage_whenModelNeverStopsCallingTools_failsAtTheCap() {
         stubLoadAndEchoAppend();
         when(registry.getProvider(PROVIDER)).thenReturn(Optional.of(provider));

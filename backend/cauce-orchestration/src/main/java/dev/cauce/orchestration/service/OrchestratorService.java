@@ -10,6 +10,7 @@ import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.conversation.ConversationNotFoundException;
 import dev.cauce.core.message.Message;
 import dev.cauce.core.message.MessageNotFoundException;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.message.MessageRole;
 import dev.cauce.core.tool.ToolCall;
 import dev.cauce.core.tool.ToolDefinition;
@@ -56,6 +57,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -319,7 +321,11 @@ public class OrchestratorService {
                 // finish_reason and rounds — the completion record; there is no separate
                 // COMPLETED audit event) commits in the SAME transaction as the message.
                 // The message id is minted client-side, so the event is complete up front.
-                Message reply = Message.from(conversationId, MessageRole.AGENT, response.content());
+                // ADR 0014, WC8: the product cards a tool of this turn asked to show go with the reply.
+                List<MessagePart> replyParts = new ArrayList<>();
+                replyParts.add(new MessagePart.Text(response.content()));
+                productCardsOfTurn(messages, triggerMessageId).forEach(ref -> replyParts.add(new MessagePart.ProductCard(ref)));
+                Message reply = Message.fromParts(conversationId, MessageRole.AGENT, replyParts);
                 Message finalMessage = conversationGateway.appendAudited(reply,
                         ConductAuditEvents.agentResponded(agent.tenantId(), invocationId,
                                 agent.id(), reply, response.finishReason().name(), iteration + 1));
@@ -483,6 +489,29 @@ public class OrchestratorService {
             log.debug("Tool failure detail", e);
             return ToolResult.error(call.toolCallId(), call.toolName(), TOOL_FAILURE_OUTPUT);
         }
+    }
+
+    /** The most product cards one reply carries (ADR 0014, WC8). */
+    static final int MAX_PRODUCT_CARDS = 6;
+
+    /**
+     * The catalog refs the tool results after {@code triggerMessageId} asked to show as product cards
+     * (ADR 0014, WC8): in order, each once, at most {@value #MAX_PRODUCT_CARDS}. An earlier attempt's
+     * results count, as its rounds do.
+     */
+    static List<String> productCardsOfTurn(List<Message> history, UUID triggerMessageId) {
+        Set<String> refs = new LinkedHashSet<>();
+        boolean afterTrigger = false;
+        for (Message message : history) {
+            if (!afterTrigger) {
+                afterTrigger = message.id().equals(triggerMessageId);
+                continue;
+            }
+            if (message.toolContent().orElse(null) instanceof ToolResult result) {
+                refs.addAll(result.productCards());
+            }
+        }
+        return refs.stream().limit(MAX_PRODUCT_CARDS).toList();
     }
 
     /**

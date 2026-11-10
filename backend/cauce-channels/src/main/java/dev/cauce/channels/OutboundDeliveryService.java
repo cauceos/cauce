@@ -9,9 +9,11 @@ import dev.cauce.core.conversation.AgentReplyDispatcher;
 import dev.cauce.core.conversation.Conversation;
 import dev.cauce.core.identity.Identity;
 import dev.cauce.core.message.Message;
+import dev.cauce.core.message.MessagePart;
 import dev.cauce.core.tenant.TenantContext;
 import dev.cauce.orchestration.LogSafe;
 import dev.cauce.orchestration.tracing.MessageTracing;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -54,17 +56,19 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
     private final InterlocutorLookup interlocutorLookup;
     private final TaskExecutor outboundExecutor;
     private final MessageTracing tracing;
+    private final ProductCards productCards;
 
     public OutboundDeliveryService(ChannelAdapterRegistry adapterRegistry,
                                    ChannelConfigService channelConfigService,
                                    InterlocutorLookup interlocutorLookup,
                                    @Qualifier("channelOutboundExecutor") TaskExecutor outboundExecutor,
-                                   MessageTracing tracing) {
+                                   MessageTracing tracing, ProductCards productCards) {
         this.adapterRegistry = adapterRegistry;
         this.channelConfigService = channelConfigService;
         this.interlocutorLookup = interlocutorLookup;
         this.outboundExecutor = outboundExecutor;
         this.tracing = tracing;
+        this.productCards = productCards;
     }
 
     @Override
@@ -90,6 +94,19 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
             log.warn("Could not queue outbound delivery for conversation {}: {}",
                     conversation.id(), e.toString(), e);
         }
+    }
+
+    /**
+     * The reply's text for {@code adapter}: its content, and its product cards as lines of text when the
+     * channel does not carry them (ADR 0014, WC8), read from the catalog now.
+     */
+    private String contentFor(OutboundChannelAdapter adapter, UUID tenantId, Message agentReply) {
+        List<String> refs = agentReply.productCards();
+        if (refs.isEmpty() || adapter.carriedPartTypes().contains(MessagePart.ProductCard.TYPE)) {
+            return agentReply.content();
+        }
+        List<ProductCards.Card> cards = productCards.resolve(tenantId, refs);
+        return cards.isEmpty() ? agentReply.content() : agentReply.content() + "\n\n" + ProductCards.asText(cards);
     }
 
     /** Runs on the outbound executor: everything is best-effort and fully caught. */
@@ -132,7 +149,7 @@ public class OutboundDeliveryService implements AgentReplyDispatcher {
             }
             // The destination is the typed pair the inbound adapter produced (ADR 0004).
             adapter.get().deliver(new ChannelOutboundMessage(interlocutor.get().kind(),
-                    interlocutor.get().value(), agentReply.content(),
+                    interlocutor.get().value(), contentFor(adapter.get(), tenantId, agentReply),
                     interlocutorLookup.lastMessageAt(conversation.id()).orElse(null)), config.get());
             log.debug("Delivered reply {} through channel '{}' for conversation {}",
                     agentReply.id(), channelType, conversation.id());

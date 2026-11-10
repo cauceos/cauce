@@ -1,6 +1,7 @@
 package dev.cauce.channels.spi;
 
 import dev.cauce.channels.config.ChannelConfig;
+import java.util.Set;
 
 /**
  * The outbound half of the channel SPI (invariant 3): delivers a neutral
@@ -25,4 +26,13 @@ public interface OutboundChannelAdapter {
      * @throws ChannelDeliveryException if the provider rejects or the delivery fails
      */
     void deliver(ChannelOutboundMessage message, ChannelConfig config);
+
+    /**
+     * The part types this channel carries besides text (ADR 0004, decision 3): none by default. A reply
+     * with a part the channel does not carry gets that part rendered by the channel layer's declared
+     * policy before delivery; for a product card, its name and price as text (ADR 0014, WC8).
+     */
+    default Set<String> carriedPartTypes() {
+        return Set.of();
+    }
 }

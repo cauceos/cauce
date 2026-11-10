@@ -309,4 +309,19 @@ class MessageTest {
                 "[orchestration_error] x", null, "LLM_ERROR", java.time.Instant.now()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void fromParts_anAgentReplyCarriesProductCards_whoseTextIsItsTextAlone_andNoOtherRoleDoes() {
+        UUID conversation = UUID.randomUUID();
+        Message reply = Message.fromParts(conversation, MessageRole.AGENT, List.of(new MessagePart.Text("Te encaja:"),
+                new MessagePart.ProductCard("plan-plus"), new MessagePart.ProductCard("plan-tienda")));
+
+        assertThat(reply.content()).isEqualTo("Te encaja:");
+        assertThat(reply.productCards()).containsExactly("plan-plus", "plan-tienda");
+        assertThatThrownBy(() -> Message.fromParts(conversation, MessageRole.USER, List.of(new MessagePart.Text("x"),
+                new MessagePart.ProductCard("plan-plus")))).hasMessageContaining("product cards");
+        assertThatThrownBy(() -> Message.fromParts(conversation, MessageRole.AGENT,
+                List.of(new MessagePart.ProductCard("plan-plus")))).hasMessageContaining("blank");
+        assertThatThrownBy(() -> new MessagePart.ProductCard(" ")).isInstanceOf(IllegalArgumentException.class);
+    }
 }

@@ -375,6 +375,23 @@ widget's build (`dist/release/{version}/`).
 The widget's checks on a physical phone and with a screen reader are a checklist in its README, run by
 CauceWebs on the hidden test page before publishing.
 
+## Amendment (2026-11-10): how W7 is built
+
+W7 lands in steps, each with its tests: the product cards; the shop-assistant configuration and the
+page context; the events and their metrics; the widget; the pack's scenarios. What it decides:
+
+- **A card is a message part**, `product_card`, holding only its ref, on an AGENT reply (ADR 0004).
+  `show_products(refs)` checks each ref against the catalog and returns the ones it accepts as the
+  result's `product_cards`; the orchestrator gives the turn's final reply those cards, in order, once
+  each, at most six. A reply's text (`content`) is its text parts alone. The cards are read from the
+  catalog when they are read: the web chat's poll returns each card's name, description and price as
+  the catalog has them then, and leaves out a ref it no longer holds.
+- **A channel that cannot carry a card** gets its name and price as lines of text, read from the
+  catalog when it is delivered. That is the channel layer's declared policy for this part: an outbound
+  adapter declares the part types it carries beyond text (`carriedPartTypes`, none by default), the
+  first piece of ADR 0004's unit 3. The web chat has no outbound adapter: its person reads the cards
+  from the poll.
+
 ## References
 
 - `docs/adr/0001-rls-escape-hatches.md`: resolving a tenant without context

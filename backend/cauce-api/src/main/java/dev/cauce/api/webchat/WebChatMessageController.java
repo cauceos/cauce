@@ -1,5 +1,6 @@
 package dev.cauce.api.webchat;
 
+import dev.cauce.channels.ProductCards;
 import dev.cauce.channels.webchat.ResolvedWebChat;
 import dev.cauce.channels.webchat.WebChatMessageService;
 import dev.cauce.orchestration.InboundMessageResult;
@@ -30,9 +31,11 @@ public class WebChatMessageController {
     private final WebChatMessageService messages;
     private final WebChatRateLimiter limiter;
     private final ClientIps ips;
+    private final ProductCards productCards;
 
     public WebChatMessageController(WebChatSessions sessions, WebChatMessageService messages,
-                                    WebChatRateLimiter limiter, ClientIps ips) {
+                                    WebChatRateLimiter limiter, ClientIps ips, ProductCards productCards) {
+        this.productCards = productCards;
         this.sessions = sessions;
         this.messages = messages;
         this.limiter = limiter;
@@ -69,10 +72,12 @@ public class WebChatMessageController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestParam(required = false) UUID cursor,
             @RequestParam(required = false) Integer limit) {
-        return WebMessagePageResponse.from(sessions.run(channel, authorization, session -> {
+        return sessions.run(channel, authorization, session -> {
             limiter.hit(channel.channelConfigId(), channel.limits(), WebChatRateLimiter.Bucket.READS_PER_SESSION_MINUTE,
                     session.id().toString());
-            return messages.read(channel, session, cursor, limit);
-        }));
+            // ADR 0014, WC8: a card is filled in from the catalog now, under the session's tenant.
+            return WebMessagePageResponse.from(messages.read(channel, session, cursor, limit),
+                    refs -> productCards.resolve(channel.tenantId(), refs));
+        });
     }
 }

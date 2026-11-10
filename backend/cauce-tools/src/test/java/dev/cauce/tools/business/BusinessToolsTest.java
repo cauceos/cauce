@@ -225,6 +225,35 @@ class BusinessToolsTest {
                 .isError()).isTrue();
     }
 
+    @Test
+    void showProducts_turnsCatalogRefsIntoCards_andRefusesAnyOtherByName() {
+        CatalogSource source = mock(CatalogSource.class);
+        when(source.findCatalog(tenantId)).thenReturn(Optional.of(catalog));
+
+        ToolResult result = new ShowProductsTool(() -> source).execute(
+                call("show_products", Map.of("refs", List.of("tarta-queso", "calamares", "bravas", "tarta-queso"))), context);
+
+        assertThat(result.isError()).isFalse();
+        assertThat(result.productCards()).containsExactly("tarta-queso", "bravas");
+        assertThat(result.output()).contains("\"not_in_catalog\":[\"calamares\"]").contains("\"price\":\"5.50\"");
+    }
+
+    @Test
+    void showProducts_withoutRefs_orWithTooMany_orWithoutACatalog() {
+        CatalogSource source = mock(CatalogSource.class);
+        when(source.findCatalog(tenantId)).thenReturn(Optional.empty());
+        ShowProductsTool tool = new ShowProductsTool(() -> source);
+
+        assertThatThrownBy(() -> tool.execute(call("show_products", Map.of("refs", List.of())), context))
+                .isInstanceOf(InvalidToolArgumentException.class);
+        assertThatThrownBy(() -> tool.execute(call("show_products",
+                Map.of("refs", List.of("a", "b", "c", "d", "e", "f", "g"))), context))
+                .isInstanceOf(InvalidToolArgumentException.class);
+        ToolResult none = tool.execute(call("show_products", Map.of("refs", List.of("bravas"))), context);
+        assertThat(none.productCards()).isEmpty();
+        assertThat(none.output()).contains("No catalog is loaded");
+    }
+
     private static ToolCall call(String name, Map<String, Object> input) {
         return new ToolCall("call-1", name, input);
     }

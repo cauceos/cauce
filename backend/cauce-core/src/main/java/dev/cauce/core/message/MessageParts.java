@@ -17,8 +17,13 @@ import java.util.Map;
  * {"type": "audio", "media_type": "...", "provider_reference": "...", "size_bytes": 0, "sha256": "...",
  *  "duration_seconds": 0, "transcript": "..."}
  * {"type": "tool_call", "tool_call_id": "...", "tool_name": "...", "input": {...}}
- * {"type": "tool_result", "tool_call_id": "...", "tool_name": "...", "output": "...", "is_error": false}
+ * {"type": "tool_result", "tool_call_id": "...", "tool_name": "...", "output": "...", "is_error": false,
+ *  "product_cards": ["..."]}
+ * {"type": "product_card", "ref": "..."}
  * </pre>
+ *
+ * A tool result's {@code product_cards} is there only when it names some (ADR 0014, WC8), so a
+ * result without them keeps the form, and the hash, it always had.
  *
  * An audio key whose value is not known yet is left out. The tool keys are the ones
  * {@code tool_content} had (V14), so the backfill (V54) only adds the {@code type}. Plain maps
@@ -40,6 +45,8 @@ public final class MessageParts {
     static final String KEY_INPUT = "input";
     static final String KEY_OUTPUT = "output";
     static final String KEY_IS_ERROR = "is_error";
+    static final String KEY_PRODUCT_CARDS = "product_cards";
+    static final String KEY_REF = "ref";
 
     private MessageParts() {
     }
@@ -87,7 +94,11 @@ public final class MessageParts {
                     object.put(KEY_TOOL_NAME, toolResult.result().toolName());
                     object.put(KEY_OUTPUT, toolResult.result().output());
                     object.put(KEY_IS_ERROR, toolResult.result().isError());
+                    if (!toolResult.result().productCards().isEmpty()) {
+                        object.put(KEY_PRODUCT_CARDS, toolResult.result().productCards());
+                    }
                 }
+                case MessagePart.ProductCard card -> object.put(KEY_REF, card.ref());
             }
             json.add(object);
         }
@@ -114,11 +125,20 @@ public final class MessageParts {
                         asMap(object.get(KEY_INPUT))));
                 case MessagePart.ToolResultPart.TYPE -> new MessagePart.ToolResultPart(new ToolResult(
                         (String) object.get(KEY_TOOL_CALL_ID), (String) object.get(KEY_TOOL_NAME),
-                        (String) object.get(KEY_OUTPUT), Boolean.TRUE.equals(object.get(KEY_IS_ERROR))));
+                        (String) object.get(KEY_OUTPUT), Boolean.TRUE.equals(object.get(KEY_IS_ERROR)),
+                        asStrings(object.get(KEY_PRODUCT_CARDS))));
+                case MessagePart.ProductCard.TYPE -> new MessagePart.ProductCard((String) object.get(KEY_REF));
                 default -> throw new IllegalArgumentException("Unknown message part type: " + type);
             });
         }
         return parts;
+    }
+
+    private static List<String> asStrings(Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        return ((List<?>) value).stream().map(String::valueOf).toList();
     }
 
     private static void putIfKnown(Map<String, Object> object, String key, Object value) {

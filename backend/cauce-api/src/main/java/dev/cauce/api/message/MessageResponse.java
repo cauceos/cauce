@@ -52,7 +52,8 @@ public record MessageResponse(
      * {@code duration_seconds} and {@code transcript} for a voice note (ADR 0012) — never the
      * provider's reference to its bytes, a handle for the channel adapter only;
      * {@code tool_call_id}, {@code tool_name} and {@code input} for a tool call;
-     * {@code tool_call_id}, {@code tool_name}, {@code output} and {@code is_error} for a result.
+     * {@code tool_call_id}, {@code tool_name}, {@code output}, {@code is_error} and, when it shows some,
+     * {@code product_cards} for a result; {@code ref} for a product card (ADR 0014, WC8).
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record PartResponse(
@@ -67,22 +68,28 @@ public record MessageResponse(
             String toolName,
             Map<String, Object> input,
             String output,
-            Boolean isError) {
+            Boolean isError,
+            List<String> productCards,
+            String ref) {
 
         static PartResponse from(MessagePart part) {
             return switch (part) {
                 case MessagePart.Text text -> new PartResponse(text.type(), text.text(),
-                        null, null, null, null, null, null, null, null, null, null);
+                        null, null, null, null, null, null, null, null, null, null, null, null);
                 case MessagePart.Audio audio -> new PartResponse(audio.type(), null, audio.mediaType(),
                         audio.sizeBytes(), audio.sha256(), audio.durationSeconds(), audio.transcript(),
-                        null, null, null, null, null);
+                        null, null, null, null, null, null, null);
                 case MessagePart.ToolCallPart toolCall -> new PartResponse(toolCall.type(), null,
                         null, null, null, null, null,
-                        toolCall.call().toolCallId(), toolCall.call().toolName(), toolCall.call().input(), null, null);
+                        toolCall.call().toolCallId(), toolCall.call().toolName(), toolCall.call().input(), null, null,
+                        null, null);
                 case MessagePart.ToolResultPart toolResult -> new PartResponse(toolResult.type(), null,
                         null, null, null, null, null,
                         toolResult.result().toolCallId(), toolResult.result().toolName(), null,
-                        toolResult.result().output(), toolResult.result().isError());
+                        toolResult.result().output(), toolResult.result().isError(),
+                        toolResult.result().productCards().isEmpty() ? null : toolResult.result().productCards(), null);
+                case MessagePart.ProductCard card -> new PartResponse(card.type(), null, null, null, null, null, null,
+                        null, null, null, null, null, null, card.ref());
             };
         }
     }

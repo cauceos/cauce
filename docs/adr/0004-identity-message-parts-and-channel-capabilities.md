@@ -1,7 +1,10 @@
 # ADR 0004: Interlocutor identity, message parts, and channel capabilities
 
 Status: Accepted. Unit 1 (identity) implemented; unit 2 cut in four by the amendment of 2026-10-24
-(2a, the parts, and 2b, the audio part, implemented; 2c–2d per ADR 0012); unit 3 not yet.
+(2a, the parts, and 2b, the audio part, implemented; 2c–2d per ADR 0012); unit 3 started by ADR 0014
+(W7) for its first non-text outbound part, the product card: an outbound adapter declares the part types
+it carries beyond text, and a card a channel does not carry is rendered as its name and price, the
+policy WC8 decides. The rest of unit 3 (limits, other part types) is not yet built.
 
 ## Context
 

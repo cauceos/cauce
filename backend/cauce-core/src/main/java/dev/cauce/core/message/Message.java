@@ -201,21 +201,31 @@ public final class Message {
         return List.of(new MessagePart.Text(content));
     }
 
-    /** The text of {@code parts}: each text verbatim, a tool part's rendering, one per line. */
+    /**
+     * The text of {@code parts}: each text verbatim, a tool part's rendering, one per line. A product
+     * card is not text and adds nothing: it is read from the catalog where it is shown.
+     */
     private static String render(List<MessagePart> parts) {
-        return parts.stream().map(part -> switch (part) {
+        return parts.stream().filter(part -> !(part instanceof MessagePart.ProductCard)).map(part -> switch (part) {
             case MessagePart.Text text -> text.text();
             case MessagePart.Audio audio -> audio.transcriptText().orElse(UNTRANSCRIBED_AUDIO);
             case MessagePart.ToolCallPart toolCall -> toolCall.call().toolName();
             case MessagePart.ToolResultPart toolResult -> renderContent(toolResult.result());
+            case MessagePart.ProductCard ignored -> "";
         }).collect(Collectors.joining("\n"));
+    }
+
+    /** The catalog refs of the product cards this message carries, in order (ADR 0014, WC8). */
+    public List<String> productCards() {
+        return parts.stream().filter(MessagePart.ProductCard.class::isInstance)
+                .map(part -> ((MessagePart.ProductCard) part).ref()).toList();
     }
 
     /**
      * Enforces the message invariants: at least one part and a non-blank text; a tool role is
-     * exactly its one tool part, of the role's kind; USER is text and audio parts, every other role
-     * text parts only (an agent does not speak, ADR 0012, V6); a failure type is present exactly
-     * for FALLBACK.
+     * exactly its one tool part, of the role's kind; USER is text and audio parts, AGENT text and
+     * product cards (ADR 0014, WC8), every other role text parts only (an agent does not speak, ADR
+     * 0012, V6); a failure type is present exactly for FALLBACK.
      */
     private static void validate(MessageRole role, List<MessagePart> parts, String failureType) {
         if (parts.isEmpty() || render(parts).isBlank()) {
@@ -247,6 +257,9 @@ public final class Message {
                 }
                 if (role != MessageRole.USER && parts.stream().anyMatch(MessagePart.Audio.class::isInstance)) {
                     throw new IllegalArgumentException(role + " must not carry audio");
+                }
+                if (role != MessageRole.AGENT && parts.stream().anyMatch(MessagePart.ProductCard.class::isInstance)) {
+                    throw new IllegalArgumentException(role + " must not carry product cards");
                 }
             }
         }
@@ -281,6 +294,7 @@ public final class Message {
             case MessagePart.ToolResultPart toolResult -> Optional.of(toolResult.result());
             case MessagePart.Text ignored -> Optional.empty();
             case MessagePart.Audio ignored -> Optional.empty();
+            case MessagePart.ProductCard ignored -> Optional.empty();
         };
     }
 
