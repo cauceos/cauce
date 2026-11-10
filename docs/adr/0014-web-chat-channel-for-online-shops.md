@@ -407,6 +407,17 @@ page context; the events and their metrics; the widget; the pack's scenarios. Wh
 - **Openings and conversations are counted when the person writes**, as `cauce.web.openings` (kind,
   signal) and `cauce.web.conversations`, tagged by channel config and variant; a variant the channel
   does not declare reads as `none`. The `opening` itself is not stored.
+- **Events are `POST /web/v1/{publicKey}/events`, with the session** (`web_events`, V66): an
+  `add_to_cart` of a catalog ref from a card, and a `purchase` the shop reports with its own order
+  number and value. A purchase is recorded once per channel and order, and attributed when the
+  session wrote or was answered on the channel within the last 7 days, by the database clock. They
+  count as `cauce.web.cart_adds`, `cauce.web.purchases` (attributed only) and `cauce.web.purchase_value`,
+  by channel config and variant. A session's purge leaves its purchases, without the session.
+- **The anonymous counter is `POST /web/v1/{publicKey}/openings`, with no session**: it counts only
+  when the channel's `opening_counter` is on, into `web_opening_counts`, one row per channel, UTC day,
+  variant, kind and signal, and nothing else; otherwise it is accepted and ignored, so the widget learns
+  nothing. Whether it waits for consent is the channel's `opening_counter_requires_consent`, which the
+  widget honours. Events are bounded per session as reads are, and the counter per IP as messages are.
 
 ## References
 

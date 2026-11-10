@@ -18,10 +18,11 @@ import java.util.regex.Pattern;
  *
  * <p>{@code variants} (at most {@value #MAX_VARIANTS}) each replace the bubble, the templates or the
  * signals in use; the widget assigns one at random and keeps it for the session, and the metrics count
- * by variant. {@code proactiveRequiresConsent} and {@code openingCounter} are the data controller's
- * decisions (WC8), both off by default: with the first, the chat opens on its own only after the shop's
- * page has told the widget the visitor consented; with the second, an opening that ends without a
- * message is counted, anonymously, per variant and day.
+ * by variant. {@code proactiveRequiresConsent}, {@code openingCounter} and
+ * {@code openingCounterRequiresConsent} are the data controller's decisions (WC8), all off by default:
+ * with the first, the chat opens on its own only after the shop's page has told the widget the visitor
+ * consented; with the second, an opening that ends without a message is counted, anonymously, per
+ * variant and day; with the third, only after that consent.
  */
 public record WebChatAssistant(
         @JsonProperty("enabled") boolean enabled,
@@ -32,7 +33,8 @@ public record WebChatAssistant(
         @JsonProperty("templates") Map<String, String> templates,
         @JsonProperty("variants") List<Variant> variants,
         @JsonProperty("proactive_requires_consent") boolean proactiveRequiresConsent,
-        @JsonProperty("opening_counter") boolean openingCounter) {
+        @JsonProperty("opening_counter") boolean openingCounter,
+        @JsonProperty("opening_counter_requires_consent") boolean openingCounterRequiresConsent) {
 
     /** The signals the browser computes (WC8). */
     public static final String BACK_TO_PRODUCT = "back_to_product";

@@ -36,7 +36,11 @@ public class WebChatRateLimiter {
         MESSAGES_PER_SESSION_MINUTE(Duration.ofMinutes(1)),
         MESSAGES_PER_SESSION_DAY(Duration.ofDays(1)),
         MESSAGES_PER_IP_MINUTE(Duration.ofMinutes(1)),
-        READS_PER_SESSION_MINUTE(Duration.ofMinutes(1));
+        READS_PER_SESSION_MINUTE(Duration.ofMinutes(1)),
+        /** A session's events (WC8): bounded as its reads are. */
+        EVENTS_PER_SESSION_MINUTE(Duration.ofMinutes(1)),
+        /** The anonymous opening counter (WC8): bounded per IP as its messages are. */
+        OPENINGS_PER_IP_MINUTE(Duration.ofMinutes(1));
 
         private final Duration window;
 
@@ -50,7 +54,8 @@ public class WebChatRateLimiter {
                 case MESSAGES_PER_SESSION_MINUTE -> limits.messagesPerSessionMinute();
                 case MESSAGES_PER_SESSION_DAY -> limits.messagesPerSessionDay();
                 case MESSAGES_PER_IP_MINUTE -> limits.messagesPerIpMinute();
-                case READS_PER_SESSION_MINUTE -> limits.readsPerSessionMinute();
+                case READS_PER_SESSION_MINUTE, EVENTS_PER_SESSION_MINUTE -> limits.readsPerSessionMinute();
+                case OPENINGS_PER_IP_MINUTE -> limits.messagesPerIpMinute();
             };
         }
     }

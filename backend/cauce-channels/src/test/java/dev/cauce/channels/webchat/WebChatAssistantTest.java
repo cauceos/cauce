@@ -21,7 +21,7 @@ class WebChatAssistantTest {
     void greetingFor_isTheVariantsTemplate_elseTheConfigurations_andNothingForAnUnknownSignal() {
         WebChatAssistant assistant = new WebChatAssistant(true, "¿Te ayudo a elegir?", "Contratar", ROUTES, null,
                 TEMPLATES, List.of(new Variant("b", "¿Hablamos?", Map.of("idle_cart", "¿Algo te frena?"), null)),
-                false, false);
+                false, false, false);
 
         assertThat(assistant.greetingFor("idle_cart", "b")).contains("¿Algo te frena?");
         assertThat(assistant.greetingFor("comparing", "b")).contains("¿Dudas entre planes?");
@@ -37,19 +37,19 @@ class WebChatAssistantTest {
         assertThatThrownBy(() -> new Route("/pagar?plan=x", List.of())).hasMessageContaining("path");
         assertThatThrownBy(() -> new Route("/", List.of("on_load"))).hasMessageContaining("signals");
         assertThatThrownBy(() -> new WebChatAssistant(true, null, null, List.of(), null,
-                Map.of("on_load", "Hola"), List.of(), false, false)).hasMessageContaining("templates");
+                Map.of("on_load", "Hola"), List.of(), false, false, false)).hasMessageContaining("templates");
         assertThatThrownBy(() -> new WebChatAssistant(true, null, null, List.of(ROUTES.get(0), ROUTES.get(0)), null,
-                Map.of(), List.of(), false, false)).hasMessageContaining("route");
+                Map.of(), List.of(), false, false, false)).hasMessageContaining("route");
         assertThatThrownBy(() -> new Variant("B mayúscula", null, null, null)).hasMessageContaining("id");
         List<Variant> six = List.of("a", "b", "c", "d", "e", "f").stream()
                 .map(id -> new Variant(id, null, null, null)).toList();
-        assertThatThrownBy(() -> new WebChatAssistant(true, null, null, List.of(), null, Map.of(), six, false, false))
+        assertThatThrownBy(() -> new WebChatAssistant(true, null, null, List.of(), null, Map.of(), six, false, false, false))
                 .hasMessageContaining("at most 5");
         assertThatThrownBy(() -> new WebChatAssistant(true, null, null, List.of(), null, Map.of(),
-                List.of(new Variant("a", null, null, null), new Variant("a", null, null, null)), false, false))
+                List.of(new Variant("a", null, null, null), new Variant("a", null, null, null)), false, false, false))
                 .hasMessageContaining("twice");
         assertThatThrownBy(() -> new Tuning(1, null, null)).hasMessageContaining("comparing_views");
         assertThatThrownBy(() -> new WebChatAssistant(true, "x".repeat(121), null, List.of(), null, Map.of(),
-                List.of(), false, false)).hasMessageContaining("bubble");
+                List.of(), false, false, false)).hasMessageContaining("bubble");
     }
 }

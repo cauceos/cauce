@@ -59,6 +59,11 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 ## Channels
 
+- **Reading a web chat's events and opening counts over the API.** W7 records adds to cart, purchases
+  (`web_events`) and the anonymous openings (`web_opening_counts`) and exports them as `cauce.web.*`
+  meters; the variants are compared on the meters. An endpoint (or the dashboard) that reads them per
+  channel, variant and day waits for the operator interface.
+
 - **The web widget on a CDN.** The Cauce instance serves `cauce-widget.js` itself, at `/web/widget/{version}/cauce-widget.js` with a year's immutable cache and the tag's SRI hash (ADR 0014, W4). A CDN in front would spare the instance the downloads. Not needed while one instance serves a few shops.
 - **A paid European transcriber, measured on the same ten voice notes (November).** The local Whisper
   is the only transcriber (ADR 0012, V3). The reference a paid adapter must beat, measured on

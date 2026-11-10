@@ -3,6 +3,7 @@ package dev.cauce.api.webchat;
 import dev.cauce.channels.webchat.ResolvedWebChat;
 import dev.cauce.channels.webchat.WebChatAssistant;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.math.BigDecimal;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,6 +22,10 @@ public class WebChatMetrics {
     static final String LIMITER_UNAVAILABLE = "cauce.web.rate_limit.unavailable";
     static final String OPENINGS = "cauce.web.openings";
     static final String CONVERSATIONS = "cauce.web.conversations";
+    static final String CART_ADDS = "cauce.web.cart_adds";
+    static final String PURCHASES = "cauce.web.purchases";
+    static final String PURCHASE_VALUE = "cauce.web.purchase_value";
+    static final String OPENINGS_COUNTED = "cauce.web.openings_counted";
     static final String NONE = "none";
 
     private final MeterRegistry registry;
@@ -61,6 +66,26 @@ public class WebChatMetrics {
     /** A thread begun on the channel. */
     public void conversation(ResolvedWebChat channel, String variant) {
         registry.counter(CONVERSATIONS, "channel_config", channel.channelConfigId().toString(), "variant", variant)
+                .increment();
+    }
+
+    /** An add to cart from a product card. */
+    public void cartAdd(ResolvedWebChat channel, String variant) {
+        registry.counter(CART_ADDS, "channel_config", channel.channelConfigId().toString(), "variant", variant).increment();
+    }
+
+    /** A purchase attributed to the chat, and its value. */
+    public void purchase(ResolvedWebChat channel, String variant, BigDecimal value) {
+        String config = channel.channelConfigId().toString();
+        registry.counter(PURCHASES, "channel_config", config, "variant", variant).increment();
+        registry.summary(PURCHASE_VALUE, "channel_config", config, "variant", variant).record(value.doubleValue());
+    }
+
+    /** An opening reported to the anonymous counter, which may end without a message. */
+    public void openingCounted(ResolvedWebChat channel, String variant, String kind, String signal) {
+        boolean proactive = "proactive".equals(kind);
+        registry.counter(OPENINGS_COUNTED, "channel_config", channel.channelConfigId().toString(), "variant", variant,
+                "kind", kind, "signal", proactive && WebChatAssistant.SIGNALS.contains(signal) ? signal : NONE)
                 .increment();
     }
 }
