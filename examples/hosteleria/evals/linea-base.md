@@ -10,6 +10,15 @@ cambio no trajo regresión. El
 
 **Modelo:** `anthropic/claude-sonnet-5-5` · **Prompt:** huella `1acbedbf4b19` · **Juez:** ninguno
 
+> **Las reglas generales cambiaron después de `1223Z` sin volver a ejecutar la batería.** `a074531`
+> las generalizó para cualquier catálogo (importes comparados como números, ningún importe fuera de
+> un resultado del turno, palabras de un producto que no cruzan un signo de puntuación, un producto
+> que nombra otra herramienta del turno). Se validó con una simulación sobre las 320 respuestas de
+> `1223Z`: la detección de platos es idéntica en todas y su único importe fuera de la carta (14,50 €,
+> el menú del día de H1.4) llega siempre con `get_business_info` en el mismo turno, así que ninguna
+> tasa cambia. `1223Z` sigue vigente mientras el prompt del bar no cambie; el primer cambio del
+> prompt se mide con una batería completa y las reglas nuevas.
+
 > **No cuentan `1320Z`, `1422Z` ni `1516Z`.** Se ejecutaron desde un worktree parado en `64ca30e`,
 > con el prompt anterior (huella `43c8a0cc2043`) y la versión de H3.14 de ese commit, todavía aviso
 > y con la comprobación de orden. Esta página dio `1320Z` por vigente: fue un error. `1320Z` sigue
