@@ -1,6 +1,7 @@
 package dev.cauce.api.channel;
 
 import dev.cauce.channels.config.ChannelConfigNotFoundException;
+import dev.cauce.channels.webchat.WebChatAppearance;
 import dev.cauce.channels.webchat.WebChatChannelService;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -9,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,7 +34,16 @@ public class WebChatChannelController {
         return ResponseEntity.status(HttpStatus.CREATED).body(WebChatChannelResponse.from(service.create(agentId,
                 new WebChatChannelService.Creation(request.turnstileSecret(), request.turnstileSiteKey(),
                         request.allowedOrigins(), request.privacyPolicyUrl(), request.consentMode(),
-                        request.limits() == null ? null : request.limits().toDomain()))));
+                        request.limits() == null ? null : request.limits().toDomain(), request.appearance()))));
+    }
+
+    /**
+     * Replaces the channel's look (ADR 0014, W4): name, avatar, colours, typeface and texts, with the
+     * colour pairs at WCAG AA contrast (400 otherwise).
+     */
+    @PutMapping("/v1/web-chat-channels/{id}/appearance")
+    public WebChatChannelResponse updateAppearance(@PathVariable UUID id, @RequestBody WebChatAppearance appearance) {
+        return WebChatChannelResponse.from(service.updateAppearance(id, appearance));
     }
 
     @GetMapping("/v1/web-chat-channels/{id}")

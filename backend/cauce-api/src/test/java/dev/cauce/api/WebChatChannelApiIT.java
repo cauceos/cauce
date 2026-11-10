@@ -120,6 +120,52 @@ class WebChatChannelApiIT extends AbstractBusinessApiIT {
     }
 
     @Test
+    void theLook_comesFromTheChannel_isReadByTheWidget_andAPairBelowAaIsRefused() throws Exception {
+        setLimit();
+        UUID agentId = createAgent(clientId, clientAuth, List.of());
+        String brand = """
+                {"name": "Cauce", "avatar_url": "https://caucewebs.es/avatar.png", "primary_color": "#0B5FFF",
+                 "on_primary_color": "#FFFFFF", "background_color": "#FFFFFF", "text_color": "#111827",
+                 "font_family": "Inter, system-ui, sans-serif", "greeting": "Hola, ¿en qué te ayudo?",
+                 "unavailable_message": "Ahora no puedo responder.", "contact": "hola@caucewebs.es", "locale": "es"}
+                """;
+        String body = postJson(clientAuth, "/v1/agents/" + agentId + "/web-chat-channels",
+                CREATE.replace("\"privacy_policy_url\"", "\"appearance\": " + brand + ", \"privacy_policy_url\""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.appearance.primary_color").value("#0b5fff"))
+                .andReturn().getResponse().getContentAsString();
+        String id = objectMapper.readTree(body).get("id").asText();
+        String key = objectMapper.readTree(body).get("public_key").asText();
+
+        mockMvc.perform(get("/web/v1/" + key + "/config").header(HttpHeaders.ORIGIN, SHOP))
+                .andExpect(jsonPath("$.appearance.name").value("Cauce"))
+                .andExpect(jsonPath("$.appearance.font_family").value("Inter, system-ui, sans-serif"))
+                .andExpect(jsonPath("$.appearance.contact").value("hola@caucewebs.es"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/v1/web-chat-channels/" + id + "/appearance").header(HttpHeaders.AUTHORIZATION, clientAuth)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(brand.replace("#111827", "#9CA3AF")))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/v1/web-chat-channels/" + id + "/appearance").header(HttpHeaders.AUTHORIZATION, clientAuth)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(brand.replace("\"Cauce\"", "\"Ana\"")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.appearance.name").value("Ana"));
+        mockMvc.perform(get("/web/v1/" + key + "/config").header(HttpHeaders.ORIGIN, SHOP))
+                .andExpect(jsonPath("$.appearance.name").value("Ana"));
+    }
+
+    @Test
+    void aChannelWithoutALook_getsTheNeutralOne() throws Exception {
+        String key = createChannel();
+
+        mockMvc.perform(get("/web/v1/" + key + "/config").header(HttpHeaders.ORIGIN, SHOP))
+                .andExpect(jsonPath("$.appearance.name").value("Asistente"))
+                .andExpect(jsonPath("$.appearance.locale").value("es"));
+    }
+
+    @Test
     void whileAWebChatIsActive_theTenantsSpendLimitCannotBeRemoved() throws Exception {
         createChannel();
 

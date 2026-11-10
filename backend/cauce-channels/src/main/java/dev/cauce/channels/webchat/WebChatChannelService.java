@@ -52,12 +52,19 @@ public class WebChatChannelService implements SpendLimitRequirement {
 
     /** What a web chat is created with; the Turnstile secret is sealed at rest, never returned. */
     public record Creation(String turnstileSecret, String turnstileSiteKey, List<String> allowedOrigins,
-                           String privacyPolicyUrl, ConsentMode consentMode, WebChatLimits limits) {
+                           String privacyPolicyUrl, ConsentMode consentMode, WebChatLimits limits,
+                           WebChatAppearance appearance) {
 
-        /** A creation that keeps the platform's limits. */
+        /** A creation that keeps the platform's limits and look. */
         public Creation(String turnstileSecret, String turnstileSiteKey, List<String> allowedOrigins,
                         String privacyPolicyUrl, ConsentMode consentMode) {
-            this(turnstileSecret, turnstileSiteKey, allowedOrigins, privacyPolicyUrl, consentMode, null);
+            this(turnstileSecret, turnstileSiteKey, allowedOrigins, privacyPolicyUrl, consentMode, null, null);
+        }
+
+        /** A creation that keeps the platform's look. */
+        public Creation(String turnstileSecret, String turnstileSiteKey, List<String> allowedOrigins,
+                        String privacyPolicyUrl, ConsentMode consentMode, WebChatLimits limits) {
+            this(turnstileSecret, turnstileSiteKey, allowedOrigins, privacyPolicyUrl, consentMode, limits, null);
         }
     }
 
@@ -91,9 +98,31 @@ public class WebChatChannelService implements SpendLimitRequirement {
                 creation.turnstileSiteKey(), creation.privacyPolicyUrl(),
                 creation.consentMode() == null ? ConsentMode.NOTICE : creation.consentMode(), limits);
         ChannelConfig saved = configMapper.toDomain(configRepository.saveAndFlush(configMapper.toEntity(config)));
-        settingsRepository.save(toEntity(settings));
+        WebChatSettingsEntity entity = toEntity(settings);
+        entity.setAppearance(write(creation.appearance()));
+        settingsRepository.save(entity);
         auditRecorder.record(ChannelAuditEvents.channelConfigured(saved, TenantContext.getCurrentTenantId().orElseThrow()));
-        return new WebChatChannel(saved, settings);
+        return new WebChatChannel(saved, settings, creation.appearance());
+    }
+
+    /**
+     * Replaces the look of the web chat {@code channelConfigId} (ADR 0014, W4), at once for every widget
+     * that reads its configuration next. Audited as {@code admin.web_chat.appearance_updated}, ids only.
+     *
+     * @throws dev.cauce.channels.config.ChannelConfigNotFoundException if it is not a visible web chat
+     */
+    @Transactional
+    public WebChatChannel updateAppearance(UUID channelConfigId, WebChatAppearance appearance) {
+        WebChatSettingsEntity entity = settingsRepository.findById(channelConfigId).orElseThrow(() ->
+                new dev.cauce.channels.config.ChannelConfigNotFoundException("No web chat channel found for id "
+                        + channelConfigId));
+        entity.setAppearance(write(appearance));
+        settingsRepository.save(entity);
+        WebChatChannel channel = find(channelConfigId).orElseThrow();
+        auditRecorder.record(new dev.cauce.core.audit.AuditEvent(channel.config().tenantId(), APPEARANCE_UPDATED,
+                java.util.Map.of("channel_config_id", channelConfigId.toString(),
+                        "actor_tenant_id", TenantContext.getCurrentTenantId().orElseThrow().toString())));
+        return channel;
     }
 
     /** The web chat {@code channelConfigId}, if it is visible under the current context (RLS). */
@@ -102,7 +131,7 @@ public class WebChatChannelService implements SpendLimitRequirement {
         return configRepository.findById(channelConfigId).map(configMapper::toDomain)
                 .filter(ChannelConfig::isPublicKeyRouted)
                 .flatMap(config -> settingsRepository.findById(config.id())
-                        .map(entity -> new WebChatChannel(config, toDomain(entity))));
+                        .map(entity -> new WebChatChannel(config, toDomain(entity), read(entity.getAppearance()))));
     }
 
     /**
@@ -122,13 +151,40 @@ public class WebChatChannelService implements SpendLimitRequirement {
                 row.getTurnstile_site_key(), row.getPrivacy_policy_url(), ConsentMode.valueOf(row.getConsent_mode()),
                 "ACTIVE".equals(row.getStatus()), new WebChatLimits(row.getSessions_per_ip_hour(),
                         row.getMessages_per_session_minute(), row.getMessages_per_session_day(),
-                        row.getMessages_per_ip_minute(), row.getReads_per_session_minute())));
+                        row.getMessages_per_ip_minute(), row.getReads_per_session_minute()),
+                read(row.getAppearance())));
     }
 
     @Override
     @Transactional(readOnly = true)
     public boolean requiresSpendLimit(UUID tenantId) {
         return settingsRepository.hasActiveChannel(tenantId);
+    }
+
+    static final String APPEARANCE_UPDATED = "admin.web_chat.appearance_updated";
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    private static String write(WebChatAppearance appearance) {
+        if (appearance == null) {
+            return null;
+        }
+        try {
+            return JSON.writeValueAsString(appearance);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** The stored look; the neutral one when none is stored. A stored one was validated when written. */
+    private static WebChatAppearance read(String json) {
+        if (json == null || json.isBlank()) {
+            return WebChatAppearance.NEUTRAL;
+        }
+        try {
+            return JSON.readValue(json, WebChatAppearance.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("A stored web-chat appearance cannot be read", e);
+        }
     }
 
     private static WebChatSettingsEntity toEntity(WebChatSettings settings) {

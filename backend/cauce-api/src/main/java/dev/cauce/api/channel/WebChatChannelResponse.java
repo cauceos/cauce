@@ -2,6 +2,7 @@ package dev.cauce.api.channel;
 
 import dev.cauce.channels.config.ChannelConfigStatus;
 import dev.cauce.channels.webchat.ConsentMode;
+import dev.cauce.channels.webchat.WebChatAppearance;
 import dev.cauce.channels.webchat.WebChatLimits;
 import dev.cauce.channels.webchat.WebChatChannel;
 import java.time.Instant;
@@ -24,6 +25,7 @@ public record WebChatChannelResponse(
         ConsentMode consentMode,
         ChannelConfigStatus status,
         WebChatLimits limits,
+        WebChatAppearance appearance,
         Instant createdAt) {
 
     public static WebChatChannelResponse from(WebChatChannel channel) {
@@ -31,6 +33,6 @@ public record WebChatChannelResponse(
                 channel.config().agentId(), channel.config().channelType(), channel.publicKey(),
                 channel.settings().allowedOrigins(), channel.settings().turnstileSiteKey(),
                 channel.settings().privacyPolicyUrl(), channel.settings().consentMode(), channel.config().status(),
-                channel.settings().limits(), channel.config().createdAt());
+                channel.settings().limits(), channel.appearance(), channel.config().createdAt());
     }
 }

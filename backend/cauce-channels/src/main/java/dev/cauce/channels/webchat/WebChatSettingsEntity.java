@@ -48,6 +48,19 @@ public class WebChatSettingsEntity {
     @Column(name = "reads_per_session_minute")
     private Integer readsPerSessionMinute;
 
+    /** The appearance as JSON (V63); null is the platform's neutral look. */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "appearance", columnDefinition = "jsonb")
+    private String appearance;
+
+    public String getAppearance() {
+        return appearance;
+    }
+
+    public void setAppearance(String appearance) {
+        this.appearance = appearance;
+    }
+
     protected WebChatSettingsEntity() {
         // for JPA
     }

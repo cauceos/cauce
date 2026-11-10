@@ -2,6 +2,7 @@ package dev.cauce.api.webchat;
 
 import dev.cauce.channels.webchat.ConsentMode;
 import dev.cauce.channels.webchat.ResolvedWebChat;
+import dev.cauce.channels.webchat.WebChatAppearance;
 
 /**
  * The widget's public configuration (ADR 0014, WC1): what it needs to show itself before the person
@@ -14,10 +15,12 @@ public record WebChatConfigResponse(
         String privacyPolicyUrl,
         ConsentMode consentMode,
         boolean consentRequired,
-        boolean active) {
+        boolean active,
+        WebChatAppearance appearance) {
 
     static WebChatConfigResponse from(ResolvedWebChat channel) {
         return new WebChatConfigResponse(channel.publicKey(), channel.turnstileSiteKey(), channel.privacyPolicyUrl(),
-                channel.consentMode(), channel.consentMode() == ConsentMode.ACCEPTANCE, channel.active());
+                channel.consentMode(), channel.consentMode() == ConsentMode.ACCEPTANCE, channel.active(),
+                channel.appearance());
     }
 }

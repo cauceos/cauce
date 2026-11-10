@@ -13,7 +13,16 @@ import java.util.UUID;
  */
 public record ResolvedWebChat(UUID channelConfigId, UUID tenantId, UUID agentId, String publicKey,
                               List<String> allowedOrigins, String turnstileSiteKey, String privacyPolicyUrl,
-                              ConsentMode consentMode, boolean active, WebChatLimits limits) {
+                              ConsentMode consentMode, boolean active, WebChatLimits limits,
+                              WebChatAppearance appearance) {
+
+    /** A channel with the platform's neutral look. */
+    public ResolvedWebChat(UUID channelConfigId, UUID tenantId, UUID agentId, String publicKey,
+                           List<String> allowedOrigins, String turnstileSiteKey, String privacyPolicyUrl,
+                           ConsentMode consentMode, boolean active, WebChatLimits limits) {
+        this(channelConfigId, tenantId, agentId, publicKey, allowedOrigins, turnstileSiteKey, privacyPolicyUrl,
+                consentMode, active, limits, WebChatAppearance.NEUTRAL);
+    }
 
     /** A channel of the given status that keeps the platform's limits. */
     public ResolvedWebChat(UUID channelConfigId, UUID tenantId, UUID agentId, String publicKey,
@@ -53,6 +62,7 @@ public record ResolvedWebChat(UUID channelConfigId, UUID tenantId, UUID agentId,
         allowedOrigins = List.copyOf(allowedOrigins);
         Objects.requireNonNull(consentMode, "consentMode");
         limits = limits == null ? WebChatLimits.NONE : limits;
+        appearance = appearance == null ? WebChatAppearance.NEUTRAL : appearance;
     }
 
     /** Whether a browser on {@code origin} may call this channel: an exact match, ignoring case. */
