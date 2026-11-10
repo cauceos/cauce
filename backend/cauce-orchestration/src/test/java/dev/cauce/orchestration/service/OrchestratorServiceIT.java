@@ -202,7 +202,8 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
     void respondToMessage_whenConversationExceedsWindow_invokesLlmWithTruncatedContext() {
         // Insert 100 USER messages of 5000 chars (2000 tokens each, plus their stamp): the 200_000
         // window less the 6_096 reserved for the response (the default 4096 plus the buffer) and the
-        // agent's system prompt, which counts against it, holds 96.
+        // agent's system prompt, which counts against it, holds about 96. The stamp names the weekday
+        // ("[Sent Tuesday ...]"), so its length, and with it the count, moves by one with the day.
         seedLargeHistory(100, 5000);
         UUID trigger = lastUserMessageId();
 
@@ -216,9 +217,11 @@ class OrchestratorServiceIT extends AbstractOrchestrationIntegrationTest {
         }
 
         List<dev.cauce.llm.model.LlmMessage> sent = mockLlmProvider.lastInvocation().messages();
-        assertThat(sent).hasSize(96);
-        assertThat(unstamped(sent.get(0).content())).startsWith("MSG4:");
-        assertThat(unstamped(sent.get(95).content())).startsWith("MSG99:");
+        int kept = sent.size();
+        assertThat(kept).isBetween(94, 97);
+        // The newest slice, contiguous and in order: MSG(100 - kept) .. MSG99.
+        assertThat(unstamped(sent.get(0).content())).startsWith("MSG" + (100 - kept) + ":");
+        assertThat(unstamped(sent.get(kept - 1).content())).startsWith("MSG99:");
     }
 
     @Test
