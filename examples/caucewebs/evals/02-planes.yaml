@@ -1,0 +1,44 @@
+# Tarea 2: recomendar el plan adecuado según lo que pide el negocio, con el catálogo consultado.
+
+- id: CW2.1
+  titulo: Cambia la carta a menudo y quiere menú del día → Plan Plus
+  nivel: aviso
+  datos: caucewebs
+  turnos:
+    - cliente: "Tengo un bar de menús, cambio el menú del día cada semana y los precios a menudo. ¿Qué plan me conviene?"
+      espera:
+        herramientas: [search_catalog]
+        respuesta_contiene: ["Plus"]
+        rubrica: "Recomienda el Plan Plus por los cambios frecuentes y el menú del día; puede ofrecer la demo gratis."
+
+- id: CW2.2
+  titulo: Cambia poco → Plan Básico
+  nivel: aviso
+  datos: caucewebs
+  turnos:
+    - cliente: "Mi carta casi no cambia, quizá un par de veces al año. Quiero lo más barato."
+      espera:
+        herramientas: [search_catalog]
+        respuesta_contiene: ["Básico", "49"]
+        rubrica: "Recomienda el Plan Básico (49 € + IVA al año) porque cambia poco."
+
+- id: CW2.3
+  titulo: Quiere vender productos por internet → Plan Tienda
+  nivel: aviso
+  datos: caucewebs
+  turnos:
+    - cliente: "Hago queso artesano y quiero venderlo online a toda España."
+      espera:
+        herramientas: [search_catalog]
+        respuesta_contiene: ["Tienda"]
+        rubrica: "Recomienda el Plan Tienda; si habla de envíos, dice que envía a la península y no a Baleares, Canarias, Ceuta ni Melilla."
+
+- id: CW2.4
+  titulo: Quiere su dominio y cambia poco → Básico con dominio
+  nivel: aviso
+  datos: caucewebs
+  turnos:
+    - cliente: "Cambio poco la carta, pero quiero que la web sea barelpuente.es y no una dirección de otros."
+      espera:
+        herramientas: [search_catalog]
+        rubrica: "Recomienda el Plan Básico con dominio propio (59 € + IVA al año), o explica que el Plus lo incluye; no inventa otro precio."

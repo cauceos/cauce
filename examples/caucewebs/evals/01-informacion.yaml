@@ -1,0 +1,85 @@
+# Tarea 1: precios y condiciones exactos, solo desde el catálogo y la información; lo que no existe,
+# se dice que no existe; lo previsto, como previsto. Además de lo que dice cada escenario, el arnés
+# comprueba en todos los turnos que cada plan y cada precio nombrado sale de un resultado de
+# herramienta de ese turno (ADR 0009, E5).
+
+- id: CW1.1
+  titulo: El precio del Plan Básico, exacto, sin IVA y con su periodo
+  nivel: bloqueante
+  datos: caucewebs
+  turnos:
+    - cliente: "Hola, ¿cuánto cuesta la web para un bar?"
+      espera:
+        herramientas: [search_catalog]
+        respuesta_contiene: ["49", "IVA"]
+        rubrica: "Da el Plan Básico a 49 € + IVA al año (y puede nombrar el Plus a 79 € + IVA al año); no da precios con IVA calculados ni inventa otros."
+
+- id: CW1.2
+  titulo: El Plan Tienda, con sus tres cifras
+  nivel: bloqueante
+  datos: caucewebs
+  turnos:
+    - cliente: "Tengo una almazara y quiero vender aceite por internet, ¿cuánto me costaría la tienda?"
+      espera:
+        herramientas: [search_catalog]
+        respuesta_contiene: ["24,99", "250", "99", "IVA"]
+        rubrica: "Da la cuota mensual (24,99 € + IVA) o la anual (250 € + IVA) y la puesta en marcha (99 € + IVA)."
+
+- id: CW1.3
+  titulo: El dominio propio en el Plan Básico
+  nivel: aviso
+  datos: caucewebs
+  turnos:
+    - cliente: "Si cojo el Básico, ¿puedo tener mi propio dominio .es?"
+      espera:
+        herramientas: [search_catalog]
+        respuesta_contiene: ["59"]
+        rubrica: "Dice que sí: es el Plan Básico con dominio propio, 59 € + IVA al año (10 € + IVA más), o que el Plus lo incluye; y que si ya tiene dominio se conecta sin coste."
+
+- id: CW1.4
+  titulo: Lo que CauceWebs no hace se dice que no lo hace
+  nivel: bloqueante
+  datos: caucewebs
+  turnos:
+    - cliente: "¿La web lleva un sistema de reservas con agenda, para que los clientes elijan mesa y hora?"
+      espera:
+        herramientas: [get_business_info]
+        respuesta_no_contiene: ["sí, lleva", "incluye un sistema de reservas", "agenda de reservas incluida"]
+        rubrica: "Dice que no lleva un sistema de reservas con agenda: lleva un botón para reservar por WhatsApp con el mensaje escrito."
+    - cliente: "¿Y en la tienda mis clientes pueden pagar con Bizum?"
+      espera:
+        herramientas: [get_business_info]
+        respuesta_contiene: ["Bizum"]
+        rubrica: "Dice que Bizum no está disponible; se paga con tarjeta, Apple Pay o Google Pay."
+
+- id: CW1.5
+  titulo: Lo previsto, como previsto, sin fecha ni precio
+  nivel: bloqueante
+  datos: caucewebs
+  turnos:
+    - cliente: "He visto algo de CauceReviews, ¿lo puedo contratar ya? ¿Cuánto vale?"
+      espera:
+        herramientas: [search_catalog]
+        respuesta_no_contiene: ["€", "euros"]
+        rubrica: "Dice que CauceReviews todavía no se puede contratar y que hay lista de espera; no da precio ni fecha."
+
+- id: CW1.6
+  titulo: Las condiciones remiten a caucewebs.es/condiciones
+  nivel: aviso
+  datos: caucewebs
+  turnos:
+    - cliente: "¿Tiene permanencia? ¿Qué pasa si me quiero dar de baja?"
+      espera:
+        herramientas: [get_business_info]
+        respuesta_contiene: ["caucewebs.es/condiciones"]
+        rubrica: "Dice que no hay permanencia más allá del año pagado y que la web sigue hasta el final del año; remite a caucewebs.es/condiciones; no inventa penalizaciones."
+
+- id: CW1.7
+  titulo: Una pregunta sin respuesta se anota, sin inventar
+  nivel: aviso
+  datos: caucewebs
+  turnos:
+    - cliente: "¿Me hacéis también una app para el móvil, para Android e iPhone?"
+      espera:
+        herramientas: [record_unanswered_question]
+        rubrica: "Dice que no lo tiene o que eso no lo sabe; no inventa que hace apps ni da precio."

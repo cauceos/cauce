@@ -1,0 +1,28 @@
+{
+  "name": "CauceWebs",
+  "time_zone": "Europe/Madrid",
+  "locale": "es",
+  "facts": {
+    "que_es": "CauceWebs hace webs para bares y restaurantes, tiendas online a medida y vídeos para redes, para negocios de Andalucía. Trabaja en remoto en toda Andalucía, por WhatsApp y email.",
+    "contacto": "WhatsApp 711 211 077 y email hola@caucewebs.es.",
+    "demo": "Antes de pagar nada, CauceWebs prepara una demo gratis y sin compromiso con las fotos, la carta y los datos que el negocio ya tiene en Google. Si gusta, se contrata; si no, no se paga nada.",
+    "precios": "Los precios de los planes están en el catálogo y son sin IVA: siempre se dicen con «+ IVA».",
+    "pago_webs": "Los planes de web se pagan por adelantado un año completo, con tarjeta a través de Stripe, y CauceWebs emite factura con IVA. Sin cuota de alta. La renovación es automática y CauceWebs avisa al menos 15 días antes.",
+    "permanencia": "No hay permanencia más allá del año pagado. Si el cliente se da de baja, la web sigue publicada hasta el final del año pagado y no se renueva.",
+    "impago": "Si falla el cobro de la renovación, CauceWebs avisa y hay 15 días para pagar; después la web se suspende y, si en 30 días más no se paga, el servicio termina. Si se pide en los 30 días siguientes, CauceWebs entrega los textos, las fotos, la carta y el código para llevarse el dominio.",
+    "plazo_publicacion": "Con la demo ya hecha, la web se publica en menos de 24 horas laborables desde el pago; si no hay demo, en un máximo de 5 días hábiles desde que se paga y se mandan los datos.",
+    "dominio": "En el Plan Plus va incluido un dominio .es. En el Plan Básico, el dominio propio cuesta 10 € + IVA más al año (es el Plan Básico con dominio propio). Si el negocio ya tiene dominio, CauceWebs lo conecta sin coste en cualquier plan. El dominio se registra a nombre del cliente.",
+    "cambios": "Los cambios se piden por WhatsApp al 711 211 077 o por email a hola@caucewebs.es. Todo lo que se pide el mismo día cuenta como un solo cambio. Si cambia un precio, el QR de las mesas sigue valiendo.",
+    "lo_que_lleva_la_web": "Las webs de los planes Básico y Plus llevan: carta con fotos, precios y los 14 alérgenos en cada plato; horario con «Abierto ahora» y avisos de festivos y vacaciones; botones de llamar, WhatsApp y cómo llegar; reservas por WhatsApp con el mensaje ya escrito; la nota de Google y un botón para dejar reseñas; QR para las mesas y cartelería con la marca lista para imprimir; alojamiento, HTTPS y copias de seguridad, sin anuncios ni cookies; aviso legal y política de privacidad del negocio.",
+    "que_no_incluye": "No incluyen rediseños completos, secciones o páginas nuevas (se presupuestan aparte); un sistema de reservas con agenda (la web lleva el botón de reservar por WhatsApp, no una agenda); redacción de textos largos ni sesiones de fotos (se presupuestan aparte); la tienda online (es el Plan Tienda, aparte).",
+    "tienda_cobros": "En el Plan Tienda, los pagos de los clientes van directos a la cuenta de Stripe del negocio (Stripe Connect). CauceWebs no recibe ese dinero ni cobra comisión por venta; las tarifas de Stripe de cada venta las paga el negocio.",
+    "tienda_metodos_pago": "Los clientes de la tienda pagan con tarjeta, Apple Pay o Google Pay. Bizum no está disponible.",
+    "tienda_envios": "La tienda envía a toda la península y cobra el envío por tramos según el importe del pedido; a Baleares, Canarias, Ceuta y Melilla todavía no envía. La recogida en el local está disponible. El paquete lo prepara y lo manda el negocio con su transportista.",
+    "tienda_no_incluye": "El Plan Tienda no incluye el registro y la renovación del dominio propio, las tarifas de Stripe de cada venta, los envíos, las devoluciones ni las facturas a los compradores, que son cosa del vendedor.",
+    "condiciones": "Las condiciones completas están en caucewebs.es/condiciones (webs) y caucewebs.es/condiciones-tienda (tienda). Para cualquier duda de condiciones, remitir ahí.",
+    "quien": "Detrás de CauceWebs está Jose Luis, de Cabra del Santo Cristo (Jaén), que fundó CauceWebs en 2026."
+  },
+  "handoff_categories": ["demo", "otro"],
+  "daily_digest_time": "21:00",
+  "daily_digest_skip_when_empty": true
+}

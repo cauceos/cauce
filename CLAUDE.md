@@ -74,7 +74,7 @@ What each module is *for* and which dependency rules it must respect. What each 
 - `.github/` — GitHub workflows (CI), Dependabot config, repo assets
 - `docs/` — public documentation: decisions as ADRs under `docs/adr/`, normative format specifications under `docs/spec/`, and the deferred-work register `docs/deferred.md`
 - `tools/` — standalone published artefacts, outside every build; each has its own README (`audit-chain-verifier/`)
-- `examples/` — sector packs: prompts, tool grants, reference data and eval scenarios, loaded through the API (`hosteleria/`). `ReferenceBarPackIT` keeps them loadable
+- `examples/` — sector packs: prompts, tool grants, reference data and eval scenarios, loaded through the API (`hosteleria/`, and the first shop `caucewebs/`). `ReferenceBarPackIT` and `ReferenceCauceWebsPackIT` keep them loadable
 - `scripts/` — operational scripts (the quickstart, the demo bar)
 - `docker/` — the local stack's init scripts
 

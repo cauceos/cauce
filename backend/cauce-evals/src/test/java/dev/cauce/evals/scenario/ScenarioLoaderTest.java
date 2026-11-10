@@ -45,6 +45,15 @@ class ScenarioLoaderTest {
     }
 
     @Test
+    void loadAll_acceptsEveryScenarioOfTheCauceWebsPack_asTheyAre() {
+        List<Scenario> all = loader.loadAll(Path.of("..", "..", "examples", "caucewebs", "evals"));
+
+        assertThat(all).extracting(Scenario::id).contains("CW1.1", "CW2.1", "CW3.1", "CW3.3", "CW4.2");
+        assertThat(all).allSatisfy(s -> assertThat(s.fixture()).isEqualTo("caucewebs"));
+        assertThat(all).filteredOn(s -> s.level() == Level.BLOCKING).isNotEmpty();
+    }
+
+    @Test
     void anEarlierThread_needsItsDaysAndBothTexts() throws Exception {
         Scenario loaded = loader.load(file("""
                 - id: X5

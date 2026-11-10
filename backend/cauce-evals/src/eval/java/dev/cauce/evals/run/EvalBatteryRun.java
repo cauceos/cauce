@@ -25,6 +25,7 @@ import dev.cauce.evals.report.Report;
 import dev.cauce.evals.report.RunValidity;
 import dev.cauce.evals.report.RunSummary;
 import dev.cauce.evals.report.ScenarioRun;
+import dev.cauce.evals.scenario.PackFixture;
 import dev.cauce.evals.scenario.Scenario;
 import dev.cauce.evals.scenario.Scenario.Kind;
 import dev.cauce.evals.scenario.RelativeDates;
@@ -233,13 +234,16 @@ class EvalBatteryRun {
         UUID partnerId = EvalWorld.asTenant(operatorId, () -> tenants.createPartner("Evals", operatorId).id());
         EvalWorld.Services services = new EvalWorld.Services(mockMvc, json, tenants, apiKeys, conversations, owners,
                 dispatcher, worker, bookings, adminDataSource, clock, SETTINGS.packDir(), inbound, messageService);
-        Menu menu = Menu.load(SETTINGS.packDir().resolve("bar-ejemplo").resolve("carta.json"));
+        // The catalog each scenario's general rules read: its fixture's (ADR 0009, E5).
+        java.util.Map<String, Menu> menus = new java.util.HashMap<>();
+        java.util.function.Function<Scenario, Menu> menuOf = s -> menus.computeIfAbsent(s.fixture(),
+                name -> Menu.load(PackFixture.of(SETTINGS.packDir(), name).catalog()));
         List<ScenarioRun> runs = new ArrayList<>();
         boolean complete = true;
         run:
         for (Scenario scenario : conversationsToRun) {
             for (int rep = 1; rep <= n; rep++) {
-                runs.add(conversation(services, scenario, partnerId, rep, menu, usable));
+                runs.add(conversation(services, scenario, partnerId, rep, menuOf.apply(scenario), usable));
                 if (spent(admin, judge, agentPrice, judgePrice) >= SETTINGS.limitUsd() && !SETTINGS.confirmed()) {
                     complete = false;
                     break run;
@@ -446,8 +450,10 @@ class EvalBatteryRun {
         Path pack = SETTINGS.packDir();
         List<Path> files = new ArrayList<>(List.of(pack.resolve("agente-clientes.prompt.md"),
                 pack.resolve("agente-dueno.prompt.md"), pack.resolve("herramientas.json"), pack.resolve("respaldo.json")));
-        try (Stream<Path> fixture = Files.list(pack.resolve("bar-ejemplo"))) {
-            fixture.sorted().forEach(files::add);
+        for (PackFixture fixture : PackFixture.allOf(pack)) { // every reference business of the pack
+            try (Stream<Path> fixtureFiles = Files.list(fixture.dir())) {
+                fixtureFiles.sorted().forEach(files::add);
+            }
         }
         for (Path file : files) {
             sha.update(Files.readAllBytes(file));

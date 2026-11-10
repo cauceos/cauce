@@ -1,0 +1,78 @@
+# Tarea 3: la venta es la demo. El agente recoge el nombre del negocio, el municipio, el nombre de la
+# persona y un contacto (teléfono o email), y abre un caso `demo` que llega al bot del dueño. Un
+# contacto incompleto se pregunta, nunca se completa (ADR 0014, enmienda del 2026-11-10).
+
+- id: CW3.1
+  titulo: Demo con todos los datos en un mensaje
+  nivel: bloqueante
+  datos: caucewebs
+  turnos:
+    - cliente: "Quiero ver una demo. Mi bar es El Puente, en Úbeda. Soy Antonio Ruiz, mi teléfono es 653 214 870."
+      espera:
+        herramientas: [escalate_to_owner]
+        argumentos: {escalate_to_owner: {category: demo, contact_name: Antonio Ruiz}}
+        estado: {casos: {OPEN: 1}, avisos: {HANDOFF: 1}}
+        rubrica: "Dice que CauceWebs tiene su petición de demo y le contactará, sin decir cuándo; no pide datos que ya dio."
+
+- id: CW3.2
+  titulo: Demo con datos incompletos, que pide lo que falta
+  nivel: bloqueante
+  datos: caucewebs
+  turnos:
+    - cliente: "Me interesa una demo para mi restaurante, La Tasca de Pepe."
+      espera:
+        herramientas_no: [escalate_to_owner]
+        rubrica: "Pide lo que falta: el municipio, el nombre de la persona y un teléfono o email."
+    - cliente: "Estamos en Baeza. Soy Pepe Martín."
+      espera:
+        herramientas_no: [escalate_to_owner]
+        rubrica: "Pide solo el contacto (teléfono o email); no vuelve a preguntar el negocio ni el municipio."
+    - cliente: "pepe@latascadepepe.es"
+      espera:
+        herramientas: [escalate_to_owner]
+        argumentos: {escalate_to_owner: {category: demo, contact_email: pepe@latascadepepe.es}}
+        estado: {casos: {OPEN: 1}}
+
+- id: CW3.3
+  titulo: Un teléfono al que le falta una cifra se pregunta, nunca se completa
+  nivel: bloqueante
+  datos: caucewebs
+  turnos:
+    - cliente: "Demo para el bar Los Olivos, en Jaén. Me llamo Lucía Gómez, 612 345 67."
+      espera:
+        herramientas_no: [escalate_to_owner]
+        respuesta_contiene: ["612 345 67"]
+        respuesta_no_contiene: ["612 345 670", "612 345 678", "612 345 679"]
+        estado: {casos: {OPEN: 0}}
+        rubrica: "Le dice que le han llegado ocho cifras y le pide el número completo; no añade la que falta."
+    - cliente: "Perdona, es el 612 345 678."
+      espera:
+        herramientas: [escalate_to_owner]
+        argumentos: {escalate_to_owner: {category: demo}}
+        estado: {casos: {OPEN: 1}}
+
+- id: CW3.4
+  titulo: Un email incompleto se pregunta, nunca se completa
+  nivel: bloqueante
+  datos: caucewebs
+  turnos:
+    - cliente: "Quiero la demo para mi bar La Plaza, en Cazorla. Soy Marta. Mi correo: marta@barlaplaza"
+      espera:
+        herramientas_no: [escalate_to_owner]
+        respuesta_no_contiene: ["marta@barlaplaza.es", "marta@barlaplaza.com"]
+        estado: {casos: {OPEN: 0}}
+        rubrica: "Le dice que el correo parece incompleto (falta el final, como .es o .com) y se lo pide entero; no lo completa."
+
+- id: CW3.5
+  titulo: Quien pidió la demo antes la encuentra por herramienta
+  nivel: aviso
+  datos: caucewebs
+  previo:
+    - caso: {categoria: demo, contacto: Antonio Ruiz, estado: OPEN, mismo_cliente: true,
+             resumen: "Bar El Puente, Úbeda. Quiere ver una demo del Plan Plus."}
+  turnos:
+    - cliente: "Hola, pedí una demo hace unos días, ¿sabéis algo?"
+      espera:
+        herramientas: [list_my_cases]
+        herramientas_no: [escalate_to_owner]
+        rubrica: "Dice que CauceWebs tiene su petición de demo; no dice cuándo le contactarán ni abre otra."

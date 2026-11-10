@@ -29,6 +29,7 @@ import dev.cauce.evals.check.TurnTrace.ObservedNotice;
 import dev.cauce.evals.check.TurnTrace.ObservedState;
 import dev.cauce.evals.check.TurnTrace.ToolUse;
 import dev.cauce.evals.scenario.RelativeDates;
+import dev.cauce.evals.scenario.PackFixture;
 import dev.cauce.evals.scenario.Scenario;
 import dev.cauce.evals.scenario.Scenario.Setup;
 import dev.cauce.orchestration.InboundMessageResult;
@@ -116,10 +117,12 @@ final class EvalWorld {
         UUID tenantId = asTenant(partnerId, () -> s.tenants().createClient(scenario.id() + " #" + repetition, partnerId)
                 .id());
         String auth = "Bearer " + asTenant(tenantId, () -> s.apiKeys().createApiKey(tenantId, "eval").plaintextKey());
-        Path fixture = s.packDir().resolve(scenario.fixture());
-        putJson(s, auth, "/v1/tenants/" + tenantId + "/business-profile", read(fixture.resolve("ficha.json")));
-        putJson(s, auth, "/v1/tenants/" + tenantId + "/catalog", read(fixture.resolve("carta.json")));
-        putJson(s, auth, "/v1/tenants/" + tenantId + "/agenda", read(fixture.resolve("agenda.json")));
+        PackFixture fixture = PackFixture.of(s.packDir(), scenario.fixture());
+        putJson(s, auth, "/v1/tenants/" + tenantId + "/business-profile", read(fixture.sheet()));
+        putJson(s, auth, "/v1/tenants/" + tenantId + "/catalog", read(fixture.catalog()));
+        if (fixture.agenda().isPresent()) { // only a business that takes bookings has one
+            putJson(s, auth, "/v1/tenants/" + tenantId + "/agenda", read(fixture.agenda().get()));
+        }
         JsonNode grants = s.json().readTree(read(s.packDir().resolve("herramientas.json")));
         JsonNode fallbacks = s.json().readTree(read(s.packDir().resolve("respaldo.json")));
         UUID customer = createAgent(s, auth, tenantId, "Camarero", read(s.packDir().resolve("agente-clientes.prompt.md")),

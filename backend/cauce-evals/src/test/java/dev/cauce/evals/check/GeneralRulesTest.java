@@ -42,6 +42,17 @@ class GeneralRulesTest {
     }
 
     @Test
+    void aCatalogWithoutAllergens_isNotNamedByTheWordAllergen_butByItsPlansAndPrices() {
+        Menu plans = Menu.load(Path.of("..", "..", "examples", "caucewebs", "caucewebs", "catalogo.json"));
+
+        // A website shows "los 14 alérgenos" of a bar's menu: that is not CauceWebs's catalog.
+        assertThat(plans.namesAllergen("La web muestra los 14 alérgenos de cada plato.")).isFalse();
+        assertThat(plans.itemsNamedIn("El Plan Plus cuesta 79 € + IVA al año.")).extracting(Menu.Item::ref)
+                .containsExactly("plan-plus");
+        assertThat(plans.pricesNamedIn("El Plan Plus cuesta 79 € + IVA al año.")).containsExactly(new BigDecimal("79.00"));
+    }
+
+    @Test
     void g1_passesAfterAMenuSearch_failsWithout_andDoesNotApplyToOtherTurns() {
         TurnTrace searched = turn(CELIAC, new ToolUse("search_catalog", Map.of(), CATALOG_OUTPUT));
         TurnTrace unsearched = turn(CELIAC, new ToolUse("get_business_info", Map.of(), "{}"));

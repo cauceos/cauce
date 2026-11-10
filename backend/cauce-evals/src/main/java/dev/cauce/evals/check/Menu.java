@@ -17,7 +17,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * The fixture's menu ({@code carta.json}), as the general rules read a reply (ADR 0009, E5). A
+ * The fixture's catalog ({@code carta.json} for a menu, {@code catalogo.json} otherwise), as the general
+ * rules read a reply (ADR 0009, E5). A
  * reply names an item when it holds the item's keyword — the words of its {@code ref}, in order and
  * with up to two words between them ({@code bravas}, {@code tarta de queso} for {@code tarta-queso},
  * {@code cana}) — as whole words, ignoring case and accents, so a birthday «tarta» alone is not the
@@ -42,7 +43,11 @@ public final class Menu {
         this.prices = new LinkedHashSet<>();
         items.forEach(item -> prices.add(item.price()));
         List<Pattern> stems = new ArrayList<>();
-        stems.add(Pattern.compile("\\balergen"));
+        if (!allergens.isEmpty()) {
+            // The word itself counts only for a catalog of dishes, which declares allergens: a shop that
+            // sells websites says "los 14 alérgenos" about what its websites show, not about its catalog.
+            stems.add(Pattern.compile("\\balergen"));
+        }
         for (String allergen : allergens) {
             String folded = Text.folded(allergen);
             // A stem, so "huevos" names "huevo" too and "lacteos" names "lacteo".
@@ -52,7 +57,7 @@ public final class Menu {
         this.allergenStems = List.copyOf(stems);
     }
 
-    /** The menu of a fixture's {@code carta.json}. */
+    /** The catalog of a fixture's catalog file; its {@code alergenos}, where it declares them. */
     public static Menu load(Path cartaJson) {
         JsonNode carta;
         try {
