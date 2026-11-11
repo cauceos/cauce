@@ -14,8 +14,8 @@
   4. Sets the client's monthly spend limit (mandatory for a web chat, W1), as its ancestor.
   5. Creates the web chat once (Turnstile keys, allowed origin, privacy policy) and, on every run,
      applies examples/caucewebs/asistente.json to it, so the instance always has the file's phase.
-  6. With TELEGRAM_OWNER_BOT_TOKEN and PUBLIC_URL: binds the owner bot once, renews and checks its
-     webhook on every run, and issues the owner's link code, so demo requests reach the owner.
+  6. Binds the owner bot (TELEGRAM_OWNER_BOT_TOKEN, required: demo requests reach the owner through
+     it) once, renews and checks its webhook on every run, and issues the owner's link code.
   7. Prints the tag, with the release's SRI hash, to paste into the hidden page.
 
   Settings (environment or .env): CAUCE_API_URL (default http://localhost:8080), CAUCE_API_KEY
@@ -23,8 +23,10 @@
   loads the widget from it), TURNSTILE_SECRET and TURNSTILE_SITE_KEY (the site's Cloudflare
   Turnstile widget; required on the first run), TEST_ORIGIN (default https://caucewebs.es),
   SPEND_LIMIT_USD (default 20), MODEL_PROVIDER (default anthropic), MODEL_NAME (default
-  claude-sonnet-5-5), TELEGRAM_OWNER_BOT_TOKEN, TELEGRAM_API_URL. Ids are kept in
-  .prueba-caucewebs.env (gitignored); no secret is written there.
+  claude-sonnet-5-5), TELEGRAM_OWNER_BOT_TOKEN (required), TELEGRAM_API_URL. Ids are kept in
+  CW_STATE_FILE (default .prueba-caucewebs.env, gitignored as .prueba-caucewebs*.env), one per
+  instance: production uses its own (e.g. .prueba-caucewebs-produccion.env). No secret is written
+  there.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\prueba-caucewebs.ps1
@@ -36,7 +38,9 @@ $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 
 $dotenv = @{}
-foreach ($file in @('.env', '.quickstart.env', '.prueba-caucewebs.env')) {
+$StateFile = [Environment]::GetEnvironmentVariable('CW_STATE_FILE')
+if (-not $StateFile) { $StateFile = '.prueba-caucewebs.env' }
+foreach ($file in @('.env', '.quickstart.env', $StateFile)) {
     if (Test-Path $file) {
         Get-Content $file | Where-Object { $_ -match '^\s*([^#][^=]*)=(.*)$' } | ForEach-Object {
             $dotenv[$Matches[1].Trim()] = $Matches[2].Trim()
@@ -51,7 +55,6 @@ function Get-Setting($name, $default) {
 }
 
 $Pack          = 'examples/caucewebs'
-$StateFile     = '.prueba-caucewebs.env'
 $ApiUrl        = (Get-Setting 'CAUCE_API_URL' 'http://localhost:8080').TrimEnd('/')
 $ApiKey        = Get-Setting 'CAUCE_API_KEY' ''
 $PublicUrl     = (Get-Setting 'PUBLIC_URL' '').TrimEnd('/')
@@ -110,6 +113,9 @@ function Get-FirstNamed($path, $name) { return @(Get-Named $path $name) | Select
 if (-not $ApiKey) { Fail 'Set CAUCE_API_KEY to an operator key (or run the quickstart first).' }
 if (-not $PublicUrl.StartsWith('https://')) {
     Fail "PUBLIC_URL must be the tunnel's https:// URL (the page at $Origin loads the widget from it), not '$PublicUrl'."
+}
+if (-not $OwnerToken) {
+    Fail 'Set TELEGRAM_OWNER_BOT_TOKEN (the owner bot, from @BotFather): the test needs the demo requests to reach the owner.'
 }
 $OperatorId = (Invoke-Api GET '/v1/me').tenant_id
 $providers = @((Invoke-Api GET '/v1/llm-providers').data | Where-Object { $_.configured } | ForEach-Object { $_.id })
@@ -237,26 +243,22 @@ Write-Host "   Assistant:  phase $phase, variant $(@($assistant.variants | ForEa
 
 # --- 6. the owner bot --------------------------------------------------------
 
-if ($OwnerToken) {
-    Say 'Connecting the owner bot...'
-    $me = Invoke-Telegram $OwnerToken 'getMe' $null
-    if (-not $me.ok) { Fail "Telegram rejects the owner bot token: $($me.description)" }
-    if (-not $OwnerConfigId) {
-        $binding = Invoke-Api POST "/v1/agents/$OwnerAgentId/channels" (@{ channel_type = 'telegram'; credential = $OwnerToken } | ConvertTo-Json)
-        $OwnerConfigId = $binding.id
-        Save 'CW_OWNER_BOT_CONFIG_ID' $OwnerConfigId
-    } else {
-        $binding = Invoke-Api POST "/v1/channel-configs/$OwnerConfigId/webhook-secret" $null
-    }
-    $url = "$PublicUrl/webhooks/channels/$OwnerConfigId"
-    $set = Invoke-Telegram $OwnerToken 'setWebhook' @{ url = $url; secret_token = $binding.webhook_secret; allowed_updates = '["message"]' }
-    if (-not $set.ok) { Fail "Telegram setWebhook failed: $($set.description)" }
-    if ((Invoke-Telegram $OwnerToken 'getWebhookInfo' $null).result.url -ne $url) { Fail "The owner bot's webhook did not take." }
-    $code = (Invoke-Api POST "/v1/tenants/$ClientId/owner-link-codes" (@{ channel_config_id = $OwnerConfigId } | ConvertTo-Json)).code
-    Write-Host "   Owner: open https://t.me/$($me.result.username)?start=$code on the owner's phone (valid 24 h)."
+Say 'Connecting the owner bot...'
+$me = Invoke-Telegram $OwnerToken 'getMe' $null
+if (-not $me.ok) { Fail "Telegram rejects the owner bot token: $($me.description)" }
+if (-not $OwnerConfigId) {
+    $binding = Invoke-Api POST "/v1/agents/$OwnerAgentId/channels" (@{ channel_type = 'telegram'; credential = $OwnerToken } | ConvertTo-Json)
+    $OwnerConfigId = $binding.id
+    Save 'CW_OWNER_BOT_CONFIG_ID' $OwnerConfigId
 } else {
-    Write-Host "`n   No TELEGRAM_OWNER_BOT_TOKEN: demo requests stay as cases, GET $ApiUrl/v1/tenants/$ClientId/handoffs"
+    $binding = Invoke-Api POST "/v1/channel-configs/$OwnerConfigId/webhook-secret" $null
 }
+$url = "$PublicUrl/webhooks/channels/$OwnerConfigId"
+$set = Invoke-Telegram $OwnerToken 'setWebhook' @{ url = $url; secret_token = $binding.webhook_secret; allowed_updates = '["message"]' }
+if (-not $set.ok) { Fail "Telegram setWebhook failed: $($set.description)" }
+if ((Invoke-Telegram $OwnerToken 'getWebhookInfo' $null).result.url -ne $url) { Fail "The owner bot's webhook did not take." }
+$code = (Invoke-Api POST "/v1/tenants/$ClientId/owner-link-codes" (@{ channel_config_id = $OwnerConfigId } | ConvertTo-Json)).code
+Write-Host "   Owner: open https://t.me/$($me.result.username)?start=$code on the owner's phone (valid 24 h)."
 
 # --- 7. the tag for the hidden page -------------------------------------------
 

@@ -80,7 +80,9 @@ fiables. Se compara antes y después, con una sola variante por fase, que da nom
 | 1, como sale `asistente.json` | `false` | `burbuja` | La burbuja; el chat se abre solo si lo pide |
 | 2, con la referencia de la 1 | `true` | `apertura` | Además, el chat se abre una vez por sí solo en una señal de su ruta |
 
-Para pasar a la fase 2 se cambian esos dos valores en `asistente.json`, se commitea y se hace el mismo `PUT`.
+Para pasar a la fase 2 se revisan primero las señales por ruta de `asistente.json` con las rutas reales de
+caucewebs.es: la ruta de la portada, la de `/pagar` y la de cada página de producto donde se llama a
+`cauce('view', …)`. Después se cambian esos dos valores, se commitea y se hace el mismo `PUT`.
 Los escenarios de la apertura sola (`evals/05-tienda.yaml`) se juegan ya en la fase 1.
 
 **Cuánto dura cada fase.** La fase 1 dura al menos 4 semanas **y** al menos 30 conversaciones. Si a
@@ -98,8 +100,8 @@ cambio no puede esperar, se anota con su fecha y la comparación pasa a ser orie
 **Qué se compara** (ADR 0014, enmienda del 2026-11-11). Se saca de la base de datos y no de los
 contadores, que se pierden cuando la instancia se reinicia. La métrica principal son las demos
 pedidas por semana. Los datos de cada fase se obtienen con esta consulta, en Adminer o con `psql`
-como `cauce`, poniendo las fechas de la fase y el id del chat web (`CW_WEB_CHAT_ID` de
-`.prueba-caucewebs.env`):
+como `cauce`, poniendo las fechas de la fase y el id del chat web de producción (`CW_WEB_CHAT_ID`
+del fichero de estado de esa instancia):
 
 ```sql
 WITH fase AS (SELECT DATE '2026-12-01' AS desde, DATE '2026-12-29' AS hasta,

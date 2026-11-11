@@ -59,6 +59,14 @@ Entries are grouped by area. Each says what is missing and, where it matters, wh
 
 ## Channels
 
+- **Rotating a web chat's Turnstile secret without changing its public key.** A web chat's Turnstile
+  secret and site key are set when the channel is created (ADR 0014, W1) and cannot be changed, so
+  moving from Cloudflare's test keys to a site's real ones, or rotating a leaked secret, means a new
+  channel, a new public key and a new tag on every page. CauceWebs's production channel is created
+  with the real keys from the start. **Required before the web chat of the first customer shop**:
+  an authority-checked, audited replacement of the sealed secret (and the site key with it), keeping
+  the channel and its public key.
+
 - **Reading a web chat's events and opening counts over the API.** W7 records adds to cart, purchases
   (`web_events`) and the anonymous openings (`web_opening_counts`) and exports them as `cauce.web.*`
   meters; the variants are compared on the meters. An endpoint (or the dashboard) that reads them per

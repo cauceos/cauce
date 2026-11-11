@@ -47,7 +47,7 @@ docker-compose.override.yml
 .quickstart.env
 .quickstart/
 .demo-bar.env
-.prueba-caucewebs.env
+.prueba-caucewebs*.env
 
 # --- Eval summaries not yet in the history: moved to historial/ by hand, when committed ---
 examples/*/evals/historial-nuevo/
