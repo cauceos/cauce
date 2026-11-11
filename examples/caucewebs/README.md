@@ -18,6 +18,7 @@ está aquí, como datos e instrucciones; el código de Cauce no sabe qué es un 
 | `caucewebs/catalogo.json` | Lo único que se vende ahora: los planes de web, la tienda y los vídeos para redes, con precios sin IVA y lo que incluyen: `PUT .../catalog` |
 | `comprobar-precios.mjs` | Compara el catálogo y la ficha con los precios publicados en caucewebs.es (ver abajo) |
 | `evals/` | Escenarios de «bien hecho» del asistente de ventas (ver `evals/README.md`) |
+| `prueba-oculta.md` | La prueba en la página oculta de caucewebs.es antes de publicar, su registro de fallos y cuándo se publica; la prepara `scripts/prueba-caucewebs.ps1` |
 
 Sin agenda: CauceWebs no reserva nada. Las reglas que no se negocian, en el prompt y en los
 escenarios: ningún precio, condición ni función que no esté en la ficha o el catálogo; lo que no
