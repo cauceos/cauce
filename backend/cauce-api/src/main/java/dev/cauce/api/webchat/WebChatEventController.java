@@ -17,7 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * What the shop's page reports to the chat (ADR 0014, WC8). After the first message, with the session:
- * an add to cart from a card (204) and a purchase (200, saying whether it was recorded and attributed).
+ * an add to cart from a card (204) and a purchase (200, saying whether it was recorded and attributed;
+ * ignored unless the channel attributes purchases and the visitor consented).
  * Before any message, with no session at all: an opening for the anonymous counter (204), counted only
  * when the channel turns it on, and silently ignored otherwise.
  */
@@ -56,7 +57,7 @@ public class WebChatEventController {
             }
             if (WebEventRequest.PURCHASE.equals(request.type())) {
                 WebChatEventService.Purchase purchase = events.purchase(channel, session, variant, request.orderId(),
-                        request.value());
+                        request.value(), Boolean.TRUE.equals(request.consent()));
                 if (purchase.recorded() && purchase.attributed()) {
                     metrics.purchase(channel, variant, request.value());
                 }

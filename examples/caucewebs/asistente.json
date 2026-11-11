@@ -31,14 +31,12 @@
   },
   "variants": [
     {
-      "id": "a"
-    },
-    {
-      "id": "b",
-      "bubble": "¿Hablamos de la web de tu bar?"
+      "id": "burbuja"
     }
   ],
+  "proactive_opening": false,
   "proactive_requires_consent": false,
   "opening_counter": false,
-  "opening_counter_requires_consent": false
+  "opening_counter_requires_consent": false,
+  "purchase_attribution": false
 }

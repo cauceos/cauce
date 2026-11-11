@@ -57,8 +57,17 @@ class ReferenceCauceWebsPackIT extends AbstractBusinessApiIT {
         // The shop-assistant mode (ADR 0014, WC8) as PUT /v1/web-chat-channels/{id}/assistant takes it.
         WebChatAssistant assistant = objectMapper.readValue(read("asistente.json"), WebChatAssistant.class);
         assertThat(assistant.enabled()).isTrue();
-        assertThat(assistant.greetingFor("idle_cart", null)).isPresent();
+        assertThat(assistant.templates()).containsKeys("comparing", "back_to_product", "idle_cart", "exit_intent");
         assertThat(assistant.routes()).extracting(WebChatAssistant.Route::path).containsExactly("/", "/pagar");
+        // The launch on caucewebs.es (ADR 0014, amendment of 2026-11-11): phase 1 is the bubble alone, one
+        // variant named for the phase, no A/B. Opening on its own goes without consent only because the
+        // widget then stores nothing but the opened and closed marks; no counter, no purchase attribution.
+        assertThat(assistant.proactiveOpening()).isFalse();
+        assertThat(assistant.greetingFor("idle_cart", null)).isEmpty();
+        assertThat(assistant.variants()).extracting(WebChatAssistant.Variant::id).containsExactly("burbuja");
+        assertThat(assistant.proactiveRequiresConsent()).isFalse();
+        assertThat(assistant.openingCounter()).isFalse();
+        assertThat(assistant.purchaseAttribution()).isFalse();
         assertThat(objectMapper.readTree(read("retencion-cache.json")).get("agente_clientes").asText()).isEqualTo("LONG");
     }
 

@@ -18,11 +18,22 @@ import java.util.regex.Pattern;
  *
  * <p>{@code variants} (at most {@value #MAX_VARIANTS}) each replace the bubble, the templates or the
  * signals in use; the widget assigns one at random and keeps it for the session, and the metrics count
- * by variant. {@code proactiveRequiresConsent}, {@code openingCounter} and
- * {@code openingCounterRequiresConsent} are the data controller's decisions (WC8), all off by default:
- * with the first, the chat opens on its own only after the shop's page has told the widget the visitor
- * consented; with the second, an opening that ends without a message is counted, anonymously, per
- * variant and day; with the third, only after that consent.
+ * by variant.
+ *
+ * <p>The switches, and their defaults when a configuration leaves them out:
+ * <ul>
+ *   <li>{@code proactiveOpening}, off: without it the mode is the bubble alone, and no signal opens the
+ *       chat. A shop launches with it off and turns it on later (ADR 0014, amendment of 2026-11-11).</li>
+ *   <li>{@code proactiveRequiresConsent}, <b>on</b>: the chat opens on its own only after the shop's page
+ *       has told the widget the visitor consented. Turned off, the widget opens without that consent
+ *       but then keeps nothing in the browser beyond the opened and closed marks.</li>
+ *   <li>{@code openingCounter}, off: an opening that ends without a message is counted, anonymously, per
+ *       variant and day; with {@code openingCounterRequiresConsent}, off, only after that consent.</li>
+ *   <li>{@code purchaseAttribution}, off: a purchase the shop reports is recorded and attributed to the
+ *       chat within 7 days of the session's last message. It always needs the visitor's consent: the
+ *       widget reports a purchase only once the visitor consented, and says so.</li>
+ * </ul>
+ * Whether these need consent is the data controller's decision (WC8), within those bounds.
  */
 public record WebChatAssistant(
         @JsonProperty("enabled") boolean enabled,
@@ -32,9 +43,11 @@ public record WebChatAssistant(
         @JsonProperty("tuning") Tuning tuning,
         @JsonProperty("templates") Map<String, String> templates,
         @JsonProperty("variants") List<Variant> variants,
-        @JsonProperty("proactive_requires_consent") boolean proactiveRequiresConsent,
-        @JsonProperty("opening_counter") boolean openingCounter,
-        @JsonProperty("opening_counter_requires_consent") boolean openingCounterRequiresConsent) {
+        @JsonProperty("proactive_opening") Boolean proactiveOpening,
+        @JsonProperty("proactive_requires_consent") Boolean proactiveRequiresConsent,
+        @JsonProperty("opening_counter") Boolean openingCounter,
+        @JsonProperty("opening_counter_requires_consent") Boolean openingCounterRequiresConsent,
+        @JsonProperty("purchase_attribution") Boolean purchaseAttribution) {
 
     /** The signals the browser computes (WC8). */
     public static final String BACK_TO_PRODUCT = "back_to_product";
@@ -99,6 +112,11 @@ public record WebChatAssistant(
     }
 
     public WebChatAssistant {
+        proactiveOpening = proactiveOpening != null && proactiveOpening;
+        proactiveRequiresConsent = proactiveRequiresConsent == null || proactiveRequiresConsent;
+        openingCounter = openingCounter != null && openingCounter;
+        openingCounterRequiresConsent = openingCounterRequiresConsent != null && openingCounterRequiresConsent;
+        purchaseAttribution = purchaseAttribution != null && purchaseAttribution;
         bubble = optional(bubble, "bubble", MAX_BUBBLE_LENGTH);
         cardButtonLabel = optional(cardButtonLabel, "card_button_label", 30);
         routes = routes == null ? List.of() : List.copyOf(routes);
@@ -130,10 +148,11 @@ public record WebChatAssistant(
     /**
      * The greeting the widget showed when it opened on {@code signal} for {@code variantId}: the variant's
      * template for that signal, else the configuration's. What reaches the agent is resolved here, from
-     * this configuration, never taken from the browser.
+     * this configuration, never taken from the browser. Nothing while {@code proactiveOpening} is off: then
+     * no signal opens the chat, so no greeting was shown.
      */
     public Optional<String> greetingFor(String signal, String variantId) {
-        if (signal == null || !SIGNALS.contains(signal)) {
+        if (!proactiveOpening || signal == null || !SIGNALS.contains(signal)) {
             return Optional.empty();
         }
         Optional<String> ofVariant = variant(variantId).map(Variant::templates).map(t -> t.get(signal));

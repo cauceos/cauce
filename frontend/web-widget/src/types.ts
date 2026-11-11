@@ -40,9 +40,13 @@ export interface Assistant {
   tuning: { comparing_views: number; comparing_minutes: number; idle_cart_minutes: number }
   templates: Partial<Record<Signal, string>>
   variants: Variant[]
+  /** Off: the bubble alone, no signal opens the chat (the first phase of a launch). */
+  proactive_opening: boolean
   proactive_requires_consent: boolean
   opening_counter: boolean
   opening_counter_requires_consent: boolean
+  /** Off by default; on, a purchase is reported only once the visitor consented. */
+  purchase_attribution: boolean
 }
 
 export interface ChannelConfig {

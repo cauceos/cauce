@@ -47,7 +47,9 @@ public final class ScenarioLoader {
 
     /**
      * Every scenario of the task files ({@code NN-name.yaml}) directly in {@code directory}, by file
-     * name; the other files there (prices, calibration) are not scenarios.
+     * name; the other files there (prices, calibration) are not scenarios. A turn opened on a signal
+     * needs the pack's greeting for it ({@link PackGreetings}, in the pack above {@code directory}):
+     * without one the turn would be played with no greeting, which no chat shows.
      */
     public List<Scenario> loadAll(Path directory) {
         List<Path> files;
@@ -65,6 +67,17 @@ public final class ScenarioLoader {
                     throw new InvalidScenarioException(file + ": the id " + scenario.id() + " is used twice");
                 }
                 all.add(scenario);
+            }
+        }
+        PackGreetings greetings = directory.toAbsolutePath().getParent() == null ? new PackGreetings(Map.of())
+                : PackGreetings.of(directory.toAbsolutePath().getParent());
+        for (Scenario scenario : all) {
+            for (Scenario.Turn turn : scenario.turns()) {
+                String signal = turn.context() == null ? null : turn.context().openedOn();
+                if (signal != null && greetings.forSignal(signal).isEmpty()) {
+                    throw new InvalidScenarioException(directory + ": scenario " + scenario.id()
+                            + " opens on " + signal + ", which has no template in the pack's " + PackGreetings.FILE);
+                }
             }
         }
         return all;

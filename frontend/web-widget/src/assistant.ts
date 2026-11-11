@@ -5,8 +5,10 @@ import type { Assistant, CartLine, Signal, Variant } from './types'
 // are on for the page, and when one fires. Everything here stays in the browser: before the person
 // writes, nothing about them is sent (the anonymous opening counter, when the channel turns it on, sends
 // only how the chat opened and the variant). What it keeps, in the shop page's localStorage under
-// `cauce:web:{publicKey}:…`: `variant`, `proactive` (the chat already opened by itself), `closed` (the
-// person closed it) and `views` (the products seen in the last hour, by ref).
+// `cauce:web:{publicKey}:…`: always only the marks `proactive` (the chat already opened by itself) and
+// `closed` (the person closed it); and, once the page has passed the visitor's consent, also `variant`
+// and `views` (the products seen in the last hour, by ref). Without that consent those two live in this
+// page's memory and are gone with it, so the signals that span pages see one page only.
 
 export interface AssistantDependencies {
   now: () => number
@@ -27,11 +29,13 @@ const HOUR = 60 * 60_000
 export class ShopAssistant {
   readonly variant: Variant | null
   private consented = false
+  private seen: View[]
   private cart = ''
   private idleHandle: unknown = null
   private onSignal: (signal: Signal, greeting: string) => void = () => {}
 
   constructor(readonly config: Assistant, private readonly key: string, private readonly deps: AssistantDependencies) {
+    this.seen = this.storedViews()
     this.variant = this.drawVariant()
   }
 
@@ -49,9 +53,24 @@ export class ShopAssistant {
     return this.variant?.id
   }
 
-  /** The shop's consent banner said the visitor consented (or withdrew). */
+  /**
+   * The shop's consent banner said the visitor consented: what was kept in memory is stored from now on.
+   * Withdrawn, the variant and the views leave the browser's storage; the opened and closed marks stay.
+   */
   consent(granted: boolean): void {
     this.consented = granted
+    if (granted) {
+      if (this.variant) storage.save(this.key, 'variant', this.variant.id)
+      this.storeViews()
+    } else {
+      storage.forget(this.key, 'variant')
+      storage.forget(this.key, 'views')
+    }
+  }
+
+  /** Whether a purchase the shop confirms may be reported: the channel attributes them, and the visitor consented. */
+  mayReportPurchases(): boolean {
+    return this.config.purchase_attribution && this.consented
   }
 
   /** Whether the anonymous opening counter may count an opening now. */
@@ -72,10 +91,11 @@ export class ShopAssistant {
   /** The shop's page shows the product {@code ref}: a second view, or enough different ones, may signal. */
   viewProduct(ref: string): void {
     const now = this.deps.now()
-    const views = this.views().filter((v) => now - v.at < HOUR)
+    const views = this.seen.filter((v) => now - v.at < HOUR)
     const seenBefore = views.some((v) => v.ref === ref)
     views.push({ ref, at: now })
-    storage.save(this.key, 'views', JSON.stringify(views.slice(-20)))
+    this.seen = views.slice(-20)
+    this.storeViews()
     if (seenBefore) this.fire('back_to_product')
     const window = this.config.tuning.comparing_minutes * 60_000
     const distinct = new Set(views.filter((v) => now - v.at <= window).map((v) => v.ref))
@@ -112,6 +132,7 @@ export class ShopAssistant {
   }
 
   private fire(signal: Signal): void {
+    if (!this.config.proactive_opening) return // the bubble alone: the shop has not turned opening on
     if (!this.signalsHere().includes(signal)) return
     if (storage.load(this.key, 'proactive') || storage.load(this.key, 'closed')) return
     if (this.config.proactive_requires_consent && !this.consented) return
@@ -126,7 +147,12 @@ export class ShopAssistant {
     this.idleHandle = null
   }
 
-  private views(): View[] {
+  private storeViews(): void {
+    if (this.consented) storage.save(this.key, 'views', JSON.stringify(this.seen))
+  }
+
+  /** Views stored on an earlier page, which only a consent let the widget store. */
+  private storedViews(): View[] {
     try {
       const parsed = JSON.parse(storage.load(this.key, 'views') ?? '[]')
       return Array.isArray(parsed) ? parsed.filter((v) => typeof v?.ref === 'string' && typeof v?.at === 'number') : []
@@ -135,14 +161,17 @@ export class ShopAssistant {
     }
   }
 
-  /** The visitor's variant, drawn once at random and kept; none when the channel declares none. */
+  /**
+   * The visitor's variant, drawn once at random; none when the channel declares none. Kept across pages
+   * only once the visitor consented: until then it is this page's.
+   */
   private drawVariant(): Variant | null {
     const variants = this.config.variants
     if (variants.length === 0) return null
     const kept = variants.find((v) => v.id === storage.load(this.key, 'variant'))
     if (kept) return kept
     const drawn = variants[Math.min(variants.length - 1, Math.floor(this.deps.random() * variants.length))]
-    storage.save(this.key, 'variant', drawn.id)
+    if (this.consented) storage.save(this.key, 'variant', drawn.id)
     return drawn
   }
 }

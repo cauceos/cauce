@@ -80,6 +80,30 @@ class ScenarioLoaderTest {
     }
 
     @Test
+    void loadAll_refusesATurnOpenedOnASignal_whoseGreetingThePackLacks() throws Exception {
+        Path evals = Files.createDirectories(dir.resolve("pack").resolve("evals"));
+        Files.writeString(evals.resolve("05-tienda.yaml"), """
+                - id: X1
+                  titulo: abierto solo
+                  nivel: aviso
+                  datos: tienda
+                  turnos:
+                    - cliente: "¿Hay permanencia?"
+                      contexto: {ruta: /pagar, abierto_por: idle_cart}
+                      espera:
+                        respuesta_no_contiene: ["Hola"]
+                """);
+        Path assistant = evals.getParent().resolve(PackGreetings.FILE);
+        Files.writeString(assistant, "{\"templates\": {\"exit_intent\": \"¿Te vas?\"}}");
+        assertThatThrownBy(() -> loader.loadAll(evals)).hasMessageContaining("X1").hasMessageContaining("idle_cart");
+
+        Files.writeString(assistant, "{\"templates\": {\"idle_cart\": \"¿Te ayudo a terminar?\"}}");
+        assertThat(loader.loadAll(evals)).extracting(Scenario::id).containsExactly("X1");
+        assertThat(PackGreetings.of(evals.getParent()).forSignal("idle_cart")).contains("¿Te ayudo a terminar?");
+        assertThat(PackGreetings.of(dir).forSignal("idle_cart")).isEmpty();
+    }
+
+    @Test
     void anEarlierThread_needsItsDaysAndBothTexts() throws Exception {
         Scenario loaded = loader.load(file("""
                 - id: X5

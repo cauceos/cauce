@@ -427,6 +427,39 @@ page context; the events and their metrics; the widget; the pack's scenarios. Wh
   scenarios of WC8 (`05-tienda.yaml`). The harness plays a turn's `contexto` as the page context the web
   chat would attach, greeting with the pack's template, and checks the cards a turn showed (`tarjetas`).
 
+## Amendment (2026-11-11): the launch in two phases, and the consent bounds
+
+W7 stays as built. Its launch on caucewebs.es, and the defaults of the engine, are decided here.
+
+- **Two phases, one after the other, never side by side.** Phase 1 shows the bubble alone: the chat
+  opens only when the person asks. Phase 2 turns opening on its own on. Phase 1 runs first so that
+  phase 2 has a reference to be compared with. There is no simultaneous A/B test, because the site's
+  traffic is too small for a reliable result. The comparison is before and after, with one variant
+  per phase, named for it (`burbuja`, then `apertura`), so the `cauce.web.*` meters tell the phases
+  apart by their `variant` tag.
+- **The switch is the assistant's `proactive_opening`, off by default.** While it is off, no signal
+  opens the chat, and a greeting claimed by the browser resolves to none. `examples/caucewebs/asistente.json`
+  ships with it off. Phase 2 is a `PUT` of the same file with it on and the variant renamed. The
+  routes, signals and templates are already in place, and the pack's scenarios of the opening on its
+  own (`05-tienda.yaml`) are played in phase 1 too, so phase 2 starts already evaluated.
+- **`proactive_requires_consent` is on by default.** A channel may turn it off, and caucewebs.es
+  does, but only for the opening itself. The widget (0.3.0) guarantees the bound: until the page
+  passes the visitor's consent, it stores in the browser nothing but the `proactive` and `closed`
+  marks. The variant and the product views stay in the page's memory, so `back_to_product` and
+  `comparing` only see the current page. A consent stores them, and a consent withdrawn removes them.
+- **Purchase attribution is the assistant's `purchase_attribution`, off by default, and it always
+  needs consent.** The widget reports a purchase only when the switch is on and the visitor
+  consented, and the report says `consent: true`. Without both, the API checks the purchase, records
+  nothing and answers `recorded: false`. caucewebs.es launches with it off.
+- **Covered by:**
+  - `WebChatAssistantTest`, for the defaults;
+  - `WebChatEventsApiIT`, for a purchase ignored without the switch or the consent;
+  - `WebChatChannelApiIT`, for the defaults as the widget reads them;
+  - the widget's tests, for what it stores with and without consent, the bubble alone, and the purchase;
+  - `ReferenceCauceWebsPackIT`, for the pack in phase 1;
+  - the harness, which takes a turn opened on a signal's greeting from the pack's `asistente.json`
+    and refuses a scenario whose signal has no template there.
+
 ## References
 
 - `docs/adr/0001-rls-escape-hatches.md`: resolving a tenant without context

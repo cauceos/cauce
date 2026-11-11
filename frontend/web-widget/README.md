@@ -12,7 +12,7 @@ the version and its Subresource Integrity hash, so the browser refuses a file th
 released one. `npm run build` writes it in `dist/release/{version}/embed.html`:
 
 ```html
-<script src="https://<cauce instance>/web/widget/0.2.0/cauce-widget.js"
+<script src="https://<cauce instance>/web/widget/0.3.0/cauce-widget.js"
         integrity="sha384-…" crossorigin="anonymous"
         data-cauce-key="pk_…" data-cauce-instance="https://<cauce instance>" defer></script>
 ```
@@ -50,7 +50,8 @@ assistant who is present without getting in the way:
 
 - **A presence bubble** beside the launcher from page load, with the channel's phrase (or the variant's).
   It is static, from the configuration: no model call, no request. It can be dismissed.
-- **It opens by itself only on a signal** that the browser computes, on a route where that signal is on
+- **It opens by itself only when the channel's `proactive_opening` is on** (off by default: the bubble
+  alone), and then only on a signal that the browser computes, on a route where that signal is on
   (the longest path prefix of the configuration wins), greeting with the signal's template:
 
   | Signal | When |
@@ -60,10 +61,10 @@ assistant who is present without getting in the way:
   | `idle_cart` | A cart the page reported non-empty, unchanged for 3 minutes (tunable) |
   | `exit_intent` | The pointer leaves through the top of the window, desktop only |
 
-  At most once per browser, never again after the person has closed the chat, and, when the channel's
-  `proactive_requires_consent` is on, only after the page has passed the visitor's consent.
-- **A variant** (up to five per channel) is drawn at random and kept for the browser; the metrics count by
-  variant.
+  At most once per browser, never again after the person has closed the chat, and, while the channel's
+  `proactive_requires_consent` is on (the default), only after the page has passed the visitor's consent.
+- **A variant** (up to five per channel) is drawn at random, kept for the browser once the visitor
+  consented and for the page until then; the metrics count by variant.
 - **With each message**, the page's path, the product on screen and the cart go along, by catalog ref, and
   with the first message after an opening, how the chat was opened. The API keeps only the path, without
   its query, and only the refs the catalog holds.
@@ -87,20 +88,25 @@ in `window.cauceq`, so this line can go before the tag:
 </script>
 ```
 
-A purchase is reported only when this browser has talked to the chat; Cauce attributes it when it comes
-within 7 days of the conversation's last message.
+A purchase is reported only when the channel's `purchase_attribution` is on (off by default), this
+browser has talked to the chat and the page has passed the visitor's consent; the report says so, and
+Cauce ignores one that does not. It attributes the purchase when it comes within 7 days of the
+conversation's last message.
 
 **What it keeps in the shop page's `localStorage`**, under `cauce:web:{public key}:`:
 
-| Key | What |
-|---|---|
-| `session` | The session token, once the person has written (WC2) |
-| `variant` | The variant drawn for this browser |
-| `proactive` | The chat already opened by itself once |
-| `closed` | The person closed the chat: it never opens by itself again |
-| `views` | The products viewed in the last hour, by ref, for `back_to_product` and `comparing` |
+| Key | What | When |
+|---|---|---|
+| `session` | The session token (WC2) | Once the person has written |
+| `proactive` | The chat already opened by itself once | Always |
+| `closed` | The person closed the chat: it never opens by itself again | Always |
+| `variant` | The variant drawn for this browser | Only after the visitor's consent |
+| `views` | The products viewed in the last hour, by ref, for `back_to_product` and `comparing` | Only after the visitor's consent |
 
-None of them leaves the browser before the person writes. With the channel's `opening_counter` on (off
+Before the person writes and without the visitor's consent, the opened and closed marks are all it
+stores: the variant and the views live in the page's memory, so `back_to_product` and `comparing` see
+that page only. A consent withdrawn (`cauce('consent', false)`) removes `variant` and `views`. None of
+them leaves the browser before the person writes. With the channel's `opening_counter` on (off
 by default), each opening sends only how it opened and the variant, with no session or identifier, and,
 with `opening_counter_requires_consent`, only after the page has passed the consent.
 
@@ -167,5 +173,5 @@ create a web chat whose `allowed_origins` include `http://localhost:5174`, and u
 for Turnstile (site key `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`, both
 always pass).
 
-Weight of 0.2.0 (2026-11-10, with the shop-assistant mode): 22.1 KB raw, **7.8 KB gzip**, 6.8 KB brotli.
-0.1.0 was 15.3 KB raw and 5.7 KB gzip.
+Weight of 0.3.0 (2026-11-11, with the launch phases and the consent bounds): 22.4 KB raw, **7.9 KB gzip**,
+7.0 KB brotli. 0.2.0 was 22.1 KB raw and 7.8 KB gzip; 0.1.0, 15.3 KB raw and 5.7 KB gzip.

@@ -13,7 +13,7 @@ está aquí, como datos e instrucciones; el código de Cauce no sabe qué es un 
 | `respaldo.json` | Texto que recibe la persona si su mensaje no se puede procesar (ADR 0005, C3) |
 | `no-soportado.json` | Texto que recibe la persona si manda algo que Cauce no lee |
 | `retencion-cache.json` | Caché del prompt de cada agente (ADR 0010, S9) |
-| `asistente.json` | El modo asistente de tienda del chat de caucewebs.es (ADR 0014, WC8): burbuja, señales por ruta (`/` y `/pagar`), saludos y variantes: `PUT /v1/web-chat-channels/{id}/assistant` |
+| `asistente.json` | El modo asistente de tienda del chat de caucewebs.es (ADR 0014, WC8): burbuja, señales por ruta (`/` y `/pagar`), saludos, la variante de la fase y los interruptores (ver abajo): `PUT /v1/web-chat-channels/{id}/assistant` |
 | `caucewebs/ficha.json` | Ficha del negocio, con las categorías de caso `demo` y `otro`: `PUT /v1/tenants/{id}/business-profile` |
 | `caucewebs/catalogo.json` | Lo único que se vende ahora: los planes de web, la tienda y los vídeos para redes, con precios sin IVA y lo que incluyen: `PUT .../catalog` |
 | `comprobar-precios.mjs` | Compara el catálogo y la ficha con los precios publicados en caucewebs.es (ver abajo) |
@@ -63,8 +63,33 @@ La página habla con el widget con `cauce(...)` (ver `frontend/web-widget/README
   carrito parado: elegido y sin pagar durante 3 minutos);
 - en las dos, `cauce('onAddToCart', ref => location.href = '/pagar?plan=' + encodeURIComponent(ref))`, el
   botón «Contratar» de las tarjetas;
-- al confirmarse el pago, `cauce('purchase', {orderId, value})`, que Cauce atribuye al chat si llega en los
-  7 días siguientes al último mensaje.
+- al confirmarse el pago, `cauce('purchase', {orderId, value})`. Mientras `purchase_attribution` esté
+  apagado (como sale) no se envía; encendido, solo con el consentimiento del visitante
+  (`cauce('consent', true)`), y Cauce lo atribuye al chat si llega en los 7 días siguientes al último
+  mensaje.
+
+### El lanzamiento, en dos fases (ADR 0014, enmienda del 2026-11-11)
+
+Una fase detrás de otra, nunca a la vez: con el tráfico de la web, un A/B simultáneo no da resultados
+fiables. Se compara antes y después, con una sola variante por fase, que da nombre a los contadores
+`cauce.web.*`.
+
+| Fase | `proactive_opening` | Variante | Qué ve el visitante |
+|---|---|---|---|
+| 1, como sale `asistente.json` | `false` | `burbuja` | La burbuja; el chat se abre solo si lo pide |
+| 2, con la referencia de la 1 | `true` | `apertura` | Además, el chat se abre una vez por sí solo en una señal de su ruta |
+
+Para pasar a la fase 2 se cambian esos dos valores en `asistente.json`, se commitea y se hace el mismo `PUT`.
+Los escenarios de la apertura sola (`evals/05-tienda.yaml`) se juegan ya en la fase 1.
+
+Los demás interruptores, tal como sale el fichero:
+
+- `proactive_requires_consent: false`. El motor lo trae encendido. caucewebs.es lo apaga solo para la
+  apertura, porque el widget, sin consentimiento, no guarda en el navegador más que las marcas de
+  abierto y cerrado.
+- `opening_counter: false`: no se cuentan las aperturas que acaban sin mensaje.
+- `purchase_attribution: false`: la compra atribuida a 7 días está apagada, y encendida exigiría el
+  consentimiento.
 
 Los refs son los del catálogo (`plan-basico`, `plan-basico-dominio`, `plan-plus`, `plan-tienda`).
 

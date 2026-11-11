@@ -30,6 +30,7 @@ import dev.cauce.evals.check.TurnTrace.ObservedState;
 import dev.cauce.evals.check.TurnTrace.ToolUse;
 import dev.cauce.evals.scenario.RelativeDates;
 import dev.cauce.evals.scenario.PackFixture;
+import dev.cauce.evals.scenario.PackGreetings;
 import dev.cauce.evals.scenario.Scenario;
 import dev.cauce.evals.scenario.Scenario.Setup;
 import dev.cauce.orchestration.InboundMessageResult;
@@ -216,7 +217,7 @@ final class EvalWorld {
                     .map(line -> new MessagePart.PageContext.CartLine(line.ref(),
                             line.quantity() == null ? 1 : line.quantity())).toList();
             MessagePart.PageContext context = new MessagePart.PageContext(page.path(), page.productRef(), cart,
-                    greetingFor(page.openedOn()));
+                    PackGreetings.of(s.packDir()).forSignal(page.openedOn()).orElse(null));
             InboundMessageResult accepted = asTenant(tenantId, () -> s.inbound().ingestParts(customerAgentId, "api",
                     null, IdentityKind.CLIENT_REFERENCE, PERSON, List.of(new MessagePart.Text(message), context), null));
             conversationId = accepted.conversationId();
@@ -249,16 +250,6 @@ final class EvalWorld {
         });
         s.dispatcher().dispatchDue();
         return new Played(trace(message, conversationId, messageId), invocationId, executionFailure(invocationId));
-    }
-
-    /** The pack's greeting template for {@code signal}, from its {@code asistente.json}; null without one. */
-    private String greetingFor(String signal) throws Exception {
-        Path assistant = s.packDir().resolve("asistente.json");
-        if (signal == null || !Files.exists(assistant)) {
-            return null;
-        }
-        JsonNode template = s.json().readTree(Files.readString(assistant)).path("templates").path(signal);
-        return template.isTextual() ? template.asText() : null;
     }
 
     /** Why the invocation did not complete (status, failure type and the internal error), if it did not. */

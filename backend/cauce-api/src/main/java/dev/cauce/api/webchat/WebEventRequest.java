@@ -5,10 +5,11 @@ import java.math.BigDecimal;
 /**
  * Body of {@code POST /web/v1/{publicKey}/events} (ADR 0014, WC8), after the person's first message:
  * {@code add_to_cart} from a product card ({@code ref}, {@code quantity}), or {@code purchase} as the
- * shop reports it ({@code order_id}, {@code value}). {@code variant} is the one the browser drew.
+ * shop reports it ({@code order_id}, {@code value}). {@code variant} is the one the browser drew;
+ * {@code consent} says the visitor consented, which a purchase needs to be attributed.
  */
 public record WebEventRequest(String type, String ref, Integer quantity, String orderId, BigDecimal value,
-                              String variant) {
+                              String variant, Boolean consent) {
 
     public static final String ADD_TO_CART = "add_to_cart";
     public static final String PURCHASE = "purchase";

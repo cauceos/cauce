@@ -143,7 +143,8 @@ class WebChatMessagesApiIT extends AbstractBusinessApiIT {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .put("/v1/web-chat-channels/" + channelId + "/assistant").header(HttpHeaders.AUTHORIZATION, clientAuth)
                         .contentType(MediaType.APPLICATION_JSON).content("""
-                                {"enabled": true, "routes": [{"path": "/pagar", "signals": ["idle_cart"]}],
+                                {"enabled": true, "proactive_opening": true,
+                                 "routes": [{"path": "/pagar", "signals": ["idle_cart"]}],
                                  "templates": {"idle_cart": "¿Te ayudo a terminar?"},
                                  "variants": [{"id": "b", "templates": {"idle_cart": "¿Algo te frena?"}}]}
                                 """))

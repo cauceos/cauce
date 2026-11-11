@@ -19,6 +19,10 @@ aviso.
 
 Las reglas generales del arnés (G1: nada fuera del catálogo consultado) leen `catalogo.json`.
 
+Un turno con `contexto.abierto_por` saluda con la plantilla de esa señal en `../asistente.json`, también
+mientras la apertura sola está apagada (fase 1 del lanzamiento): así la fase 2 empieza evaluada. El
+arnés no carga un escenario cuya señal no tenga plantilla.
+
 ```bash
 cd backend
 ./gradlew :cauce-evals:eval -Pevals.paquete=caucewebs -Pevals.simulacro=true -Pevals.n=1   # sin coste

@@ -178,7 +178,13 @@ class WebChatChannelApiIT extends AbstractBusinessApiIT {
         mockMvc.perform(get("/web/v1/" + key + "/config").header(HttpHeaders.ORIGIN, SHOP))
                 .andExpect(jsonPath("$.assistant.bubble").value("¿Te ayudo a elegir plan?"))
                 .andExpect(jsonPath("$.assistant.tuning.idle_cart_minutes").value(3))
-                .andExpect(jsonPath("$.assistant.variants[0].id").value("b"));
+                .andExpect(jsonPath("$.assistant.variants[0].id").value("b"))
+                // Left out, the switches take the engine's defaults: bubble only, consent before opening on
+                // its own, no counter, no purchase attribution.
+                .andExpect(jsonPath("$.assistant.proactive_opening").value(false))
+                .andExpect(jsonPath("$.assistant.proactive_requires_consent").value(true))
+                .andExpect(jsonPath("$.assistant.opening_counter").value(false))
+                .andExpect(jsonPath("$.assistant.purchase_attribution").value(false));
         assertThat(new JdbcTemplate(adminDataSource).queryForObject("SELECT count(*) FROM audit_outbox WHERE "
                 + "event_type = 'admin.web_chat.assistant_updated'", Integer.class)).isEqualTo(1);
 

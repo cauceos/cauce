@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * What the shop's page reports after the person's first message (ADR 0014, WC8): an add to cart from a
  * product card, and a purchase, attributed to the chat when it comes within 7 days of the session's last
- * message. And the anonymous opening counter, when the channel turns it on. Runs under the channel's
+ * message, only when the channel turns attribution on and the visitor consented. And the anonymous opening counter, when the channel turns it on. Runs under the channel's
  * tenant context, which the caller establishes; nothing about the person is recorded.
  */
 @Service
@@ -33,7 +33,10 @@ public class WebChatEventService {
         this.catalogs = catalogs;
     }
 
-    /** A purchase reported: whether it was recorded (false when the order was reported before) and attributed. */
+    /**
+     * A purchase reported: whether it was recorded (false when the order was reported before, or when it
+     * was ignored) and attributed.
+     */
     public record Purchase(boolean recorded, boolean attributed) {
     }
 
@@ -59,20 +62,27 @@ public class WebChatEventService {
 
     /**
      * Records the purchase {@code orderId} of {@code value} that the shop reported, once per order, and
-     * attributes it when the session talked on the channel within the last 7 days.
+     * attributes it when the session talked on the channel within the last 7 days. Attribution is off by
+     * default and always needs the visitor's consent: unless the channel's shop-assistant mode turns
+     * {@code purchase_attribution} on and the widget says the visitor {@code consented}, the purchase is
+     * checked and then ignored, recorded nowhere, so the page learns nothing it could not tell already.
      *
      * @throws ChannelDisabledException if the channel is switched off
      * @throws InvalidWebMessageException if the order id or the value is not one
      */
     @Transactional
     public Purchase purchase(ResolvedWebChat channel, WebSession session, String variant, String orderId,
-                             BigDecimal value) {
+                             BigDecimal value, boolean consented) {
         channel.requireActive();
         if (orderId == null || orderId.isBlank() || orderId.strip().length() > MAX_ORDER_ID_LENGTH) {
             throw new InvalidWebMessageException("order_id holds 1 to " + MAX_ORDER_ID_LENGTH + " characters");
         }
         if (value == null || value.signum() < 0 || value.compareTo(MAX_VALUE) > 0 || value.stripTrailingZeros().scale() > 2) {
             throw new InvalidWebMessageException("value is an amount from 0 with at most two decimals");
+        }
+        WebChatAssistant assistant = channel.assistant();
+        if (assistant == null || !assistant.enabled() || !assistant.purchaseAttribution() || !consented) {
+            return new Purchase(false, false);
         }
         boolean attributed = events.sessionTalkedWithinAttributionWindow(session.id().toString(),
                 channel.channelConfigId());

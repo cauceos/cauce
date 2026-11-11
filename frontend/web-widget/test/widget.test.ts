@@ -216,8 +216,17 @@ const SHOP: ChannelConfig = {
     templates: { idle_cart: '¿Te ayudo a terminar el pago?', exit_intent: '¿Te vas? Te ayudo.', comparing: '¿Dudas entre planes?' },
     variants: [{ id: 'a', bubble: null, templates: null, signals: null },
       { id: 'b', bubble: '¿Hablamos?', templates: { idle_cart: '¿Algo te frena?' }, signals: null }],
-    proactive_requires_consent: false, opening_counter: false, opening_counter_requires_consent: false,
+    proactive_opening: true, proactive_requires_consent: false, opening_counter: false,
+    opening_counter_requires_consent: false, purchase_attribution: false,
   },
+}
+
+const KEY = 'cauce:web:pk_ABCDEFGHIJKLMNOPQRSTUVWX:'
+
+/** What the widget keeps in the shop page's localStorage, by name, its session token apart. */
+function stored(): string[] {
+  return Object.keys(localStorage).filter((k) => k.startsWith(KEY)).map((k) => k.slice(KEY.length))
+    .filter((name) => name !== 'session').sort()
 }
 
 /** Runs the timer the widget scheduled with {@code ms}, the last one. */
@@ -228,13 +237,15 @@ function runTimer(f: Fake, ms: number): void {
 }
 
 describe('the shop-assistant mode', () => {
-  it('shows the variant\'s bubble from page load, without a request, and keeps the variant for the visitor', () => {
+  it('shows the variant\'s bubble from page load, without a request, and keeps the variant once the visitor consented', () => {
     const f = fake()
     const w = mount(SHOP, f)
 
     expect($<HTMLButtonElement>(w, '.presence .say').textContent).toBe('¿Hablamos?') // random 0.7 draws "b"
     expect(f.calls).toEqual([])
-    expect(localStorage.getItem('cauce:web:pk_ABCDEFGHIJKLMNOPQRSTUVWX:variant')).toBe('b')
+    expect(stored()).toEqual([])
+    w.consent(true)
+    expect(localStorage.getItem(KEY + 'variant')).toBe('b')
     $<HTMLButtonElement>(w, '.presence .say').click()
     expect($<HTMLElement>(w, '.panel').hidden).toBe(false)
     expect($<HTMLElement>(w, '.presence').hidden).toBe(true)
@@ -289,6 +300,34 @@ describe('the shop-assistant mode', () => {
     w3.setCart([{ ref: 'plan-plus', quantity: 2 }])
     runTimer(gated, 3 * 60_000)
     expect($<HTMLElement>(w3, '.panel').hidden).toBe(false)
+  })
+
+  it('with opening on its own off, shows the bubble alone and no signal opens the chat', () => {
+    const f = fake()
+    f.path = '/pagar'
+    const bubbleOnly = { ...SHOP, assistant: { ...SHOP.assistant!, proactive_opening: false } }
+    const w = mount(bubbleOnly, f)
+    expect($<HTMLButtonElement>(w, '.presence .say').textContent).toBe('¿Hablamos?')
+    w.setCart([{ ref: 'plan-plus', quantity: 1 }])
+    runTimer(f, 3 * 60_000)
+    expect($<HTMLElement>(w, '.panel').hidden).toBe(true)
+    expect(stored()).toEqual([])
+  })
+
+  it('without the visitor\'s consent keeps only the opened and closed marks; with it, the variant and views too', () => {
+    const f = fake()
+    const w = mount(SHOP, f)
+    w.viewProduct('plan-basico')
+    w.viewProduct('plan-plus')
+    w.viewProduct('plan-tienda') // comparing: opens by itself, the channel not asking for consent
+    expect($<HTMLElement>(w, '.panel').hidden).toBe(false)
+    w.close()
+    expect(stored()).toEqual(['closed', 'proactive'])
+
+    w.consent(true)
+    expect(stored()).toEqual(['closed', 'proactive', 'variant', 'views'])
+    w.consent(false)
+    expect(stored()).toEqual(['closed', 'proactive'])
   })
 
   it('opens on comparing three products within five minutes, by ref', () => {
@@ -352,8 +391,9 @@ describe('the shop-assistant mode', () => {
 
   it('reports a purchase only once this browser has talked to the chat, and counts openings only when the channel says', async () => {
     const f = fake()
-    const counted = { ...SHOP, assistant: { ...SHOP.assistant!, opening_counter: true } }
+    const counted = { ...SHOP, assistant: { ...SHOP.assistant!, opening_counter: true, purchase_attribution: true } }
     const w = mount(counted, f)
+    w.consent(true)
     w.trackPurchase({ orderId: 'CW-1', value: 79 })
     expect(f.events).toEqual([])
 
@@ -362,7 +402,31 @@ describe('the shop-assistant mode', () => {
     $<HTMLTextAreaElement>(w, '#cauce-input').value = 'Hola'
     await w.submit(false)
     w.trackPurchase({ orderId: 'CW-2', value: 95.59 })
-    expect(f.events).toEqual([{ type: 'purchase', order_id: 'CW-2', value: 95.59, variant: 'b' }])
+    expect(f.events).toEqual([{ type: 'purchase', order_id: 'CW-2', value: 95.59, variant: 'b', consent: true }])
+  })
+
+  it('reports no purchase unless the channel attributes them and the visitor consented', async () => {
+    const f = fake()
+    const w = mount(SHOP, f) // purchase_attribution off, as by default
+    $<HTMLButtonElement>(w, '.launcher').click()
+    $<HTMLTextAreaElement>(w, '#cauce-input').value = 'Hola'
+    await w.submit(false)
+    w.consent(true)
+    w.trackPurchase({ orderId: 'CW-1', value: 79 })
+    expect(f.events).toEqual([])
+
+    localStorage.clear()
+    const g = fake()
+    const attributing = { ...SHOP, assistant: { ...SHOP.assistant!, purchase_attribution: true } }
+    const w2 = mount(attributing, g)
+    $<HTMLButtonElement>(w2, '.launcher').click()
+    $<HTMLTextAreaElement>(w2, '#cauce-input').value = 'Hola'
+    await w2.submit(false)
+    w2.trackPurchase({ orderId: 'CW-2', value: 79 }) // no consent yet
+    expect(g.events).toEqual([])
+    w2.consent(true)
+    w2.trackPurchase({ orderId: 'CW-3', value: 79 })
+    expect(g.events).toEqual([{ type: 'purchase', order_id: 'CW-3', value: 79, variant: 'b', consent: true }])
   })
 
   it('without the mode, sends no context and shows no bubble', async () => {

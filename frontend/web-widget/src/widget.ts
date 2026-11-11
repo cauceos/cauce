@@ -241,11 +241,15 @@ export class Widget {
     this.assistant?.consent(granted)
   }
 
-  /** A purchase the shop confirms: reported only when this browser has talked to the chat. */
+  /**
+   * A purchase the shop confirms: reported only when this browser has talked to the chat, the channel
+   * attributes purchases and the visitor consented, which the report says.
+   */
   trackPurchase(purchase: { orderId: string; value: number }): void {
-    if (!this.token || !purchase || typeof purchase.orderId !== 'string' || typeof purchase.value !== 'number') return
+    if (!this.token || !this.assistant?.mayReportPurchases()) return
+    if (!purchase || typeof purchase.orderId !== 'string' || typeof purchase.value !== 'number') return
     void this.deps.api.event(this.token, { type: 'purchase', order_id: purchase.orderId, value: purchase.value,
-      variant: this.assistant?.variantId() }).catch(() => {})
+      variant: this.assistant.variantId(), consent: true }).catch(() => {})
   }
 
   private context(): PageContext {

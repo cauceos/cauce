@@ -23,7 +23,8 @@ import org.springframework.test.web.servlet.ResultActions;
 
 /**
  * What the shop's page reports to the chat, of ADR 0014, WC8, end to end: an add to cart from a card,
- * a purchase attributed only within 7 days of the session's last message and recorded once per order,
+ * a purchase recorded only when the channel attributes purchases and the visitor consented, attributed
+ * within 7 days of the session's last message and recorded once per order,
  * and the anonymous opening counter, which counts only when the channel turns it on and keeps nothing
  * but aggregates.
  */
@@ -87,14 +88,35 @@ class WebChatEventsApiIT extends AbstractBusinessApiIT {
     }
 
     @Test
+    void aPurchase_isIgnored_unlessTheChannelAttributesPurchases_andTheVisitorConsented() throws Exception {
+        send("Quiero el Plus");
+        // Attribution is off by default: the purchase is checked, then recorded nowhere.
+        event(token, purchase("CW-1", "79.00")).andExpect(jsonPath("$.recorded").value(false))
+                .andExpect(jsonPath("$.attributed").value(false));
+        event(token, purchase("CW-1", "-1")).andExpect(status().isBadRequest());
+
+        attributePurchases();
+        // On, it still needs the visitor's consent, which the widget says.
+        event(token, purchase("CW-2", "79.00").replace(", \"consent\": true", ""))
+                .andExpect(jsonPath("$.recorded").value(false));
+        event(token, purchase("CW-3", "79.00").replace("\"consent\": true", "\"consent\": false"))
+                .andExpect(jsonPath("$.recorded").value(false));
+        event(token, purchase("CW-4", "79.00")).andExpect(jsonPath("$.recorded").value(true))
+                .andExpect(jsonPath("$.attributed").value(true));
+
+        assertThat(admin.queryForObject("SELECT string_agg(order_id, ',') FROM web_events", String.class))
+                .isEqualTo("CW-4");
+        assertThat(meters.counter("cauce.web.purchases", "channel_config", channelId, "variant", "a").count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
     void aPurchase_isAttributedWithinSevenDaysOfTheLastMessage_andRecordedOncePerOrder() throws Exception {
+        attributePurchases();
         event(token, purchase("CW-1", "79.00")).andExpect(jsonPath("$.recorded").value(true))
                 .andExpect(jsonPath("$.attributed").value(false));
 
-        mockMvc.perform(post("/web/v1/" + key + "/messages").header(HttpHeaders.ORIGIN, SHOP)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"content\": \"Quiero el Plus\"}"))
-                .andExpect(status().isAccepted());
+        send("Quiero el Plus");
         event(token, purchase("CW-2", "95.59")).andExpect(jsonPath("$.recorded").value(true))
                 .andExpect(jsonPath("$.attributed").value(true));
         event(token, purchase("CW-2", "95.59")).andExpect(jsonPath("$.recorded").value(false));
@@ -133,8 +155,24 @@ class WebChatEventsApiIT extends AbstractBusinessApiIT {
                 "proactive", "signal", "idle_cart").count()).isEqualTo(2.0);
     }
 
+    private void send(String content) throws Exception {
+        mockMvc.perform(post("/web/v1/" + key + "/messages").header(HttpHeaders.ORIGIN, SHOP)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\": \"" + content + "\"}"))
+                .andExpect(status().isAccepted());
+    }
+
+    private void attributePurchases() throws Exception {
+        mockMvc.perform(put("/v1/web-chat-channels/" + channelId + "/assistant").header(HttpHeaders.AUTHORIZATION, clientAuth)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\": true, \"purchase_attribution\": true, \"variants\": [{\"id\": \"a\"}]}"))
+                .andExpect(status().isOk());
+    }
+
+    /** A purchase as the widget reports it once the visitor consented. */
     private static String purchase(String orderId, String value) {
-        return "{\"type\": \"purchase\", \"order_id\": \"" + orderId + "\", \"value\": " + value + ", \"variant\": \"a\"}";
+        return "{\"type\": \"purchase\", \"order_id\": \"" + orderId + "\", \"value\": " + value
+                + ", \"variant\": \"a\", \"consent\": true}";
     }
 
     private ResultActions event(String sessionToken, String json) throws Exception {
