@@ -451,6 +451,33 @@ W7 stays as built. Its launch on caucewebs.es, and the defaults of the engine, a
   needs consent.** The widget reports a purchase only when the switch is on and the visitor
   consented, and the report says `consent: true`. Without both, the API checks the purchase, records
   nothing and answers `recorded: false`. caucewebs.es launches with it off.
+- **How long phase 1 lasts.** Phase 1 lasts at least 4 weeks **and** at least 30 conversations.
+  If it has not reached both after 8 weeks, phase 2 starts anyway, and the comparison is marked
+  *orientativa* (indicative). Phase 2 lasts as long, by the same rule, so the two windows can be
+  compared. A phase starts on the day its configuration is applied to the public pages. The
+  hidden-page test comes before phase 1 and does not count toward it.
+- **Nothing else changes during a phase.** The prices, the ads and the landing page of
+  caucewebs.es stay as they were for the whole phase. A change that cannot wait is recorded with
+  its date, and the comparison is then marked *orientativa*.
+- **What is compared**, per phase, from the database rather than from the meters. The meters live
+  in the instance's memory and are lost on a restart; they serve to watch a phase, not to close it.
+  A conversation is a thread (ADR 0013) of the web chat's channel config, counted by the day it
+  started inside the phase's window.
+
+  | Metric | Definition |
+  |---|---|
+  | Conversations per week | Conversations of the channel ÷ weeks of the phase |
+  | Demo requests per conversation | Cases of category `demo` opened from those conversations ÷ conversations |
+  | Demo requests per week | The same cases ÷ weeks of the phase |
+  | Card adds per conversation | `web_events` of kind `ADD_TO_CART` of the channel in the window ÷ conversations |
+  | Opened by the chat (phase 2 only) | Conversations with a person's message whose page context carries a greeting ÷ conversations |
+  | Cost per conversation | The client's cost in the window (`GET /v1/tenants/{id}/usage`) ÷ conversations |
+
+  The headline metric is demo requests per week, because a demo request is the sale. The others
+  explain it. The cost per conversation is a guardrail: phase 2 must not raise it without more demo
+  requests. There is no visit denominator, because nothing about a visitor is counted before they
+  write (WC8). Purchases are left out while attribution is off. The queries are in the pack's
+  README.
 - **Covered by:**
   - `WebChatAssistantTest`, for the defaults;
   - `WebChatEventsApiIT`, for a purchase ignored without the switch or the consent;

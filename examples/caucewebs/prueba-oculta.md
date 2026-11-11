@@ -10,8 +10,11 @@ antes de arreglarse, para que no vuelva.
 
 ## Antes de empezar
 
-1. **La página.** Una copia de la portada y de `/pagar` en una ruta sin enlazar, por ejemplo
-   `caucewebs.es/prueba-chat/`, con `<meta name="robots" content="noindex">` y fuera del sitemap.
+1. **La página.** Una copia de la portada y de `/pagar` en una ruta que no se enlaza desde ningún
+   sitio, por ejemplo `caucewebs.es/prueba-chat/`. Ninguna otra página de caucewebs.es la enlaza, y
+   tampoco las redes, los anuncios, los correos ni un acortador. Lleva
+   `<meta name="robots" content="noindex, nofollow">`, no está en el sitemap y su dirección no se
+   comparte con nadie.
    Lleva las llamadas `cauce(...)` del README (`view`, `cart`, `onAddToCart`). Con la fase 1 no
    hacen falta ni `consent` ni `purchase`. Va en el mismo origen, `https://caucewebs.es`, que es el
    origen permitido del canal.
@@ -45,9 +48,10 @@ antes de arreglarse, para que no vuelva.
 
 ## Durante la prueba
 
-Usan la página quienes le darían un uso real: el equipo de CauceWebs y algunos dueños de bar de
-confianza, a los que se les pasa el enlace. Nada de mensajes de prueba en bucle: tiene que ser una
-conversación de verdad.
+**La página oculta la usa solo el dueño de CauceWebs.** No la usa nadie más, ni del equipo ni de
+fuera. Él escribe como escribiría un dueño de bar de verdad, desde el móvil y desde el ordenador,
+en conversaciones completas. Nada de mensajes de prueba en bucle. Como nadie más escribe, las
+conversaciones no traen datos de terceros, y las de la prueba no cuentan para la fase 1.
 
 **Cada día** se revisan las conversaciones del día. Desde Adminer, o con `psql` como `cauce`:
 

@@ -83,6 +83,46 @@ fiables. Se compara antes y después, con una sola variante por fase, que da nom
 Para pasar a la fase 2 se cambian esos dos valores en `asistente.json`, se commitea y se hace el mismo `PUT`.
 Los escenarios de la apertura sola (`evals/05-tienda.yaml`) se juegan ya en la fase 1.
 
+**Cuánto dura cada fase.** La fase 1 dura al menos 4 semanas **y** al menos 30 conversaciones. Si a
+las 8 semanas no ha llegado a las dos cosas, se pasa a la fase 2 igualmente y la comparación se marca
+como orientativa. La fase 2 dura lo mismo, con la misma regla. Una fase empieza el día en que su
+configuración se aplica a las páginas públicas. La prueba en la página oculta va antes y no cuenta.
+Mientras dura una fase no se tocan los precios, los anuncios ni la portada de caucewebs.es. Si algún
+cambio no puede esperar, se anota con su fecha y la comparación pasa a ser orientativa.
+
+| Fase | Empieza | Termina | Conversaciones | ¿Orientativa? | Cambios durante la fase |
+|---|---|---|---|---|---|
+| 1 | | | | | |
+| 2 | | | | | |
+
+**Qué se compara** (ADR 0014, enmienda del 2026-11-11). Se saca de la base de datos y no de los
+contadores, que se pierden cuando la instancia se reinicia. La métrica principal son las demos
+pedidas por semana. Los datos de cada fase se obtienen con esta consulta, en Adminer o con `psql`
+como `cauce`, poniendo las fechas de la fase y el id del chat web (`CW_WEB_CHAT_ID` de
+`.prueba-caucewebs.env`):
+
+```sql
+WITH fase AS (SELECT DATE '2026-12-01' AS desde, DATE '2026-12-29' AS hasta,
+                     '00000000-0000-0000-0000-000000000000'::uuid AS canal),
+     conv AS (SELECT c.id FROM conversations c, fase
+              WHERE c.channel_config_id = fase.canal
+                AND c.started_at >= fase.desde AND c.started_at < fase.hasta)
+SELECT
+  (SELECT count(*) FROM conv) AS conversaciones,
+  (SELECT count(*) FROM handoffs h WHERE h.category = 'demo'
+     AND h.conversation_id IN (SELECT id FROM conv)) AS demos,
+  (SELECT count(*) FROM web_events e, fase WHERE e.kind = 'ADD_TO_CART' AND e.channel_config_id = fase.canal
+     AND e.created_at >= fase.desde AND e.created_at < fase.hasta) AS tarjetas_al_carrito,
+  (SELECT count(DISTINCT m.conversation_id) FROM messages m, jsonb_array_elements(m.parts) p
+     WHERE m.conversation_id IN (SELECT id FROM conv) AND m.role = 'USER'
+       AND p ->> 'type' = 'page_context' AND p ->> 'greeting' IS NOT NULL) AS abiertas_por_el_chat;
+```
+
+Con esos números y las semanas de la fase salen las demos por semana y por conversación, las
+conversaciones por semana, las tarjetas al carrito por conversación y, solo en la fase 2, la parte de
+conversaciones que abrió el chat. El coste por conversación es `GET /v1/tenants/{cliente}/usage?from=…&to=…`
+dividido entre las conversaciones. Sirve de control: la fase 2 no puede subirlo sin traer más demos.
+
 Los demás interruptores, tal como sale el fichero:
 
 - `proactive_requires_consent: false`. El motor lo trae encendido. caucewebs.es lo apaga solo para la
